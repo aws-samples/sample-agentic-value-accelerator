@@ -1,0 +1,302 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AgentCore Runtime deployment with safety controls.
+  Supports both stateless (DynamoDB sessions) and memory-enabled agents.
+  Creates: IAM Role (optional), DynamoDB table, Memory (optional), AgentCore Runtime.
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+Parameters:
+  AgentName:
+    Type: String
+    Description: Name for the AgentCore runtime (alphanumeric + underscores, max 48 chars)
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_]{0,47}'
+    ConstraintDescription: Must start with a letter, followed by up to 47 alphanumeric or underscore characters.
+
+  S3Bucket:
+    Type: String
+    Description: S3 bucket containing the agent deployment package
+
+  S3Prefix:
+    Type: String
+    Description: >
+      S3 key prefix for the deployment zip (e.g. my_agent/deployment.zip).
+      This is the full object key of the uploaded zip file.
+
+  RoleArn:
+    Type: String
+    Description: IAM execution role ARN (leave empty to auto-create)
+    Default: ''
+
+  ModelId:
+    Type: String
+    Description: Bedrock model ID or Application Inference Profile ARN
+    Default: us.anthropic.claude-sonnet-4-20250514-v1:0
+
+  Entrypoint:
+    Type: String
+    Description: Python entrypoint file name
+    Default: agent.py
+
+  EnableMemory:
+    Type: String
+    Description: Enable AgentCore Memory (yes/no)
+    Default: 'no'
+    AllowedValues:
+      - 'yes'
+      - 'no'
+
+  ExistingMemoryId:
+    Type: String
+    Description: Existing Memory ID to use (leave empty to create new)
+    Default: ''
+
+  AgentTagName:
+    Type: String
+    Description: Value for agent-name tag (used for cost allocation via AWS Budgets)
+
+  SessionTableName:
+    Type: String
+    Description: DynamoDB table name for session tracking
+    Default: session-token-usage
+
+  CreateSessionTable:
+    Type: String
+    Description: Whether to create the DynamoDB session table (no if it already exists)
+    Default: 'yes'
+    AllowedValues:
+      - 'yes'
+      - 'no'
+
+# ---------------------------------------------------------------------------
+# Conditions
+# ---------------------------------------------------------------------------
+Conditions:
+  CreateNewMemory: !And
+    - !Equals [!Ref EnableMemory, 'yes']
+    - !Equals [!Ref ExistingMemoryId, '']
+  UseExistingMemory: !And
+    - !Equals [!Ref EnableMemory, 'yes']
+    - !Not [!Equals [!Ref ExistingMemoryId, '']]
+  HasMemory: !Equals [!Ref EnableMemory, 'yes']
+  CreateRole: !Equals [!Ref RoleArn, '']
+  ShouldCreateSessionTable: !Equals [!Ref CreateSessionTable, 'yes']
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # --- IAM execution role (auto-created if no RoleArn provided) ---
+  AgentExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: CreateRole
+    Properties:
+      RoleName: !Sub 'AgentCore-${AgentName}-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AgentCoreRuntimePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: BedrockModelAccess
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+              - Sid: DynamoDBSessionTracking
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTableName}'
+                  - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTableName}/index/*'
+              - Sid: AgentCoreMemoryAccess
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateEvent
+                  - bedrock-agentcore:ListEvents
+                  - bedrock-agentcore:GetEvent
+                  - bedrock-agentcore:DeleteEvent
+                  - bedrock-agentcore:ListSessions
+                  - bedrock-agentcore:RetrieveMemoryRecords
+                Resource: '*'
+              - Sid: S3CodeAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${S3Bucket}/*'
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutDeliverySource
+                  - logs:PutDeliveryDestination
+                  - logs:CreateDelivery
+                  - logs:GetDeliverySource
+                  - logs:DeleteDeliverySource
+                  - logs:DeleteDeliveryDestination
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CloudWatchMetrics
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+              - Sid: XRayTracing
+                Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource: '*'
+
+  # --- DynamoDB table for session tracking ---
+  SessionTable:
+    Type: AWS::DynamoDB::Table
+    Condition: ShouldCreateSessionTable
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Ref SessionTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+        - AttributeName: agent_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: agent-index
+          KeySchema:
+            - AttributeName: agent_name
+              KeyType: HASH
+            - AttributeName: session_id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: component
+          Value: agent-safety
+        - Key: agent-name
+          Value: !Ref AgentTagName
+
+  # --- AgentCore Memory (created only if EnableMemory=yes and no existing ID) ---
+  AgentMemory:
+    Type: AWS::BedrockAgentCore::Memory
+    Condition: CreateNewMemory
+    Properties:
+      Name: !Sub '${AgentName}_memory'
+      EventExpiryDuration: 30
+
+  # --- AgentCore Runtime ---
+  # Implicit dependencies via !GetAtt / !If:
+  #   - AgentExecutionRole (when CreateRole=true) via !GetAtt AgentExecutionRole.Arn
+  #   - AgentMemory (when CreateNewMemory=true) via !GetAtt AgentMemory.MemoryId
+  # CF resolves these before creating the runtime, ensuring correct ordering.
+  AgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Ref AgentName
+      Description: !Sub 'Agent Safety demo agent: ${AgentName}'
+      RoleArn: !If [CreateRole, !GetAtt AgentExecutionRole.Arn, !Ref RoleArn]
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3:
+              Bucket: !Ref S3Bucket
+              Prefix: !Ref S3Prefix
+          Runtime: PYTHON_3_11
+          EntryPoint:
+            - opentelemetry-instrument
+            - !Ref Entrypoint
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      ProtocolConfiguration: HTTP
+      EnvironmentVariables:
+        AGENT_NAME: !Ref AgentName
+        MODEL_ID: !Ref ModelId
+        SESSION_TABLE: !Ref SessionTableName
+        AWS_REGION: !Ref 'AWS::Region'
+        AGENTCORE_MEMORY_ID: !If
+          - CreateNewMemory
+          - !GetAtt AgentMemory.MemoryId
+          - !If [UseExistingMemory, !Ref ExistingMemoryId, '']
+      Tags:
+        agent-name: !Ref AgentTagName
+        component: agent-safety
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+Outputs:
+  AgentRuntimeArn:
+    Description: ARN of the deployed agent runtime
+    Value: !GetAtt AgentRuntime.AgentRuntimeArn
+
+  AgentRuntimeId:
+    Description: ID of the deployed agent runtime
+    Value: !GetAtt AgentRuntime.AgentRuntimeId
+
+  AgentRuntimeStatus:
+    Description: Current status of the runtime (should be READY)
+    Value: !GetAtt AgentRuntime.Status
+
+  InferenceProfileArn:
+    Description: >
+      Bedrock Inference Profile ARN used by this agent (passed as ModelId).
+      Tagged with agent-name for per-agent cost tracking via AWS Budgets.
+    Value: !Ref ModelId
+
+  AgentType:
+    Description: Agent type (stateless or memory-enabled)
+    Value: !If [HasMemory, 'memory-enabled', 'stateless']
+
+  MemoryId:
+    Condition: CreateNewMemory
+    Description: ID of the newly created Memory resource
+    Value: !GetAtt AgentMemory.MemoryId
+
+  MemoryArn:
+    Condition: CreateNewMemory
+    Description: ARN of the newly created Memory resource
+    Value: !GetAtt AgentMemory.MemoryArn
+
+  ExistingMemoryIdOutput:
+    Condition: UseExistingMemory
+    Description: ID of the existing Memory resource attached to this agent
+    Value: !Ref ExistingMemoryId
+
+  RoleArn:
+    Description: IAM execution role ARN used by the runtime
+    Value: !If [CreateRole, !GetAtt AgentExecutionRole.Arn, !Ref RoleArn]
+
+  SessionTableOutput:
+    Description: DynamoDB table for session tracking
+    Value: !Ref SessionTableName
+
+  InvokeCommand:
+    Description: Command to invoke the agent
+    Value: !Sub 'python invoke_agent.py --arn ${AgentRuntime.AgentRuntimeArn} --prompt "Hello!"'

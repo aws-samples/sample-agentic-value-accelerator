@@ -1,0 +1,554 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Agent Safety Dashboard — Main stack.
+  Creates DynamoDB tables, IAM roles, stop-sessions Lambda, and App Runner service.
+  Requires ECR image to exist (deploy ecr-stack.yaml and push image first).
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/safety-dashboard:latest)
+
+  AdminEmail:
+    Type: String
+    Description: Email for the default admin user (receives temporary password)
+    AllowedPattern: '.+@.+'
+    ConstraintDescription: Must be a valid email address
+
+  RegistryTableName:
+    Type: String
+    Default: safety-dashboard-registry
+
+  SessionTableName:
+    Type: String
+    Default: safety-dashboard-sessions
+
+  InterventionTableName:
+    Type: String
+    Default: safety-dashboard-interventions
+
+  CostSignalsTableName:
+    Type: String
+    Default: safety-dashboard-cost-signals
+
+  ObsSignalsTableName:
+    Type: String
+    Default: safety-dashboard-obs-signals
+
+  EvalSignalsTableName:
+    Type: String
+    Default: safety-dashboard-eval-signals
+
+  StopSessionsLambdaName:
+    Type: String
+    Default: SafetyDashboard-StopSessions
+
+  BudgetPrefix:
+    Type: String
+    Default: agent-
+
+  AppRunnerServiceName:
+    Type: String
+    Default: agent-safety-dashboard
+
+  AppRunnerCpu:
+    Type: String
+    Default: '0.25 vCPU'
+    AllowedValues: ['0.25 vCPU', '0.5 vCPU', '1 vCPU', '2 vCPU', '4 vCPU']
+
+  AppRunnerMemory:
+    Type: String
+    Default: '0.5 GB'
+    AllowedValues: ['0.5 GB', '1 GB', '2 GB', '3 GB', '4 GB', '6 GB', '8 GB', '10 GB', '12 GB']
+
+
+Resources:
+  # =========================================================================
+  # DynamoDB Tables
+  # =========================================================================
+  AgentRegistryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref RegistryTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: agent_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: agent_name
+          KeyType: HASH
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+  SessionTokenUsageTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref SessionTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+  InterventionLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref InterventionTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: intervention_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: intervention_id
+          KeyType: HASH
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+  CostSignalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref CostSignalsTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: agent_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: agent_name
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+  ObsSignalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref ObsSignalsTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: agent_name
+          AttributeType: S
+        - AttributeName: signal_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: agent_name
+          KeyType: HASH
+        - AttributeName: signal_key
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+  EvalSignalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref EvalSignalsTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: agent_name
+          AttributeType: S
+        - AttributeName: signal_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: agent_name
+          KeyType: HASH
+        - AttributeName: signal_key
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+
+  # =========================================================================
+  # Cognito — User Pool, App Client, Domain, Default Admin User
+  # =========================================================================
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-users'
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      MfaConfiguration: 'OFF'
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          TemporaryPasswordValidityDays: 7
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        component: agent-safety
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub '${AWS::StackName}-${AWS::AccountId}'
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoUserPoolDomain
+    Properties:
+      ClientName: dashboard-web
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      # Callback URLs — App Runner URL is added post-deploy via update
+      CallbackURLs:
+        - http://localhost:8000
+      LogoutURLs:
+        - http://localhost:8000
+
+  CognitoAdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    DependsOn: CognitoUserPool
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      Username: !Ref AdminEmail
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+        - Name: email_verified
+          Value: 'true'
+      MessageAction: SUPPRESS
+
+
+  # =========================================================================
+  # Lambda — Stop Sessions (IAM Role + Function)
+  # =========================================================================
+  StopSessionsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-StopSessionsLambdaRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StopSessionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${InterventionTableName}'
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:ListAgentRuntimes
+                  - bedrock-agentcore:StopRuntimeSession
+                Resource: '*'
+
+  StopSessionsLambda:
+    Type: AWS::Lambda::Function
+    # Wait for role to propagate — avoids "role cannot be assumed" race condition
+    DependsOn: StopSessionsLambdaRole
+    Properties:
+      FunctionName: !Ref StopSessionsLambdaName
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 256
+      Role: !GetAtt StopSessionsLambdaRole.Arn
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          SESSION_TABLE: !Ref SessionTableName
+          INTERVENTION_TABLE: !Ref InterventionTableName
+      Code:
+        ZipFile: |
+          import json, logging, os, uuid
+          from datetime import datetime, timezone
+          import boto3
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          REGION = os.environ.get("REGION", "us-east-1")
+          SESSION_TABLE = os.environ.get("SESSION_TABLE", "session-token-usage")
+          INTERVENTION_TABLE = os.environ.get("INTERVENTION_TABLE", "intervention-log")
+          ACTIVE_THRESHOLD_MIN = 6
+          IDLE_THRESHOLD_MIN = 30
+          retry_config = Config(retries={"max_attempts": 3, "mode": "adaptive"})
+          agentcore_control = boto3.client("bedrock-agentcore-control", region_name=REGION, config=retry_config)
+          agentcore_data = boto3.client("bedrock-agentcore", region_name=REGION, config=retry_config)
+          dynamodb = boto3.resource("dynamodb", region_name=REGION)
+
+          def _normalize(name):
+              return name.lower().replace("-", "").replace("_", "")
+
+          def _classify_status(last_hb_str, stored_status=""):
+              if stored_status in ("terminated", "completed"): return "inactive"
+              try:
+                  mins = (datetime.now(timezone.utc) - datetime.fromisoformat(last_hb_str)).total_seconds() / 60
+                  if mins <= ACTIVE_THRESHOLD_MIN: return "active"
+                  elif mins <= IDLE_THRESHOLD_MIN: return "idle"
+                  return "inactive"
+              except (ValueError, TypeError): return "unknown"
+
+          def _resolve_arn(agent_name):
+              norm = _normalize(agent_name)
+              for page in agentcore_control.get_paginator("list_agent_runtimes").paginate():
+                  for rt in page.get("agentRuntimes", []):
+                      if _normalize(rt["agentRuntimeName"]) == norm: return rt["agentRuntimeArn"]
+              return None
+
+          def handler(event, context):
+              agent_name, reason, admin_user = event.get("agent_name",""), event.get("reason",""), event.get("admin_user","")
+              if not all([agent_name, reason, admin_user]):
+                  return {"statusCode": 400, "body": json.dumps({"error": "agent_name, reason, admin_user required"})}
+              agent_arn = _resolve_arn(agent_name)
+              if not agent_arn:
+                  return {"statusCode": 404, "body": json.dumps({"error": f"Agent '{agent_name}' not found"})}
+              sess_table = dynamodb.Table(SESSION_TABLE)
+              norm = _normalize(agent_name)
+              try: all_sess = sess_table.scan().get("Items", [])
+              except ClientError as e: return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+              active = [s for s in all_sess if _normalize(s.get("agent_name","")) == norm and _classify_status(s.get("last_heartbeat",""), s.get("status","")) in ("active","idle")]
+              if not active:
+                  return {"statusCode": 200, "body": json.dumps({"agent_name": agent_name, "agent_runtime_arn": agent_arn, "total_sessions": 0, "stopped": 0, "failed": 0, "results": [], "intervention_ids": []})}
+              results, iids, int_table = [], [], dynamodb.Table(INTERVENTION_TABLE)
+              for s in active:
+                  sid = s["session_id"]
+                  sr, se = "stopped", ""
+                  try: agentcore_data.stop_runtime_session(agentRuntimeArn=agent_arn, runtimeSessionId=sid, clientToken=f"stop-{sid}-{uuid.uuid5(uuid.NAMESPACE_DNS, sid)}")
+                  except ClientError as e:
+                      c = e.response["Error"]["Code"]
+                      if c in ("ResourceNotFoundException","404"): sr = "not_found"
+                      elif c == "ConflictException": sr = "already_stopping"
+                      else: sr, se = "error", str(e)
+                  results.append({"session_id": sid, "status": sr})
+                  if sr in ("stopped","not_found","already_stopping"):
+                      try: sess_table.update_item(Key={"session_id": sid}, UpdateExpression="SET #st = :s", ExpressionAttributeNames={"#st": "status"}, ExpressionAttributeValues={":s": "terminated"})
+                      except ClientError: pass
+                  iid = str(uuid.uuid4())
+                  try:
+                      item = {"intervention_id": iid, "timestamp": datetime.now(timezone.utc).isoformat(), "agent_runtime_arn": agent_arn, "agent_name": agent_name, "session_id": sid, "action": "stop_session", "triggered_by": "human", "reason": reason, "admin_user": admin_user, "stop_result": sr, "rollback_status": "none"}
+                      if se: item["error_detail"] = se
+                      int_table.put_item(Item=item); iids.append(iid)
+                  except ClientError as e: logger.warning(f"Log failed: {e}")
+              stopped = sum(1 for r in results if r["status"] in ("stopped","not_found","already_stopping"))
+              return {"statusCode": 200, "body": json.dumps({"agent_name": agent_name, "agent_runtime_arn": agent_arn, "total_sessions": len(active), "stopped": stopped, "failed": len(active)-stopped, "results": results, "intervention_ids": iids})}
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+
+  # =========================================================================
+  # App Runner — IAM Roles
+  # =========================================================================
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-AppRunnerInstanceRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DashboardPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DescribeTable
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${InterventionTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CostSignalsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ObsSignalsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EvalSignalsTableName}'
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:ListAgentRuntimes
+                  - bedrock-agentcore:GetAgentRuntime
+                  - bedrock-agentcore:ListAgentRuntimeEndpoints
+                  - bedrock-agentcore:ListTagsForResource
+                  - bedrock-agentcore:StopRuntimeSession
+                  - bedrock-agentcore:ListSessions
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:DescribeAlarms
+                Resource: '*'
+              # budgets:* — DescribeBudgets requires ViewBudget which is separate
+              - Effect: Allow
+                Action:
+                  - budgets:*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt StopSessionsLambda.Arn
+              - Effect: Allow
+                Action:
+                  - sts:GetCallerIdentity
+                Resource: '*'
+
+  AppRunnerECRAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-AppRunnerECRAccess'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+
+  # =========================================================================
+  # App Runner Service
+  # =========================================================================
+  DashboardService:
+    Type: AWS::AppRunner::Service
+    # Wait for roles to propagate — avoids "unable to assume role" errors
+    DependsOn:
+      - AppRunnerInstanceRole
+      - AppRunnerECRAccessRole
+      - StopSessionsLambda
+    Properties:
+      ServiceName: !Ref AppRunnerServiceName
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerECRAccessRole.Arn
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: !Ref ImageUri
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: '8000'
+            RuntimeEnvironmentVariables:
+              - Name: AWS_REGION
+                Value: !Ref AWS::Region
+              - Name: REGISTRY_TABLE
+                Value: !Ref RegistryTableName
+              - Name: SESSION_TABLE
+                Value: !Ref SessionTableName
+              - Name: INTERVENTION_TABLE
+                Value: !Ref InterventionTableName
+              - Name: COST_SIGNALS_TABLE
+                Value: !Ref CostSignalsTableName
+              - Name: OBS_SIGNALS_TABLE
+                Value: !Ref ObsSignalsTableName
+              - Name: EVAL_SIGNALS_TABLE
+                Value: !Ref EvalSignalsTableName
+              - Name: STOP_SESSIONS_LAMBDA
+                Value: !Ref StopSessionsLambdaName
+              - Name: BUDGET_PREFIX
+                Value: !Ref BudgetPrefix
+              - Name: ALLOWED_ORIGINS
+                Value: '*'
+              - Name: COGNITO_USER_POOL_ID
+                Value: !Ref CognitoUserPool
+              - Name: COGNITO_APP_CLIENT_ID
+                Value: !Ref CognitoAppClient
+              - Name: COGNITO_DOMAIN
+                Value: !Sub '${AWS::StackName}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com'
+              - Name: COGNITO_REGION
+                Value: !Ref AWS::Region
+      InstanceConfiguration:
+        Cpu: !Ref AppRunnerCpu
+        Memory: !Ref AppRunnerMemory
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /api/health
+        Interval: 20
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+      Tags:
+        - Key: component
+          Value: agent-safety
+
+Outputs:
+  DashboardUrl:
+    Description: Dashboard URL
+    Value: !Sub 'https://${DashboardService.ServiceUrl}'
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+  CognitoAppClientId:
+    Description: Cognito App Client ID
+    Value: !Ref CognitoAppClient
+  CognitoDomain:
+    Description: Cognito Hosted UI domain
+    Value: !Sub '${AWS::StackName}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com'
+  CognitoLoginUrl:
+    Description: Cognito login URL (update callback URL after first deploy)
+    Value: !Sub 'https://${AWS::StackName}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${CognitoAppClient}&response_type=code&scope=openid+email+profile&redirect_uri=https://${DashboardService.ServiceUrl}'
+  DefaultAdminEmail:
+    Description: Default admin user email (temporary password — must change on first login)
+    Value: !Ref AdminEmail
+  LoginInstructions:
+    Description: How to log in
+    Value: !Sub 'Open the DashboardUrl, sign in with ${AdminEmail} and the temporary password (set via admin-set-user-password CLI), then set a new password.'
+  StopSessionsLambdaArn:
+    Value: !GetAtt StopSessionsLambda.Arn
+  InstanceRoleArn:
+    Value: !GetAtt AppRunnerInstanceRole.Arn
+  HealthCheckUrl:
+    Value: !Sub 'https://${DashboardService.ServiceUrl}/api/health'
