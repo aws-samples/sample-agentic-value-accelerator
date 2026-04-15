@@ -1,0 +1,248 @@
+# Market Surveillance – US Rates Surveillance Decision Tree
+name: "Market Surveillance – US Rates – Decision Tree"
+description: >
+  Decision-tree for disposition of institutional surveillance detection alerts (US Rates).
+business_domain: "Risk Management"
+business_sub-domain: "Market Surveillance"
+surveillance: "Market Surveillance"
+asset_class: "Fixed Income"
+asset_type: "Rates"
+region: "US"
+version: "2026.2"
+metadata:
+  author: Surveillance Team
+  created: "2026-03-05"
+  last_updated: "2026-03-05"
+  domain: "market_conduct_market_surveillance"
+  notes: >
+    Notes
+
+rule_sequence: "Rules with rule_type = 'Individual' should be tested first, followed by Rules with rule_type = 'Aggregate'"
+
+hierarchy:
+  level_1: relevant_product_types
+  level_2: rule_name
+  
+
+data_validation:
+  alert_details:
+    description: "Alert information that triggered the investigation"
+    source_table: "fact_alert"
+    required_fields:
+      - alert_id
+      - alert_date
+      - alert_time
+      - alert_summary
+      - alert_isin
+      - alert_account_name
+      - alert_account_number
+      - trade_side
+      - trade_price
+      - trade_qty
+  pivot_trade:
+    description: "The customer trade that triggered the alert"
+    source_table: "fact_trade"
+    required_fields:
+      - trade_id
+      - trade_date
+      - trade_time
+      - trade_price
+      - trade_qty
+      - trade_side_code
+      - trade_notional
+      - trade_type
+      - trade_source
+      - book_code
+      - standard_id
+      - trader_id
+      - trader_name
+      - account_name
+      - account_number
+  flagged_trades:
+    description: "Suspected flagged trades to evaluate against decision tree"
+    source_table: "fact_trade"
+    required_fields:
+      - trade_id
+      - trade_date
+      - trade_time
+      - trade_price
+      - trade_qty
+      - trade_side_code
+      - trade_notional
+      - trade_type
+      - trade_source
+      - book_code
+      - standard_id
+      - trader_id
+      - trader_name
+      - account_name
+      - account_number
+  product_details:
+    description: "Security characteristics and classifications"
+    source_table: "dim_product"
+    required_fields:
+      - product_isin
+      - product_type
+      - product_sub_type
+      - product_category
+      - product_maturity_date
+      - product_issue_date
+      - product_currency_of_issue
+      - product_country_of_issue
+      - product_description
+  account_details:
+    description: "Account structure and ownership"
+    source_table: "dim_account"
+    required_fields:
+      - account_id
+      - account_name
+      - account_number
+      - account_type
+      - account_sub_type
+      - account_country
+  actor_details:
+    description: "Trader and counterparty information"
+    source_table: "dim_actor"
+    required_fields:
+      - actor_trader_id
+      - actor_trader_name
+      - actor_position
+      - actor_trading_desk
+      - actor_risk_area
+      - actor_account_name
+  ecomm_evidence:
+    description: "Electronic communications evidence from eComm analysis (may be absent if no conversations found)"
+    source_table: "fact_ecomm"
+    required_fields: []
+    optional_fields:
+      - conversation_id
+      - conversation_start_timestamp
+      - conversation_end_timestamp
+      - intent_type
+      - intent_message
+      - intent_timestamp
+      - classification_tier
+      - participants
+    note: "If no eComm data was found, the Coordinator should pass an explicit statement: 'No eComm evidence found within the time window.' The Trade Analyst agent should proceed with evaluation but note that rules requiring eComm cannot be confirmed via eComm Agent"
+
+decision_tree:
+
+  - relevant_product_types: "All"
+  
+    rules:
+    
+      - rule_name: "70% Threshold"
+        rule_type: Aggregate
+        rule_id: "R1"
+        pass_criteria: |
+          The Market Value of the potential Flagged Trade is less than 70 percent of the Market Value of the Pivot Trade.
+          If there are multiple potential Flagged Trades, the total Market Value of all potential Flagged Trades must be less than 70 percent of the Market Value of the Pivot Trade.
+        pass_criteria_trade_type: "Flagged Trade"
+
+      - rule_name: "Different LOBs"
+        rule_type: Individual
+        rule_id: "R2"
+        pass_criteria: |
+          The Trader who executed the potential Flagged Trade works in a different Line of Business / Volcker Business Area than the Trader who executed the customer Pivot Trade.
+        pass_criteria_trade_type: "Flagged Trade"
+
+      - rule_name: "Client-Initiated Trade"
+        rule_type: Individual
+        rule_id: "R3"
+        pass_criteria: |
+          The potential Flagged Trade is initiated by a Client Request, such as a Request for Quote.
+          This condition is confirmed by reviewing Order information in the Electronic Communications System.
+        pass_criteria_trade_type: "Flagged Trade"
+
+      - rule_name: "Client Request Timing"
+        rule_type: Individual
+        rule_id: "R4"
+        pass_criteria: |
+          The potential Flagged Trade occurs before the Client Request Time.
+          The Client Request Time is the start time of the Electronic Communications.
+        pass_criteria_trade_type: "Flagged Trade"
+
+      - rule_name: "Specific Account Prefix"
+        rule_type: Individual
+        rule_id: "R6"
+        pass_criteria: |
+          The Account Identifier for the Flagged Trade begins with the prefix ‘ACC’.
+        pass_criteria_trade_type: "Flagged Trade"
+
+      - rule_name: "Cancelled Trade Slate"
+        rule_type: Individual
+        rule_id: "R7"
+        pass_criteria: |
+          The Trade Type of the transaction is ‘TypeCode0’, indicating that the Trade is Cancelled.
+        pass_criteria_trade_type: "Flagged Trade and Pivot"
+
+      - rule_name: "Post-Trade Modification"
+        rule_type: Individual
+        rule_id: "R8"
+        pass_criteria: |
+          The Trade Type of the transaction is ‘TypeCode1’ or ‘TypeCode2’, indicating that the Trade has been Modified.
+        pass_criteria_trade_type: "Flagged Trade and Pivot"
+
+      - rule_name: "Same Account Number"
+        rule_type: Individual
+        rule_id: "R9"
+        pass_criteria: |
+          The Account for the Pivot Trade and the potential Flagged Trade is the same.
+        pass_criteria_trade_type: "Flagged Trade"
+
+      - rule_name: "Specific Trade Source"
+        rule_type: Individual
+        rule_id: "R10"
+        pass_criteria: |
+          The Trade Source of the Flagged Trade is ‘SourceCode0’, or the Trade Source of the Pivot Trade is ‘SourceCode1’.
+        pass_criteria_trade_type: "Flagged Trade"  
+
+      - rule_name: "Specific Book"
+        rule_type: Individual
+        rule_id: "R11"
+        pass_criteria: |
+          Both the Pivot Trade and the potential Flagged Trade are booked to the Book identified as ‘BOOK1’.
+        pass_criteria_trade_type: "Flagged Trade"
+        
+      - rule_name: "Trade Date Mismatch"
+        rule_type: Individual
+        rule_id: "R18"
+        pass_criteria: |
+          The Trade Date of the Flagged Trade is not equal to the Trade Date of the Pivot Trade.
+        pass_criteria_trade_type: "Flagged Trade"
+
+      - rule_name: "Agreed Pivot Trade Terms Timing"
+        rule_type: Individual
+        rule_id: "R19"
+        pass_criteria: |
+          The Pivot Trade Terms are agreed before the potential Flagged Trade is initiated. 
+          This condition is confirmed by reviewing Order information in the Electronic Communications System.
+        pass_criteria_trade_type: "Flagged Trade"
+          
+      - rule_name: "Repos"
+        rule_type: Individual
+        rule_id: "R17"
+        pass_criteria: |
+          The first character of the Account Number of the Trade is the letter “M”.
+        pass_criteria_trade_type: "Flagged Trade and Pivot"
+
+  - relevant_product_types: "Agency Security"
+  
+    rules:
+      - rule_name: "GSE – Primary Market"
+        rule_type: Individual
+        rule_id: "R16"
+        pass_criteria: |
+          The Issuer of the Security and the Counterparty to the Trade are the same government-sponsored enterprise.
+        pass_criteria_trade_type: "Flagged Trade"
+
+  - relevant_product_types: "Government Bond"
+  
+    rules:
+      - rule_name: "Government Bond Liquidity Threshold"
+        rule_type: Individual
+        rule_id: "R13"
+        pass_criteria: |
+          The Market Value of the Pivot Trade is less than the Liquidity Threshold corresponding to the Currency and the Remaining Tenor of the instrument.
+        pass_criteria_trade_type: "Pivot"
+
