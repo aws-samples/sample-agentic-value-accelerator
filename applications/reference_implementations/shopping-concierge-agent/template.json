@@ -1,0 +1,37 @@
+{
+  "id": "shopping-concierge-agent",
+  "name": "Shopping Concierge Agent",
+  "description": "AI-powered concierge with shopping assistance, product search, cart management, and mock payment support. Built with Strands SDK, MCP tools, and AWS Bedrock AgentCore. Includes Amplify backend, CDK infrastructure, and React frontend.",
+  "version": "1.0.0",
+  "pattern_type": "orchestration",
+  "type": "reference",
+  "frameworks": [
+    {"id": "strands", "name": "Strands Agents SDK", "path": "concierge_agent", "description": "Strands framework with MCP tool integration"}
+  ],
+  "deployment_patterns": [
+    {"id": "cdk", "name": "AWS CDK", "description": "Multi-stack CDK deployment (Amplify + MCP Servers + Agent + Frontend)", "path": "."}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "shopping-agent"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1", "enum": ["us-east-1", "us-east-2", "us-west-2"]},
+    {"name": "serp_api_key", "type": "string", "description": "SERP API key for product search (optional)", "required": false, "default": "", "input_type": "password", "help_url": "https://serpapi.com/users/sign_up"}
+  ],
+  "example_use_cases": [
+    "Shopping assistant with product recommendations",
+    "Cart management with mock payments",
+    "Agentic payments prototype",
+    "Multi-agent concierge system"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": ["shopping", "payments", "concierge", "strands", "mcp", "amplify", "agentcore"],
+  "outputs": {
+    "agent_endpoint": "Agent Gateway endpoint",
+    "frontend_url": "Frontend CloudFront URL"
+  },
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "shopping_agent_onboarding_request", "outgoing_event": "shopping_agent_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "shopping_agent_offboarding_request", "outgoing_event": "shopping_agent_offboarding_success"}
+  ],
+  "dependencies": []
+}
