@@ -1,0 +1,18 @@
+flowchart TD
+    A["InvestigationRequest\n(entity_id, investigation_type)"] --> B["Orchestrator\nCompliance Investigation Supervisor"]
+    B -->|"investigation_type = full"| C["Parallel Execution"]
+    C --> D["Evidence Gatherer Agent"]
+    C --> E["Pattern Matcher Agent"]
+    C --> F["Regulatory Mapper Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Evidence Gatherer Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Pattern Matcher Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Regulatory Mapper Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(InvestigationResponse)"]
+    H --> I["InvestigationResponse\n(evidence, patterns,
+regulatory_findings)"]

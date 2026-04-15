@@ -1,0 +1,74 @@
+{
+  "entity_id": "CALL001",
+  "call_date": "2024-01-15T14:30:00Z",
+  "duration_seconds": 847,
+  "agent_id": "AGT-2847",
+  "customer_id": "CUST-90421",
+  "call_type": "inbound",
+  "disposition": "resolved",
+  "queue": "retail_banking",
+  "call_segments": [
+    {
+      "speaker": "agent",
+      "timestamp": "00:00",
+      "text": "Thank you for calling First National Bank, this is Sarah speaking. How can I help you today?"
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:08",
+      "text": "Hi Sarah, I noticed two unauthorized charges on my checking account from last week. One for $247.50 and another for $89.99. I need to dispute these."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:22",
+      "text": "I'm sorry to hear about that. Let me pull up your account right away. Can you confirm the last four digits of your account number?"
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:30",
+      "text": "It's 4521."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "00:35",
+      "text": "Thank you. I can see the two charges you mentioned. I'll initiate a dispute for both transactions right now. You should receive provisional credits within 2 business days."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "00:52",
+      "text": "That's great, thank you. Also, should I get a new debit card in case the card number was compromised?"
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "01:02",
+      "text": "That's a great question. Yes, I'd recommend we issue a replacement card. I'll cancel the current card and send a new one. It should arrive within 5-7 business days. In the meantime, you can use your digital wallet."
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "01:20",
+      "text": "Perfect. One more thing - can you also set up transaction alerts so I get notified for any charge over $50?"
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "01:30",
+      "text": "Absolutely. I've set up SMS alerts for transactions over $50. You'll also receive email notifications. Is there anything else I can help with?"
+    },
+    {
+      "speaker": "customer",
+      "timestamp": "01:42",
+      "text": "No, that covers everything. You've been very helpful, Sarah. Thank you."
+    },
+    {
+      "speaker": "agent",
+      "timestamp": "01:48",
+      "text": "You're welcome! Just to confirm - I've initiated disputes for both charges, ordered a replacement card, and set up transaction alerts. If you have any other concerns, don't hesitate to call back. Have a great day!"
+    }
+  ],
+  "metadata": {
+    "channel": "phone",
+    "language": "en",
+    "hold_time_seconds": 45,
+    "transfer_count": 0,
+    "ivr_path": "main_menu > account_services > fraud_dispute"
+  }
+}

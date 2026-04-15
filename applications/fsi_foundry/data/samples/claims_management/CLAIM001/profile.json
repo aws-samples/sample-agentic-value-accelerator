@@ -1,0 +1,22 @@
+{
+  "claim_id": "CLAIM001",
+  "policy_id": "POL-2024-00142",
+  "claimant_name": "[name]",
+  "claim_type": "auto",
+  "incident_date": "2024-01-10",
+  "description": "Rear-end collision at intersection during morning commute. Other driver ran red light.",
+  "coverage_details": {
+    "policy_type": "comprehensive_auto",
+    "deductible": 500,
+    "coverage_limit": 100000,
+    "collision_coverage": true,
+    "rental_car_coverage": true
+  },
+  "estimated_damage": 12500.00,
+  "supporting_documents": [
+    {"type": "police_report", "id": "PR-2024-0892", "status": "received"},
+    {"type": "photos", "count": 8, "status": "received"},
+    {"type": "repair_estimate", "id": "EST-2024-0341", "status": "received"},
+    {"type": "medical_report", "id": "MED-2024-0156", "status": "pending"}
+  ]
+}

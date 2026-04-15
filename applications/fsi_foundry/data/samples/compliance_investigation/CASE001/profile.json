@@ -1,0 +1,14 @@
+{
+  "case_id": "CASE001",
+  "entity_name": "GlobalTrade Financial Services",
+  "entity_type": "corporation",
+  "investigation_scope": "AML/KYC compliance review",
+  "regulatory_frameworks": ["AML", "BSA", "KYC"],
+  "data_sources": ["transaction_records", "communications", "audit_logs"],
+  "status": "open",
+  "opened_date": "2024-01-15",
+  "flagged_transactions": [
+    {"id": "TXN-2024-001", "amount": 150000, "type": "wire_transfer", "flag_reason": "Unusual pattern"},
+    {"id": "TXN-2024-002", "amount": 75000, "type": "cash_deposit", "flag_reason": "Structuring suspected"}
+  ]
+}

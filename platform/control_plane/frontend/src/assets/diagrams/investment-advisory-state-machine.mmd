@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: analysis_type = full
+    Router --> PortfolioAnalyst: analysis_type = portfolio_analyst_only
+    Router --> MarketResearcher: analysis_type = market_researcher_only
+    Router --> ClientProfiler: analysis_type = client_profiler_only
+    ParallelAssessment --> Synthesize
+    PortfolioAnalyst --> Synthesize
+    MarketResearcher --> Synthesize
+    ClientProfiler --> Synthesize
+    Synthesize --> [*]

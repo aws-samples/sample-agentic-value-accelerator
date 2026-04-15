@@ -1,0 +1,14 @@
+{
+  "entity_id": "ENT001",
+  "entity_name": "GlobalTrade Holdings Ltd",
+  "entity_type": "corporate",
+  "monitoring_scope": "adverse media screening",
+  "media_sources": ["news_wires", "regulatory_filings", "court_records", "sanctions_lists", "social_media"],
+  "screening_status": "active",
+  "monitoring_since": "2023-06-01",
+  "flagged_articles": [
+    {"id": "ART001", "date": "2024-01-12", "source": "Financial Times", "headline": "GlobalTrade Holdings under investigation for sanctions evasion", "sentiment": "very_negative"},
+    {"id": "ART002", "date": "2024-01-10", "source": "Reuters", "headline": "Regulatory probe into GlobalTrade Holdings trade finance operations", "sentiment": "negative"},
+    {"id": "ART003", "date": "2024-01-08", "source": "Bloomberg", "headline": "GlobalTrade Holdings reports record quarterly earnings", "sentiment": "positive"}
+  ]
+}

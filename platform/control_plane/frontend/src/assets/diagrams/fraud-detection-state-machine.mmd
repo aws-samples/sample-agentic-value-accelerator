@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: detection_type = full
+    Router --> TransactionMonitor: detection_type = transaction_monitor_only
+    Router --> PatternAnalyst: detection_type = pattern_analyst_only
+    Router --> AlertGenerator: detection_type = alert_generator_only
+    ParallelAssessment --> Synthesize
+    TransactionMonitor --> Synthesize
+    PatternAnalyst --> Synthesize
+    AlertGenerator --> Synthesize
+    Synthesize --> [*]

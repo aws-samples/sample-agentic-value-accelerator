@@ -1,0 +1,7 @@
+flowchart LR
+    A["Select KYC Banking\nin FSI Foundry UI"] --> B["Choose Framework\n& Configure"]
+    B --> C["Step Functions\nOrchestration"]
+    C --> D["CodeBuild\nStage 1: Infra"]
+    D --> E["CodeBuild\nStage 2: Docker"]
+    E --> F["CodeBuild\nStage 3: Runtime"]
+    F --> G["AgentCore\nRuntime Live"]

@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: task_type = full
+    Router --> TaskRouter: task_type = task_router_only
+    Router --> DataLookupAgent: task_type = data_lookup_agent_only
+    Router --> ReportGenerator: task_type = report_generator_only
+    ParallelAssessment --> Synthesize
+    TaskRouter --> Synthesize
+    DataLookupAgent --> Synthesize
+    ReportGenerator --> Synthesize
+    Synthesize --> [*]

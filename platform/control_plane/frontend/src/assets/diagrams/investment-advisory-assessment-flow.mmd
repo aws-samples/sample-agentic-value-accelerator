@@ -1,0 +1,18 @@
+flowchart TD
+    A["AdvisoryRequest\n(entity_id, analysis_type)"] --> B["Orchestrator\nInvestment Advisory Supervisor"]
+    B -->|"analysis_type = full"| C["Parallel Execution"]
+    C --> D["Portfolio Analyst Agent"]
+    C --> E["Market Researcher Agent"]
+    C --> F["Client Profiler Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Portfolio Analyst Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Market Researcher Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Client Profiler Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(AdvisoryResponse)"]
+    H --> I["AdvisoryResponse\n(portfolio_analysis, recommendations,
+client_profile)"]

@@ -1,0 +1,11 @@
+# =============================================================================
+# Lambda / Step Functions Dependencies
+# =============================================================================
+# Install with: pip install -r requirements.txt -r requirements_lambda.txt
+
+# AWS Lambda Powertools (optional but recommended)
+aws-lambda-powertools>=2.0.0
+
+# Note: Most base dependencies from requirements.txt are included in Lambda runtime
+# You may be able to reduce the deployment package size by excluding some base deps
+# that are already available in the Lambda Python runtime environment

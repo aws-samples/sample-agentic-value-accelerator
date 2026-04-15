@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=dev
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - APPLICATION_CATALOG_TABLE=${APPLICATION_CATALOG_TABLE:-}
+      - DEPLOYMENT_METADATA_TABLE=${DEPLOYMENT_METADATA_TABLE:-}
+      - PROJECT_ARCHIVES_BUCKET=${PROJECT_ARCHIVES_BUCKET:-}
+      - FRONTEND_BUCKET=${FRONTEND_BUCKET:-}
+      - TEMPLATES_PATH=/app/templates
+    volumes:
+      - ./src:/app/src
+      - ./platform:/app/platform
+      - ~/.aws:/root/.aws:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  default:
+    name: control-plane-network

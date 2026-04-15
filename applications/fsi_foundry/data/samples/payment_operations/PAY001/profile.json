@@ -1,0 +1,35 @@
+{
+  "payment_id": "PAY-2024-001",
+  "type": "wire_transfer",
+  "status": "exception",
+  "amount": 250000.00,
+  "currency": "USD",
+  "originator": {
+    "name": "Acme Corporation Ltd",
+    "account": "1234567890",
+    "bank": "First National Bank",
+    "country": "US"
+  },
+  "beneficiary": {
+    "name": "Global Supplies Inc",
+    "account": "9876543210",
+    "bank": "International Commerce Bank",
+    "country": "GB"
+  },
+  "exception_details": {
+    "code": "ADDR_MISMATCH",
+    "description": "Beneficiary address does not match bank records",
+    "severity": "medium",
+    "raised_at": "2024-01-15T10:30:00Z"
+  },
+  "settlement": {
+    "expected_date": "2024-01-16",
+    "clearing_system": "SWIFT",
+    "reference": "SWIFT-REF-20240115-001"
+  },
+  "compliance": {
+    "sanctions_screened": true,
+    "sanctions_clear": true,
+    "aml_flagged": false
+  }
+}

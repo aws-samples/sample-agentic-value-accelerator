@@ -1,0 +1,13 @@
+flowchart TD
+    A["AssessmentRequest\n(customer_id, assessment_type)"] --> B["Orchestrator\nSenior Risk Supervisor"]
+    B -->|"assessment_type = full"| C["Parallel Execution"]
+    C --> D["Credit Analyst Agent"]
+    C --> E["Compliance Officer Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: profile,\ncredit_history, transactions"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: profile,\ncompliance, transactions"]
+    D1 --> D2["Credit Risk Analysis"]
+    E1 --> E2["Compliance Assessment"]
+    D2 --> F["Synthesis"]
+    E2 --> F
+    F --> G["Structured Output\n(KYCSynthesisSchema)"]
+    G --> H["AssessmentResponse\n(risk_score, compliance_status,\nrecommendation)"]

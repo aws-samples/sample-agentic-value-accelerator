@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AgentCore infrastructure for Strands agent'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-strands-agent
+    Description: Name of the project
+
+  LangfuseHost:
+    Type: String
+    Default: https://cloud.langfuse.com
+    Description: Langfuse observability endpoint
+
+  LangfusePublicKey:
+    Type: String
+    Default: ''
+    Description: Langfuse public key for tracing
+    NoEcho: true
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Project Configuration
+        Parameters:
+          - ProjectName
+      - Label:
+          default: Observability Configuration
+        Parameters:
+          - LangfuseHost
+          - LangfusePublicKey
+
+Resources:
+  AgentExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - agentcore.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: LangfusePublicKey
+          Value: !Ref LangfusePublicKey
+
+Outputs:
+  ProjectName:
+    Description: Project name
+    Value: !Ref ProjectName
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectName'
+
+  ExecutionRoleArn:
+    Description: IAM role ARN for agent execution
+    Value: !GetAtt AgentExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ExecutionRoleArn'
+
+  LangfuseHost:
+    Description: Langfuse observability endpoint
+    Value: !Ref LangfuseHost
+    Export:
+      Name: !Sub '${AWS::StackName}-LangfuseHost'

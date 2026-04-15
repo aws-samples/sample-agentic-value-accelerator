@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: request_type = full
+    Router --> NeedsAnalyst: request_type = needs_analyst_only
+    Router --> ProductMatcher: request_type = product_matcher_only
+    Router --> UnderwritingAssistant: request_type = underwriting_assistant_only
+    ParallelAssessment --> Synthesize
+    NeedsAnalyst --> Synthesize
+    ProductMatcher --> Synthesize
+    UnderwritingAssistant --> Synthesize
+    Synthesize --> [*]

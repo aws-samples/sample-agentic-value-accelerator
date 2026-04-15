@@ -1,0 +1,18 @@
+flowchart TD
+    A["ScreeningRequest\n(entity_id, screening_type)"] --> B["Orchestrator\nAdverse Media Screening Supervisor"]
+    B -->|"screening_type = full"| C["Parallel Execution"]
+    C --> D["Media Screener Agent"]
+    C --> E["Sentiment Analyst Agent"]
+    C --> F["Risk Signal Extractor Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Media Screener Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Sentiment Analyst Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Risk Signal Extractor Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(ScreeningResponse)"]
+    H --> I["ScreeningResponse\n(media_findings, sentiment,
+risk_signals)"]

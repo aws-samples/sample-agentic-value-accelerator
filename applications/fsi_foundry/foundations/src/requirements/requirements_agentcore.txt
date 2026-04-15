@@ -1,0 +1,19 @@
+# =============================================================================
+# AgentCore Runtime Dependencies
+# =============================================================================
+# Install with: pip install -r requirements.txt -r requirements_agentcore.txt
+
+# Amazon Bedrock AgentCore Runtime SDK
+bedrock-agentcore>=0.1.0
+
+# Strands Agents SDK (for Strands-based agents)
+strands-agents>=0.1.0
+
+# Observability (recommended for AgentCore)
+aws-opentelemetry-distro>=0.2.0
+
+# Pin starlette to 0.x — starlette 1.0.0 has breaking changes that prevent
+# the bedrock-agentcore runtime from starting in AgentCore
+starlette<1.0.0
+
+# Note: All base dependencies from requirements.txt are still required

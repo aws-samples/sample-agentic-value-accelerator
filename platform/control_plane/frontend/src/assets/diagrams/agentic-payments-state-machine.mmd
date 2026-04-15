@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: validation_type = full
+    Router --> PaymentValidator: validation_type = payment_validator_only
+    Router --> RoutingAgent: validation_type = routing_agent_only
+    Router --> ReconciliationAgent: validation_type = reconciliation_agent_only
+    ParallelAssessment --> Synthesize
+    PaymentValidator --> Synthesize
+    RoutingAgent --> Synthesize
+    ReconciliationAgent --> Synthesize
+    Synthesize --> [*]

@@ -1,0 +1,22 @@
+{
+  "claim_id": "CLAIM002",
+  "policy_id": "POL-2024-00287",
+  "claimant_name": "[name]",
+  "claim_type": "property",
+  "incident_date": "2024-02-15",
+  "description": "Water damage from burst pipe in basement. Flooding affected finished basement and stored belongings.",
+  "coverage_details": {
+    "policy_type": "homeowners",
+    "deductible": 1000,
+    "coverage_limit": 250000,
+    "water_damage_coverage": true,
+    "personal_property_coverage": true
+  },
+  "estimated_damage": 45000.00,
+  "supporting_documents": [
+    {"type": "photos", "count": 15, "status": "received"},
+    {"type": "plumber_report", "id": "PLB-2024-0112", "status": "received"},
+    {"type": "contractor_estimate", "id": "EST-2024-0567", "status": "received"},
+    {"type": "inventory_list", "id": "INV-2024-0089", "status": "received"}
+  ]
+}
