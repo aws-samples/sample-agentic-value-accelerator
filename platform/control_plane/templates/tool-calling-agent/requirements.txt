@@ -9,7 +9,7 @@ pydantic==2.9.2
 langchain==0.1.0
 langchain-core==0.1.0
 langchain-community==0.0.13
-langgraph==0.0.20
+langgraph==1.0.10rc1
 langchain-aws==0.0.1
 
 # AWS
