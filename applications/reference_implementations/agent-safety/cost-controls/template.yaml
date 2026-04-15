@@ -1,0 +1,387 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Agent Safety — Cost Controls Infrastructure.
+  Creates: SNS topic, EventBridge rule, Auto Budget Lambda, Stop Sessions Lambda.
+  When any AgentCore agent is created/deleted, budgets are auto-managed
+  and cost signals are written to DynamoDB for the dashboard.
+
+  Deploy: aws cloudformation deploy --template-file template.yaml \
+    --stack-name agent-safety-cost-controls --capabilities CAPABILITY_NAMED_IAM
+
+Parameters:
+  DefaultBudgetUsd:
+    Type: Number
+    Default: 2.0
+    Description: Default monthly budget in USD for new agents
+
+  BudgetPrefix:
+    Type: String
+    Default: agent-
+    Description: Prefix for AWS Budget names
+
+  CostSignalsTableName:
+    Type: String
+    Default: cost-signals
+    Description: DynamoDB table for cost signals (must exist)
+
+  RegistryTableName:
+    Type: String
+    Default: agent-registry
+    Description: DynamoDB table for agent registry (must exist)
+
+  SessionTableName:
+    Type: String
+    Default: session-token-usage
+    Description: DynamoDB table for session tracking (must exist)
+
+  InterventionTableName:
+    Type: String
+    Default: intervention-log
+    Description: DynamoDB table for intervention audit log (must exist)
+
+Resources:
+
+  # =========================================================================
+  # SNS Topic — Shared notification channel for budget alerts
+  # =========================================================================
+  CostAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: agent-cost-alerts
+      Tags:
+        - Key: component
+          Value: agent-safety-cost-controls
+
+  # =========================================================================
+  # Auto Budget Lambda — Creates/deletes budgets on agent lifecycle events
+  # =========================================================================
+  AutoBudgetLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-AutoBudgetRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AutoBudgetPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: BudgetManagement
+                Effect: Allow
+                Action:
+                  - budgets:ModifyBudget
+                  - budgets:ViewBudget
+                Resource: '*'
+              - Sid: DynamoDBWriteSignals
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CostSignalsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTableName}'
+              - Sid: STSGetAccount
+                Effect: Allow
+                Action:
+                  - sts:GetCallerIdentity
+                Resource: '*'
+
+  AutoBudgetLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: AutoBudgetLambdaRole
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-AutoBudget'
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 128
+      Role: !GetAtt AutoBudgetLambdaRole.Arn
+      Environment:
+        Variables:
+          DEFAULT_BUDGET_USD: !Ref DefaultBudgetUsd
+          SNS_TOPIC_ARN: !Ref CostAlertsTopic
+          BUDGET_PREFIX: !Ref BudgetPrefix
+          COST_SIGNALS_TABLE: !Ref CostSignalsTableName
+          REGISTRY_TABLE: !Ref RegistryTableName
+          REGION: !Ref AWS::Region
+      Code:
+        ZipFile: |
+          import json, logging, os, boto3
+          from datetime import datetime, timezone
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          DEFAULT_BUDGET_USD = float(os.environ.get("DEFAULT_BUDGET_USD", "2.0"))
+          SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN", "")
+          BUDGET_PREFIX = os.environ.get("BUDGET_PREFIX", "agent-")
+          COST_SIGNALS_TABLE = os.environ.get("COST_SIGNALS_TABLE", "cost-signals")
+          REGISTRY_TABLE = os.environ.get("REGISTRY_TABLE", "agent-registry")
+          REGION = os.environ.get("REGION", "us-east-1")
+          retry = Config(retries={"max_attempts": 3, "mode": "adaptive"})
+          budgets_client = boto3.client("budgets", region_name="us-east-1", config=retry)
+          dynamodb = boto3.resource("dynamodb", region_name=REGION)
+          try: AWS_ACCOUNT_ID = os.environ.get("AWS_ACCOUNT_ID","") or boto3.client("sts").get_caller_identity()["Account"]
+          except: AWS_ACCOUNT_ID = os.environ.get("AWS_ACCOUNT_ID","")
+
+          def _write_cost_signal(name, budget_name, limit):
+              now = datetime.now(timezone.utc)
+              try:
+                  dynamodb.Table(COST_SIGNALS_TABLE).put_item(Item={"agent_name":name,"budget_name":budget_name,"budget_limit_usd":str(round(limit,2)),"actual_spend_usd":"0.0","forecasted_spend_usd":"0.0","pct_used":"0.0","forecast_pct":"0.0","severity":"low","synced_at":now.isoformat(),"expires_at":int(now.timestamp())+86400})
+              except ClientError as e: logger.warning(f"Cost signal write failed: {e}")
+
+          def _write_registry(name, arn, tags):
+              now = datetime.now(timezone.utc).isoformat()
+              try:
+                  dynamodb.Table(REGISTRY_TABLE).update_item(Key={"agent_name":name},UpdateExpression="SET agent_runtime_arn=:arn,runtime_status=:st,tags=:tags,last_synced=:now,team=if_not_exists(team,:dt),environment=if_not_exists(environment,:de),#s=if_not_exists(#s,:ds),created_at=if_not_exists(created_at,:now)",ExpressionAttributeNames={"#s":"status"},ExpressionAttributeValues={":arn":arn,":st":"CREATING",":tags":tags,":now":now,":dt":"default",":de":"production",":ds":"active"})
+              except ClientError as e: logger.warning(f"Registry write failed: {e}")
+
+          def handler(event, context):
+              logger.info(f"Event: {json.dumps(event)}")
+              detail = event.get("detail",{})
+              event_name = detail.get("eventName","")
+              rp = detail.get("requestParameters",{})
+              re = detail.get("responseElements",{})
+              agent_name = rp.get("agentRuntimeName","")
+              agent_arn = re.get("agentRuntimeArn","")
+              rid = rp.get("agentRuntimeId","") or re.get("agentRuntimeId","")
+              if not agent_name and rid:
+                  parts = rid.rsplit("-",1)
+                  agent_name = parts[0] if len(parts)==2 else rid
+              if not agent_name: return {"statusCode":200,"body":"no agent name"}
+
+              if event_name == "CreateAgentRuntime":
+                  tags = rp.get("tags",{})
+                  tag_value = tags.get("agent-name", agent_name)
+                  budget_name = f"{BUDGET_PREFIX}{agent_name}"
+                  # Create budget
+                  try:
+                      params = {"AccountId":AWS_ACCOUNT_ID,"Budget":{"BudgetName":budget_name,"BudgetLimit":{"Amount":str(DEFAULT_BUDGET_USD),"Unit":"USD"},"BudgetType":"COST","TimeUnit":"MONTHLY","CostFilters":{"TagKeyValue":[f"user:agent-name${tag_value}"]}}}
+                      notifs = []
+                      if SNS_TOPIC_ARN:
+                          for t in [80.0,100.0]:
+                              notifs.append({"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":t,"ThresholdType":"PERCENTAGE"},"Subscribers":[{"SubscriptionType":"SNS","Address":SNS_TOPIC_ARN}]})
+                      if notifs: params["NotificationsWithSubscribers"] = notifs
+                      budgets_client.create_budget(**params)
+                      status = "created"
+                      logger.info(f"Budget created: {budget_name}")
+                  except ClientError as e:
+                      status = "exists" if "DuplicateRecordException" in str(e) else "error"
+                      logger.info(f"Budget result: {status} - {e}")
+                  _write_cost_signal(agent_name, budget_name, DEFAULT_BUDGET_USD)
+                  _write_registry(agent_name, agent_arn, tags)
+                  return {"statusCode":200,"body":json.dumps({"status":status,"budget_name":budget_name})}
+
+              elif event_name == "DeleteAgentRuntime":
+                  budget_name = f"{BUDGET_PREFIX}{agent_name}"
+                  try: budgets_client.delete_budget(AccountId=AWS_ACCOUNT_ID,BudgetName=budget_name); status="deleted"
+                  except ClientError: status="not_found"
+                  try: dynamodb.Table(COST_SIGNALS_TABLE).delete_item(Key={"agent_name":agent_name})
+                  except ClientError: pass
+                  try:
+                      now=datetime.now(timezone.utc).isoformat()
+                      dynamodb.Table(REGISTRY_TABLE).update_item(Key={"agent_name":agent_name},UpdateExpression="SET runtime_status=:st,#s=:ds,deleted_at=:now,last_synced=:now",ExpressionAttributeNames={"#s":"status"},ExpressionAttributeValues={":st":"DELETED",":ds":"deleted",":now":now})
+                  except ClientError: pass
+                  return {"statusCode":200,"body":json.dumps({"status":status,"budget_name":budget_name})}
+
+              return {"statusCode":200,"body":f"unhandled: {event_name}"}
+      Tags:
+        - Key: component
+          Value: agent-safety-cost-controls
+
+  # =========================================================================
+  # EventBridge Rule — Triggers Auto Budget Lambda on agent lifecycle
+  # =========================================================================
+  AgentLifecycleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-AgentLifecycle'
+      Description: Triggers auto budget creation/deletion on AgentCore runtime events
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.bedrock-agentcore
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - bedrock-agentcore.amazonaws.com
+          eventName:
+            - CreateAgentRuntime
+            - DeleteAgentRuntime
+      Targets:
+        - Id: AutoBudgetTarget
+          Arn: !GetAtt AutoBudgetLambda.Arn
+
+  AutoBudgetLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AutoBudgetLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AgentLifecycleRule.Arn
+
+  # =========================================================================
+  # Stop Sessions Lambda — Bulk stop sessions (invoked by dashboard)
+  # =========================================================================
+  StopSessionsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-StopSessionsRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StopSessionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoDBAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${InterventionTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CostSignalsTableName}'
+              - Sid: AgentCoreStopSession
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:StopRuntimeSession
+                Resource: '*'
+
+  StopSessionsLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: StopSessionsLambdaRole
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-StopSessions'
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 256
+      Role: !GetAtt StopSessionsLambdaRole.Arn
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          SESSION_TABLE: !Ref SessionTableName
+          INTERVENTION_TABLE: !Ref InterventionTableName
+          REGISTRY_TABLE: !Ref RegistryTableName
+          COST_SIGNALS_TABLE: !Ref CostSignalsTableName
+      Code:
+        ZipFile: |
+          import json, logging, os, uuid, boto3
+          from datetime import datetime, timezone
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          REGION = os.environ.get("REGION","us-east-1")
+          SESSION_TABLE = os.environ.get("SESSION_TABLE","session-token-usage")
+          INTERVENTION_TABLE = os.environ.get("INTERVENTION_TABLE","intervention-log")
+          REGISTRY_TABLE = os.environ.get("REGISTRY_TABLE","agent-registry")
+          COST_SIGNALS_TABLE = os.environ.get("COST_SIGNALS_TABLE","cost-signals")
+          retry = Config(retries={"max_attempts":3,"mode":"adaptive"})
+          agentcore = boto3.client("bedrock-agentcore",region_name=REGION,config=retry)
+          dynamodb = boto3.resource("dynamodb",region_name=REGION)
+
+          def _norm(n): return n.lower().replace("-","").replace("_","")
+          def _status(hb,st=""):
+              if st in ("terminated","completed"): return "inactive"
+              try:
+                  m=(datetime.now(timezone.utc)-datetime.fromisoformat(hb)).total_seconds()/60
+                  return "active" if m<=6 else ("idle" if m<=30 else "inactive")
+              except: return "unknown"
+
+          def _resolve_arn(name):
+              norm=_norm(name)
+              try:
+                  t=dynamodb.Table(REGISTRY_TABLE)
+                  r=t.get_item(Key={"agent_name":name}).get("Item")
+                  if r and r.get("agent_runtime_arn"): return r["agent_runtime_arn"]
+                  for i in t.scan().get("Items",[]):
+                      if _norm(i.get("agent_name",""))==norm and i.get("agent_runtime_arn"): return i["agent_runtime_arn"]
+              except ClientError: pass
+              return None
+
+          def handler(event, context):
+              name,reason,admin=event.get("agent_name",""),event.get("reason",""),event.get("admin_user","")
+              if not all([name,reason,admin]): return {"statusCode":400,"body":json.dumps({"error":"agent_name, reason, admin_user required"})}
+              arn=_resolve_arn(name)
+              if not arn: return {"statusCode":404,"body":json.dumps({"error":f"Agent '{name}' not found in registry"})}
+              st=dynamodb.Table(SESSION_TABLE)
+              norm=_norm(name)
+              try: items=st.scan().get("Items",[])
+              except ClientError as e: return {"statusCode":500,"body":json.dumps({"error":str(e)})}
+              active=[s for s in items if _norm(s.get("agent_name",""))==norm and _status(s.get("last_heartbeat",""),s.get("status","")) in ("active","idle")]
+              if not active: return {"statusCode":200,"body":json.dumps({"agent_name":name,"agent_runtime_arn":arn,"total_sessions":0,"stopped":0,"failed":0,"results":[],"intervention_ids":[]})}
+              results,iids,it=[],[],dynamodb.Table(INTERVENTION_TABLE)
+              for s in active:
+                  sid=s["session_id"]; sr,se="stopped",""
+                  try: agentcore.stop_runtime_session(agentRuntimeArn=arn,runtimeSessionId=sid,clientToken=f"stop-{sid}-{uuid.uuid5(uuid.NAMESPACE_DNS,sid)}")
+                  except ClientError as e:
+                      c=e.response["Error"]["Code"]
+                      if c in ("ResourceNotFoundException","404"): sr="not_found"
+                      elif c=="ConflictException": sr="already_stopping"
+                      else: sr,se="error",str(e)
+                  results.append({"session_id":sid,"status":sr})
+                  if sr in ("stopped","not_found","already_stopping"):
+                      try: st.update_item(Key={"session_id":sid},UpdateExpression="SET #s=:s",ExpressionAttributeNames={"#s":"status"},ExpressionAttributeValues={":s":"terminated"})
+                      except: pass
+                  iid=str(uuid.uuid4()); now=datetime.now(timezone.utc).isoformat()
+                  try:
+                      item={"intervention_id":iid,"timestamp":now,"agent_runtime_arn":arn,"agent_name":name,"session_id":sid,"action":"stop_session","triggered_by":"human","reason":reason,"admin_user":admin,"stop_result":sr,"rollback_status":"none"}
+                      if se: item["error_detail"]=se
+                      it.put_item(Item=item); iids.append(iid)
+                  except: pass
+                  try: dynamodb.Table(COST_SIGNALS_TABLE).update_item(Key={"agent_name":name},UpdateExpression="SET last_action=:a,last_action_at=:t",ExpressionAttributeValues={":a":"session_stopped",":t":now})
+                  except: pass
+              stopped=sum(1 for r in results if r["status"] in ("stopped","not_found","already_stopping"))
+              return {"statusCode":200,"body":json.dumps({"agent_name":name,"agent_runtime_arn":arn,"total_sessions":len(active),"stopped":stopped,"failed":len(active)-stopped,"results":results,"intervention_ids":iids})}
+      Tags:
+        - Key: component
+          Value: agent-safety-cost-controls
+
+Outputs:
+  SNSTopicArn:
+    Description: SNS topic for budget alerts (subscribe your email/Slack here)
+    Value: !Ref CostAlertsTopic
+
+  AutoBudgetLambdaArn:
+    Description: Lambda that auto-creates budgets when agents are deployed
+    Value: !GetAtt AutoBudgetLambda.Arn
+
+  StopSessionsLambdaArn:
+    Description: Lambda for bulk session termination (invoked by dashboard)
+    Value: !GetAtt StopSessionsLambda.Arn
+
+  StopSessionsLambdaName:
+    Description: Lambda function name (set as STOP_SESSIONS_LAMBDA in dashboard)
+    Value: !Sub '${AWS::StackName}-StopSessions'
+
+  EventBridgeRuleArn:
+    Description: EventBridge rule that triggers on agent create/delete
+    Value: !GetAtt AgentLifecycleRule.Arn
+
+  DeployCommand:
+    Description: How to deploy this stack
+    Value: !Sub 'aws cloudformation deploy --template-file template.yaml --stack-name ${AWS::StackName} --capabilities CAPABILITY_NAMED_IAM'

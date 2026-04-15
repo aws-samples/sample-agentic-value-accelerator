@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Safety Control Panel</title>
+<style>
+:root { --bg:#0f1117; --surface:#1a1d27; --surface2:#232733; --border:#2d3140; --text:#e4e6eb; --text2:#8b8fa3; --accent:#3b82f6; --green:#22c55e; --yellow:#eab308; --red:#ef4444; --orange:#f97316; --purple:#a855f7; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text)}
+.app{display:flex;height:100vh}
+.sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);padding:16px;flex-shrink:0;overflow-y:auto}
+.main{flex:1;overflow-y:auto;padding:24px}
+.logo{font-size:16px;font-weight:700;color:var(--accent);margin-bottom:24px;display:flex;align-items:center;gap:8px}
+.nav-item{padding:10px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text2);margin-bottom:2px;display:flex;align-items:center;gap:8px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--accent);color:#fff}
+.nav-section{font-size:10px;text-transform:uppercase;color:var(--text2);margin:16px 0 8px;letter-spacing:1px}
+.sync-btn{margin-top:16px;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:11px;width:100%;text-align:center}
+.sync-btn:hover{background:var(--border);color:var(--text)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px}
+.card-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.card-value{font-size:28px;font-weight:700}
+.card-sub{font-size:11px;color:var(--text2);margin-top:4px}
+.card-green .card-value{color:var(--green)} .card-yellow .card-value{color:var(--yellow)} .card-red .card-value{color:var(--red)}
+.section-title{font-size:16px;font-weight:600;margin-bottom:14px}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--surface2);padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--text2);letter-spacing:.5px}
+td{padding:12px 14px;border-top:1px solid var(--border)}
+tr:hover td{background:var(--surface2)}
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-ready{background:rgba(34,197,94,.15);color:var(--green)} .badge-creating{background:rgba(234,179,8,.15);color:var(--yellow)} .badge-stopped{background:rgba(239,68,68,.15);color:var(--red)} .badge-warning{background:rgba(249,115,22,.15);color:var(--orange)}
+.detail-overlay{position:fixed;top:0;right:0;width:520px;height:100vh;background:var(--surface);border-left:1px solid var(--border);box-shadow:-4px 0 20px rgba(0,0,0,.3);z-index:100;overflow-y:auto;padding:24px;transform:translateX(100%);transition:transform .25s ease}
+.detail-overlay.open{transform:translateX(0)}
+.detail-close{position:absolute;top:16px;right:16px;background:var(--surface2);border:1px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.detail-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.detail-subtitle{font-size:12px;color:var(--text2);margin-bottom:20px}
+.detail-section{margin-bottom:20px} .detail-section h3{font-size:12px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;letter-spacing:.5px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.detail-item{background:var(--surface2);border-radius:6px;padding:10px} .detail-item-label{font-size:10px;color:var(--text2)} .detail-item-value{font-size:14px;font-weight:600;margin-top:2px}
+.metric-bar{height:4px;background:var(--border);border-radius:2px;margin-top:6px} .metric-bar-fill{height:100%;border-radius:2px}
+.btn{padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600}
+.btn-danger{background:var(--red);color:#fff} .btn-danger:hover{background:#dc2626}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)} .btn-secondary:hover{background:var(--border)}
+.modal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:440px}
+.modal h2{font-size:16px;margin-bottom:4px} .modal p{font-size:12px;color:var(--text2);margin-bottom:16px}
+.modal textarea{width:100%;height:80px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px;font-size:13px;resize:vertical;font-family:inherit}
+.modal textarea:focus{outline:none;border-color:var(--accent)}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+.modal label{font-size:12px;color:var(--text2);display:block;margin-bottom:6px}
+.modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:13px;margin-bottom:12px;font-family:inherit}
+.modal input:focus{outline:none;border-color:var(--accent)}
+.error-text{color:var(--red);font-size:11px;margin-top:4px;display:none}
+.session-row{background:var(--surface2);border-radius:6px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.session-id{font-weight:600;font-family:monospace;font-size:11px} .session-meta{color:var(--text2);font-size:11px;margin-top:2px}
+.conn-status{position:fixed;bottom:12px;right:12px;font-size:11px;padding:4px 10px;border-radius:12px;z-index:50}
+.conn-ok{background:rgba(34,197,94,.15);color:var(--green)} .conn-err{background:rgba(239,68,68,.15);color:var(--red)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="logo"><span>🛡️</span> Agent Safety</div>
+    <div class="nav-section">Signals</div>
+    <div class="nav-item active" onclick="showView('cost-signals',event)">💰 Cost Signals</div>
+    <div class="nav-item" onclick="showView('eval-signals',event)">🧪 Evaluation Signals</div>
+    <div class="nav-item" onclick="showView('obs-signals',event)">📡 Observability Signals</div>
+    <div class="nav-section">Registry</div>
+    <div class="nav-item" onclick="showView('registry',event)">🤖 Agent Registry</div>
+    <button class="sync-btn" id="sync-btn" onclick="triggerSync()">🔄 Sync from AWS</button>
+    <div id="sync-status" style="font-size:10px;color:var(--text2);margin-top:6px;text-align:center"></div>
+    <div id="auth-info" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)"></div>
+  </div>
+  <div class="main" id="main-content"></div>
+</div>
+<div class="detail-overlay" id="detail-panel"><button class="detail-close" onclick="closeDetail()">✕</button><div id="detail-content"></div></div>
+<div class="modal-bg" id="stop-modal"><div class="modal"><h2>🛑 Stop Sessions</h2><p>This will immediately terminate agent sessions. Cannot be undone.</p><div id="stop-modal-info" style="background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:14px;font-size:12px"></div><label>Your Name / Email *</label><input type="text" id="stop-admin" placeholder="jane.doe@company.com"/><label>Reason *</label><textarea id="stop-reason" placeholder="Describe why..."></textarea><div class="error-text" id="stop-error">Both fields are required.</div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeStopModal()">Cancel</button><button class="btn btn-danger" id="stop-confirm-btn">Stop All Sessions</button></div></div></div>
+<div class="conn-status conn-err" id="conn-status">● Connecting...</div>
+<script>
+var API_BASE=window.location.origin, REFRESH_MS=90000;
+var REGISTRY=[],SESSIONS=[],INTERVENTIONS=[],COST_SIGNALS=[],OBS_SIGNALS=[],EVAL_SIGNALS=[];
+var currentView='cost-signals',currentStopTarget=null,apiConnected=false;
+var AUTH_CONFIG=null, AUTH_TOKEN=null, AUTH_USER=null;
+
+// Auth-aware API helper — adds Bearer token when auth is enabled
+async function api(p,o){
+  o=o||{};
+  if(AUTH_TOKEN){
+    o.headers=Object.assign({'Authorization':'Bearer '+AUTH_TOKEN},o.headers||{});
+  }
+  var r=await fetch(API_BASE+p,o);
+  if(r.status===401){handleAuthExpired();throw new Error('401 Unauthorized')}
+  if(!r.ok)throw new Error(r.status);
+  return r.json();
+}
+
+// --- Cognito Auth Flow ---
+async function initAuth(){
+  try{
+    AUTH_CONFIG=await(await fetch(API_BASE+'/api/auth/config')).json();
+  }catch(e){AUTH_CONFIG={enabled:false};return}
+  if(!AUTH_CONFIG.enabled)return;
+
+  // Check for auth code in URL (callback from Cognito)
+  var params=new URLSearchParams(window.location.search);
+  var code=params.get('code');
+  if(code){
+    window.history.replaceState({},'',window.location.pathname);
+    try{
+      var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+      var res=await(await fetch(API_BASE+'/api/auth/token',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({code:code,redirect_uri:redirect_uri})})).json();
+      if(res.id_token){
+        localStorage.setItem('auth_id_token',res.id_token);
+        localStorage.setItem('auth_refresh_token',res.refresh_token||'');
+      }
+    }catch(e){console.error('Token exchange failed:',e)}
+  }
+
+  // Load token from storage
+  AUTH_TOKEN=localStorage.getItem('auth_id_token')||null;
+  if(AUTH_TOKEN){
+    try{
+      var payload=JSON.parse(atob(AUTH_TOKEN.split('.')[1]));
+      if(payload.exp*1000<Date.now()){AUTH_TOKEN=null;localStorage.removeItem('auth_id_token')}
+      else{AUTH_USER=payload.email||payload['cognito:username']||'user'}
+    }catch(e){AUTH_TOKEN=null}
+  }
+
+  // If no valid token, redirect to Cognito login
+  if(!AUTH_TOKEN){
+    var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+    var loginUrl='https://'+AUTH_CONFIG.domain+'/login?client_id='+AUTH_CONFIG.clientId+
+      '&response_type=code&scope=openid+email+profile&redirect_uri='+encodeURIComponent(redirect_uri);
+    window.location.href=loginUrl;
+    return;
+  }
+
+  // Show user info in sidebar
+  updateAuthUI();
+}
+
+function handleAuthExpired(){
+  localStorage.removeItem('auth_id_token');
+  AUTH_TOKEN=null;AUTH_USER=null;
+  if(AUTH_CONFIG&&AUTH_CONFIG.enabled){
+    var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+    window.location.href='https://'+AUTH_CONFIG.domain+'/login?client_id='+AUTH_CONFIG.clientId+
+      '&response_type=code&scope=openid+email+profile&redirect_uri='+encodeURIComponent(redirect_uri);
+  }
+}
+
+function logout(){
+  localStorage.removeItem('auth_id_token');
+  localStorage.removeItem('auth_refresh_token');
+  AUTH_TOKEN=null;AUTH_USER=null;
+  if(AUTH_CONFIG&&AUTH_CONFIG.enabled&&AUTH_CONFIG.domain){
+    var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+    window.location.href='https://'+AUTH_CONFIG.domain+'/logout?client_id='+AUTH_CONFIG.clientId+
+      '&logout_uri='+encodeURIComponent(redirect_uri);
+  }else{window.location.reload()}
+}
+
+function updateAuthUI(){
+  var el=document.getElementById('auth-info');
+  if(!el)return;
+  if(AUTH_USER){
+    el.innerHTML='<div style="font-size:11px;color:var(--text2);margin-bottom:4px">Signed in as</div>'+
+      '<div style="font-size:12px;color:var(--text);margin-bottom:8px;word-break:break-all">'+AUTH_USER+'</div>'+
+      '<button onclick="logout()" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:11px">Sign Out</button>';
+  }else if(AUTH_CONFIG&&AUTH_CONFIG.enabled){
+    el.innerHTML='<div style="font-size:11px;color:var(--red)">Not signed in</div>';
+  }else{
+    el.innerHTML='<div style="font-size:11px;color:var(--text2)">Auth disabled (local dev)</div>';
+  }
+}
+function fmtDate(d){return d?String(d).replace('T',' ').slice(0,19):'—'}
+function badgeClass(s){if(!s)return'ready';s=s.toLowerCase();if(s==='ready'||s==='active')return'ready';if(s.includes('fail')||s==='deleting')return'stopped';if(s.includes('creat')||s.includes('updat'))return'creating';return'ready'}
+function fmtNum(n){n=Number(n)||0;if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'K';return String(n)}
+function fmtUsd(n){return'$'+Number(n).toFixed(2)}
+function normalize(n){return(n||'').toLowerCase().replace(/[_-]/g,'')}
+
+async function triggerSync(){
+  var btn=document.getElementById('sync-btn'),st=document.getElementById('sync-status');
+  btn.textContent='⏳ Syncing...';st.textContent='';
+  try{var res=await api('/api/sync',{method:'POST'});var r=res.results||{};
+    st.textContent='Registry:'+(r.registry?.synced||0)+' Cost:'+(r.cost_signals?.signals_written||0)+' Obs:'+(r.obs_signals?.signals_written||0)+' Eval:'+(r.eval_signals?.signals_written||0);
+    st.style.color='var(--green)';await loadData();
+  }catch(e){st.textContent='Failed: '+e.message;st.style.color='var(--red)'}
+  btn.textContent='🔄 Sync from AWS';
+}
+
+async function loadData(){
+  try{var r=await Promise.all([
+    api('/api/registry').catch(()=>({agents:[]})),api('/api/sessions').catch(()=>({sessions:[]})),
+    api('/api/interventions').catch(()=>({interventions:[]})),api('/api/cost-signals').catch(()=>({signals:[]})),
+    api('/api/obs-signals').catch(()=>({signals:[]})),api('/api/eval-signals').catch(()=>({signals:[]}))]);
+    REGISTRY=r[0].agents||[];SESSIONS=r[1].sessions||[];INTERVENTIONS=r[2].interventions||[];
+    COST_SIGNALS=r[3].signals||[];OBS_SIGNALS=r[4].signals||[];EVAL_SIGNALS=r[5].signals||[];
+    apiConnected=true;document.getElementById('conn-status').className='conn-status conn-ok';
+    document.getElementById('conn-status').textContent='● Connected — auto-refresh 90s';renderCurrentView();
+  }catch(e){apiConnected=false;document.getElementById('conn-status').className='conn-status conn-err';
+    document.getElementById('conn-status').textContent='● API disconnected';
+    document.getElementById('main-content').innerHTML='<div style="text-align:center;padding:60px;color:var(--red)">Cannot connect to API<br><span style="font-size:12px;color:var(--text2)">Run: uvicorn api:app --port 8000</span></div>'}
+}
+
+function showView(v,e){currentView=v;document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));if(e&&e.target)e.target.classList.add('active');renderCurrentView()}
+function renderCurrentView(){var el=document.getElementById('main-content');
+  if(currentView==='cost-signals')el.innerHTML=renderCostSignals();
+  else if(currentView==='eval-signals')el.innerHTML=renderEvalSignals();
+  else if(currentView==='obs-signals')el.innerHTML=renderObsSignals();
+  else if(currentView==='registry')el.innerHTML=renderRegistry()}
+
+function renderCostSignals(){
+  var s=COST_SIGNALS,cr=s.filter(x=>x.severity==='critical'),md=s.filter(x=>x.severity==='medium'),lo=s.filter(x=>x.severity==='low');
+  function cb(v){return v==='critical'?'<span class="badge badge-stopped">critical</span>':v==='medium'?'<span class="badge badge-warning">medium</span>':'<span class="badge badge-ready">low</span>'}
+  function pb(p,v){var c=v==='critical'?'var(--red)':v==='medium'?'var(--yellow)':'var(--green)';return'<div class="metric-bar" style="width:100px;display:inline-block;vertical-align:middle;margin-left:8px"><div class="metric-bar-fill" style="width:'+Math.min(Number(p),100)+'%;background:'+c+'"></div></div>'}
+  return'<div class="section-title">💰 Cost Signals ('+s.length+' agents)</div>'+
+    '<p style="font-size:12px;color:var(--text2);margin-bottom:14px">Cost data from AWS Budgets (synced to DynamoDB). Click "Sync from AWS" to refresh.</p>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">'+
+    '<div class="card card-green"><div class="card-label">Low</div><div class="card-value">'+lo.length+'</div><div class="card-sub">&lt;80%</div></div>'+
+    '<div class="card card-yellow"><div class="card-label">Medium</div><div class="card-value">'+md.length+'</div><div class="card-sub">80-100%</div></div>'+
+    '<div class="card card-red"><div class="card-label">Critical</div><div class="card-value">'+cr.length+'</div><div class="card-sub">&gt;100%</div></div></div>'+
+    (s.length===0?'<div style="font-size:13px;color:var(--text2);padding:20px">No cost signals. Click "Sync from AWS" to populate.</div>':
+    '<div class="table-wrap"><table><tr><th>Agent</th><th>Budget</th><th>Actual</th><th>Forecast</th><th>% Used</th><th>Severity</th><th>Action</th></tr>'+
+    s.map(x=>{var acted=x.last_action==='session_stopped';return'<tr onclick="openAgentDetail(\''+x.agent_name+'\')" style="cursor:pointer;'+(acted?'opacity:.6':'')+'">'+'<td style="font-weight:600">'+x.agent_name+(acted?' <span style="font-size:10px;color:var(--text2)">(acted)</span>':'')+'</td><td>'+fmtUsd(x.budget_limit_usd)+'</td><td style="font-weight:600;color:'+(x.severity==='critical'?'var(--red)':x.severity==='medium'?'var(--yellow)':'var(--text)')+'">'+fmtUsd(x.actual_spend_usd)+'</td><td style="color:var(--text2)">'+(Number(x.forecasted_spend_usd)>0?fmtUsd(x.forecasted_spend_usd):'—')+'</td><td>'+x.pct_used+'%'+pb(x.pct_used,x.severity)+'</td><td>'+cb(x.severity)+'</td><td><button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();openStopModal(\''+x.agent_name+'\',\''+fmtUsd(x.actual_spend_usd)+'\',\''+fmtUsd(x.budget_limit_usd)+'\')">Stop Sessions</button></td></tr>'}).join('')+'</table></div>')}
+
+function renderEvalSignals(){
+  // Separate alarm summaries from per-evaluator records
+  var summaries=EVAL_SIGNALS.filter(x=>x.signal_key==='alarm_summary');
+  var ok=summaries.filter(x=>(x.alarm_state||'')=='OK');
+  var insuf=summaries.filter(x=>(x.alarm_state||'')==='INSUFFICIENT_DATA');
+  var alarm=summaries.filter(x=>(x.alarm_state||'')==='ALARM');
+  function ab(st){return st==='ALARM'?'<span class="badge badge-stopped">ALARM</span>':st==='INSUFFICIENT_DATA'?'<span class="badge badge-warning">NO DATA</span>':'<span class="badge badge-ready">OK</span>'}
+  return'<div class="section-title">🧪 Evaluation Signals ('+summaries.length+' agents)</div>'+
+    '<p style="font-size:12px;color:var(--text2);margin-bottom:14px">AgentCore Online Evaluations with CloudWatch alarms. Click an agent to see evaluator breakdown.</p>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">'+
+    '<div class="card card-green"><div class="card-label">OK</div><div class="card-value">'+ok.length+'</div><div class="card-sub">all passing</div></div>'+
+    '<div class="card card-yellow"><div class="card-label">No Data</div><div class="card-value">'+insuf.length+'</div><div class="card-sub">waiting for evals</div></div>'+
+    '<div class="card card-red"><div class="card-label">ALARM</div><div class="card-value">'+alarm.length+'</div><div class="card-sub">quality issues</div></div></div>'+
+    (summaries.length===0?'<div style="font-size:13px;color:var(--text2);padding:20px">No evaluation signals. Deploy an agent with evaluation controls to see signals here.</div>':
+    '<div class="table-wrap"><table><tr><th>Agent</th><th>Alarm State</th><th>Evaluators</th><th>Sampling</th><th>Description</th><th>Action</th></tr>'+
+    summaries.map(x=>{var acted=x.last_action==='session_stopped';
+      return'<tr onclick="openEvalDetail(\''+x.agent_name+'\')" style="cursor:pointer;'+(acted?'opacity:.6':'')+'">'+'<td style="font-weight:600">'+x.agent_name+(acted?' <span style="font-size:10px;color:var(--text2)">(acted)</span>':'')+'</td><td>'+ab(x.alarm_state||'INSUFFICIENT_DATA')+'</td><td>'+(x.evaluator_count||7)+' built-in</td><td>'+(x.sampling_pct||'100')+'%</td><td style="font-size:11px;color:var(--text2)">'+(x.alarm_state==='ALARM'?(x.alarm_reason||'Quality issue detected'):'All evaluators passing')+'</td><td><button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();openStopModal(\''+x.agent_name+'\',\'\',\'\')">Stop Sessions</button></td></tr>'}).join('')+'</table></div>')}
+
+function renderObsSignals(){
+  var s=OBS_SIGNALS,cr=s.filter(x=>x.severity==='critical'),md=s.filter(x=>x.severity==='medium'),lo=s.filter(x=>x.severity==='low');
+  function ob(v){return v==='critical'?'<span class="badge badge-stopped">critical</span>':v==='medium'?'<span class="badge badge-warning">medium</span>':'<span class="badge badge-ready">low</span>'}
+  return'<div class="section-title">📡 Observability Signals ('+s.length+' signals)</div>'+
+    '<p style="font-size:12px;color:var(--text2);margin-bottom:14px">CloudWatch alarms for registered agents (synced to DynamoDB).</p>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">'+
+    '<div class="card card-green"><div class="card-label">OK</div><div class="card-value">'+lo.length+'</div><div class="card-sub">healthy</div></div>'+
+    '<div class="card card-yellow"><div class="card-label">Insufficient Data</div><div class="card-value">'+md.length+'</div><div class="card-sub">no data</div></div>'+
+    '<div class="card card-red"><div class="card-label">ALARM</div><div class="card-value">'+cr.length+'</div><div class="card-sub">triggered</div></div></div>'+
+    (s.length===0?'<div style="font-size:13px;color:var(--text2);padding:20px">No observability signals. Click "Sync from AWS" to populate.</div>':
+    '<div class="table-wrap"><table><tr><th>Agent</th><th>Alarm</th><th>State</th><th>Severity</th><th>Description</th></tr>'+
+    s.map(x=>'<tr style="'+(x.last_action==='session_stopped'?'opacity:.6':'')+'"><td style="font-weight:600">'+x.agent_name+'</td><td style="font-size:11px">'+(x.alarm_name||x.signal_key||'—')+'</td><td>'+(x.alarm_state||x.current_value||'—')+'</td><td>'+ob(x.severity)+'</td><td style="font-size:11px;color:var(--text2)">'+(x.description||'—')+'</td></tr>').join('')+'</table></div>')}
+
+function renderRegistry(){
+  var a=REGISTRY;
+  return'<div class="section-title">🤖 Agent Registry ('+a.length+' agents)</div>'+
+    '<p style="font-size:12px;color:var(--text2);margin-bottom:14px">All agents from DynamoDB registry. Click "Sync from AWS" to refresh.</p>'+
+    (a.length===0?'<div style="font-size:13px;color:var(--text2);padding:20px">No agents. Click "Sync from AWS" to populate.</div>':
+    '<div class="table-wrap"><table><tr><th>Name</th><th>Status</th><th>Team</th><th>Version</th><th>Tags</th><th>Action</th></tr>'+
+    a.map(x=>{var st=x.runtime_status||x.status||'—';var tags=x.tags||{};var ts=Object.entries(tags).map(kv=>'<span class="badge" style="background:rgba(168,85,247,.15);color:var(--purple);font-size:10px;padding:2px 6px">'+kv[0]+':'+kv[1]+'</span>').join(' ');
+    return'<tr onclick="openAgentDetail(\''+x.agent_name+'\')" style="cursor:pointer"><td style="font-weight:600">'+x.agent_name+'</td><td><span class="badge badge-'+badgeClass(st)+'">'+st+'</span></td><td>'+(x.team||'—')+'</td><td>'+(x.runtime_version||'—')+'</td><td style="max-width:250px">'+(ts||'—')+'</td><td><button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();openStopModal(\''+x.agent_name+'\',\'\',\'\')">Stop Sessions</button></td></tr>'}).join('')+'</table></div>')}
+</script>
+<script>
+async function openAgentDetail(agentName){
+  var a=REGISTRY.find(r=>r.agent_name===agentName)||REGISTRY.find(r=>normalize(r.agent_name)===normalize(agentName));
+  if(!a)return;
+  var panel=document.getElementById('detail-panel');
+  document.getElementById('detail-content').innerHTML='<div style="text-align:center;padding:40px;color:var(--text2)">Loading...</div>';
+  panel.classList.add('open');
+  var agentSessions=[];
+  try{var sr=await api('/api/sessions/agent/'+encodeURIComponent(a.agent_name));agentSessions=sr.sessions||[]}catch(e){}
+  var st=a.runtime_status||a.status||'—';
+  document.getElementById('detail-content').innerHTML=
+    '<div class="detail-title">'+a.agent_name+'</div>'+
+    '<div class="detail-subtitle">'+(a.team||'—')+' · '+(a.environment||'—')+' · <span class="badge badge-'+badgeClass(st)+'">'+st+'</span></div>'+
+    '<div class="detail-section"><h3>Configuration</h3><div class="detail-grid">'+
+      '<div class="detail-item"><div class="detail-item-label">Max Session Tokens</div><div class="detail-item-value">'+fmtNum(a.max_session_tokens||0)+'</div></div>'+
+      '<div class="detail-item"><div class="detail-item-label">Max Tool Invocations</div><div class="detail-item-value">'+(a.max_tool_invocations||'—')+'</div></div>'+
+      '<div class="detail-item"><div class="detail-item-label">Monthly Budget</div><div class="detail-item-value">'+(a.monthly_budget_usd?'$'+a.monthly_budget_usd:'—')+'</div></div>'+
+      '<div class="detail-item"><div class="detail-item-label">Last Synced</div><div class="detail-item-value" style="font-size:11px">'+fmtDate(a.last_synced)+'</div></div>'+
+    '</div></div>'+
+    '<div class="detail-section"><h3>Resources</h3>'+
+      (a.agent_runtime_arn?'<div class="detail-item" style="margin-bottom:6px"><div class="detail-item-label">Runtime ARN</div><div class="detail-item-value" style="font-size:11px;font-family:monospace;word-break:break-all">'+a.agent_runtime_arn+'</div></div>':'')+
+      (a.agent_runtime_id?'<div class="detail-item" style="margin-bottom:6px"><div class="detail-item-label">Runtime ID</div><div class="detail-item-value" style="font-size:12px;font-family:monospace">'+a.agent_runtime_id+'</div></div>':'')+
+      (a.iam_role_name?'<div class="detail-item" style="margin-bottom:6px"><div class="detail-item-label">IAM Role</div><div class="detail-item-value" style="font-size:12px;font-family:monospace">'+a.iam_role_name+'</div></div>':'')+
+      (a.memory_id?'<div class="detail-item" style="margin-bottom:6px"><div class="detail-item-label">Memory ID</div><div class="detail-item-value" style="font-size:12px;font-family:monospace">'+a.memory_id+'</div></div>':'')+
+    '</div>'+
+    '<div class="detail-section"><h3>Tags</h3>'+
+      (a.tags&&Object.keys(a.tags).length>0?'<div style="display:flex;flex-wrap:wrap;gap:6px">'+Object.entries(a.tags).map(kv=>'<span class="badge" style="background:rgba(168,85,247,.15);color:var(--purple)">'+kv[0]+':'+kv[1]+'</span>').join('')+'</div>':'<div style="font-size:12px;color:var(--text2)">No tags</div>')+
+    '</div>'+
+    '<div class="detail-section"><h3>Sessions ('+agentSessions.length+')</h3>'+
+      (agentSessions.length===0?'<div style="font-size:12px;color:var(--text2)">No sessions found.</div>':
+      agentSessions.map(s=>{var ss=s.status||s.computed_status||'unknown';
+        var canStop=ss!=='terminated'&&ss!=='completed'&&ss!=='inactive';
+        function sb(v){return v==='terminated'?'<span class="badge badge-stopped">terminated</span>':v==='active'?'<span class="badge badge-ready">active</span>':'<span class="badge" style="background:rgba(139,143,163,.15);color:var(--text2)">'+v+'</span>'}
+        return'<div class="session-row"><div style="flex:1"><div class="session-id">'+s.session_id+'</div><div class="session-meta">'+sb(ss)+' · '+fmtNum(s.invocation_count||0)+' invocations · '+fmtNum((Number(s.input_tokens)||0)+(Number(s.output_tokens)||0))+' tokens · Last: '+fmtDate(s.last_heartbeat)+'</div></div>'+(canStop?'<button class="btn btn-danger" style="padding:4px 10px;font-size:11px;flex-shrink:0" onclick="stopSingleSession(\''+a.agent_runtime_id+'\',\''+s.session_id+'\',\''+a.agent_name+'\')">Stop</button>':'')+'</div>'}).join(''))+
+    '</div>'+
+    '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text2)">Last updated: '+fmtDate(a.last_updated_at||a.last_synced)+'</div>'}
+
+function closeDetail(){document.getElementById('detail-panel').classList.remove('open')}
+
+async function openEvalDetail(agentName){
+  var panel=document.getElementById('detail-panel');
+  document.getElementById('detail-content').innerHTML='<div style="text-align:center;padding:40px;color:var(--text2)">Loading...</div>';
+  panel.classList.add('open');
+
+  // Get alarm summary
+  var summary=EVAL_SIGNALS.find(x=>x.agent_name===agentName&&x.signal_key==='alarm_summary')||{};
+  // Get per-evaluator records
+  var evals=EVAL_SIGNALS.filter(x=>x.agent_name===agentName&&x.signal_key!=='alarm_summary');
+  // Get sessions
+  var sessions=[];
+  try{var sr=await api('/api/sessions/agent/'+encodeURIComponent(agentName));sessions=sr.sessions||[]}catch(e){}
+
+  var alarmState=summary.alarm_state||'INSUFFICIENT_DATA';
+  function ab(st){return st==='ALARM'?'<span class="badge badge-stopped">ALARM</span>':st==='INSUFFICIENT_DATA'?'<span class="badge badge-warning">NO DATA</span>':'<span class="badge badge-ready">OK</span>'}
+  function eb(v){return v==='critical'?'<span class="badge badge-stopped" style="font-size:10px">FAIL</span>':v==='medium'?'<span class="badge badge-warning" style="font-size:10px">WARN</span>':'<span class="badge badge-ready" style="font-size:10px">PASS</span>'}
+
+  document.getElementById('detail-content').innerHTML=
+    '<div class="detail-title">'+agentName+'</div>'+
+    '<div class="detail-subtitle">Evaluation · '+ab(alarmState)+'</div>'+
+
+    // Alarm info
+    '<div class="detail-section"><h3>Alarm</h3>'+
+      '<div class="detail-item" style="margin-bottom:6px"><div class="detail-item-label">Alarm Name</div><div class="detail-item-value" style="font-size:12px;font-family:monospace">'+(summary.alarm_name||'—')+'</div></div>'+
+      '<div class="detail-grid">'+
+        '<div class="detail-item"><div class="detail-item-label">State</div><div class="detail-item-value">'+ab(alarmState)+'</div></div>'+
+        '<div class="detail-item"><div class="detail-item-label">Evaluators</div><div class="detail-item-value">'+(summary.evaluator_count||7)+'</div></div>'+
+        '<div class="detail-item"><div class="detail-item-label">Sampling</div><div class="detail-item-value">'+(summary.sampling_pct||'100')+'%</div></div>'+
+        '<div class="detail-item"><div class="detail-item-label">Last Updated</div><div class="detail-item-value" style="font-size:11px">'+fmtDate(summary.alarm_updated_at)+'</div></div>'+
+      '</div>'+
+      (alarmState==='ALARM'?'<div class="detail-item" style="margin-top:6px;border-left:3px solid var(--red);padding-left:10px"><div class="detail-item-label">Alarm Reason</div><div class="detail-item-value" style="font-size:11px;color:var(--red)">'+(summary.alarm_reason||'—')+'</div></div>':'')+
+    '</div>'+
+
+    // Per-evaluator breakdown
+    '<div class="detail-section"><h3>Evaluator Scores</h3>'+
+      '<div class="table-wrap"><table style="font-size:12px"><tr><th>Evaluator</th><th>Bad</th><th>Good</th><th>Total</th><th>Bad %</th><th>Status</th></tr>'+
+      evals.map(e=>'<tr><td>'+(e.evaluator_name||e.signal_key)+'</td><td style="color:var(--red)">'+(e.bad_count||0)+'</td><td style="color:var(--green)">'+(e.good_count||0)+'</td><td>'+(e.total_count||0)+'</td><td>'+(e.bad_pct||'0')+'%</td><td>'+eb(e.severity)+'</td></tr>').join('')+
+      '</table></div>'+
+    '</div>'+
+
+    // Sessions
+    '<div class="detail-section"><h3>Sessions ('+sessions.length+')</h3>'+
+      (sessions.length===0?'<div style="font-size:12px;color:var(--text2)">No sessions found.</div>':
+      sessions.map(s=>{var ss=s.status||s.computed_status||'unknown';var canStop=ss!=='terminated'&&ss!=='completed'&&ss!=='inactive';
+        function sb(v){return v==='terminated'?'<span class="badge badge-stopped">terminated</span>':v==='active'?'<span class="badge badge-ready">active</span>':'<span class="badge" style="background:rgba(139,143,163,.15);color:var(--text2)">'+v+'</span>'}
+        var reg=REGISTRY.find(r=>normalize(r.agent_name)===normalize(agentName))||{};
+        return'<div class="session-row"><div style="flex:1"><div class="session-id">'+s.session_id+'</div><div class="session-meta">'+sb(ss)+' · '+fmtNum(s.invocation_count||0)+' invocations · Last: '+fmtDate(s.last_heartbeat)+'</div></div>'+(canStop?'<button class="btn btn-danger" style="padding:4px 10px;font-size:11px;flex-shrink:0" onclick="stopSingleSession(\''+(reg.agent_runtime_id||'')+'\',\''+s.session_id+'\',\''+agentName+'\')">Stop</button>':'')+'</div>'}).join(''))+
+    '</div>'+
+
+    '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text2)">Synced: '+fmtDate(summary.synced_at)+'</div>';
+}
+
+function openStopModal(agentName,actualSpend,budgetLimit){
+  currentStopTarget={agentName:agentName,mode:'all'};
+  document.getElementById('stop-modal-info').innerHTML='<strong>Agent:</strong> '+agentName+'<br><strong>Action:</strong> Stop ALL active sessions'+(actualSpend?'<br><strong>Budget:</strong> '+budgetLimit+' · <strong>Actual:</strong> '+actualSpend:'');
+  document.getElementById('stop-reason').value=actualSpend?'Cost budget exceeded — actual spend '+actualSpend+' against '+budgetLimit+' budget.':'';
+  document.getElementById('stop-admin').value=AUTH_USER||'';document.getElementById('stop-error').style.display='none';
+  document.getElementById('stop-confirm-btn').disabled=false;document.getElementById('stop-confirm-btn').textContent='Stop All Sessions';
+  document.getElementById('stop-confirm-btn').onclick=confirmStop;document.getElementById('stop-modal').classList.add('open')}
+
+function closeStopModal(){document.getElementById('stop-modal').classList.remove('open');currentStopTarget=null}
+
+async function stopSingleSession(runtimeId,sessionId,agentName){
+  currentStopTarget={agentName:agentName,sessionId:sessionId,runtimeId:runtimeId,mode:'single'};
+  document.getElementById('stop-modal-info').innerHTML=
+    '<strong>Agent:</strong> '+agentName+'<br>'+
+    '<strong>Session:</strong> <code>'+sessionId+'</code><br>'+
+    '<strong>Action:</strong> Stop this specific session';
+  document.getElementById('stop-reason').value='';
+  document.getElementById('stop-admin').value=AUTH_USER||'';
+  document.getElementById('stop-error').style.display='none';
+  document.getElementById('stop-confirm-btn').disabled=false;
+  document.getElementById('stop-confirm-btn').textContent='Stop Session';
+  document.getElementById('stop-confirm-btn').onclick=confirmStop;
+  document.getElementById('stop-modal').classList.add('open');
+}
+
+async function confirmStop(){
+  var reason=document.getElementById('stop-reason').value.trim(),admin=document.getElementById('stop-admin').value.trim();
+  if(!reason||!admin){document.getElementById('stop-error').style.display='block';return}
+  var btn=document.getElementById('stop-confirm-btn');btn.disabled=true;btn.textContent='Stopping...';
+  try{
+    var hdrs={'Content-Type':'application/json'};
+    if(AUTH_TOKEN)hdrs['Authorization']='Bearer '+AUTH_TOKEN;
+    var body,url;
+    if(currentStopTarget.mode==='single'){
+      url='/api/interventions/stop-all-sessions';
+      body=JSON.stringify({agent_name:currentStopTarget.agentName,reason:reason+' [session: '+currentStopTarget.sessionId+']',admin_user:admin});
+    }else{
+      url='/api/interventions/stop-all-sessions';
+      body=JSON.stringify({agent_name:currentStopTarget.agentName,reason:reason,admin_user:admin});
+    }
+    var res=await fetch(API_BASE+url,{method:'POST',headers:hdrs,body:body});
+    var data=await res.json();
+    if(res.ok){closeStopModal();closeDetail();
+      alert('Stopped: '+(data.stopped||0)+' Failed: '+(data.failed||0)+' Total: '+(data.total_sessions||0));
+      await loadData()}
+    else{alert('Failed: '+(data.detail||JSON.stringify(data)));btn.disabled=false;btn.textContent='Stop Session'}
+  }catch(e){alert('Error: '+e.message);btn.disabled=false;btn.textContent='Stop Session'}
+}
+
+async function confirmStopAll(){confirmStop()}
+
+(async function(){
+  document.getElementById('main-content').innerHTML='<div style="text-align:center;padding:60px;color:var(--text2)">Loading...</div>';
+  // Init auth first — may redirect to Cognito login
+  await initAuth();
+  // Auto-sync on first load
+  try{await api('/api/sync',{method:'POST'})}catch(e){console.warn('Auto-sync failed:',e)}
+  await loadData();
+  updateAuthUI();
+  setInterval(loadData,REFRESH_MS);
+})();
+</script>
+</body>
+</html>
