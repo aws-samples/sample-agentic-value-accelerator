@@ -7,7 +7,7 @@ pydantic==2.9.2
 
 # LangChain & LangGraph
 langchain==0.1.0
-langchain-core==0.1.0
+langchain-core==1.2.28
 langchain-community==0.0.13
 langgraph==0.0.20
 langchain-aws==0.0.1
