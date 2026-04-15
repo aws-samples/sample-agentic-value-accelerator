@@ -1,0 +1,51 @@
+{
+  "use_case_id": "fraud_detection",
+  "use_case_name": "Fraud Detection Agent",
+  "description": "AI-powered fraud detection and monitoring system for real-time transaction surveillance, pattern analysis, and automated alert generation",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "transaction_monitor",
+      "name": "Transaction Monitor",
+      "description": "Specialized AI agent: Transaction Monitor"
+    },
+    {
+      "id": "pattern_analyst",
+      "name": "Pattern Analyst",
+      "description": "Specialized AI agent: Pattern Analyst"
+    },
+    {
+      "id": "alert_generator",
+      "name": "Alert Generator",
+      "description": "Specialized AI agent: Alert Generator"
+    }
+  ],
+  "api_endpoint": "https://d3txi0se9a5j5s.cloudfront.net/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. FRD001",
+    "type_field": "monitoring_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "transaction_monitoring",
+        "label": "Transaction Monitoring"
+      },
+      {
+        "value": "pattern_analysis",
+        "label": "Pattern Analysis"
+      },
+      {
+        "value": "alert_generation",
+        "label": "Alert Generation"
+      }
+    ],
+    "test_entities": [
+      "ACCT001"
+    ]
+  }
+}

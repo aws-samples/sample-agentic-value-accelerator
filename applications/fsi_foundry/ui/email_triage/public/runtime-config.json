@@ -1,0 +1,42 @@
+{
+  "use_case_id": "email_triage",
+  "use_case_name": "Email Triage",
+  "description": "Email classification and action extraction for trading desks",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "email_classifier",
+      "name": "Email Classifier",
+      "description": "Specialized AI agent: Email Classifier"
+    },
+    {
+      "id": "action_extractor",
+      "name": "Action Extractor",
+      "description": "Specialized AI agent: Action Extractor"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity Id",
+    "id_placeholder": "e.g. ENT001",
+    "type_field": "triage_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "classification",
+        "label": "Classification"
+      },
+      {
+        "value": "action_extraction",
+        "label": "Action Extraction"
+      }
+    ],
+    "test_entities": [
+      "EMAIL001"
+    ]
+  }
+}
