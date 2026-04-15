@@ -1,0 +1,39 @@
+{
+  "use_case_id": "mainframe_migration",
+  "use_case_name": "Mainframe Migration",
+  "description": "Mainframe analysis, business rule extraction, and cloud code generation for mainframe migration",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "mainframe_analyzer",
+      "name": "Mainframe Analyzer",
+      "description": "Specialized AI agent: Mainframe Analyzer"
+    },
+    {
+      "id": "business_rule_extractor",
+      "name": "Business Rule Extractor",
+      "description": "Specialized AI agent: Business Rule Extractor"
+    },
+    {
+      "id": "cloud_code_generator",
+      "name": "Cloud Code Generator",
+      "description": "Specialized AI agent: Cloud Code Generator"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "project_id",
+    "id_label": "Project ID",
+    "id_placeholder": "e.g. PROJECT001",
+    "type_field": "",
+    "type_options": [
+      {
+        "value": "default",
+        "label": "Default"
+      }
+    ],
+    "test_entities": [
+      "PROJECT001"
+    ]
+  }
+}

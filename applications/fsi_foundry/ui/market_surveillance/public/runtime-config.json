@@ -1,0 +1,52 @@
+{
+  "use_case_id": "market_surveillance",
+  "use_case_name": "Market Surveillance",
+  "description": "Trade pattern analysis, communication monitoring, and surveillance alerts",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "trade_pattern_analyst",
+      "name": "Trade Pattern Analyst",
+      "description": "Specialized AI agent: Trade Pattern Analyst"
+    },
+    {
+      "id": "communication_monitor",
+      "name": "Communication Monitor",
+      "description": "Specialized AI agent: Communication Monitor"
+    },
+    {
+      "id": "surveillance_alert_generator",
+      "name": "Surveillance Alert Generator",
+      "description": "Specialized AI agent: Surveillance Alert Generator"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. SURV001",
+    "type_field": "surveillance_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "trade_only",
+        "label": "Trade Only"
+      },
+      {
+        "value": "comms_only",
+        "label": "Comms Only"
+      },
+      {
+        "value": "alert_only",
+        "label": "Alert Only"
+      }
+    ],
+    "test_entities": [
+      "SURV001",
+      "SURV002"
+    ]
+  }
+}

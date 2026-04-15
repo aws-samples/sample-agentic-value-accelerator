@@ -1,0 +1,441 @@
+@import "tailwindcss";
+
+:root {
+  --navy-deep: #0C1222;
+  --navy: #1A2332;
+  --charcoal: #1F2937;
+  --gray-cool: #6B7280;
+  --gray-light: #9CA3AF;
+  --warm-white: #FFFDF7;
+  --white: #FFFFFF;
+  --gold: #D4A017;
+  --gold-bright: #F5C842;
+  --gold-light: #FCD34D;
+  --gold-pale: #FEF3C7;
+  --success: #22C55E;
+  --danger: #DC2626;
+  --info-blue: #3B82F6;
+  --cold-blue: #60A5FA;
+
+  --bg-primary: #FAFAF7;
+  --bg-secondary: var(--warm-white);
+  --accent: var(--gold);
+  --accent-bright: var(--gold-bright);
+  --text-primary: var(--charcoal);
+  --text-secondary: var(--gray-cool);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Cards ─────────────────────────────────────── */
+
+.card {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(12, 18, 34, 0.06), 0 1px 2px rgba(12, 18, 34, 0.04);
+  border: 1px solid rgba(212, 160, 23, 0.08);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(12, 18, 34, 0.08), 0 2px 4px rgba(212, 160, 23, 0.06);
+}
+
+.card-gold {
+  border-left: 3px solid var(--gold);
+}
+
+.card-navy {
+  background: var(--navy);
+  color: var(--warm-white);
+  border: 1px solid rgba(245, 200, 66, 0.15);
+}
+
+/* ── Gold Gradient Utilities ───────────────────── */
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gold-gradient-bg {
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+}
+
+.gold-gradient-border {
+  border-image: linear-gradient(135deg, var(--gold), var(--gold-bright)) 1;
+}
+
+.gold-accent-line {
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright), transparent);
+}
+
+/* ── Lead Tier Badges ──────────────────────────── */
+
+.lead-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.lead-tier-HOT {
+  background: linear-gradient(135deg, #DC2626, #F59E0B);
+  color: white;
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.3);
+  animation: tierPulse 2s ease-in-out infinite;
+}
+
+.lead-tier-WARM {
+  background: linear-gradient(135deg, #F59E0B, #FBBF24);
+  color: #78350F;
+}
+
+.lead-tier-COLD {
+  background: linear-gradient(135deg, #3B82F6, #60A5FA);
+  color: white;
+}
+
+.lead-tier-UNQUALIFIED {
+  background: linear-gradient(135deg, #6B7280, #9CA3AF);
+  color: white;
+}
+
+/* ── Score Gauge ───────────────────────────────── */
+
+.score-gauge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.score-gauge svg circle {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.score-gauge .gauge-track {
+  stroke: #E5E7EB;
+  stroke-width: 8;
+}
+
+.score-gauge .gauge-fill {
+  stroke-width: 8;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  animation: gaugeRotate 1.5s ease-out forwards;
+  stroke-dasharray: 0, 999;
+}
+
+.score-gauge .gauge-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.score-gauge .gauge-number {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.score-gauge .gauge-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--gray-cool);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 0.125rem;
+}
+
+/* ── Pipeline Stage Cards ──────────────────────── */
+
+.pipeline-stage {
+  position: relative;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+  animation: funnelReveal 0.6s ease-out both;
+}
+
+.pipeline-stage:hover {
+  transform: scale(1.05);
+}
+
+.pipeline-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  font-size: 1rem;
+  animation: fadeSlideUp 0.5s ease-out both;
+}
+
+/* ── Confidence Bar ────────────────────────────── */
+
+.confidence-bar {
+  position: relative;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: #F3F4F6;
+  overflow: hidden;
+}
+
+.confidence-bar .fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+  animation: progressFill 1.2s ease-out forwards;
+  width: 0;
+}
+
+.confidence-bar .label {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--charcoal);
+}
+
+/* ── Deal Value ────────────────────────────────── */
+
+.deal-value {
+  font-size: 2rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+/* ── Funnel Visualization ──────────────────────── */
+
+.funnel-bar {
+  height: 2.5rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: white;
+  transition: transform 0.2s ease;
+  animation: funnelReveal 0.8s ease-out both;
+}
+
+.funnel-bar:hover {
+  transform: scaleX(1.03);
+}
+
+/* ── Stage Timeline ────────────────────────────── */
+
+.stage-timeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.stage-dot {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.625rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  border: 2px solid #E5E7EB;
+  background: var(--white);
+  color: var(--gray-cool);
+}
+
+.stage-dot.active {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, var(--gold), var(--gold-bright));
+  color: white;
+  transform: scale(1.2);
+  box-shadow: 0 0 12px rgba(212, 160, 23, 0.3);
+}
+
+.stage-dot.completed {
+  border-color: var(--success);
+  background: var(--success);
+  color: white;
+}
+
+.stage-line {
+  flex: 1;
+  height: 2px;
+  background: #E5E7EB;
+  min-width: 1rem;
+}
+
+.stage-line.completed {
+  background: var(--success);
+}
+
+.stage-line.active {
+  background: linear-gradient(90deg, var(--success), var(--gold));
+}
+
+/* ── Sparkline ─────────────────────────────────── */
+
+.sparkline-container {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ── Animations ────────────────────────────────── */
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gaugeRotate {
+  from {
+    stroke-dasharray: 0, 999;
+  }
+}
+
+@keyframes funnelReveal {
+  from {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes dealSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.3);
+  }
+}
+
+@keyframes progressFill {
+  from {
+    width: 0;
+  }
+}
+
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tierPulse {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(220, 38, 38, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.5);
+  }
+}
+
+@keyframes slideRight {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Utility animation classes ─────────────────── */
+
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.5s ease-out both;
+}
+
+.animate-deal-slide {
+  animation: dealSlide 0.5s ease-out both;
+}
+
+.animate-sparkle {
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+.animate-slide-right {
+  animation: slideRight 0.4s ease-out both;
+}
+
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }

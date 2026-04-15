@@ -1,0 +1,51 @@
+{
+  "use_case_id": "earnings_summarization",
+  "use_case_name": "Earnings Summarization",
+  "description": "AI-powered earnings call analysis with transcript processing, metric extraction, and sentiment analysis for investment intelligence",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "transcript_processor",
+      "name": "Transcript Processor",
+      "description": "Ingests and parses raw earnings call transcripts, identifying speaker segments, Q&A sections, and forward-looking statements for downstream analysis"
+    },
+    {
+      "id": "metric_extractor",
+      "name": "Metric Extractor",
+      "description": "Extracts key financial metrics, KPIs, guidance figures, and period-over-period changes from processed transcript data"
+    },
+    {
+      "id": "sentiment_analyst",
+      "name": "Sentiment Analyst",
+      "description": "Analyzes management tone, market outlook sentiment, and forward guidance confidence to generate bullish/bearish/neutral ratings"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. ERN001",
+    "type_field": "summarization_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "transcript_only",
+        "label": "Transcript Only"
+      },
+      {
+        "value": "metrics_only",
+        "label": "Metrics Only"
+      },
+      {
+        "value": "sentiment_only",
+        "label": "Sentiment Only"
+      }
+    ],
+    "test_entities": [
+      "EARN001"
+    ]
+  }
+}

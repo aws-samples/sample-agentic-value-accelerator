@@ -1,0 +1,392 @@
+@import "tailwindcss";
+
+/* ── Marketplace Theme Variables ── */
+:root {
+  --rose-600: #E11D48;
+  --rose-400: #FB7185;
+  --rose-50: #FFF1F2;
+  --indigo-600: #4F46E5;
+  --indigo-400: #818CF8;
+  --indigo-50: #EEF2FF;
+  --cream: #FFFBEB;
+  --charcoal: #18181B;
+  --warm-gray-600: #52525B;
+  --warm-gray-400: #A1A1AA;
+  --mint: #34D399;
+  --mint-50: #ECFDF5;
+  --amber: #F59E0B;
+  --amber-50: #FFFBEB;
+
+  --accent: var(--rose-600);
+  --accent-light: var(--rose-400);
+  --accent-bg: var(--rose-50);
+  --secondary: var(--indigo-600);
+  --secondary-light: var(--indigo-400);
+  --bg-primary: #FEFCF8;
+  --bg-card: #FFFFFF;
+  --text-primary: var(--charcoal);
+  --text-secondary: var(--warm-gray-600);
+  --text-muted: var(--warm-gray-400);
+}
+
+/* ── Base ── */
+body {
+  font-family: 'Nunito', 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(251,113,133,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(79,70,229,0.04) 0%, transparent 50%);
+}
+
+/* ── Card ── */
+.card {
+  background: var(--bg-card);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 4px 16px rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card:hover {
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.06),
+    0 8px 32px rgba(0,0,0,0.06);
+}
+
+/* ── Offer Card ── */
+.offer-card {
+  background: var(--bg-card);
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.04);
+  position: relative;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.offer-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(225,29,72,0.12);
+}
+.offer-card-header {
+  height: 100px;
+  background: linear-gradient(135deg, var(--rose-400), var(--indigo-400));
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.offer-card-header.savings {
+  background: linear-gradient(135deg, #34D399, #06B6D4);
+}
+.offer-card-header.credit {
+  background: linear-gradient(135deg, var(--rose-400), #F472B6);
+}
+.offer-card-header.mortgage {
+  background: linear-gradient(135deg, var(--indigo-400), #A78BFA);
+}
+.offer-card-header.investment {
+  background: linear-gradient(135deg, var(--amber), #FBBF24);
+}
+.offer-card-body {
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+/* ── Price Tag ── */
+.price-tag {
+  position: absolute;
+  top: 12px;
+  right: -6px;
+  background: var(--charcoal);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+  border-radius: 4px 0 0 4px;
+  letter-spacing: 0.02em;
+}
+.price-tag::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -6px;
+  border-width: 3px 6px 3px 0;
+  border-style: solid;
+  border-color: transparent #18181B transparent transparent;
+  transform: rotate(180deg);
+}
+
+/* ── Offer Ribbon ── */
+.offer-ribbon {
+  position: absolute;
+  top: 16px;
+  left: -8px;
+  padding: 0.2rem 1rem 0.2rem 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: white;
+  z-index: 2;
+  clip-path: polygon(0 0, 100% 0, 92% 50%, 100% 100%, 0 100%, 8% 50%);
+  animation: ribbonWave 3s ease-in-out infinite;
+}
+.offer-ribbon.generated { background: var(--rose-600); }
+.offer-ribbon.approved { background: var(--mint); }
+.offer-ribbon.rejected { background: #EF4444; }
+.offer-ribbon.pending { background: var(--amber); }
+
+/* ── Fulfillment Tracker ── */
+.fulfillment-tracker {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  position: relative;
+}
+.fulfillment-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+.fulfillment-step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 2.5px solid var(--warm-gray-400);
+  background: white;
+  color: var(--warm-gray-400);
+  transition: all 0.4s ease;
+}
+.fulfillment-step.completed .fulfillment-step-circle {
+  border-color: var(--mint);
+  background: var(--mint);
+  color: white;
+  animation: fulfillmentStep 0.5s ease-out;
+}
+.fulfillment-step.active .fulfillment-step-circle {
+  border-color: var(--rose-600);
+  color: var(--rose-600);
+  box-shadow: 0 0 0 4px rgba(225,29,72,0.15);
+}
+.fulfillment-step-label {
+  font-size: 0.65rem;
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 80px;
+  line-height: 1.2;
+}
+.fulfillment-step.completed .fulfillment-step-label {
+  color: var(--mint);
+  font-weight: 600;
+}
+.fulfillment-connector {
+  flex: 1;
+  height: 3px;
+  background: var(--warm-gray-400);
+  opacity: 0.3;
+  margin-top: -16px;
+  z-index: 0;
+}
+.fulfillment-connector.completed {
+  background: var(--mint);
+  opacity: 1;
+  animation: progressFill 0.6s ease-out;
+}
+
+/* ── Channel Badge ── */
+.channel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.channel-badge.digital {
+  background: var(--indigo-50);
+  color: var(--indigo-600);
+}
+.channel-badge.branch {
+  background: var(--amber-50);
+  color: var(--amber);
+}
+.channel-badge.phone {
+  background: var(--rose-50);
+  color: var(--rose-600);
+}
+
+/* ── Match Score (Radial) ── */
+.match-score {
+  width: 48px;
+  height: 48px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.match-score svg {
+  transform: rotate(-90deg);
+}
+.match-score-value {
+  position: absolute;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ── Product Tag ── */
+.product-tag {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--rose-50);
+  color: var(--rose-600);
+  border: 1px solid rgba(225,29,72,0.15);
+}
+
+/* ── Status Badges ── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.status-badge.ready { background: #DBEAFE; color: #1D4ED8; }
+.status-badge.in-progress { background: var(--amber-50); color: #B45309; }
+.status-badge.completed { background: var(--mint-50); color: #047857; }
+.status-badge.blocked { background: #FEE2E2; color: #B91C1C; }
+.status-badge.generated { background: var(--rose-50); color: var(--rose-600); }
+.status-badge.approved { background: var(--mint-50); color: #047857; }
+.status-badge.rejected { background: #FEE2E2; color: #B91C1C; }
+.status-badge.pending-review { background: var(--amber-50); color: #B45309; }
+
+/* ── Animations ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes offerSlide {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-10px); }
+}
+@keyframes fulfillmentStep {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes matchReveal {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes sparkle {
+  0%, 100% { opacity: 0.4; transform: scale(0.8) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.2) rotate(180deg); }
+}
+@keyframes ribbonWave {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(2px); }
+}
+@keyframes progressFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-8px) rotate(1deg); }
+  66% { transform: translateY(-4px) rotate(-0.5deg); }
+}
+@keyframes slideCarousel {
+  0% { transform: translateX(0); }
+  33% { transform: translateX(-33.33%); }
+  66% { transform: translateX(-66.66%); }
+  100% { transform: translateX(0); }
+}
+@keyframes pulseRose {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(225,29,72,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(225,29,72,0); }
+}
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-fadeSlideUp {
+  animation: fadeSlideUp 0.6s ease-out both;
+}
+.animate-floatCard {
+  animation: floatCard 4s ease-in-out infinite;
+}
+.animate-matchReveal {
+  animation: matchReveal 0.5s ease-out both;
+}
+.animate-sparkle {
+  animation: sparkle 2s ease-in-out infinite;
+}
+.animate-pulseRose {
+  animation: pulseRose 2s ease-in-out infinite;
+}
+
+/* ── Radial Progress ── */
+.radial-progress {
+  --size: 72px;
+  --stroke: 6px;
+  width: var(--size);
+  height: var(--size);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.radial-progress svg {
+  transform: rotate(-90deg);
+  width: var(--size);
+  height: var(--size);
+}
+.radial-progress .track {
+  fill: none;
+  stroke: #F1F5F9;
+  stroke-width: var(--stroke);
+}
+.radial-progress .fill {
+  fill: none;
+  stroke: var(--rose-600);
+  stroke-width: var(--stroke);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out;
+}
+.radial-progress .label {
+  position: absolute;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ── Utility ── */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }

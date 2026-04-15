@@ -1,0 +1,51 @@
+{
+  "use_case_id": "life_insurance_agent",
+  "use_case_name": "Life Insurance Agent",
+  "description": "AI-powered life insurance needs analysis, product matching, and underwriting assessment for personalized coverage recommendations",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "needs_analyst",
+      "name": "Needs Analyst",
+      "description": "Evaluates applicant life stage, income, dependents, and financial obligations to determine optimal coverage levels and identify protection gaps"
+    },
+    {
+      "id": "product_matcher",
+      "name": "Product Matcher",
+      "description": "Matches applicant profiles against available insurance products, compares coverage options, and recommends optimal product combinations with premium estimates"
+    },
+    {
+      "id": "underwriting_assistant",
+      "name": "Underwriting Assistant",
+      "description": "Assesses risk factors including health history, lifestyle choices, and family medical background to determine risk category and recommend underwriting actions"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "applicant_id",
+    "id_label": "Applicant ID",
+    "id_placeholder": "e.g. LIF001",
+    "type_field": "analysis_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "needs_analysis_only",
+        "label": "Needs Analysis Only"
+      },
+      {
+        "value": "product_matching_only",
+        "label": "Product Matching Only"
+      },
+      {
+        "value": "underwriting_only",
+        "label": "Underwriting Only"
+      }
+    ],
+    "test_entities": [
+      "APP001"
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "use_case_id": "customer_chatbot",
+  "use_case_name": "Customer Chatbot",
+  "description": "AI-powered customer chatbot delivering 24/7 banking support with natural language understanding",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "conversation_manager",
+      "name": "Conversation Manager",
+      "description": "Manages multi-turn conversations, classifies intent, routes to specialists"
+    },
+    {
+      "id": "account_agent",
+      "name": "Account Agent",
+      "description": "Handles account balances, statements, profile updates, and account status"
+    },
+    {
+      "id": "transaction_agent",
+      "name": "Transaction Agent",
+      "description": "Processes transfers, bill payments, transaction history, and payment tracking"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. CHAT001",
+    "type_field": "intent_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "general",
+        "label": "General"
+      },
+      {
+        "value": "account_inquiry",
+        "label": "Account Inquiry"
+      },
+      {
+        "value": "transfer",
+        "label": "Transfer"
+      },
+      {
+        "value": "bill_payment",
+        "label": "Bill Payment"
+      },
+      {
+        "value": "transaction_history",
+        "label": "Transaction History"
+      }
+    ],
+    "test_entities": [
+      "CUST001"
+    ]
+  }
+}

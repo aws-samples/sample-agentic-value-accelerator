@@ -1,0 +1,56 @@
+{
+  "use_case_id": "document_search",
+  "use_case_name": "Document Search",
+  "description": "Semantic search and document retrieval for banking documents",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "document_indexer",
+      "name": "Document Indexer",
+      "description": "Indexes and categorizes banking documents from multiple sources"
+    },
+    {
+      "id": "search_agent",
+      "name": "Search Agent",
+      "description": "Performs semantic search across document corpus and ranks results"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "query",
+    "id_label": "Search Query",
+    "id_placeholder": "e.g. anti-money laundering requirements",
+    "type_field": "document_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "policy",
+        "label": "Policy"
+      },
+      {
+        "value": "procedure",
+        "label": "Procedure"
+      },
+      {
+        "value": "compliance",
+        "label": "Compliance"
+      },
+      {
+        "value": "regulation",
+        "label": "Regulation"
+      },
+      {
+        "value": "guideline",
+        "label": "Guideline"
+      }
+    ],
+    "test_entities": [
+      "anti-money laundering requirements",
+      "KYC documentation standards",
+      "credit risk assessment procedures"
+    ]
+  }
+}

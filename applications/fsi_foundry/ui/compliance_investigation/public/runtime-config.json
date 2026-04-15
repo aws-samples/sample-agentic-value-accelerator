@@ -1,0 +1,51 @@
+{
+  "use_case_id": "compliance_investigation",
+  "use_case_name": "Compliance Investigation",
+  "description": "AI-powered compliance investigation with evidence gathering, pattern analysis, and regulatory mapping",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "evidence_gatherer",
+      "name": "Evidence Gatherer",
+      "description": "Collects and organizes evidence from transaction records, communications, and audit trails for compliance investigations"
+    },
+    {
+      "id": "pattern_matcher",
+      "name": "Pattern Matcher",
+      "description": "Identifies suspicious patterns, anomalies, and behavioral correlations across financial data"
+    },
+    {
+      "id": "regulatory_mapper",
+      "name": "Regulatory Mapper",
+      "description": "Maps findings to specific regulations, requirements, and violation types with severity assessment"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. INV001",
+    "type_field": "investigation_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "evidence_collection",
+        "label": "Evidence Collection"
+      },
+      {
+        "value": "pattern_analysis",
+        "label": "Pattern Analysis"
+      },
+      {
+        "value": "regulatory_mapping",
+        "label": "Regulatory Mapping"
+      }
+    ],
+    "test_entities": [
+      "CASE001"
+    ]
+  }
+}

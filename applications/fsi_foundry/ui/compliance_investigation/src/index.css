@@ -1,0 +1,290 @@
+@import "tailwindcss";
+
+/* ── Investigation Dashboard Theme Variables ── */
+:root {
+  --slate-900: #0F172A;
+  --slate-800: #1E293B;
+  --slate-700: #334155;
+  --slate-600: #475569;
+  --slate-400: #94A3B8;
+  --slate-200: #E2E8F0;
+  --slate-100: #F1F5F9;
+  --slate-50: #F8FAFC;
+  --amber-600: #D97706;
+  --amber-500: #F59E0B;
+  --amber-400: #FBBF24;
+  --amber-100: #FEF3C7;
+  --amber-50: #FFFBEB;
+  --red-600: #DC2626;
+  --red-500: #EF4444;
+  --red-100: #FEE2E2;
+  --red-50: #FEF2F2;
+  --teal-600: #0D9488;
+  --teal-500: #14B8A6;
+  --teal-400: #2DD4BF;
+  --teal-100: #CCFBF1;
+  --teal-50: #F0FDFA;
+  --neutral-400: #9CA3AF;
+  --neutral-300: #D1D5DB;
+
+  --accent: var(--amber-600);
+  --accent-light: var(--amber-500);
+  --accent-bg: var(--amber-50);
+  --secondary: var(--teal-600);
+  --secondary-light: var(--teal-500);
+  --danger: var(--red-600);
+  --bg-primary: var(--slate-50);
+  --bg-card: #FFFFFF;
+  --text-primary: var(--slate-900);
+  --text-secondary: var(--slate-600);
+  --text-muted: var(--slate-400);
+}
+
+/* ── Base ── */
+body {
+  font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(217,119,6,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(13,148,136,0.03) 0%, transparent 50%);
+}
+
+/* ── Card ── */
+.card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(15,23,42,0.04),
+    0 4px 16px rgba(15,23,42,0.04);
+  border: 1px solid var(--slate-200);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card:hover {
+  box-shadow:
+    0 2px 8px rgba(15,23,42,0.06),
+    0 8px 32px rgba(15,23,42,0.06);
+}
+
+/* ── Evidence Card ── */
+.evidence-card {
+  background: var(--bg-card);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--slate-200);
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.evidence-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(15,23,42,0.08);
+  border-color: var(--amber-500);
+}
+.evidence-card-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+
+/* ── Severity Badges ── */
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.severity-badge.critical { background: var(--red-100); color: var(--red-600); }
+.severity-badge.high { background: #FEF3C7; color: #B45309; }
+.severity-badge.medium { background: var(--amber-100); color: var(--amber-600); }
+.severity-badge.low { background: var(--teal-100); color: var(--teal-600); }
+
+/* ── Status Badges ── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.status-badge.open { background: var(--amber-100); color: var(--amber-600); }
+.status-badge.in-progress { background: #DBEAFE; color: #1D4ED8; }
+.status-badge.escalated { background: var(--red-100); color: var(--red-600); }
+.status-badge.resolved { background: var(--teal-100); color: var(--teal-600); }
+.status-badge.closed { background: var(--slate-200); color: var(--slate-600); }
+
+/* ── Violation Timeline ── */
+.violation-timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+.violation-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--amber-500), var(--red-500), var(--teal-500));
+  border-radius: 1px;
+}
+.violation-timeline-item {
+  position: relative;
+  padding-bottom: 1rem;
+}
+.violation-timeline-item:last-child {
+  padding-bottom: 0;
+}
+.violation-timeline-dot {
+  position: absolute;
+  left: -1.65rem;
+  top: 0.15rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 2px var(--slate-300);
+}
+.violation-timeline-dot.critical { background: var(--red-600); box-shadow: 0 0 0 2px var(--red-600); }
+.violation-timeline-dot.high { background: #B45309; box-shadow: 0 0 0 2px #B45309; }
+.violation-timeline-dot.medium { background: var(--amber-600); box-shadow: 0 0 0 2px var(--amber-600); }
+.violation-timeline-dot.low { background: var(--teal-600); box-shadow: 0 0 0 2px var(--teal-600); }
+
+/* ── Risk Indicator ── */
+.risk-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--slate-200);
+  background: white;
+  transition: border-color 0.2s ease;
+}
+.risk-indicator:hover {
+  border-color: var(--amber-500);
+}
+
+/* ── Regulatory Table ── */
+.reg-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.75rem;
+}
+.reg-table thead th {
+  background: var(--slate-800);
+  color: var(--slate-50);
+  padding: 0.6rem 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.65rem;
+  text-align: left;
+}
+.reg-table thead th:first-child {
+  border-radius: 0.5rem 0 0 0;
+}
+.reg-table thead th:last-child {
+  border-radius: 0 0.5rem 0 0;
+}
+.reg-table tbody tr {
+  transition: background 0.15s ease;
+}
+.reg-table tbody tr:hover {
+  background: var(--slate-100);
+}
+.reg-table tbody td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--slate-200);
+  color: var(--text-secondary);
+}
+
+/* ── Animations ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scanLine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes pulseAmber {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217,119,6,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(217,119,6,0); }
+}
+@keyframes alertPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+@keyframes slideRight {
+  from { transform: scaleX(0); transform-origin: left; }
+  to { transform: scaleX(1); transform-origin: left; }
+}
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-fadeSlideUp {
+  animation: fadeSlideUp 0.6s ease-out both;
+}
+.animate-pulseAmber {
+  animation: pulseAmber 2s ease-in-out infinite;
+}
+.animate-alertPulse {
+  animation: alertPulse 1.5s ease-in-out infinite;
+}
+
+/* ── Radial Progress ── */
+.radial-progress {
+  --size: 72px;
+  --stroke: 6px;
+  width: var(--size);
+  height: var(--size);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.radial-progress svg {
+  transform: rotate(-90deg);
+  width: var(--size);
+  height: var(--size);
+}
+.radial-progress .track {
+  fill: none;
+  stroke: var(--slate-100);
+  stroke-width: var(--stroke);
+}
+.radial-progress .fill {
+  fill: none;
+  stroke-width: var(--stroke);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out;
+}
+.radial-progress .label {
+  position: absolute;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ── Utility ── */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }

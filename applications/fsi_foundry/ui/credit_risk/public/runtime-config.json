@@ -1,0 +1,51 @@
+{
+  "use_case_id": "credit_risk",
+  "use_case_name": "Credit Risk Analysis",
+  "description": "Comprehensive credit risk assessment with multi-agent analysis including financial evaluation, risk scoring, and portfolio impact",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "financial_analyst",
+      "name": "Financial Analyst",
+      "description": "Analyzes financial statements, revenue trends, and key ratios"
+    },
+    {
+      "id": "risk_scorer",
+      "name": "Risk Scorer",
+      "description": "Calculates risk scores using multiple risk models and frameworks"
+    },
+    {
+      "id": "portfolio_analyst",
+      "name": "Portfolio Analyst",
+      "description": "Evaluates portfolio concentration, diversification, and systemic risk impact"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Borrower ID",
+    "id_placeholder": "e.g. BORROW001",
+    "type_field": "assessment_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "financial_analysis",
+        "label": "Financial Analysis"
+      },
+      {
+        "value": "risk_scoring",
+        "label": "Risk Scoring"
+      },
+      {
+        "value": "portfolio_analysis",
+        "label": "Portfolio Analysis"
+      }
+    ],
+    "test_entities": [
+      "BORROW001"
+    ]
+  }
+}

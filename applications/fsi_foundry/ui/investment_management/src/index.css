@@ -1,0 +1,418 @@
+@import "tailwindcss";
+
+/* ── Portfolio Dashboard Theme Variables ── */
+:root {
+  --slate-900: #0F172A;
+  --slate-800: #1E293B;
+  --slate-700: #334155;
+  --slate-600: #475569;
+  --slate-500: #64748B;
+  --slate-400: #94A3B8;
+  --slate-300: #CBD5E1;
+  --slate-200: #E2E8F0;
+  --slate-100: #F1F5F9;
+  --slate-50: #F8FAFC;
+  --teal-700: #0F766E;
+  --teal-600: #0D9488;
+  --teal-500: #14B8A6;
+  --teal-400: #2DD4BF;
+  --teal-100: #CCFBF1;
+  --teal-50: #F0FDFA;
+  --violet-700: #6D28D9;
+  --violet-600: #7C3AED;
+  --violet-500: #8B5CF6;
+  --violet-100: #EDE9FE;
+  --violet-50: #F5F3FF;
+  --amber-600: #D97706;
+  --amber-500: #F59E0B;
+  --amber-100: #FEF3C7;
+  --amber-50: #FFFBEB;
+  --rose-600: #E11D48;
+  --rose-500: #F43F5E;
+  --rose-100: #FFE4E6;
+  --rose-50: #FFF1F2;
+  --warm-white: #F8FAFC;
+  --charcoal: #0F172A;
+  --red-500: #EF4444;
+  --red-50: #FEF2F2;
+
+  --accent: var(--teal-600);
+  --accent-light: var(--teal-500);
+  --accent-bg: var(--teal-50);
+  --secondary: var(--violet-600);
+  --secondary-light: var(--violet-500);
+  --bg-primary: var(--warm-white);
+  --bg-card: #FFFFFF;
+  --text-primary: var(--charcoal);
+  --text-secondary: #334155;
+  --text-muted: var(--slate-500);
+}
+
+/* ── Base ── */
+body {
+  font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at 10% 0%, rgba(13,148,136,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 100%, rgba(124,58,237,0.03) 0%, transparent 50%);
+}
+
+/* ── Dashboard Heading ── */
+.heading-dash {
+  font-family: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--bg-card);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 4px 16px rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card:hover {
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.06),
+    0 8px 32px rgba(0,0,0,0.06);
+}
+
+/* ── Metric Card ── */
+.metric-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.05);
+  position: relative;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(13,148,136,0.12);
+}
+.metric-card-accent {
+  height: 4px;
+  width: 100%;
+}
+.metric-card-accent.optimal { background: linear-gradient(90deg, var(--teal-600), var(--teal-500)); }
+.metric-card-accent.warning { background: linear-gradient(90deg, var(--amber-500), #FBBF24); }
+.metric-card-accent.critical { background: linear-gradient(90deg, var(--rose-600), var(--rose-500)); }
+.metric-card-accent.neutral { background: linear-gradient(90deg, var(--slate-500), var(--slate-400)); }
+
+/* ── Urgency Badge ── */
+.urgency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.urgency-badge.low { background: var(--teal-50); color: var(--teal-700); }
+.urgency-badge.medium { background: var(--amber-50); color: var(--amber-600); }
+.urgency-badge.high { background: var(--rose-50); color: var(--rose-600); }
+.urgency-badge.critical { background: var(--rose-100); color: var(--rose-600); border: 1px solid rgba(225,29,72,0.2); }
+
+/* ── Risk Profile Badge ── */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.risk-badge.conservative { background: var(--teal-50); color: var(--teal-700); }
+.risk-badge.moderate { background: var(--slate-100); color: var(--slate-700); }
+.risk-badge.aggressive { background: var(--amber-50); color: var(--amber-600); }
+.risk-badge.ultra_aggressive { background: var(--rose-50); color: var(--rose-600); }
+
+/* ── Confidence Badge ── */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.confidence-badge.high { background: var(--teal-50); color: var(--teal-700); }
+.confidence-badge.medium { background: var(--amber-50); color: var(--amber-600); }
+.confidence-badge.low { background: var(--slate-100); color: var(--slate-500); }
+
+/* ── Trade Action Badge ── */
+.trade-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.trade-badge.buy { background: var(--teal-50); color: var(--teal-700); }
+.trade-badge.sell { background: var(--rose-50); color: var(--rose-600); }
+.trade-badge.hold { background: var(--slate-100); color: var(--slate-600); }
+
+/* ── Asset Tag ── */
+.asset-tag {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: var(--violet-50);
+  color: var(--violet-600);
+  border: 1px solid rgba(124,58,237,0.15);
+}
+
+/* ── Factor Tag ── */
+.factor-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.375rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--slate-100);
+  color: var(--text-secondary);
+}
+
+/* ── Portfolio Pulse ── */
+.portfolio-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--teal-500);
+  animation: portfolioPulse 2s ease-in-out infinite;
+}
+.portfolio-pulse.optimal { background: var(--teal-500); }
+.portfolio-pulse.warning { background: var(--amber-500); }
+.portfolio-pulse.critical { background: var(--rose-500); }
+
+/* ── Allocation Bar ── */
+.allocation-bar {
+  height: 8px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--slate-100);
+}
+.allocation-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s ease-out;
+}
+
+/* ── Drift Meter ── */
+.drift-meter {
+  height: 6px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--slate-100);
+  position: relative;
+}
+.drift-meter-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s ease-out;
+}
+.drift-meter-target {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--charcoal);
+  border-radius: 1px;
+}
+
+/* ── Radial Progress ── */
+.radial-progress {
+  --size: 72px;
+  --stroke: 6px;
+  width: var(--size);
+  height: var(--size);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.radial-progress svg {
+  transform: rotate(-90deg);
+  width: var(--size);
+  height: var(--size);
+}
+.radial-progress .track {
+  fill: none;
+  stroke: var(--slate-100);
+  stroke-width: var(--stroke);
+}
+.radial-progress .fill {
+  fill: none;
+  stroke: var(--teal-600);
+  stroke-width: var(--stroke);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out;
+}
+.radial-progress .label {
+  position: absolute;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ── Recommendation Card ── */
+.recommendation-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--slate-200);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.recommendation-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+.recommendation-card.high::before { background: var(--teal-600); }
+.recommendation-card.medium::before { background: var(--amber-500); }
+.recommendation-card.low::before { background: var(--slate-400); }
+.recommendation-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* ── Rebalance Card ── */
+.rebalance-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--slate-200);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.rebalance-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+.rebalance-card.buy::before { background: var(--teal-600); }
+.rebalance-card.sell::before { background: var(--rose-600); }
+.rebalance-card.hold::before { background: var(--slate-400); }
+.rebalance-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+
+/* ── Attribution Bar ── */
+.attribution-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.attribution-bar-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 100px;
+  text-align: right;
+}
+.attribution-bar-track {
+  flex: 1;
+  height: 20px;
+  border-radius: 0.375rem;
+  overflow: hidden;
+  background: var(--slate-100);
+  position: relative;
+}
+.attribution-bar-fill {
+  height: 100%;
+  border-radius: 0.375rem;
+  transition: width 1s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+}
+.attribution-bar-value {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: white;
+}
+
+/* ── Animations ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes portfolioPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+@keyframes scanLine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes signalReveal {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-6px) rotate(0.5deg); }
+  66% { transform: translateY(-3px) rotate(-0.3deg); }
+}
+@keyframes pulseTeal {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(13,148,136,0); }
+}
+@keyframes driftSweep {
+  0% { width: 0%; }
+  100% { width: var(--drift-width); }
+}
+
+.animate-fadeSlideUp {
+  animation: fadeSlideUp 0.6s ease-out both;
+}
+.animate-floatCard {
+  animation: floatCard 4s ease-in-out infinite;
+}
+.animate-signalReveal {
+  animation: signalReveal 0.5s ease-out both;
+}
+.animate-pulseTeal {
+  animation: pulseTeal 2s ease-in-out infinite;
+}
+
+/* ── Utility ── */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }

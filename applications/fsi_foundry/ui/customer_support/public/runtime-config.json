@@ -1,0 +1,55 @@
+{
+  "use_case_id": "customer_support",
+  "use_case_name": "Customer Support",
+  "description": "Ticket classification, resolution, and escalation management",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "ticket_classifier",
+      "name": "Ticket Classifier",
+      "description": "Classifies tickets by category and urgency, identifies expertise areas"
+    },
+    {
+      "id": "resolution_agent",
+      "name": "Resolution Agent",
+      "description": "Searches historical cases, suggests resolutions with confidence scores"
+    },
+    {
+      "id": "escalation_agent",
+      "name": "Escalation Agent",
+      "description": "Evaluates escalation needs, determines team routing and priority"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. SUP001",
+    "type_field": "ticket_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "general",
+        "label": "General"
+      },
+      {
+        "value": "billing",
+        "label": "Billing"
+      },
+      {
+        "value": "technical",
+        "label": "Technical"
+      },
+      {
+        "value": "account",
+        "label": "Account"
+      }
+    ],
+    "test_entities": [
+      "CUST001"
+    ]
+  }
+}

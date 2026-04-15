@@ -1,0 +1,528 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+:root {
+  /* Warm Library Palette */
+  --cream: #FDF8F0;
+  --parchment: #FFFBF2;
+  --amber: #D97706;
+  --amber-light: #F59E0B;
+  --amber-glow: rgba(217, 119, 6, 0.15);
+  --amber-soft: #FEF3C7;
+  --brown-deep: #44200D;
+  --brown-dark: #78350F;
+  --brown-warm: #92400E;
+  --warm-gray: #57534E;
+  --warm-gray-light: #A8A29E;
+  --warm-gray-lighter: #D6D3D1;
+  --warm-white: #FAF9F7;
+
+  --accent: var(--amber);
+  --accent-light: var(--amber-light);
+  --accent-glow: var(--amber-glow);
+
+  --bg-primary: var(--cream);
+  --bg-secondary: var(--parchment);
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FFFDF8;
+  --border: #E7E0D6;
+  --border-warm: rgba(217, 119, 6, 0.2);
+  --text-primary: #1C1917;
+  --text-secondary: var(--warm-gray);
+  --text-muted: var(--warm-gray-light);
+
+  --relevance-high: #D97706;
+  --relevance-medium: #EAB308;
+  --relevance-low: #A8A29E;
+
+  --status-active: #16A34A;
+  --status-archived: #9CA3AF;
+  --status-draft: #D97706;
+  --status-superseded: #9A3412;
+
+  --shadow-soft: 0 1px 3px rgba(68, 32, 13, 0.06), 0 1px 2px rgba(68, 32, 13, 0.04);
+  --shadow-card: 0 4px 16px rgba(68, 32, 13, 0.06), 0 1px 4px rgba(68, 32, 13, 0.04);
+  --shadow-card-hover: 0 8px 30px rgba(68, 32, 13, 0.1), 0 2px 8px rgba(68, 32, 13, 0.06);
+  --shadow-elevated: 0 12px 40px rgba(68, 32, 13, 0.12), 0 4px 12px rgba(68, 32, 13, 0.06);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  /* Subtle parchment texture via gradient */
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(254, 243, 199, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(254, 243, 199, 0.2) 0%, transparent 40%),
+    linear-gradient(0deg, transparent 49.9%, rgba(168, 162, 158, 0.03) 50%, transparent 50.1%),
+    linear-gradient(90deg, transparent 49.9%, rgba(168, 162, 158, 0.03) 50%, transparent 50.1%);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(231, 224, 214, 0.3); }
+::-webkit-scrollbar-thumb { background: rgba(168, 162, 158, 0.4); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(120, 53, 15, 0.3); }
+
+/* ============================================
+   ANIMATIONS - Warm, Library-inspired
+   ============================================ */
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pageReveal {
+  from { opacity: 0; transform: rotateY(-8deg) translateX(-12px); }
+  to { opacity: 1; transform: rotateY(0) translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blinkCaret {
+  0%, 100% { border-color: var(--amber); }
+  50% { border-color: transparent; }
+}
+
+@keyframes gentleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pageFlip {
+  0% { transform: rotateY(0deg); }
+  50% { transform: rotateY(-20deg); }
+  100% { transform: rotateY(0deg); }
+}
+
+@keyframes bookOpen {
+  0%, 100% { transform: perspective(600px) rotateY(0deg); }
+  50% { transform: perspective(600px) rotateY(-15deg); }
+}
+
+@keyframes warmPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(217, 119, 6, 0);
+  }
+}
+
+@keyframes loadingBar {
+  0% { width: 0%; }
+  50% { width: 70%; }
+  90% { width: 95%; }
+  100% { width: 100%; }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.animate-fade-slide-up { animation: fadeSlideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-fade-in { animation: fadeIn 0.5s ease forwards; opacity: 0; }
+.animate-page-reveal { animation: pageReveal 0.7s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-slide-left { animation: slideInLeft 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-slide-right { animation: slideInRight 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-gentle-float { animation: gentleFloat 4s ease-in-out infinite; }
+.animate-warm-pulse { animation: warmPulse 2.5s ease-in-out infinite; }
+.animate-page-flip { animation: pageFlip 2s ease-in-out infinite; }
+.animate-book-open { animation: bookOpen 3s ease-in-out infinite; }
+.animate-spin { animation: spin 1s linear infinite; }
+
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }
+
+/* ============================================
+   CARD STYLES - Paper/Book inspired
+   ============================================ */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-card);
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+}
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+  border-color: rgba(217, 119, 6, 0.15);
+}
+
+.card-parchment {
+  background: var(--parchment);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-card);
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* ============================================
+   DOCUMENT CARD - Book spine accent
+   ============================================ */
+
+.document-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--amber);
+  border-radius: 0 12px 12px 0;
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-card);
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+}
+.document-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateX(4px);
+  border-left-width: 6px;
+}
+.document-card.relevance-high { border-left-color: var(--relevance-high); }
+.document-card.relevance-medium { border-left-color: var(--relevance-medium); }
+.document-card.relevance-low { border-left-color: var(--relevance-low); }
+
+/* ============================================
+   SEARCH BAR - Prominent, warm
+   ============================================ */
+
+.search-bar {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  font-size: 1.125rem;
+  border-radius: 16px;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: var(--shadow-soft);
+  font-family: var(--font-sans);
+}
+.search-bar::placeholder {
+  color: var(--text-muted);
+}
+.search-bar:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.12), var(--shadow-card);
+}
+
+.search-bar-large {
+  width: 100%;
+  padding: 1.25rem 1.75rem;
+  font-size: 1.25rem;
+  border-radius: 20px;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-sans);
+}
+.search-bar-large::placeholder {
+  color: var(--text-muted);
+}
+.search-bar-large:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 6px rgba(217, 119, 6, 0.1), var(--shadow-elevated);
+}
+
+/* ============================================
+   RELEVANCE & STATUS BADGES
+   ============================================ */
+
+.relevance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.relevance-high {
+  background: rgba(217, 119, 6, 0.12);
+  color: #92400E;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+}
+.relevance-medium {
+  background: rgba(234, 179, 8, 0.12);
+  color: #854D0E;
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+.relevance-low {
+  background: rgba(168, 162, 158, 0.15);
+  color: var(--warm-gray);
+  border: 1px solid rgba(168, 162, 158, 0.3);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.625rem;
+  border-radius: 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.status-active {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803D;
+  border: 1px solid rgba(22, 163, 74, 0.2);
+}
+.status-archived {
+  background: rgba(156, 163, 175, 0.12);
+  color: #6B7280;
+  border: 1px solid rgba(156, 163, 175, 0.25);
+}
+.status-draft {
+  background: rgba(217, 119, 6, 0.1);
+  color: #92400E;
+  border: 1px solid rgba(217, 119, 6, 0.2);
+}
+.status-superseded {
+  background: rgba(154, 52, 18, 0.1);
+  color: #9A3412;
+  border: 1px solid rgba(154, 52, 18, 0.2);
+}
+
+/* ============================================
+   BUTTONS - Warm amber
+   ============================================ */
+
+.btn-primary {
+  @apply inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border-0 cursor-pointer transition-all;
+  background: linear-gradient(135deg, #D97706, #B45309);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+}
+.btn-primary:hover {
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.4);
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #E08816, #C46310);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm cursor-pointer transition-all;
+  background: transparent;
+  color: var(--brown-dark);
+  border: 1.5px solid var(--border);
+}
+.btn-secondary:hover {
+  background: rgba(217, 119, 6, 0.05);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* ============================================
+   INPUT FIELDS
+   ============================================ */
+
+.input-field {
+  @apply w-full px-4 py-3 rounded-xl text-sm outline-none transition-all;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  color: var(--text-primary);
+}
+.input-field::placeholder { color: var(--text-muted); }
+.input-field:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.08);
+}
+
+.label {
+  @apply block text-xs font-semibold uppercase tracking-wider mb-2;
+  color: var(--text-secondary);
+}
+
+/* ============================================
+   PILL / TAB FILTERS
+   ============================================ */
+
+.filter-pill {
+  @apply inline-flex items-center px-4 py-2 rounded-full text-sm font-medium cursor-pointer transition-all;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  color: var(--text-secondary);
+}
+.filter-pill:hover {
+  border-color: var(--amber);
+  color: var(--brown-dark);
+  background: rgba(217, 119, 6, 0.04);
+}
+.filter-pill.active {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.1), rgba(245, 158, 11, 0.08));
+  border-color: var(--amber);
+  color: var(--brown-dark);
+  box-shadow: 0 1px 4px rgba(217, 119, 6, 0.15);
+}
+
+/* ============================================
+   CATEGORY CARDS - Book spine / folder tabs
+   ============================================ */
+
+.category-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.category-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.category-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-3px);
+}
+.category-card:hover::before {
+  width: 6px;
+}
+
+/* ============================================
+   LOADING STATE - Book pages flipping
+   ============================================ */
+
+.book-loader {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+.book-loader .page {
+  width: 12px;
+  height: 20px;
+  border-radius: 1px 3px 3px 1px;
+  transform-origin: left center;
+  animation: pageFlip 1.2s ease-in-out infinite;
+}
+.book-loader .page:nth-child(1) { animation-delay: 0s; background: var(--amber); }
+.book-loader .page:nth-child(2) { animation-delay: 0.15s; background: var(--amber-light); }
+.book-loader .page:nth-child(3) { animation-delay: 0.3s; background: var(--brown-warm); }
+.book-loader .page:nth-child(4) { animation-delay: 0.45s; background: var(--amber); }
+
+.loading-bar {
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--amber), var(--amber-light), var(--amber));
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite, loadingBar 8s ease-out forwards;
+}
+
+/* ============================================
+   AGENT STATUS CARDS
+   ============================================ */
+
+.agent-card-indexer {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.06), rgba(245, 158, 11, 0.03));
+  border: 1px solid rgba(217, 119, 6, 0.15);
+  border-radius: 14px;
+  padding: 1.25rem;
+  transition: all 0.3s ease;
+}
+
+.agent-card-search {
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.06), rgba(68, 32, 13, 0.03));
+  border: 1px solid rgba(120, 53, 15, 0.15);
+  border-radius: 14px;
+  padding: 1.25rem;
+  transition: all 0.3s ease;
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
+.heading-serif {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--brown-deep);
+  line-height: 1.3;
+}
+
+.text-warm {
+  color: var(--text-secondary);
+}
+
+.text-amber {
+  color: var(--amber);
+}
+
+/* ============================================
+   MISC UTILITIES
+   ============================================ */
+
+.warm-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+.parchment-bg {
+  background: var(--parchment);
+}
+
+.elevated {
+  box-shadow: var(--shadow-elevated);
+}
