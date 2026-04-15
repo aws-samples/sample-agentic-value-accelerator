@@ -1,0 +1,830 @@
+
+schema_version: '1.0'
+created_date: '2026-01-20'
+database: market_surveillance
+description: Market Surveillance Database Schema
+
+tables:
+  # ==================== DIMENSIONAL TABLES ====================
+  
+  - name: dim_account
+    type: Dimensional
+    purpose: Database
+    description: External and internal accounts involved in trading
+    schema:
+      - column: account_id
+        data_type: Alphanumeric
+        primary_key: true
+        nullable: false
+        description: Unique ID - Account
+      - column: account_country
+        data_type: Alphanumeric
+        description: Country of organization controlling the account
+        foreign_keys:
+          - references: ref_country_name.ref_country_name
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Country_Name
+      - column: account_frb_code
+        data_type: Alphanumeric
+        description: Type of account?
+        foreign_keys:
+          - references: ref_frb_code.ref_frb_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes FRB_Code
+      - column: account_mli_number
+        data_type: Alphanumeric
+        description: Client account number? (if FRB Code = "CUSTOMER"?)
+        foreign_keys:
+          - references: ref_mli_number.ref_mli_number
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes MLI_Number
+      - column: account_organization
+        data_type: Alphanumeric
+        description: Organization name for the account
+      - column: account_name
+        data_type: Alphanumeric
+        description: Name of the counterparty / account
+      - column: account_number
+        data_type: Alphanumeric
+        primary_key: true
+        nullable: false
+        description: Unique ID - Account
+      - column: account_type
+        data_type: Alphanumeric
+        description: Type of organization controlling the account
+        foreign_keys:
+          - references: ref_account_type.ref_account_type
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Account_Type
+      - column: account_sub_type
+        data_type: Alphanumeric
+        description: Sub-type of organization controlling the account
+        foreign_keys:
+          - references: ref_account_sub_type.ref_account_sub_type
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Account_Sub_Type
+
+  - name: dim_actor
+    type: Dimensional
+    purpose: Database
+    description: Actor information for clients and internal
+    schema:
+      - column: actor_trader_id
+        data_type: Alphanumeric
+        primary_key: true
+        nullable: false
+        description: Trader_ID
+      - column: actor_account_id
+        data_type: Alphanumeric
+        description: Actor account identifier
+      - column: actor_account_name
+        data_type: Alphanumeric
+        description: Actor account name (desk or back office)
+      - column: actor_email_address
+        data_type: Alphanumeric
+        description: Receiver - email address
+      - column: actor_trader_name
+        data_type: Alphanumeric
+        description: Trader's first and last names
+      - column: actor_position
+        data_type: Alphanumeric
+        description: Function of the actor
+        foreign_keys:
+          - references: ref_role.ref_role
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Role
+      - column: actor_risk_area
+        data_type: Alphanumeric
+        description: Risk Area
+        foreign_keys:
+          - references: ref_risk_area_name.ref_risk_area_name
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Risk_Area_Name
+      - column: actor_standard_id
+        data_type: Alphanumeric
+        description: Internal standard ID
+      - column: actor_organization
+        data_type: Alphanumeric
+        description: Actor organization
+      - column: actor_business_area
+        data_type: Alphanumeric
+        description: Business Area
+        foreign_keys:
+          - references: ref_business_area.ref_business_area
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Business_Area
+      - column: actor_business_unit_name
+        data_type: Alphanumeric
+        description: Business unit where actor works
+        foreign_keys:
+          - references: ref_business_unit_name.ref_business_unit_name
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Business_Unit_Name
+      - column: actor_trading_desk
+        data_type: Alphanumeric
+        description: Trading Desk
+        foreign_keys:
+          - references: ref_trading_desk.ref_trading_desk
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Trading_Desk
+      - column: actor_product_type
+        data_type: Alphanumeric
+        description: Product type traded (Corporate Bond or Government Bond)
+      - column: actor_category
+        data_type: Alphanumeric
+        description: Actor category (Internal)
+
+  - name: dim_product
+    type: Dimensional
+    purpose: Database
+    description: Product data
+    schema:
+      - column: product_isin
+        data_type: Alphanumeric
+        primary_key: true
+        nullable: false
+        description: Unique ID - Product
+      - column: product_bbgid
+        data_type: Alphanumeric
+        description: Unique ID - Product - Bloomberg
+      - column: product_country_of_issue
+        data_type: Alphanumeric
+        description: Country of issue
+        foreign_keys:
+          - references: ref_country_name.ref_country_name
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Country_Name
+      - column: product_currency_of_issue
+        data_type: Alphanumeric
+        description: Standard currency code
+        foreign_keys:
+          - references: ref_currency_code.ref_currency_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Currency_Code
+          - references: ref_government_bond_liquidity_threshold.govt_liq_currency
+            cardinality: Zero or Many -> Zero or One
+            purpose: Standardizes Government_Bond_Liquidity_Threshold
+      - column: product_cusip
+        data_type: Alphanumeric
+        description: Unique ID - Product - CUSIP
+      - column: product_description_long
+        data_type: Alphanumeric
+        description: Short description of the Products traded
+      - column: product_description_short
+        data_type: Alphanumeric
+        description: Short description of the Products traded
+      - column: product_issue_date
+        data_type: DateTime
+        description: Date instrument started trading
+      - column: product_maturity_date
+        data_type: DateTime
+        description: Date when fixed income interest is redeemed or expires
+      - column: product_category
+        data_type: Alphanumeric
+        description: Product Category (Asset class name)
+      - column: product_type
+        data_type: Alphanumeric
+        description: Product Type
+        foreign_keys:
+          - references: ref_product_type.ref_product_type
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Product_Type
+      - column: product_sub_type
+        data_type: Alphanumeric
+        description: Product Sub-Type
+        foreign_keys:
+          - references: ref_product_sub_type.ref_product_sub_type
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Product_Sub_Type
+
+  - name: flagged_trade
+    type: Dimensional
+    purpose: Database
+    description: Lists of flagged trades associated with alerts
+    schema:
+      - column: trade_alert_id
+        data_type: Alphanumeric
+        description: Unique ID - Alert
+      - column: trade_id
+        data_type: Alphanumeric
+        description: Unique ID - Flagged Trade
+        foreign_keys:
+          - references: fact_trade.trade_id
+            cardinality: Zero or Many -> One and Only One
+            purpose: Cross-references flagged_trade and fact_trade
+
+  # ==================== FACT TABLES ====================
+
+  - name: fact_alert
+    type: Fact
+    purpose: Database
+    description: Market surveillance alert data
+    schema:
+      - column: alert_id
+        data_type: Alphanumeric
+        primary_key: true
+        nullable: false
+        description: Unique identifier for the alert
+      - column: alert_date
+        data_type: DateTime
+        description: Alert Date
+      - column: alert_isin
+        data_type: Alphanumeric
+        description: Unique ID - Product
+      - column: alert_summary
+        data_type: Alphanumeric
+        description: Brief description of the reason for alert
+        foreign_keys:
+          - references: ref_alert_summary.ref_alert_summary
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Alert_Summary
+      - column: alert_time
+        data_type: Time
+        description: Time when alert was generated
+      - column: alert_trade_id
+        data_type: Alphanumeric
+        description: Unique ID - Trade. Pivot (customer) trade
+      - column: alert_account_id
+        data_type: Alphanumeric
+        description: Unique ID - Account
+      - column: alert_account_name
+        data_type: Alphanumeric
+        description: Name of the counterparty / account
+      - column: alert_account_number
+        data_type: Alphanumeric
+        description: Unique ID - Account
+    composite_foreign_keys:
+      - columns: [alert_account_id, alert_account_number]
+        referenced_table: dim_account
+        referenced_columns: [account_id, account_number]
+        purpose: Cross-references fact_alert and dim_account
+
+  - name: fact_ecomm
+    type: Fact
+    purpose: Database
+    description: Electronic communication records, one row per conversation with raw XML bodies
+    schema:
+      - column: ecomm_conversation_id
+        data_type: Alphanumeric
+        primary_key: true
+        description: Unique conversation identifier (primary key)
+      - column: ecomm_app_code
+        data_type: Alphanumeric
+        description: Code of the original application/system in which communication occurred
+        foreign_keys:
+          - references: ref_ecomm_app.ref_ecomm_app_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Ecomm_Apps
+      - column: ecomm_app_type
+        data_type: Alphanumeric
+        description: Type of the original application/system in which communication occurred
+      - column: ecomm_date
+        data_type: DateTime
+        description: Date on which the communication occurred
+      - column: ecomm_start_timestamp
+        data_type: Alphanumeric
+        description: Time with tz offset when conversation started (e.g., 09:55:58.652-05:00)
+      - column: ecomm_end_timestamp
+        data_type: Alphanumeric
+        description: Time with tz offset when conversation ended (e.g., 14:04:30.750-05:00)
+      - column: ecomm_timezone
+        data_type: Alphanumeric
+        description: IANA timezone identifier (e.g., IANA:America/New_York)
+      - column: ecomm_participants_body
+        data_type: Text
+        description: Raw XML content of the Participants element containing party roles, account organizations, and trader details
+      - column: ecomm_chat_body
+        data_type: Text
+        description: Raw XML content of the Chat element containing the full conversation transcript with messages, timestamps, and sentence-level detail
+
+  - name: fact_trade
+    type: Fact
+    purpose: Database
+    description: Trade data
+    schema:
+      - column: trade_id
+        data_type: Alphanumeric
+        primary_key: true
+        nullable: false
+        description: Unique ID - Trade
+      - column: trade_algorithm_flag
+        data_type: Alphanumeric
+        description: Flag indicating whether the trade was algorithm-related
+        foreign_keys:
+          - references: ref_algorithm_flag.ref_algorithm_flag
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Algorithm_Flag
+      - column: trade_book_code
+        data_type: Alphanumeric
+        description: Book against which the trade is booked
+        foreign_keys:
+          - references: ref_book.book_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Book
+      - column: trade_date
+        data_type: DateTime
+        description: Date on which the traded was executed
+      - column: trade_dealer_count
+        data_type: Integer
+        description: Count of dealers for customer's RFQ
+      - column: trade_dealer_name
+        data_type: Alphanumeric
+        description: Dealer name
+        foreign_keys:
+          - references: ref_dealer_name.ref_dealer_name
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Dealer_Name
+      - column: trade_entry_date
+        data_type: DateTime
+        description: Trade entry date
+      - column: trade_event_type
+        data_type: Alphanumeric
+        description: Type of transaction event
+        foreign_keys:
+          - references: ref_event_type.ref_event_type
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Event_Type
+      - column: trade_isvoicetrade
+        data_type: Alphanumeric
+        description: Voice trade indicator Y/N
+        foreign_keys:
+          - references: ref_isvoicetrade_flag.ref_isvoicetrade_flag
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes IsVoiceTrade_Flag
+      - column: trade_legal_entity
+        data_type: Alphanumeric
+        description: Bank ABC legal entity
+        foreign_keys:
+          - references: ref_legal_entity_code.ref_legal_entity_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Legal_Entity_Code
+      - column: trade_notional
+        data_type: Currency
+        description: Notional Dollar value of the Product traded
+      - column: trade_price
+        data_type: Decimal(18,2)
+        description: Price at which the traded was executed
+      - column: trade_qty
+        data_type: Integer
+        description: Face value of the Product traded
+      - column: trade_side_code
+        data_type: Alphanumeric
+        description: Trade side code
+        foreign_keys:
+          - references: ref_trade_side.ref_trade_side_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Trade_Side
+      - column: trade_side_name
+        data_type: Alphanumeric
+        description: Trade side name
+      - column: trade_source_code
+        data_type: Alphanumeric
+        description: Trade source (e.g. order management system) code
+        foreign_keys:
+          - references: ref_trade_source.ref_trade_source_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Trade_Source
+      - column: trade_source_name
+        data_type: Alphanumeric
+        description: Trade source (e.g. order management system) name
+      - column: trade_standard_id
+        data_type: Alphanumeric
+        description: Internal standard ID
+      - column: trade_state
+        data_type: Alphanumeric
+        description: Trade state
+        foreign_keys:
+          - references: ref_trade_state.ref_trade_state
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Trade_State
+      - column: trade_ticket_id
+        data_type: Alphanumeric
+        description: ID of the ticket associated with the trade
+      - column: trade_time
+        data_type: Time
+        description: Time when the trade was executed (no fractional seconds?)
+      - column: trade_type_code
+        data_type: Alphanumeric
+        description: Type of trade - code
+        foreign_keys:
+          - references: ref_trade_type.ref_trade_type_code
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Trade_Type
+      - column: trade_type_name
+        data_type: Alphanumeric
+        description: Type of trade - name
+      - column: trade_venue
+        data_type: Alphanumeric
+        description: Code of trading venue where the trade was executed
+        foreign_keys:
+          - references: ref_venue_name.ref_venue_name
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Venue_Name
+      - column: trade_account_id
+        data_type: Alphanumeric
+        description: Unique ID - Account
+      - column: trade_account_name
+        data_type: Alphanumeric
+        description: Name of the counterparty / account
+      - column: trade_trader_id
+        data_type: Alphanumeric
+        description: Unique ID - Trader
+        foreign_keys:
+          - references: dim_actor.actor_trader_id
+            cardinality: Zero or Many -> One and Only One
+            purpose: Cross-references fact_trade and dim_actor
+      - column: trade_trader_capacity
+        data_type: Alphanumeric
+        description: Capacity in which the trader acted
+        foreign_keys:
+          - references: ref_capacity_type.ref_capacity_type
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Capacity_Type
+      - column: trade_trader_name
+        data_type: Alphanumeric
+        description: Trader's first and last names
+      - column: trade_isin
+        data_type: Alphanumeric
+        description: Unique ID - Product
+        foreign_keys:
+          - references: dim_product.product_isin
+            cardinality: Zero or Many -> One and Only One
+            purpose: Cross-references fact_trade and dim_product
+      - column: trade_asset_class_name
+        data_type: Alphanumeric
+        description: Asset class (Product)
+        foreign_keys:
+          - references: ref_asset_class_name.ref_asset_class_name
+            cardinality: Zero or Many -> One and Only One
+            purpose: Standardizes Asset_Class_Name
+      - column: trade_product
+        data_type: Alphanumeric
+        description: Short description of the Products traded
+      - column: trade_account_number
+        data_type: Alphanumeric
+        description: Account number for the trade
+      - column: trade_alert_id
+        data_type: Alphanumeric
+        description: Alert ID associated with the trade
+    composite_foreign_keys:
+      - columns: [trade_account_id, trade_account_number]
+        referenced_table: dim_account
+        referenced_columns: [account_id, account_number]
+        purpose: Cross-references fact_trade and dim_account
+
+  # ==================== REFERENCE TABLES ====================
+
+  - name: ref_account_sub_type
+    type: Reference
+    purpose: Database
+    description: Account Sub Type
+    schema:
+      - column: ref_account_sub_type
+        data_type: Alphanumeric
+        primary_key: true
+        description: Account Sub Type
+
+  - name: ref_account_type
+    type: Reference
+    purpose: Database
+    description: Account Type
+    schema:
+      - column: ref_account_type
+        data_type: Alphanumeric
+        primary_key: true
+        description: Account Type
+
+  - name: ref_alert_summary
+    type: Reference
+    purpose: Database
+    description: Alert Summary
+    schema:
+      - column: ref_alert_summary
+        data_type: Alphanumeric
+        primary_key: true
+        description: Alert Summary
+
+  - name: ref_algorithm_flag
+    type: Reference
+    purpose: Database
+    description: Algorithm Flag
+    schema:
+      - column: ref_algorithm_flag
+        data_type: Alphanumeric
+        primary_key: true
+        description: Algorithm Flag
+
+  - name: ref_asset_class_name
+    type: Reference
+    purpose: Database
+    description: Asset Class Name
+    schema:
+      - column: ref_asset_class_name
+        data_type: Alphanumeric
+        primary_key: true
+        description: Asset Class Name
+
+  - name: ref_book
+    type: Reference
+    purpose: Database
+    description: Book
+    schema:
+      - column: book_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: Book Code
+      - column: book_description
+        data_type: Alphanumeric
+        description: Book Description
+      - column: book_type
+        data_type: Alphanumeric
+        description: Book Type
+
+  - name: ref_business_area
+    type: Reference
+    purpose: Database
+    description: Business Area
+    schema:
+      - column: ref_business_area
+        data_type: Alphanumeric
+        primary_key: true
+        description: Business Area
+
+  - name: ref_business_unit_name
+    type: Reference
+    purpose: Database
+    description: Business Unit Name
+    schema:
+      - column: ref_business_unit_name
+        data_type: Alphanumeric
+        primary_key: true
+        description: Business Unit Name
+
+  - name: ref_capacity_type
+    type: Reference
+    purpose: Database
+    description: Capacity Type
+    schema:
+      - column: ref_capacity_type
+        data_type: Alphanumeric
+        primary_key: true
+        description: Capacity Type
+
+  - name: ref_country_name
+    type: Reference
+    purpose: Database
+    description: Country Name
+    schema:
+      - column: ref_country_name
+        data_type: Alphanumeric
+        primary_key: true
+        description: Country Name
+
+  - name: ref_currency_code
+    type: Reference
+    purpose: Database
+    description: Currency Code
+    schema:
+      - column: ref_currency_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: Currency Code
+
+  - name: ref_dealer_name
+    type: Reference
+    purpose: Database
+    description: Dealer Name
+    schema:
+      - column: ref_dealer_name
+        data_type: Alphanumeric
+        primary_key: true
+        description: Dealer Name
+
+  - name: ref_ecomm_app
+    type: Reference
+    purpose: Database
+    description: eComm Apps
+    schema:
+      - column: ref_ecomm_app_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: Ecomm App Code
+      - column: ref_ecomm_app_type
+        data_type: Alphanumeric
+        description: Ecomm App Type
+
+  - name: ref_event_type
+    type: Reference
+    purpose: Database
+    description: Event Type
+    schema:
+      - column: ref_event_type
+        data_type: Alphanumeric
+        primary_key: true
+        description: Event Type
+
+  - name: ref_frb_code
+    type: Reference
+    purpose: Database
+    description: FRB Code
+    schema:
+      - column: ref_frb_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: FRB Code
+
+  - name: ref_government_bond_liquidity_threshold
+    type: Reference
+    purpose: Database
+    description: Government Bond Liquidity Threshold
+    schema:
+      - column: govt_liq_currency
+        data_type: Alphanumeric
+        primary_key: true
+        description: Currency Code
+      - column: "0 -2 Years"
+        data_type: Integer
+        description: Liquidity threshold amount for the corresponding bucket (column name)
+      - column: "3 – 5 Years"
+        data_type: Integer
+        description: Liquidity threshold amount for the corresponding bucket (column name)
+      - column: "6 – 10 Years"
+        data_type: Integer
+        description: Liquidity threshold amount for the corresponding bucket (column name)
+      - column: "11 – 20 Years"
+        data_type: Integer
+        description: Liquidity threshold amount for the corresponding bucket (column name)
+      - column: "21 – 30 Years"
+        data_type: Integer
+        description: Liquidity threshold amount for the corresponding bucket (column name)
+
+  - name: ref_isvoicetrade_flag
+    type: Reference
+    purpose: Database
+    description: IsVoiceTrade Flag
+    schema:
+      - column: ref_isvoicetrade_flag
+        data_type: Alphanumeric
+        primary_key: true
+        description: IsVoiceTrade Flag
+
+  - name: ref_legal_entity_code
+    type: Reference
+    purpose: Database
+    description: Legal Entity Code
+    schema:
+      - column: ref_legal_entity_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: Legal Entity Code
+
+  - name: ref_mli_number
+    type: Reference
+    purpose: Database
+    description: MLI Number
+    schema:
+      - column: ref_mli_number
+        data_type: Alphanumeric
+        primary_key: true
+        description: MLI Number
+
+  - name: ref_product_sub_type
+    type: Reference
+    purpose: Database
+    description: Product Sub-Type
+    schema:
+      - column: ref_product_sub_type
+        data_type: Alphanumeric
+        primary_key: true
+        description: Product Sub Type
+
+  - name: ref_product_type
+    type: Reference
+    purpose: Database
+    description: Product Type
+    schema:
+      - column: ref_product_type
+        data_type: Alphanumeric
+        primary_key: true
+        description: Product Type
+
+  - name: ref_risk_area_name
+    type: Reference
+    purpose: Database
+    description: Risk Area Name
+    schema:
+      - column: ref_risk_area_name
+        data_type: Alphanumeric
+        primary_key: true
+        description: Risk Area Name
+
+  - name: ref_role
+    type: Reference
+    purpose: Database
+    description: Role
+    schema:
+      - column: ref_role
+        data_type: Alphanumeric
+        primary_key: true
+        description: Actor's Role
+
+  - name: ref_trade_side
+    type: Reference
+    purpose: Database
+    description: Trade Side
+    schema:
+      - column: ref_trade_side_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: Trade Side Code
+      - column: ref_trade_side_name
+        data_type: Alphanumeric
+        description: Trade Side Name
+
+  - name: ref_trade_source
+    type: Reference
+    purpose: Database
+    description: Trade Source
+    schema:
+      - column: ref_trade_source_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: Trade Source Code
+      - column: ref_trade_source_name
+        data_type: Alphanumeric
+        description: Trade Source Code
+
+  - name: ref_trade_state
+    type: Reference
+    purpose: Database
+    description: Trade State
+    schema:
+      - column: ref_trade_state
+        data_type: Alphanumeric
+        primary_key: true
+        description: Trade State
+
+  - name: ref_trade_type
+    type: Reference
+    purpose: Database
+    description: Trade Type
+    schema:
+      - column: ref_trade_type_code
+        data_type: Alphanumeric
+        primary_key: true
+        description: Trade Type Code
+      - column: ref_trade_type_name
+        data_type: Alphanumeric
+        description: Trade Type Name
+
+  - name: ref_trading_desk
+    type: Reference
+    purpose: Database
+    description: Trading Desk
+    schema:
+      - column: ref_trading_desk
+        data_type: Alphanumeric
+        primary_key: true
+        description: Trading Desk
+
+  - name: ref_venue_name
+    type: Reference
+    purpose: Database
+    description: Venue Name
+    schema:
+      - column: ref_venue_name
+        data_type: Alphanumeric
+        primary_key: true
+        description: Venue Name
+
+  # ==================== CONFIGURATION TABLES ====================
+
+  - name: report_list
+    type: Dictionary
+    purpose: Output_config
+    description: List of output tables to be generated
+    schema:
+      - column: report_name
+        data_type: Alphanumeric
+        description: Name of the output report/table
+      - column: report_description
+        data_type: Alphanumeric
+        description: Description of the report purpose
+
+  - name: output_schema
+    type: Schema
+    purpose: Output_config
+    description: Break down of output tables and relevant columns
+    schema:
+      - column: output_table
+        data_type: Alphanumeric
+        description: Name of the output table
+      - column: column_name
+        data_type: Alphanumeric
+        description: Column name in output
+      - column: source_table
+        data_type: Alphanumeric
+        description: Source table for the column
+      - column: required
+        data_type: Alphanumeric
+        description: Whether the field is required (Yes/No)

@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --msp-aqua: #007FAA;
+    --msp-squid-ink: #232F3E;
+    --msp-sea-blue: #005276;
+    --msp-lab: #38EF7D;
+    --msp-mist: #9FFCEA;
+    --msp-gray: #F5F5F5;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    background-color: #F7F7F7;
+  }
+}
+
+@layer utilities {
+  .card-shadow {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  .card-shadow-hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+}
+
+/* Markdown styling */
+@layer components {
+  .markdown-content {
+    @apply text-gray-800 overflow-hidden;
+  }
+
+  .markdown-content h1 {
+    @apply text-2xl font-bold mt-6 mb-4;
+  }
+
+  .markdown-content h2 {
+    @apply text-xl font-bold mt-5 mb-3;
+  }
+
+  .markdown-content h3 {
+    @apply text-lg font-semibold mt-4 mb-2;
+  }
+
+  .markdown-content h4 {
+    @apply text-base font-semibold mt-3 mb-2;
+  }
+
+  .markdown-content p {
+    @apply mb-3 leading-relaxed;
+  }
+
+  .markdown-content ul {
+    @apply list-disc list-inside mb-3 space-y-1;
+  }
+
+  .markdown-content ol {
+    @apply list-decimal list-inside mb-3 space-y-1;
+  }
+
+  .markdown-content li {
+    @apply ml-4;
+  }
+
+  .markdown-content strong {
+    @apply font-semibold text-gray-900;
+  }
+
+  .markdown-content em {
+    @apply italic;
+  }
+
+  .markdown-content code {
+    @apply bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono text-red-600;
+  }
+
+  .markdown-content pre {
+    @apply bg-gray-900 text-gray-100 p-4 rounded-lg mb-3 overflow-x-auto max-w-full;
+  }
+
+  .markdown-content pre code {
+    @apply bg-transparent text-gray-100 p-0;
+  }
+
+  .markdown-content blockquote {
+    @apply border-l-4 border-gray-300 pl-4 italic text-gray-600 mb-3;
+  }
+
+  .markdown-content a {
+    @apply text-blue-600 hover:text-blue-800 underline;
+  }
+
+  .markdown-content table {
+    @apply w-full border-collapse mb-3 block overflow-x-auto;
+  }
+
+  .markdown-content th {
+    @apply bg-gray-100 border border-gray-300 px-3 py-2 text-left font-semibold;
+  }
+
+  .markdown-content td {
+    @apply border border-gray-300 px-3 py-2;
+  }
+
+  .markdown-content hr {
+    @apply my-4 border-gray-300;
+  }
+
+  .markdown-content details {
+    @apply my-3 border border-gray-200 rounded-lg overflow-hidden;
+  }
+
+  .markdown-content summary {
+    @apply px-4 py-3 bg-gray-50 cursor-pointer font-semibold text-sm hover:bg-gray-100 select-none;
+  }
+
+  .markdown-content details[open] summary {
+    @apply border-b border-gray-200;
+  }
+
+  .markdown-content details > *:not(summary) {
+    @apply px-4;
+  }
+}
+
+/* Animation for real-time audit trail entries */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}

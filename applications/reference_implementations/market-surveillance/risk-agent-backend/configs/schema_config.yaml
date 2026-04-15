@@ -1,0 +1,80 @@
+schema_version: '1.0'
+created_date: '2026-03-10'
+database: financial_risk
+description: Financial Risk - Early Warning Metrics Database Schema
+
+tables:
+  # ==================== DIMENSIONAL TABLES ====================
+
+  - name: dim_metric
+    type: Dimensional
+    purpose: Database
+    description: Metric definitions including trigger/threshold configuration with SCD2 versioning (Effective_From_Date, Effective_To_Date, Is_Current_Flag)
+    schema:
+      - column: metric_id
+        data_type: Alphanumeric
+        nullable: false
+        description: Unique identifier of a metric (e.g. RM1, RM2)
+      - column: metric_name
+        data_type: Alphanumeric
+        nullable: false
+        description: Metric long name (e.g. GC Rate, FX Maturity Mismatch)
+      - column: unit
+        data_type: Alphanumeric
+        description: Metric unit of measurement (e.g. bps, $B, %, days, £B, $MM, n/a)
+      - column: entity
+        data_type: Alphanumeric
+        description: Legal entity for which the metric was calculated
+      - column: metric_category
+        data_type: Alphanumeric
+        description: Metric category
+      - column: trigger_type
+        data_type: Alphanumeric
+        description: Type of test of the metric value vs. trigger (and threshold). Can be either MIN or MAX
+      - column: trigger_value
+        data_type: Alphanumeric
+        description: Metric value that triggers a warning
+      - column: threshold_value
+        data_type: Alphanumeric
+        description: Metric value that triggers actions required to mitigate the breach
+      - column: frequency
+        data_type: Alphanumeric
+        description: Frequency within which the metric is calculated and published
+      - column: effective_from_date
+        data_type: DateTime
+        description: Date from which the current row is effective
+      - column: effective_to_date
+        data_type: DateTime
+        description: Date to which the current row is effective
+      - column: is_current_flag
+        data_type: Boolean
+        description: Flag indicating whether the current row is effective
+      - column: recalibration_rationale
+        data_type: Text
+        description: Business description for the reason recalibration was performed
+
+  # ==================== FACT TABLES ====================
+
+  - name: fact_history
+    type: Fact
+    purpose: Database
+    description: Daily time-series of metric values, one row per metric per close-of-business date
+    schema:
+      - column: metric_id
+        data_type: Alphanumeric
+        nullable: false
+        description: Unique identifier of a metric
+      - column: metric_name
+        data_type: Alphanumeric
+        description: Metric long name (denormalized from dim_metric)
+      - column: units
+        data_type: Alphanumeric
+        description: Metric unit of measurement (denormalized from dim_metric)
+      - column: cob_date
+        data_type: DateTime
+        nullable: false
+        description: Close of business date on which the metric was calculated
+      - column: value
+        data_type: Alphanumeric
+        description: Calculated value of the metric (numeric for most metrics, alphanumeric for counterparty names)
+

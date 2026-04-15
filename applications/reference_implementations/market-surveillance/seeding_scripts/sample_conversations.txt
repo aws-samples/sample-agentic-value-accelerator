@@ -1,0 +1,154 @@
+Conversation Template 1 - Simple Bid/Offer
+---
+Trader: Hey {Client_Name}
+Trader: Got a bid for you on the {Instrument}
+Client: Shoot
+Trader: {Bid_Price} for {Size}mm
+Client: Can you stretch to {Counter_Price}?
+Trader: Let me check with desk
+Trader: Best I can do is {Final_Price}
+Client: Works for me
+Trader: {Confirmation_Phrase}. Will send confirm shortly
+Client: Thx
+
+Conversation Template 2 - Level Inquiry
+---
+Client: Morning {Trader_Name}
+Trader: Hey {Client_Name} whats up
+Client: Looking for a level on {Instrument}
+Client: Have {Size}mm to move
+Trader: Let me pull it up
+Trader: {Bid_Price}/{Offer_Price} in size
+Client: Need tighter for that
+Trader: Could do {Tighter_Bid}/{Tighter_Offer}
+Client: Take the offer
+Trader: {Confirmation_Phrase} at {Final_Price}
+Client: Perfect ty
+
+Conversation Template 3 - Client Selling
+---
+Client: yo
+Client: u around?
+Trader: yeah whats good
+Client: client wants to unload some {Instrument}
+Client: {Size}mm face
+Trader: what level they thinking
+Client: {Target_Price} area
+Trader: thats rich
+Trader: can do {Counter_Price}
+Client: let me go back
+Client: they'll do {Negotiated_Price}
+Trader: split the diff at {Final_Price}?
+Client: {Confirmation_Phrase}
+Trader: nice
+
+Conversation Template 4 - Follow-up Inquiry
+---
+Client: Hi {Trader_Name}
+Client: Following up on the {Instrument} inquiry
+Trader: Yes still looking
+Client: Can show {Offer_Price} on {Size}mm
+Trader: Thats better than yesterday
+Trader: Can you hold that for 20 min?
+Client: Will try but market moving
+Trader: Ok give me 10
+Client: np
+Trader: Back - {Confirmation_Phrase} at {Final_Price}
+Client: Great will book it now
+
+Conversation Template 5 - Quick Bid Request
+---
+Client: {Trader_Name}
+Client: Quick one
+Trader: go ahead
+Client: {Instrument}
+Client: where would you bid {Size}mm
+Trader: {Bid_Price} area
+Client: client looking for {Target_Price}+
+Trader: no way in this tape
+Trader: could maybe stretch to {Counter_Price}
+Client: let me try
+Client: {Final_Price} works
+Trader: {Confirmation_Phrase}
+
+Conversation Template 6 - Cover Trade
+---
+Client: Hey {Trader_Name}
+Trader: Hi {Client_Name}
+Client: Got lifted on that {Instrument}
+Client: Need to cover
+Trader: How much
+Client: {Size}mm
+Trader: Can offer at {Offer_Price}
+Client: Thats wide of where I got hit
+Trader: Best I can do is {Final_Price}
+Client: Fine take it
+Trader: {Confirmation_Phrase}
+Client: Thx for the help
+
+Conversation Template 7 - Flow Check
+---
+Client: {Trader_Name} u there
+Trader: yep
+Client: {Instrument}
+Client: seeing any flow?
+Trader: yeah been active
+Trader: whats the interest
+Client: looking to add {Size}mm
+Trader: big clip
+Trader: {Offer_Price} offer in {Smaller_Size}
+Trader: could work {Better_Price} on full size
+Client: do it
+Trader: {Confirmation_Phrase} at {Final_Price}
+Client: legend
+
+Conversation Template 8 - Size Increase
+---
+Client: Hi {Trader_Name}
+Client: Circling back on {Instrument}
+Trader: Still have interest?
+Client: Yes client wants to increase
+Client: Originally {Original_Size}mm now looking for {New_Size}mm
+Trader: Price will move on that size
+Trader: Was {Original_Price} on {Original_Size}
+Trader: Would need {New_Price} on {New_Size}
+Client: Let me check
+Client: They can do {Counter_Price}
+Trader: Meet at {Final_Price}?
+Client: That works
+Trader: {Confirmation_Phrase} at {Final_Price}
+
+Conversation Template 9 - Offer Check
+---
+Client: {Trader_Name}
+Trader: Hey
+Client: Quick check on {Instrument}
+Client: Have an offer?
+Trader: {Offer_Price} in {Size}mm
+Client: Client bid is {Bid_Price}
+Trader: Gap is too wide
+Client: Could they come up to {Counter_Price}?
+Trader: Would need {Minimum_Price} minimum
+Client: One sec
+Client: {Final_Price} final
+Trader: ok fine
+Trader: {Confirmation_Phrase} at {Final_Price}
+Client: Appreciate the flex
+
+Conversation Template 10 - Casual Reconnect
+---
+Client: Hi {Trader_Name}
+Trader: Hey {Client_Name} long time
+Client: I know been crazy
+Client: Got something for you
+Client: {Instrument}
+Trader: Im listening
+Client: {Size}mm at {Price}
+Trader: Thats in line
+Trader: Buyer or seller?
+Client: Seller
+Trader: {Confirmation_Phrase}
+Client: Great
+Client: Will send ticket
+Trader: Sounds good talk soon
+Client: Definitely catch up soon

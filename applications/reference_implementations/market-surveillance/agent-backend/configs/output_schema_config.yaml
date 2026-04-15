@@ -1,0 +1,474 @@
+
+schema_version: '1.0'
+description: Output schema configuration for market surveillance alert investigation reports
+
+output_tables:
+  alert_details:
+    description: Alert information for the investigation
+    source_tables:
+      - Fact_Alert
+    columns:
+      - output_name: Alert ID
+        source_column: Alert_ID
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Alert Date
+        source_column: Alert_Date
+        data_type: Date
+        format_rule: dd-mmm-yyyy
+        required: Yes
+      - output_name: Alert Time
+        source_column: Alert_time
+        data_type: Time
+        format_rule: hh:mm:ss
+        required: Yes
+      - output_name: Alert summary
+        source_column: Alert_Summary
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Account name
+        source_column: Account_Name
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Product ISIN
+        source_column: ISIN
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Alerted price
+        source_column: Trade_Price
+        data_type: Decimal(18,2)
+        format_rule: '#,###.##'
+        required: Yes
+      - output_name: Alerted Quantity
+        source_column: Trade_Qty
+        data_type: Integer
+        format_rule: '#,###'
+        required: Yes
+      - output_name: Alerted side
+        source_column: Trade_Side
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+
+  account_details:
+    description: Account information for the alert
+    source_tables:
+      - Dim_Account
+    columns:
+      - output_name: Country
+        source_column: Account_Country
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Account Name
+        source_column: Account_Name
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Account Number
+        source_column: Account_Number
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Account Type
+        source_column: Account_Type
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+
+  actor_details:
+    description: Trader and actor information
+    source_tables:
+      - Dim_Actor
+    columns:
+      - output_name: Actor name
+        source_column: Actor_name
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Actor organization
+        source_column: Actor_organization
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Business Area
+        source_column: Business_Area
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Position
+        source_column: Position
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Risk Area
+        source_column: Risk_Area
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Standard ID
+        source_column: Standard_ID
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Trading Desk
+        source_column: Trading_Desk
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Trder ID
+        source_column: Trder_ID
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+
+  product_details:
+    description: Product and instrument information
+    source_tables:
+      - Dim_Product
+    columns:
+      - output_name: ISIN
+        source_column: ISIN
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: CUSIP
+        source_column: CUSIP
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Optional
+      - output_name: BBGID
+        source_column: BBGID
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Optional
+      - output_name: Product
+        source_column: Product
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Product Description Long
+        source_column: Product_Description_Long
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Product Type
+        source_column: Product_Type
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Product Sub-Type
+        source_column: Product_Sub-Type
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Optional
+      - output_name: Country of issue
+        source_column: Country_of_issue
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Currency of issue
+        source_column: Currency_of_issue
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+
+  pivot_trade:
+    description: Pivot trade that triggered the alert (the customer trade flagged by surveillance)
+    source_tables:
+      - Fact_Trade
+      - Dim_Account
+      - Dim_Book
+    columns:
+      - output_name: Ticket#
+        source_column: Trade_Ticket_ID
+        source_table: Fact_Trade
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Trade Date
+        source_column: Trade_Date
+        source_table: Fact_Trade
+        data_type: Date
+        format_rule: dd-mmm-yyyy
+        required: Yes
+      - output_name: Trade Time
+        source_column: Trade_Time
+        source_table: Fact_Trade
+        data_type: Time
+        format_rule: hh:mm:ss
+        required: Yes
+      - output_name: Trade Price
+        source_column: Trade_Price
+        source_table: Fact_Trade
+        data_type: Decimal(18,2)
+        format_rule: '#,###.##'
+        required: Yes
+      - output_name: Quantity
+        source_column: Trade_Qty
+        source_table: Fact_Trade
+        data_type: Integer
+        format_rule: '#,###'
+        required: Yes
+      - output_name: Trade Notional
+        source_column: Trade_Notional
+        source_table: Fact_Trade
+        data_type: Currency
+        format_rule: '#,###.##'
+        required: Yes
+      - output_name: B/S
+        source_column: Trade_Side
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Trade Source
+        source_column: Trade_Source
+        source_table: Fact_Trade
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Trade Type
+        source_column: Trade_Type
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Currency Code
+        source_column: Currency_of_issue
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Book Code
+        source_column: Book_Code
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Trader capacity
+        source_column: Trader_Capacity
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Account Name
+        source_column: Account_Name
+        source_table: Dim_Account
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Account Number
+        source_column: Account_Number
+        source_table: Dim_Account
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Book Description
+        source_column: Book_Description
+        source_table: Dim_Book
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Book Type
+        source_column: Book_Type
+        source_table: Dim_Book
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+
+  flagged_trades:
+    description: Suspected flagged trades for the same instrument within 20 minutes before alert timestamp
+    source_tables:
+      - Fact_Trade
+      - Dim_Account
+    time_window: 20 minutes before alert timestamp
+    columns:
+      - output_name: Ticket#
+        source_column: Trade_Ticket_ID
+        source_table: Fact_Trade
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Trade Date
+        source_column: Trade_Date
+        source_table: Fact_Trade
+        data_type: Date
+        format_rule: dd-mmm-yyyy
+        required: Yes
+      - output_name: Trade Time
+        source_column: Trade_Time
+        source_table: Fact_Trade
+        data_type: Time
+        format_rule: hh:mm:ss
+        required: Yes
+      - output_name: Trade Price
+        source_column: Trade_Price
+        source_table: Fact_Trade
+        data_type: Decimal(18,2)
+        format_rule: '#,###.##'
+        required: Yes
+      - output_name: Quantity
+        source_column: Trade_Qty
+        source_table: Fact_Trade
+        data_type: Integer
+        format_rule: '#,###'
+        required: Yes
+      - output_name: Trade Notional
+        source_column: Trade_Notional
+        source_table: Fact_Trade
+        data_type: Currency
+        format_rule: '#,###.##'
+        required: Yes
+      - output_name: B/S
+        source_column: Trade_Side
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Trade Source
+        source_column: Trade_Source
+        source_table: Fact_Trade
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Trade Type
+        source_column: Trade_Type
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Currency Code
+        source_column: Currency_of_issue
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Book
+        source_column: Book_Code
+        source_table: Fact_Trade
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Account Name
+        source_column: Account_Name
+        source_table: Dim_Account
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Account Number
+        source_column: Account_Number
+        source_table: Dim_Account
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+
+  book_details:
+    description: Book information for trades
+    source_tables:
+      - Dim_Book
+    columns:
+      - output_name: Book Code
+        source_column: Book_Code
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Book Description
+        source_column: Book_Description
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Book Type
+        source_column: Book_Type
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+
+  summary_table:
+    description: Alert summary with optional disposition parameters
+    source_tables:
+      - Fact_Alert
+      - DECISION_TREE
+    columns:
+      - output_name: Alert_ID
+        source_column: Alert_ID
+        source_table: Fact_Alert
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Alert Date
+        source_column: Alert_Date
+        source_table: Fact_Alert
+        data_type: Date
+        format_rule: dd-mmm-yyyy
+        required: Yes
+      - output_name: Alert Time
+        source_column: Alert_time
+        source_table: Fact_Alert
+        data_type: Time
+        format_rule: hh:mm:ss
+        required: Yes
+      - output_name: Alert summary
+        source_column: Alert_Summary
+        source_table: Fact_Alert
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Account name
+        source_column: Account_Name
+        source_table: Fact_Alert
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Product ISIN
+        source_column: ISIN
+        source_table: Fact_Alert
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Yes
+      - output_name: Alerted price
+        source_column: Trade_Price
+        source_table: Fact_Alert
+        data_type: Decimal(18,2)
+        format_rule: '#,###.##'
+        required: Yes
+      - output_name: Alerted Quantity
+        source_column: Trade_Qty
+        source_table: Fact_Alert
+        data_type: Integer
+        format_rule: '#,###'
+        required: Yes
+      - output_name: Alerted side
+        source_column: Trade_Side
+        source_table: Fact_Alert
+        data_type: Categorical
+        format_rule: NA
+        required: Yes
+      - output_name: Parameter name & value
+        source_column: NA
+        source_table: DECISION_TREE
+        data_type: Alphanumeric
+        format_rule: NA
+        required: Optional
+        note: Multiple disposition parameters can be included
+
+  disposition_parameters:
+    description: Alert-type specific disposition parameters
+    source_tables:
+      - REF_Disposition_Parameters
+    note: Parameters vary by alert type
+
+  ecomm:
+    description: Electronic communications relevant to the alert
+    source_tables:
+      - Fact_eComm
+    filters:
+      - product: Match alert ISIN
+      - timeframe: Alert date and time window
+      - sender: Relevant actors
+      - recipient: Relevant actors
+

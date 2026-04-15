@@ -1,0 +1,36 @@
+{
+  "id": "market-surveillance",
+  "name": "Market Surveillance",
+  "description": "AI-powered surveillance system for detecting and investigating suspicious trading patterns in Fixed Income markets using multi-agent orchestration on AWS Bedrock AgentCore.",
+  "version": "1.0.0",
+  "pattern_type": "orchestration",
+  "type": "reference",
+  "frameworks": [
+    {"id": "strands", "name": "Strands Agents SDK", "path": "agent-backend", "description": "Strands framework with multi-agent orchestration"}
+  ],
+  "deployment_patterns": [
+    {"id": "terraform", "name": "Terraform", "description": "Multi-module Terraform deployment (Foundations + App Infrastructure)", "path": "."}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "market-surveillance"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1", "enum": ["us-east-1", "us-east-2", "us-west-2"]}
+  ],
+  "example_use_cases": [
+    "Fixed income trade surveillance",
+    "Suspicious pattern detection",
+    "Regulatory compliance alerting",
+    "Audit-ready investigation reports"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": ["surveillance", "capital-markets", "compliance", "fixed-income", "strands", "agentcore", "terraform"],
+  "outputs": {
+    "cloudfront_url": "CloudFront distribution URL",
+    "api_endpoint": "API Gateway endpoint"
+  },
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "market_surveillance_onboarding_request", "outgoing_event": "market_surveillance_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "market_surveillance_offboarding_request", "outgoing_event": "market_surveillance_offboarding_success"}
+  ],
+  "dependencies": []
+}

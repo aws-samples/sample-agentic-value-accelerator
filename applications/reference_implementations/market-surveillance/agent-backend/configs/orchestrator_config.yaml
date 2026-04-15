@@ -1,0 +1,55 @@
+orchestrator:
+  version: "1.1"
+  scope: "Alert-level flagged trade orchestration"
+  name: flagged_trade_disposition_workflow
+  created_on: "2026-01-15"
+  last_modified: "2026-02-17"
+  tags: [Flagged Trade, surveillance, disposition, decision-tree, aggregation, automated]
+  flags:
+    audit_enabled: true
+    strict_mode: true
+    automated: true
+
+description: >
+  For a given alert, automatically evaluate all flagged trades through individual
+  rule evaluation and aggregation rules (if needed). Produce final disposition
+  with audit trail of triggered rules.
+
+states:
+  - CLEARED_INDIVIDUAL
+  - CLEARED_AGGREGATED
+  - UNCLEARED
+  - EXITED_NO_ACTION
+  - COMPLETED_NO_AGGREGATION
+  - COMPLETED
+
+workflow_logic:
+  initial_count_threshold: 1
+  aggregation_count_threshold: 1
+
+  exit_conditions:
+    - condition: "Flagged trade count <= 1"
+      status: "EXITED_NO_ACTION"
+    - condition: "Remaining uncleared count <= 1 after individual evaluation"
+      status: "COMPLETED_NO_AGGREGATION"
+    - condition: "Aggregation rules executed"
+      status: "COMPLETED"
+
+error_handling:
+  max_retries: 3
+  retry_on_failure: true
+
+investigation_output:
+  summary_min_paragraphs: 2
+  summary_max_paragraphs: 5
+  audit_trail_required: true
+
+outputs:
+  cleared_trades_individual:
+    description: "Trades cleared by single-trade rules"
+
+  cleared_trades_aggregated:
+    description: "Trades cleared by multi-trade aggregation rules with rule identifiers"
+
+  uncleared_trades:
+    description: "Trades remaining uncleared after both evaluation stages"

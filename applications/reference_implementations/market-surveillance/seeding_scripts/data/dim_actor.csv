@@ -1,0 +1,12 @@
+actor_organization,actor_account_name,actor_product_type,actor_account_id,actor_category,actor_trader_name,actor_trader_id,actor_standard_id,actor_email_address,actor_position,actor_business_unit_name,actor_risk_area,actor_business_area,actor_trading_desk
+ABC Bank,Corporates Desk,Corporate Bond,BU11,Internal,Alexander Lee,Sales1,YN5Z70,alexander.lee@example.com,Sales,BU1,Risk_Area1,Business_Area1,Trading_Desk1
+ABC Bank,Corporates Desk,Corporate Bond,BU11,Internal,Benjamin Torres,Sales3,Y2AEMY,benjamin.torres@example.com,Sales,BU1,Risk_Area1,Business_Area1,Trading_Desk1
+ABC Bank,Corporates Desk,Corporate Bond,BU11,Internal,Chloe Singh,Sales2,YYU8XW,chloe.singh@example.com,Sales,BU1,Risk_Area1,Business_Area1,Trading_Desk1
+ABC Bank,Governments Desk,Government Bond,BU12,Internal,Daniel Chen,Sales5,YL4LXW,daniel.chen@example.com,Sales,BU1,Risk_Area1,Business_Area2,Trading_Desk2
+ABC Bank,Corporates Desk,Corporate Bond,BU11,Internal,Emma Johnson,TraderID11,YDZ4KZ,emma.johnson@example.com,Trader,BU1,Risk_Area1,Business_Area1,Trading_Desk1
+ABC Bank,Corporates Desk,Corporate Bond,BU11,Internal,Ethan Kim,TraderID14,YH7RRJ,ethan.kim@example.com,Trader,BU1,Risk_Area1,Business_Area1,Trading_Desk1
+ABC Bank,Back Office,Corporate Bond,BU11,Internal,Jessica Kuntz,OtherID1,Y43J1Z,Jessica.Kuntz@example.com,Clerk,BU1,NA,Business_Area3,NA
+ABC Bank,Corporates Desk,Corporate Bond,BU11,Internal,Mia Garcia,TraderID15,YFL7U1,mia.garcia@example.com,Trader,BU1,Risk_Area2,Business_Area1,Trading_Desk1
+ABC Bank,Corporates Desk,Corporate Bond,BU11,Internal,Noah Thompson,TraderID12,YQFJLK,noah.thompson@example.com,Trader,BU1,Risk_Area1,Business_Area1,Trading_Desk1
+ABC Bank,Corporates Desk,Corporate Bond,BUG1,Internal,Olivia Wang,TraderID13,YAWUT7,olivia.wang@example.com,Trader,BUG1,Risk_Area1,Business_Area1,Trading_Desk1
+ABC Bank,Governments Desk,Government Bond,BU12,Internal,Zoe Murphy,Sales4,Y43J1S,zoe.murphy@example.com,Sales,BU1,Risk_Area2,Business_Area2,Trading_Desk2

@@ -1,0 +1,141 @@
+# ===================
+# Node.js / npm
+# ===================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnp
+.pnp.*
+
+# ===================
+# Next.js / React
+# ===================
+.next/
+out/
+build/
+.vercel
+
+# ===================
+# TypeScript
+# ===================
+*.tsbuildinfo
+next-env.d.ts
+
+# ===================
+# Terraform
+# ===================
+# Local .terraform directories
+**/.terraform/
+
+# Terraform state files (contain sensitive data)
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Variable files that may contain secrets
+*.tfvars
+*.tfvars.json
+
+# Backend config files (contain account-specific identifiers)
+backend.hcl
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform CLI config file
+.terraformrc
+terraform.rc
+
+# Note: .terraform.lock.hcl should be committed for reproducible builds
+
+# ===================
+# Environment & Secrets
+# ===================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+.aws/credentials
+
+# ===================
+# IDE / Editors
+# ===================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ===================
+# OS Files
+# ===================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+
+# ===================
+# Build / Test Artifacts
+# ===================
+coverage/
+dist/
+.cache/
+*.log
+
+# ===================
+# Development Tools
+# ===================
+.eslintcache
+.husky/_/
+.kiro/
+
+infrastructure/.terraform/*
+infrastructure/.terraform
+agent-backend/.venv/*
+agent-backend/.venv
+
+infrastructure/.terraform.lock.hcl
+infrastructure/app-infra/.terraform.lock.hcl
+infrastructure/foundations/.terraform.lock.hcl
+infrastructure/modules/lambda/data_api.zip
+infrastructure/modules/lambda/alert_mcp.zip
+infrastructure/modules/lambda/alert_api.zip
+
+# ===================
+# Seeding Scripts
+# ===================
+seeding_scripts/synthetic_data/*.csv
+seeding_scripts/__pycache__
+seeding_scripts/**/__pycache__
+risk_seeding/**/__pycache__/
+infrastructure/backend.hcl
+misc/
+misc/*
+infrastructure/modules/lambda/data_api_package/*
+infrastructure/modules/lambda/*.zip
+
+!Dockerfile

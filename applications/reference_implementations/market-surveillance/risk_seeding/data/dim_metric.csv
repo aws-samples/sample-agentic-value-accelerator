@@ -1,0 +1,11 @@
+metric_id,metric_name,unit,entity,metric_category,trigger_type,trigger_value,threshold_value,frequency,effective_from_date,effective_to_date,is_current_flag,recalibration_rationale
+RM1,GC Rate,bps,Entity1,Category2,n/a,n/a,n/a,Daily,n/a,2099-01-01 00:00:00,true,
+RM2,FX Maturity Mismatch,$B,Entity1,Category1,MIN,-10,n/a,Daily,2025-01-25 00:00:00,2099-01-01 00:00:00,true,"Risk committee approved that our existing FX Maturity Mismatch limits were creating unnecessary constraints, as recent funding patterns and hedging flows showed that the prior thresholds didn’t reflect how positions naturally roll or how liquidity behaves across currencies in current economic forecasting."
+RM3,Sub 30 day Secured Funding,days,Entity1,Category3,MAX,1,2,Daily,2025-01-25 00:00:00,2099-01-01 00:00:00,true,
+RM4,Liquidity Ratio,%,Entity1,Category5,MIN,1,n/a,Daily,2025-01-25 00:00:00,2099-01-01 00:00:00,true,"Risk committee approved that our current Liquidity Coverage Ratio limits were overly conservative relative to actual liquidity profiles and recent balance sheet behavior, creating operational constraints without providing a risk benefit."
+RM5,Total size of the Non-TLAC Portfolio,B,Entity1,Category7,n/a,n/a,n/a,Daily,n/a,2099-01-01 00:00:00,true,"Risk committee approved that the targeted size of the non TLAC portfolio over the next seven years should better reflect expected balance sheet growth, refinancing cadence, and liquidity needs."
+RM6,Total GBP Reverse Repo ,£B,Entity1,Category3,MAX,2.75,3,Daily,2025-01-27 00:00:00,2025-06-30 00:00:00,false,"Risk committee approved that the existing Total GBP Reverse Repo limits were overly restrictive given current sterling funding conditions, periodic shifts in GBP collateral availability, and our operational need to manage intraday liquidity more efficiently."
+RM7,Wholesale Funding Counterparty Concentration,n/a,Entity1,Category2,n/a,n/a,n/a,Daily,n/a,2099-01-01 00:00:00,true,
+RM8,Customer Shorts Counterparty Concentration,n/a,Entity1,Category2,n/a,n/a,n/a,Daily,n/a,2099-01-01 00:00:00,true,
+RM9,Zero Coupon / Accreter issued,$MM,Entity1,Category3,MAX,0,n/a,Daily,2025-01-25 00:00:00,2099-01-01 00:00:00,true,
+RM6,Total GBP Reverse Repo ,£B,Entity1,Category3,MAX,2.8,3,Daily,2025-07-01 00:00:00,2099-01-01 00:00:00,true,"Aligned with senior management risk appetite, supporting the metric."

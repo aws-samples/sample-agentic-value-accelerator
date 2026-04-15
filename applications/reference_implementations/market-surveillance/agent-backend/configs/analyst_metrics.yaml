@@ -1,0 +1,106 @@
+version: '2026.1'
+name: Market Surveillance – US Rates – Metrics
+description: Metrics for disposition of institutional surveillance detection alerts
+  (US Rates).
+business_domain: Risk Management
+business_sub-domain: Market Surveillance
+surveillance: Market Surveillance
+asset_class: Fixed Income
+asset_type: Rates
+region: US
+metadata:
+  author: Surveillance Team
+  created: '2026-02-19'
+  last_updated: '2026-02-19'
+  domain: market_conduct_market_surveillance
+  notes: Notes
+hierarchy:
+  level_1: instrument_type
+  level_2: metric_name
+
+metrics:
+
+- instrument_type: All, Excluding Repo
+
+  metrics:
+
+  - metric_name: Market Value of One Trade
+    metric_id: M1
+    description: |
+     The Market Value of one Trade is the monetary value of a Trade.
+     The Market Value of one Trade equals the Trade Quantity multiplied by the Price.
+     The Price is expressed as a percentage of the Par Value.
+    example: 112895003.55
+    formula: Quantity x Price x 0.01
+    format:
+      number_format:
+        type: decimal
+        decimal_places: 2
+        grouping: thousands
+    units: Currency, e.g. USD
+
+- instrument_type: All
+
+  metrics:
+
+  - metric_name: Market Value of Multiple Trades
+    metric_id: M2
+    description: >
+     The Market Value of Multiple Trades is simple arithmetic sum of Market Values of One Trade for all relevant Trades.
+    example: 145010101.08
+    format:
+      number_format:
+        type: decimal
+        decimal_places: 2
+        grouping: thousands
+    units: Currency, e.g. USD
+
+- instrument_type: Repo
+
+  metrics:
+
+  - metric_name: Market Value of One Trade
+    metric_id: M3
+    description: |
+     The Market Value of one Trade is the monetary value of a Trade.
+     The Market Value of one Trade equals the Trade Quantity.
+    example: 60000000
+    format:
+      number_format:
+        type: decimal
+        decimal_places: 0
+        grouping: thousands
+    units: Currency, e.g. USD
+
+- instrument_type: Government Bonds
+
+  metrics:
+
+  - metric_name: Remaining Tenor
+    metric_id: M4
+    description: >
+     The Remaining Tenor is the whole number of years between the Current Date and the Maturity Date.
+    example: 7
+    formula: (Maturity Date – Current Date) / 365
+    transform:
+     operation: round
+     digits: 0    # nearest integer    
+    format:
+      number_format:
+        type: decimal
+        decimal_places: 0
+    units: Years
+
+  - metric_name: Liquidity Threshold
+    metric_id: M5
+    description: |
+     The Liquidity Threshold is the minimum Liquidity required for the instrument to be included in a surveillance scenario.
+     The Liquidity Threshold is obtained from a reference table.
+     The row of the reference table is selected by matching the Instrument Currency and the column is selected by matching the Remaining Tenor.
+    example: 100000000
+    format:
+      number_format:
+        type: decimal
+        decimal_places: 0
+        grouping: thousands
+    units: Currency, e.g. USD
