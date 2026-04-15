@@ -1,0 +1,14 @@
+flowchart TD
+    A["TriageRequest\n(entity_id, triage_type)"] --> B["Orchestrator\nEmail Triage Supervisor"]
+    B -->|"triage_type = full"| C["Parallel Execution"]
+    C --> D["Email Classifier Agent"]
+    C --> E["Action Extractor Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Email Classifier Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Action Extractor Analysis"]
+    D2 --> F["Synthesis"]
+    E2 --> F["Synthesis"]
+    F --> G["Structured Output\n(TriageResponse)"]
+    G --> H["TriageResponse\n(classification, actions,
+priority)"]

@@ -1,0 +1,19 @@
+{
+  "entity_id": "ECON001",
+  "research_topic": "US Economic Outlook Q2 2026",
+  "region": "United States",
+  "time_period": "2025-Q1 to 2026-Q2",
+  "data_sources": ["Bureau of Economic Analysis", "Bureau of Labor Statistics", "Federal Reserve", "Treasury Department"],
+  "key_indicators": {
+    "gdp_growth": 2.3,
+    "inflation_rate": 3.1,
+    "unemployment_rate": 4.2,
+    "federal_funds_rate": 4.75,
+    "trade_balance": -68500000000
+  },
+  "prior_findings": [
+    {"date": "2025-12-15", "finding": "GDP growth moderating from post-pandemic highs"},
+    {"date": "2026-01-20", "finding": "Inflation trending toward target but services remain sticky"},
+    {"date": "2026-02-10", "finding": "Labor market showing signs of gradual cooling"}
+  ]
+}

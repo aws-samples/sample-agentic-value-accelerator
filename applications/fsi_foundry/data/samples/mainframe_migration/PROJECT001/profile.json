@@ -1,0 +1,34 @@
+{
+  "project_id": "PROJECT001",
+  "name": "Core Banking Transaction Processing System",
+  "source_platform": "IBM z/OS",
+  "source_languages": ["COBOL", "JCL", "CICS", "DB2 SQL"],
+  "target_platform": "AWS",
+  "target_language": "Python",
+  "codebase_metrics": {
+    "cobol_programs": 340,
+    "jcl_jobs": 125,
+    "copybooks": 89,
+    "total_lines_of_code": 680000,
+    "cics_transactions": 45,
+    "batch_jobs": 80,
+    "db2_tables": 156
+  },
+  "mainframe_artifacts": {
+    "transaction_programs": ["ACCTINQ", "FUNDXFR", "STMTGEN", "LOANPMT"],
+    "batch_processes": ["DAILYBAL", "INTCALC", "RPTGEN", "EODPROC"],
+    "data_stores": ["DB2:ACCTMSTR", "DB2:TRANSHIST", "VSAM:CUSTFILE", "VSAM:PRODCAT"],
+    "messaging": ["MQ:PAYMENT.IN", "MQ:PAYMENT.OUT", "MQ:NOTIFY.QUEUE"]
+  },
+  "migration_constraints": {
+    "downtime_window_hours": 6,
+    "regulatory_requirements": ["SOX", "PCI-DSS", "FFIEC", "OCC"],
+    "data_sensitivity": "high",
+    "parallel_run_required": true,
+    "transaction_volume_daily": 2500000,
+    "sla_requirements": {
+      "max_response_time_ms": 200,
+      "availability_target": 0.9999
+    }
+  }
+}

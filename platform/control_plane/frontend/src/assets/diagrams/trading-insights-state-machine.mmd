@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: analysis_type = full
+    Router --> SignalGenerator: analysis_type = signal_generator_only
+    Router --> CrossAssetAnalyst: analysis_type = cross_asset_analyst_only
+    Router --> ScenarioModeler: analysis_type = scenario_modeler_only
+    ParallelAssessment --> Synthesize
+    SignalGenerator --> Synthesize
+    CrossAssetAnalyst --> Synthesize
+    ScenarioModeler --> Synthesize
+    Synthesize --> [*]

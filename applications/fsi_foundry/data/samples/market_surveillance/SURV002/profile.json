@@ -1,0 +1,19 @@
+{
+  "surveillance_id": "SURV-2024-002",
+  "trader_id": "TRD-7890",
+  "trader_name": "Sarah Williams",
+  "desk": "Fixed Income",
+  "trades": [
+    {"id": "T010", "symbol": "UST10Y", "side": "BUY", "quantity": 10000, "price": 98.50, "timestamp": "2024-02-10T10:00:00Z"},
+    {"id": "T011", "symbol": "UST10Y", "side": "SELL", "quantity": 5000, "price": 98.75, "timestamp": "2024-02-10T14:30:00Z"}
+  ],
+  "communications": [
+    {"type": "chat", "counterparty": "Internal Sales", "timestamp": "2024-02-10T09:45:00Z", "summary": "Discussed client order flow for treasury bonds"}
+  ],
+  "market_events": [],
+  "flags": {
+    "pre_announcement_trading": false,
+    "unusual_volume": false,
+    "communication_with_external": false
+  }
+}

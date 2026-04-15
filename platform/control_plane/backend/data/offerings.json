@@ -1,0 +1,1418 @@
+{
+  "frameworks": [
+    {
+      "id": "langchain_langgraph",
+      "name": "LangChain + LangGraph",
+      "short_name": "langgraph",
+      "description": "Build agents with LangChain and orchestrate with LangGraph"
+    },
+    {
+      "id": "strands",
+      "name": "Strands Agents SDK",
+      "short_name": "strands",
+      "description": "AWS Strands Agents SDK for building AI agents"
+    },
+    {
+      "id": "crewai",
+      "name": "CrewAI",
+      "short_name": "crewai",
+      "description": "Multi-agent orchestration with CrewAI framework"
+    },
+    {
+      "id": "llamaindex",
+      "name": "LlamaIndex",
+      "short_name": "llamaindex",
+      "description": "Data framework for LLM applications"
+    }
+  ],
+  "use_cases": [
+    {
+      "id": "B01",
+      "use_case_name": "kyc_banking",
+      "name": "KYC Risk Assessment - Banking",
+      "description": "Know Your Customer risk assessment for corporate banking customers including credit analysis and compliance checks",
+      "application_path": "applications/fsi_foundry/use_cases/kyc_banking",
+      "data_path": "applications/fsi_foundry/data/samples/kyc_banking",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "credit_analyst",
+          "name": "Credit Analyst"
+        },
+        {
+          "id": "compliance_officer",
+          "name": "Compliance Officer"
+        }
+      ],
+      "test_customers": [
+        "CUST001",
+        "CUST002",
+        "CUST003"
+      ],
+      "type_field": "assessment_type",
+      "type_values": [
+        "full",
+        "credit_only",
+        "compliance_only"
+      ],
+      "test_entities": [
+        "CUST001",
+        "CUST002",
+        "CUST003"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "B02",
+      "use_case_name": "customer_service",
+      "name": "Customer Service Agent",
+      "description": "AI-powered customer service for banking support including inquiry handling, transaction investigation, and product advisory",
+      "application_path": "applications/fsi_foundry/use_cases/customer_service",
+      "data_path": "applications/fsi_foundry/data/samples/customer_service",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "inquiry_handler",
+          "name": "Inquiry Handler"
+        },
+        {
+          "id": "transaction_specialist",
+          "name": "Transaction Specialist"
+        },
+        {
+          "id": "product_advisor",
+          "name": "Product Advisor"
+        }
+      ],
+      "test_customers": [
+        "CUST001"
+      ],
+      "type_field": "inquiry_type",
+      "type_values": [
+        "full",
+        "general",
+        "transaction_dispute",
+        "product_inquiry",
+        "service_request"
+      ],
+      "test_entities": [
+        "CUST001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "B03",
+      "use_case_name": "document_search",
+      "name": "Document Search",
+      "description": "Semantic search and document retrieval for banking documents",
+      "application_path": "applications/fsi_foundry/use_cases/document_search",
+      "data_path": "applications/fsi_foundry/data/samples/document_search",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "document_indexer",
+          "name": "Document Indexer"
+        },
+        {
+          "id": "search_agent",
+          "name": "Search Agent"
+        }
+      ],
+      "test_documents": [
+        "DOC001"
+      ],
+      "type_field": "document_type",
+      "type_values": [
+        "full",
+        "policy",
+        "procedure",
+        "compliance",
+        "regulation",
+        "guideline"
+      ],
+      "test_entities": [
+        "DOC001"
+      ],
+      "id_field": "query"
+    },
+    {
+      "id": "B04",
+      "use_case_name": "agentic_payments",
+      "name": "Agentic Payments",
+      "description": "AI-powered payment validation, routing, and reconciliation",
+      "application_path": "applications/fsi_foundry/use_cases/agentic_payments",
+      "data_path": "applications/fsi_foundry/data/samples/agentic_payments",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "payment_validator",
+          "name": "Payment Validator"
+        },
+        {
+          "id": "routing_agent",
+          "name": "Routing Agent"
+        },
+        {
+          "id": "reconciliation_agent",
+          "name": "Reconciliation Agent"
+        }
+      ],
+      "type_field": "payment_type",
+      "type_values": [
+        "wire",
+        "ach",
+        "real_time",
+        "international",
+        "domestic"
+      ],
+      "test_entities": [
+        "PMT001"
+      ],
+      "id_field": "payment_id"
+    },
+    {
+      "id": "B05",
+      "use_case_name": "payment_operations",
+      "name": "Payment Operations",
+      "description": "Payment exception handling and settlement operations",
+      "application_path": "applications/fsi_foundry/use_cases/payment_operations",
+      "data_path": "applications/fsi_foundry/data/samples/payment_operations",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "exception_handler",
+          "name": "Exception Handler"
+        },
+        {
+          "id": "settlement_agent",
+          "name": "Settlement Agent"
+        }
+      ],
+      "type_field": "operation_type",
+      "type_values": [
+        "full",
+        "exception_only",
+        "settlement_only"
+      ],
+      "test_entities": [
+        "PAY001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "B06",
+      "use_case_name": "customer_chatbot",
+      "name": "Customer Facing Chatbot",
+      "description": "AI-powered customer chatbot delivering 24/7 banking support with natural language understanding for account management, transfers, and general inquiries",
+      "application_path": "applications/fsi_foundry/use_cases/customer_chatbot",
+      "data_path": "applications/fsi_foundry/data/samples/customer_chatbot",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "conversation_manager",
+          "name": "Conversation Manager"
+        },
+        {
+          "id": "account_agent",
+          "name": "Account Agent"
+        },
+        {
+          "id": "transaction_agent",
+          "name": "Transaction Agent"
+        }
+      ],
+      "test_customers": [
+        "CUST001"
+      ],
+      "type_field": "intent_type",
+      "type_values": [
+        "full",
+        "general",
+        "account_inquiry",
+        "transfer",
+        "bill_payment",
+        "transaction_history"
+      ],
+      "test_entities": [
+        "CUST001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "B07",
+      "use_case_name": "customer_support",
+      "name": "Customer Support",
+      "description": "Ticket classification, resolution, and escalation management",
+      "application_path": "applications/fsi_foundry/use_cases/customer_support",
+      "data_path": "applications/fsi_foundry/data/samples/customer_support",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "ticket_classifier",
+          "name": "Ticket Classifier"
+        },
+        {
+          "id": "resolution_agent",
+          "name": "Resolution Agent"
+        },
+        {
+          "id": "escalation_agent",
+          "name": "Escalation Agent"
+        }
+      ],
+      "type_field": "ticket_type",
+      "type_values": [
+        "full",
+        "general",
+        "billing",
+        "technical",
+        "account"
+      ],
+      "test_entities": [
+        "CUST001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "B08",
+      "use_case_name": "ai_assistant",
+      "name": "Banking AI Assistant",
+      "description": "General-purpose AI assistant for banking operations with task routing and data lookup",
+      "application_path": "applications/fsi_foundry/use_cases/ai_assistant",
+      "data_path": "applications/fsi_foundry/data/samples/ai_assistant",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "task_router",
+          "name": "Task Router"
+        },
+        {
+          "id": "data_lookup_agent",
+          "name": "Data Lookup Agent"
+        },
+        {
+          "id": "report_generator",
+          "name": "Report Generator"
+        }
+      ],
+      "test_employees": [
+        "EMP001"
+      ],
+      "type_field": "task_type",
+      "type_values": [
+        "full",
+        "data_lookup",
+        "report_generation",
+        "document_summary",
+        "task_automation"
+      ],
+      "test_entities": [
+        "EMP001"
+      ],
+      "id_field": "employee_id"
+    },
+    {
+      "id": "B09",
+      "use_case_name": "corporate_sales",
+      "name": "Corporate Sales",
+      "description": "Lead scoring, opportunity analysis, and pitch preparation for corporate banking",
+      "application_path": "applications/fsi_foundry/use_cases/corporate_sales",
+      "data_path": "applications/fsi_foundry/data/samples/corporate_sales",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "lead_scorer",
+          "name": "Lead Scorer"
+        },
+        {
+          "id": "opportunity_analyst",
+          "name": "Opportunity Analyst"
+        },
+        {
+          "id": "pitch_preparer",
+          "name": "Pitch Preparer"
+        }
+      ],
+      "type_field": "analysis_type",
+      "type_values": [
+        "full",
+        "lead_scoring",
+        "opportunity_analysis",
+        "pitch_preparation"
+      ],
+      "test_entities": [
+        "CORP001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "B10",
+      "use_case_name": "agentic_commerce",
+      "name": "Agentic Commerce",
+      "description": "AI-powered offer engines, fulfillment, and product matching for banking products",
+      "application_path": "applications/fsi_foundry/use_cases/agentic_commerce",
+      "data_path": "applications/fsi_foundry/data/samples/agentic_commerce",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "offer_engine",
+          "name": "Offer Engine"
+        },
+        {
+          "id": "fulfillment_agent",
+          "name": "Fulfillment Agent"
+        },
+        {
+          "id": "product_matcher",
+          "name": "Product Matcher"
+        }
+      ],
+      "type_field": "commerce_type",
+      "type_values": [
+        "full",
+        "offer_only",
+        "fulfillment_only",
+        "matching_only"
+      ],
+      "test_entities": [
+        "OFFER001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "R01",
+      "use_case_name": "fraud_detection",
+      "name": "Fraud Detection",
+      "description": "AI-powered fraud detection with transaction monitoring and pattern analysis",
+      "application_path": "applications/fsi_foundry/use_cases/fraud_detection",
+      "data_path": "applications/fsi_foundry/data/samples/fraud_detection",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "transaction_monitor",
+          "name": "Transaction Monitor"
+        },
+        {
+          "id": "pattern_analyst",
+          "name": "Pattern Analyst"
+        },
+        {
+          "id": "alert_generator",
+          "name": "Alert Generator"
+        }
+      ],
+      "test_accounts": [
+        "ACCT001"
+      ],
+      "type_field": "monitoring_type",
+      "type_values": [
+        "full",
+        "transaction_monitoring",
+        "pattern_analysis",
+        "alert_generation"
+      ],
+      "test_entities": [
+        "ACCT001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "R02",
+      "use_case_name": "document_processing",
+      "name": "Document Processing",
+      "description": "Document classification, data extraction, and validation for compliance",
+      "application_path": "applications/fsi_foundry/use_cases/document_processing",
+      "data_path": "applications/fsi_foundry/data/samples/document_processing",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "document_classifier",
+          "name": "Document Classifier"
+        },
+        {
+          "id": "data_extractor",
+          "name": "Data Extractor"
+        },
+        {
+          "id": "validation_agent",
+          "name": "Validation Agent"
+        }
+      ],
+      "test_documents": [
+        "DOC001"
+      ],
+      "type_field": "processing_type",
+      "type_values": [
+        "full",
+        "classification_only",
+        "extraction_only",
+        "validation_only"
+      ],
+      "test_entities": [
+        "DOC001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "R03",
+      "use_case_name": "credit_risk",
+      "name": "Credit Risk Assessment",
+      "description": "Financial analysis, risk scoring, and portfolio risk assessment",
+      "application_path": "applications/fsi_foundry/use_cases/credit_risk",
+      "data_path": "applications/fsi_foundry/data/samples/credit_risk",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "financial_analyst",
+          "name": "Financial Analyst"
+        },
+        {
+          "id": "risk_scorer",
+          "name": "Risk Scorer"
+        },
+        {
+          "id": "portfolio_analyst",
+          "name": "Portfolio Analyst"
+        }
+      ],
+      "type_field": "assessment_type",
+      "type_values": [
+        "full",
+        "financial_analysis",
+        "risk_scoring",
+        "portfolio_analysis"
+      ],
+      "test_entities": [
+        "BORROW001"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "R04",
+      "use_case_name": "compliance_investigation",
+      "name": "Compliance Investigation",
+      "description": "Evidence gathering, pattern matching, and regulatory mapping for compliance investigations",
+      "application_path": "applications/fsi_foundry/use_cases/compliance_investigation",
+      "data_path": "applications/fsi_foundry/data/samples/compliance_investigation",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "evidence_gatherer",
+          "name": "Evidence Gatherer"
+        },
+        {
+          "id": "pattern_matcher",
+          "name": "Pattern Matcher"
+        },
+        {
+          "id": "regulatory_mapper",
+          "name": "Regulatory Mapper"
+        }
+      ],
+      "type_field": "investigation_type",
+      "type_values": [
+        "full",
+        "evidence_collection",
+        "pattern_analysis",
+        "regulatory_mapping"
+      ],
+      "test_entities": [
+        "CASE001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "R05",
+      "use_case_name": "adverse_media",
+      "name": "Adverse Media Screening",
+      "description": "Media screening, sentiment analysis, and risk signal extraction",
+      "application_path": "applications/fsi_foundry/use_cases/adverse_media",
+      "data_path": "applications/fsi_foundry/data/samples/adverse_media",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "media_screener",
+          "name": "Media Screener"
+        },
+        {
+          "id": "sentiment_analyst",
+          "name": "Sentiment Analyst"
+        },
+        {
+          "id": "risk_signal_extractor",
+          "name": "Risk Signal Extractor"
+        }
+      ],
+      "type_field": "screening_type",
+      "type_values": [
+        "full",
+        "media_screening",
+        "sentiment_analysis",
+        "risk_extraction"
+      ],
+      "test_entities": [
+        "ENT001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "R06",
+      "use_case_name": "market_surveillance",
+      "name": "Market Surveillance",
+      "description": "Trade pattern analysis, communication monitoring, and surveillance alerts",
+      "application_path": "applications/fsi_foundry/use_cases/market_surveillance",
+      "data_path": "applications/fsi_foundry/data/samples/market_surveillance",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "trade_pattern_analyst",
+          "name": "Trade Pattern Analyst"
+        },
+        {
+          "id": "communication_monitor",
+          "name": "Communication Monitor"
+        },
+        {
+          "id": "surveillance_alert_generator",
+          "name": "Surveillance Alert Generator"
+        }
+      ],
+      "type_field": "surveillance_type",
+      "type_values": [
+        "full",
+        "trade_only",
+        "comms_only",
+        "alert_only"
+      ],
+      "test_entities": [
+        "SURV001",
+        "SURV002"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C01",
+      "use_case_name": "investment_advisory",
+      "name": "Investment Advisory",
+      "description": "Portfolio analysis, market research, and client profiling for investment advisory",
+      "application_path": "applications/fsi_foundry/use_cases/investment_advisory",
+      "data_path": "applications/fsi_foundry/data/samples/investment_advisory",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "portfolio_analyst",
+          "name": "Portfolio Analyst"
+        },
+        {
+          "id": "market_researcher",
+          "name": "Market Researcher"
+        },
+        {
+          "id": "client_profiler",
+          "name": "Client Profiler"
+        }
+      ],
+      "type_field": "advisory_type",
+      "type_values": [
+        "full",
+        "portfolio_review",
+        "market_analysis",
+        "client_profiling",
+        "rebalancing"
+      ],
+      "test_entities": [
+        "CLIENT001"
+      ],
+      "id_field": "client_id"
+    },
+    {
+      "id": "C02",
+      "use_case_name": "earnings_summarization",
+      "name": "Earnings Summarization",
+      "description": "Transcript processing, metric extraction, and sentiment analysis for earnings calls",
+      "application_path": "applications/fsi_foundry/use_cases/earnings_summarization",
+      "data_path": "applications/fsi_foundry/data/samples/earnings_summarization",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "transcript_processor",
+          "name": "Transcript Processor"
+        },
+        {
+          "id": "metric_extractor",
+          "name": "Metric Extractor"
+        },
+        {
+          "id": "sentiment_analyst",
+          "name": "Sentiment Analyst"
+        }
+      ],
+      "type_field": "summarization_type",
+      "type_values": [
+        "full",
+        "transcript_only",
+        "metrics_only",
+        "sentiment_only"
+      ],
+      "test_entities": [
+        "EARN001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C03",
+      "use_case_name": "economic_research",
+      "name": "Economic Research",
+      "description": "Data aggregation, trend analysis, and research writing for economic research",
+      "application_path": "applications/fsi_foundry/use_cases/economic_research",
+      "data_path": "applications/fsi_foundry/data/samples/economic_research",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "data_aggregator",
+          "name": "Data Aggregator"
+        },
+        {
+          "id": "trend_analyst",
+          "name": "Trend Analyst"
+        },
+        {
+          "id": "research_writer",
+          "name": "Research Writer"
+        }
+      ],
+      "type_field": "research_type",
+      "type_values": [
+        "full",
+        "data_aggregation",
+        "trend_analysis",
+        "report_generation",
+        "indicator_focus"
+      ],
+      "test_entities": [
+        "ECON001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C04",
+      "use_case_name": "email_triage",
+      "name": "Email Triage",
+      "description": "Email classification and action extraction for trading desks",
+      "application_path": "applications/fsi_foundry/use_cases/email_triage",
+      "data_path": "applications/fsi_foundry/data/samples/email_triage",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "email_classifier",
+          "name": "Email Classifier"
+        },
+        {
+          "id": "action_extractor",
+          "name": "Action Extractor"
+        }
+      ],
+      "type_field": "triage_type",
+      "type_values": [
+        "full",
+        "classification",
+        "action_extraction"
+      ],
+      "test_entities": [
+        "EMAIL001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C05",
+      "use_case_name": "trading_assistant",
+      "name": "Trading Assistant",
+      "description": "Market analysis, trade idea generation, and execution planning for traders",
+      "application_path": "applications/fsi_foundry/use_cases/trading_assistant",
+      "data_path": "applications/fsi_foundry/data/samples/trading_assistant",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "market_analyst",
+          "name": "Market Analyst"
+        },
+        {
+          "id": "trade_idea_generator",
+          "name": "Trade Idea Generator"
+        },
+        {
+          "id": "execution_planner",
+          "name": "Execution Planner"
+        }
+      ],
+      "type_field": "analysis_type",
+      "type_values": [
+        "full",
+        "market_analysis",
+        "trade_idea",
+        "execution_plan"
+      ],
+      "test_entities": [
+        "TRADE001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C06",
+      "use_case_name": "research_credit_memo",
+      "name": "Research Credit Memo",
+      "description": "Data gathering, credit analysis, and memo writing for credit research",
+      "application_path": "applications/fsi_foundry/use_cases/research_credit_memo",
+      "data_path": "applications/fsi_foundry/data/samples/research_credit_memo",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "data_gatherer",
+          "name": "Data Gatherer"
+        },
+        {
+          "id": "credit_analyst",
+          "name": "Credit Analyst"
+        },
+        {
+          "id": "memo_writer",
+          "name": "Memo Writer"
+        }
+      ],
+      "type_field": "analysis_type",
+      "type_values": [
+        "full",
+        "data_gathering",
+        "credit_analysis",
+        "memo_generation"
+      ],
+      "test_entities": [
+        "ENTITY001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C07",
+      "use_case_name": "investment_management",
+      "name": "Investment Management",
+      "description": "Allocation optimization, rebalancing, and performance attribution for investment management",
+      "application_path": "applications/fsi_foundry/use_cases/investment_management",
+      "data_path": "applications/fsi_foundry/data/samples/investment_management",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "allocation_optimizer",
+          "name": "Allocation Optimizer"
+        },
+        {
+          "id": "rebalancing_agent",
+          "name": "Rebalancing Agent"
+        },
+        {
+          "id": "performance_attributor",
+          "name": "Performance Attributor"
+        }
+      ],
+      "type_field": "assessment_type",
+      "type_values": [
+        "full",
+        "allocation_optimization",
+        "rebalancing",
+        "performance_attribution"
+      ],
+      "test_entities": [
+        "PORT001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C08",
+      "use_case_name": "data_analytics",
+      "name": "Data Analytics",
+      "description": "Data exploration, statistical analysis, and insight generation for capital markets",
+      "application_path": "applications/fsi_foundry/use_cases/data_analytics",
+      "data_path": "applications/fsi_foundry/data/samples/data_analytics",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "data_explorer",
+          "name": "Data Explorer"
+        },
+        {
+          "id": "statistical_analyst",
+          "name": "Statistical Analyst"
+        },
+        {
+          "id": "insight_generator",
+          "name": "Insight Generator"
+        }
+      ],
+      "type_field": "assessment_type",
+      "type_values": [
+        "full",
+        "data_exploration",
+        "statistical_analysis",
+        "insight_generation"
+      ],
+      "test_entities": [
+        "ASSET001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "C09",
+      "use_case_name": "trading_insights",
+      "name": "Trading Insights",
+      "description": "Signal generation, cross-asset analysis, and scenario modeling for trading insights",
+      "application_path": "applications/fsi_foundry/use_cases/trading_insights",
+      "data_path": "applications/fsi_foundry/data/samples/trading_insights",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "signal_generator",
+          "name": "Signal Generator"
+        },
+        {
+          "id": "cross_asset_analyst",
+          "name": "Cross Asset Analyst"
+        },
+        {
+          "id": "scenario_modeler",
+          "name": "Scenario Modeler"
+        }
+      ],
+      "type_field": "assessment_type",
+      "type_values": [
+        "full",
+        "signal_generation",
+        "cross_asset_analysis",
+        "scenario_modeling"
+      ],
+      "test_entities": [
+        "TRADE001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "I01",
+      "use_case_name": "claims_management",
+      "name": "Claims Management",
+      "description": "Claims intake, damage assessment, and settlement recommendation for insurance claims",
+      "application_path": "applications/fsi_foundry/use_cases/claims_management",
+      "data_path": "applications/fsi_foundry/data/samples/claims_management",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "claims_intake_agent",
+          "name": "Claims Intake Agent"
+        },
+        {
+          "id": "damage_assessor",
+          "name": "Damage Assessor"
+        },
+        {
+          "id": "settlement_recommender",
+          "name": "Settlement Recommender"
+        }
+      ],
+      "type_field": "assessment_type",
+      "type_values": [
+        "full",
+        "claims_intake_only",
+        "damage_assessment_only",
+        "settlement_only"
+      ],
+      "test_entities": [
+        "CLAIM001",
+        "CLAIM002",
+        "CLAIM003"
+      ],
+      "id_field": "claim_id"
+    },
+    {
+      "id": "I02",
+      "use_case_name": "life_insurance_agent",
+      "name": "Life Insurance Agent",
+      "description": "Needs analysis, product matching, and underwriting assistance for life insurance",
+      "application_path": "applications/fsi_foundry/use_cases/life_insurance_agent",
+      "data_path": "applications/fsi_foundry/data/samples/life_insurance_agent",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "needs_analyst",
+          "name": "Needs Analyst"
+        },
+        {
+          "id": "product_matcher",
+          "name": "Product Matcher"
+        },
+        {
+          "id": "underwriting_assistant",
+          "name": "Underwriting Assistant"
+        }
+      ],
+      "type_field": "analysis_type",
+      "type_values": [
+        "full",
+        "needs_analysis_only",
+        "product_matching_only",
+        "underwriting_only"
+      ],
+      "test_entities": [
+        "APP001"
+      ],
+      "id_field": "applicant_id"
+    },
+    {
+      "id": "I03",
+      "use_case_name": "customer_engagement",
+      "name": "Customer Engagement",
+      "description": "AI-powered customer engagement for insurance to improve retention through churn prediction, personalized outreach, and policy optimization",
+      "application_path": "applications/fsi_foundry/use_cases/customer_engagement",
+      "data_path": "applications/fsi_foundry/data/samples/customer_engagement",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "churn_predictor",
+          "name": "Churn Predictor"
+        },
+        {
+          "id": "outreach_agent",
+          "name": "Outreach Agent"
+        },
+        {
+          "id": "policy_optimizer",
+          "name": "Policy Optimizer"
+        }
+      ],
+      "test_entities": [
+        "POLICY001"
+      ],
+      "type_field": "assessment_type",
+      "type_values": [
+        "full",
+        "churn_prediction_only",
+        "outreach_only",
+        "policy_optimization_only"
+      ],
+      "id_field": "customer_id"
+    },
+    {
+      "id": "O01",
+      "use_case_name": "call_center_analytics",
+      "name": "Call Center Analytics",
+      "description": "Call monitoring, agent performance analysis, and operational insights",
+      "application_path": "applications/fsi_foundry/use_cases/call_center_analytics",
+      "data_path": "applications/fsi_foundry/data/samples/call_center_analytics",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "call_monitor",
+          "name": "Call Monitor"
+        },
+        {
+          "id": "agent_performance_analyst",
+          "name": "Agent Performance Analyst"
+        },
+        {
+          "id": "operations_insight_generator",
+          "name": "Operations Insight Generator"
+        }
+      ],
+      "type_field": "analysis_type",
+      "type_values": [
+        "full",
+        "call_monitoring_only",
+        "performance_only",
+        "operations_only"
+      ],
+      "test_entities": [
+        "CC001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "O02",
+      "use_case_name": "post_call_analytics",
+      "name": "Post Call Analytics",
+      "description": "Transcription processing, sentiment analysis, and action extraction for post-call analysis",
+      "application_path": "applications/fsi_foundry/use_cases/post_call_analytics",
+      "data_path": "applications/fsi_foundry/data/samples/post_call_analytics",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "transcription_processor",
+          "name": "Transcription Processor"
+        },
+        {
+          "id": "sentiment_analyst",
+          "name": "Sentiment Analyst"
+        },
+        {
+          "id": "action_extractor",
+          "name": "Action Extractor"
+        }
+      ],
+      "type_field": "analysis_type",
+      "type_values": [
+        "full",
+        "transcription",
+        "sentiment",
+        "action_extraction"
+      ],
+      "test_entities": [
+        "CALL001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "O03",
+      "use_case_name": "call_summarization",
+      "name": "Call Summarization",
+      "description": "Key point extraction and summary generation for call center calls",
+      "application_path": "applications/fsi_foundry/use_cases/call_summarization",
+      "data_path": "applications/fsi_foundry/data/samples/call_summarization",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "key_point_extractor",
+          "name": "Key Point Extractor"
+        },
+        {
+          "id": "summary_generator",
+          "name": "Summary Generator"
+        }
+      ],
+      "type_field": "summarization_type",
+      "type_values": [
+        "full",
+        "key_points_only",
+        "summary_only"
+      ],
+      "test_entities": [
+        "CALL001"
+      ],
+      "id_field": "call_id"
+    },
+    {
+      "id": "M01",
+      "use_case_name": "legacy_migration",
+      "name": "Legacy Migration",
+      "description": "Code analysis, migration planning, and automated conversion for legacy system migration",
+      "application_path": "applications/fsi_foundry/use_cases/legacy_migration",
+      "data_path": "applications/fsi_foundry/data/samples/legacy_migration",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "code_analyzer",
+          "name": "Code Analyzer"
+        },
+        {
+          "id": "migration_planner",
+          "name": "Migration Planner"
+        },
+        {
+          "id": "conversion_agent",
+          "name": "Conversion Agent"
+        }
+      ],
+      "test_entities": [
+        "PROJ001"
+      ],
+      "id_field": "project_id"
+    },
+    {
+      "id": "M02",
+      "use_case_name": "code_generation",
+      "name": "Code Generation",
+      "description": "Requirement analysis, code scaffolding, and test generation for code generation",
+      "application_path": "applications/fsi_foundry/use_cases/code_generation",
+      "data_path": "applications/fsi_foundry/data/samples/code_generation",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "requirement_analyst",
+          "name": "Requirement Analyst"
+        },
+        {
+          "id": "code_scaffolder",
+          "name": "Code Scaffolder"
+        },
+        {
+          "id": "test_generator",
+          "name": "Test Generator"
+        }
+      ],
+      "test_entities": [
+        "PROJ001"
+      ],
+      "id_field": "entity_id"
+    },
+    {
+      "id": "M03",
+      "use_case_name": "mainframe_migration",
+      "name": "Mainframe Migration",
+      "description": "Mainframe analysis, business rule extraction, and cloud code generation for mainframe migration",
+      "application_path": "applications/fsi_foundry/use_cases/mainframe_migration",
+      "data_path": "applications/fsi_foundry/data/samples/mainframe_migration",
+      "supported_frameworks": [
+        "langchain_langgraph",
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "mainframe_analyzer",
+          "name": "Mainframe Analyzer"
+        },
+        {
+          "id": "business_rule_extractor",
+          "name": "Business Rule Extractor"
+        },
+        {
+          "id": "cloud_code_generator",
+          "name": "Cloud Code Generator"
+        }
+      ],
+      "test_entities": [
+        "PROJECT001"
+      ],
+      "id_field": "entity_id"
+    }
+  ],
+  "deployment_patterns": [
+    {
+      "id": "ec2",
+      "name": "EC2 + ALB",
+      "description": "Traditional deployment on EC2 with Application Load Balancer",
+      "iac_path": "applications/fsi_foundry/foundations/iac/ec2",
+      "docker_path": "applications/fsi_foundry/foundations/docker/patterns/ec2.Dockerfile",
+      "architecture": "amd64",
+      "uses_docker": true
+    },
+    {
+      "id": "step_functions",
+      "name": "Step Functions + Lambda",
+      "description": "Serverless orchestration with AWS Step Functions and Lambda",
+      "iac_path": "applications/fsi_foundry/foundations/iac/step_functions",
+      "docker_path": null,
+      "architecture": null,
+      "uses_docker": false
+    },
+    {
+      "id": "agentcore",
+      "name": "Bedrock AgentCore",
+      "description": "Fully managed serverless deployment on Amazon Bedrock AgentCore Runtime",
+      "iac_path": "applications/fsi_foundry/foundations/iac/agentcore",
+      "docker_path": "applications/fsi_foundry/foundations/docker/patterns/agentcore.Dockerfile",
+      "architecture": "arm64",
+      "uses_docker": true
+    }
+  ],
+  "platform": {
+    "src_path": "applications/fsi_foundry/foundations/src",
+    "iac_path": "applications/fsi_foundry/foundations/iac",
+    "docker_path": "applications/fsi_foundry/foundations/docker",
+    "docs_path": "applications/fsi_foundry/docs/platform"
+  }
+}

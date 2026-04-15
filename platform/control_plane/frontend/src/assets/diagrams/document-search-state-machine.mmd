@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: request_type = full
+    Router --> DocumentIndexer: request_type = document_indexer_only
+    Router --> SearchAgent: request_type = search_agent_only
+    ParallelAssessment --> Synthesize
+    DocumentIndexer --> Synthesize
+    SearchAgent --> Synthesize
+    Synthesize --> [*]

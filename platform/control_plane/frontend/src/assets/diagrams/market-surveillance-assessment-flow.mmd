@@ -1,0 +1,18 @@
+flowchart TD
+    A["SurveillanceRequest\n(entity_id, monitoring_type)"] --> B["Orchestrator\nMarket Surveillance Supervisor"]
+    B -->|"monitoring_type = full"| C["Parallel Execution"]
+    C --> D["Trade Pattern Analyst Agent"]
+    C --> E["Communication Monitor Agent"]
+    C --> F["Surveillance Alert Generator Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Trade Pattern Analyst Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Communication Monitor Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Surveillance Alert Generator Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(SurveillanceResponse)"]
+    H --> I["SurveillanceResponse\n(trade_patterns, communications,
+alerts)"]

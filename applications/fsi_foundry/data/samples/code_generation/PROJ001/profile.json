@@ -1,0 +1,26 @@
+{
+  "project_id": "PROJ001",
+  "name": "Payment Gateway API",
+  "target_language": "Python",
+  "framework": "FastAPI",
+  "requirements_summary": "RESTful API for processing payments with support for multiple payment providers, transaction logging, and webhook notifications",
+  "modules": [
+    {"name": "payment_processor", "description": "Core payment processing logic with idempotency and retry"},
+    {"name": "provider_adapter", "description": "Adapters for Stripe, PayPal, and bank transfers"},
+    {"name": "transaction_logger", "description": "Transaction audit logging and reporting"},
+    {"name": "webhook_manager", "description": "Webhook notification dispatch and retry"}
+  ],
+  "constraints": {
+    "max_response_time_ms": 500,
+    "availability_target": "99.95%",
+    "compliance_requirements": ["PCI-DSS", "SOC2"],
+    "supported_currencies": ["USD", "EUR", "GBP"]
+  },
+  "coding_standards": {
+    "style_guide": "PEP 8",
+    "type_hints": "required",
+    "docstrings": "Google style",
+    "test_framework": "pytest",
+    "min_coverage": 85
+  }
+}

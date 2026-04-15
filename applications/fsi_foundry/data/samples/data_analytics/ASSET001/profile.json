@@ -1,0 +1,25 @@
+{
+  "entity_id": "ASSET001",
+  "dataset_name": "US Equity Sector Performance Dataset",
+  "asset_class": "Equities",
+  "market": "US",
+  "sector": "Technology",
+  "time_series_summary": {
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "frequency": "daily",
+    "total_observations": 1258,
+    "variables": ["close_price", "volume", "volatility", "pe_ratio", "market_cap"]
+  },
+  "data_quality_metrics": {
+    "completeness_pct": 98.5,
+    "missing_values": 19,
+    "outlier_count": 7,
+    "last_updated": "2024-12-31"
+  },
+  "analysis_history": [
+    {"date": "2024-11-15", "type": "correlation_analysis", "analyst": "quant_team", "status": "completed"},
+    {"date": "2024-10-01", "type": "regression_model", "analyst": "research_desk", "status": "completed"},
+    {"date": "2024-09-10", "type": "trend_analysis", "analyst": "quant_team", "status": "in_progress"}
+  ]
+}

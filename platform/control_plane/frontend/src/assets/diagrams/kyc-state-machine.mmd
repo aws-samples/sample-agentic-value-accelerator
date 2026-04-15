@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: assessment_type = full
+    Router --> CreditAnalyst: assessment_type = credit_only
+    Router --> ComplianceOfficer: assessment_type = compliance_only
+    ParallelAssessment --> Synthesize
+    CreditAnalyst --> Synthesize
+    ComplianceOfficer --> Synthesize
+    Synthesize --> [*]

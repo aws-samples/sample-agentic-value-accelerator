@@ -1,0 +1,12 @@
+{
+  "entity_id": "EMAIL001",
+  "sender": "[name]@hedgefund.example.com",
+  "sender_role": "Portfolio Manager",
+  "recipient": "trading-desk@bank.example.com",
+  "subject": "Urgent: Rebalance Request - Tech Sector Exposure",
+  "body_preview": "Need to reduce tech sector exposure by 15% before market close today. Please execute the following trades...",
+  "received_date": "2024-01-15T09:30:00Z",
+  "thread_count": 1,
+  "attachments": ["trade_instructions.xlsx"],
+  "priority_indicators": ["urgent", "market_close_deadline"]
+}

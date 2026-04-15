@@ -1,0 +1,29 @@
+{
+  "project_id": "PROJ001",
+  "name": "Core Banking COBOL System",
+  "source_language": "COBOL",
+  "target_language": "Python",
+  "codebase_size": {
+    "files": 1250,
+    "lines_of_code": 450000,
+    "modules": 85
+  },
+  "dependencies": [
+    {"name": "DB2", "type": "database", "version": "11.5"},
+    {"name": "CICS", "type": "transaction_manager", "version": "5.6"},
+    {"name": "MQ Series", "type": "messaging", "version": "9.2"},
+    {"name": "JCL", "type": "batch_scheduler", "version": "legacy"}
+  ],
+  "complexity_metrics": {
+    "average_cyclomatic_complexity": 12.5,
+    "coupling_score": 0.72,
+    "cohesion_score": 0.45,
+    "technical_debt_hours": 8500
+  },
+  "migration_constraints": {
+    "downtime_window_hours": 4,
+    "regulatory_requirements": ["SOX", "PCI-DSS", "GDPR"],
+    "data_sensitivity": "high",
+    "parallel_run_required": true
+  }
+}

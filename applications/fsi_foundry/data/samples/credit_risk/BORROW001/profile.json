@@ -1,0 +1,30 @@
+{
+  "borrower_id": "BORROW001",
+  "company_name": "Acme Manufacturing Corp",
+  "industry": "manufacturing",
+  "financial_statements": {
+    "revenue": 50000000,
+    "net_income": 3500000,
+    "total_assets": 80000000,
+    "total_liabilities": 45000000,
+    "total_equity": 35000000,
+    "operating_cash_flow": 7200000,
+    "debt_to_equity": 1.29,
+    "current_ratio": 1.85,
+    "interest_coverage": 4.2
+  },
+  "existing_credit": [
+    {"facility_id": "FAC001", "type": "revolving_credit", "amount": 10000000, "outstanding": 6500000, "maturity": "2026-06-30"},
+    {"facility_id": "FAC002", "type": "term_loan", "amount": 15000000, "outstanding": 12000000, "maturity": "2028-12-31"}
+  ],
+  "requested_facility": {
+    "type": "term_loan",
+    "amount": 20000000,
+    "purpose": "expansion",
+    "term_years": 5
+  },
+  "collateral": [
+    {"type": "real_estate", "value": 25000000, "description": "Manufacturing facility"},
+    {"type": "equipment", "value": 8000000, "description": "Production machinery"}
+  ]
+}

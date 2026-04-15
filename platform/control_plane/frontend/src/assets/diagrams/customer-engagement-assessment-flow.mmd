@@ -1,0 +1,18 @@
+flowchart TD
+    A["EngagementRequest\n(entity_id, engagement_type)"] --> B["Orchestrator\nCustomer Engagement Supervisor"]
+    B -->|"engagement_type = full"| C["Parallel Execution"]
+    C --> D["Churn Predictor Agent"]
+    C --> E["Outreach Agent Agent"]
+    C --> F["Policy Optimizer Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Churn Predictor Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Outreach Agent Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Policy Optimizer Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(EngagementResponse)"]
+    H --> I["EngagementResponse\n(churn_prediction, outreach_plan,
+policy_recommendations)"]

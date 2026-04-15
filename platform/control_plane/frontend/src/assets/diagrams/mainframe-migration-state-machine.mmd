@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: migration_type = full
+    Router --> MainframeAnalyzer: migration_type = mainframe_analyzer_only
+    Router --> BusinessRuleExtractor: migration_type = business_rule_extractor_only
+    Router --> CloudCodeGenerator: migration_type = cloud_code_generator_only
+    ParallelAssessment --> Synthesize
+    MainframeAnalyzer --> Synthesize
+    BusinessRuleExtractor --> Synthesize
+    CloudCodeGenerator --> Synthesize
+    Synthesize --> [*]

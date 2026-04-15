@@ -1,0 +1,7 @@
+# CloudFormation artifacts
+*.zip
+packaged-template.yaml
+
+# AWS SAM artifacts
+.aws-sam/
+samconfig.toml

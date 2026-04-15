@@ -1,0 +1,18 @@
+flowchart TD
+    A["MigrationRequest\n(entity_id, migration_type)"] --> B["Orchestrator\nLegacy Migration Supervisor"]
+    B -->|"migration_type = full"| C["Parallel Execution"]
+    C --> D["Code Analyzer Agent"]
+    C --> E["Migration Planner Agent"]
+    C --> F["Conversion Agent Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Code Analyzer Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Migration Planner Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Conversion Agent Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(MigrationResponse)"]
+    H --> I["MigrationResponse\n(code_analysis, migration_plan,
+converted_code)"]

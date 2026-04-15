@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: request_type = full
+    Router --> TicketClassifier: request_type = ticket_classifier_only
+    Router --> ResolutionAgent: request_type = resolution_agent_only
+    Router --> EscalationAgent: request_type = escalation_agent_only
+    ParallelAssessment --> Synthesize
+    TicketClassifier --> Synthesize
+    ResolutionAgent --> Synthesize
+    EscalationAgent --> Synthesize
+    Synthesize --> [*]

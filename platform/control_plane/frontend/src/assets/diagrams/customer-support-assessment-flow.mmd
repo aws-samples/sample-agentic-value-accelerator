@@ -1,0 +1,18 @@
+flowchart TD
+    A["SupportRequest\n(entity_id, request_type)"] --> B["Orchestrator\nCustomer Support Supervisor"]
+    B -->|"request_type = full"| C["Parallel Execution"]
+    C --> D["Ticket Classifier Agent"]
+    C --> E["Resolution Agent Agent"]
+    C --> F["Escalation Agent Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Ticket Classifier Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Resolution Agent Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Escalation Agent Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(SupportResponse)"]
+    H --> I["SupportResponse\n(classification, resolution,
+escalation_path)"]

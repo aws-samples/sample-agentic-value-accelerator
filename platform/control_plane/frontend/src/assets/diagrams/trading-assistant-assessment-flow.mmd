@@ -1,0 +1,18 @@
+flowchart TD
+    A["TradingRequest\n(entity_id, analysis_type)"] --> B["Orchestrator\nTrading Assistant Supervisor"]
+    B -->|"analysis_type = full"| C["Parallel Execution"]
+    C --> D["Market Analyst Agent"]
+    C --> E["Trade Idea Generator Agent"]
+    C --> F["Execution Planner Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Market Analyst Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Trade Idea Generator Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Execution Planner Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(TradingResponse)"]
+    H --> I["TradingResponse\n(market_analysis, trade_ideas,
+execution_plan)"]

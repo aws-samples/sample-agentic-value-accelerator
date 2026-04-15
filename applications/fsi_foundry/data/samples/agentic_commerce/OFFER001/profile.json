@@ -1,0 +1,26 @@
+{
+  "customer_id": "OFFER001",
+  "customer_type": "retail",
+  "name": "Jane Smith",
+  "segment": "premium",
+  "products_held": ["checking_account", "savings_account"],
+  "annual_income": 125000,
+  "credit_score": 780,
+  "tenure_years": 5,
+  "preferences": {
+    "digital_first": true,
+    "risk_tolerance": "moderate",
+    "investment_interest": true
+  },
+  "recent_activity": {
+    "large_deposit": true,
+    "mortgage_inquiry": true,
+    "investment_page_visits": 3
+  },
+  "eligible_products": ["premium_credit_card", "mortgage", "investment_account", "personal_loan"],
+  "fulfillment_status": {
+    "pending_offers": 1,
+    "last_offer_date": "2024-01-10",
+    "channel": "digital"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "entity_id": "ENTITY001",
+  "company_name": "Acme Industrial Corp",
+  "sector": "Industrials",
+  "industry": "Diversified Manufacturing",
+  "financials": {
+    "revenue_ttm": 12500000000,
+    "ebitda_ttm": 2100000000,
+    "total_debt": 8500000000,
+    "cash_and_equivalents": 1200000000,
+    "interest_expense_ttm": 425000000,
+    "net_income_ttm": 875000000
+  },
+  "credit_history": {
+    "current_rating": "BBB",
+    "rating_agency": "S&P",
+    "last_review_date": "2024-06-15",
+    "outlook": "stable",
+    "previous_ratings": [
+      {"date": "2022-01-10", "rating": "BBB-", "action": "upgrade"},
+      {"date": "2020-03-20", "rating": "BB+", "action": "downgrade"}
+    ]
+  },
+  "peer_companies": [
+    {"name": "Global Manufacturing Inc", "ticker": "GMI", "rating": "BBB+"},
+    {"name": "Industrial Solutions Ltd", "ticker": "ISL", "rating": "BBB"},
+    {"name": "Premier Industries Corp", "ticker": "PIC", "rating": "BBB-"}
+  ],
+  "market_data": {
+    "stock_price": 78.50,
+    "market_cap": 15200000000,
+    "bond_spread_bps": 185,
+    "cds_spread_bps": 142,
+    "beta": 1.15
+  }
+}

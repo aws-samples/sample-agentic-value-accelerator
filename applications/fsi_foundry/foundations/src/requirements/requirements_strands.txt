@@ -1,0 +1,7 @@
+# =============================================================================
+# Strands Framework Requirements
+# =============================================================================
+# For Strands-based agent deployment: pip install -r requirements.txt -r requirements_strands.txt
+
+# Strands Agents SDK
+strands-agents>=0.1.0

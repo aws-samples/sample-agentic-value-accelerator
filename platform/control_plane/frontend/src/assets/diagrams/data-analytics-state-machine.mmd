@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: analysis_type = full
+    Router --> DataExplorer: analysis_type = data_explorer_only
+    Router --> StatisticalAnalyst: analysis_type = statistical_analyst_only
+    Router --> InsightGenerator: analysis_type = insight_generator_only
+    ParallelAssessment --> Synthesize
+    DataExplorer --> Synthesize
+    StatisticalAnalyst --> Synthesize
+    InsightGenerator --> Synthesize
+    Synthesize --> [*]

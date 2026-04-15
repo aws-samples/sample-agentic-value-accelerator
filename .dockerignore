@@ -1,0 +1,11 @@
+**/node_modules
+**/.git
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/dist
+**/.DS_Store
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/terraform.tfstate.d

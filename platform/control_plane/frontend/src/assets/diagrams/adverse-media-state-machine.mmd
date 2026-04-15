@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: screening_type = full
+    Router --> MediaScreener: screening_type = media_screener_only
+    Router --> SentimentAnalyst: screening_type = sentiment_analyst_only
+    Router --> RiskSignalExtractor: screening_type = risk_signal_extractor_only
+    ParallelAssessment --> Synthesize
+    MediaScreener --> Synthesize
+    SentimentAnalyst --> Synthesize
+    RiskSignalExtractor --> Synthesize
+    Synthesize --> [*]

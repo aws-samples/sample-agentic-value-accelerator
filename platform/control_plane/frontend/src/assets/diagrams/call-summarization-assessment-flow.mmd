@@ -1,0 +1,14 @@
+flowchart TD
+    A["SummarizationRequest\n(entity_id, summary_type)"] --> B["Orchestrator\nCall Summarization Supervisor"]
+    B -->|"summary_type = full"| C["Parallel Execution"]
+    C --> D["Key Point Extractor Agent"]
+    C --> E["Summary Generator Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Key Point Extractor Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Summary Generator Analysis"]
+    D2 --> F["Synthesis"]
+    E2 --> F["Synthesis"]
+    F --> G["Structured Output\n(SummarizationResponse)"]
+    G --> H["SummarizationResponse\n(key_points, summary,
+action_items)"]
