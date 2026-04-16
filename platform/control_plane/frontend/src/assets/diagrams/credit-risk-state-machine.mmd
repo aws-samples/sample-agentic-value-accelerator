@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: assessment_type = full
+    Router --> FinancialAnalyst: assessment_type = financial_analyst_only
+    Router --> RiskScorer: assessment_type = risk_scorer_only
+    Router --> PortfolioAnalyst: assessment_type = portfolio_analyst_only
+    ParallelAssessment --> Synthesize
+    FinancialAnalyst --> Synthesize
+    RiskScorer --> Synthesize
+    PortfolioAnalyst --> Synthesize
+    Synthesize --> [*]

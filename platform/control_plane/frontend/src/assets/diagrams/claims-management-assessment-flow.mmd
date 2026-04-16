@@ -1,0 +1,18 @@
+flowchart TD
+    A["ClaimRequest\n(entity_id, claim_type)"] --> B["Orchestrator\nClaims Management Supervisor"]
+    B -->|"claim_type = full"| C["Parallel Execution"]
+    C --> D["Claims Intake Agent Agent"]
+    C --> E["Damage Assessor Agent"]
+    C --> F["Settlement Recommender Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Claims Intake Agent Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Damage Assessor Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Settlement Recommender Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(ClaimResponse)"]
+    H --> I["ClaimResponse\n(intake_result, damage_assessment,
+settlement)"]

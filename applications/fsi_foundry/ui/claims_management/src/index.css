@@ -1,0 +1,385 @@
+@import "tailwindcss";
+
+/* ── Claims Center Theme Variables ── */
+:root {
+  --sky-700: #0284C7;
+  --sky-600: #0284C7;
+  --sky-500: #38BDF8;
+  --sky-400: #38BDF8;
+  --sky-100: #E0F2FE;
+  --sky-50: #F0F9FF;
+  --warm-white: #FFFBF5;
+  --charcoal: #292524;
+  --stone-700: #44403C;
+  --stone-600: #57534E;
+  --stone-500: #78716C;
+  --stone-400: #A8A29E;
+  --stone-300: #D6D3D1;
+  --stone-200: #E7E5E4;
+  --stone-100: #F5F5F4;
+  --stone-50: #FAFAF9;
+  --coral-600: #EA580C;
+  --coral-500: #F97316;
+  --coral-100: #FFEDD5;
+  --coral-50: #FFF7ED;
+  --green-700: #15803D;
+  --green-600: #16A34A;
+  --green-500: #22C55E;
+  --green-100: #DCFCE7;
+  --green-50: #F0FDF4;
+  --amber-600: #D97706;
+  --amber-500: #EAB308;
+  --amber-100: #FEF3C7;
+  --amber-50: #FFFBEB;
+  --red-600: #DC2626;
+  --red-500: #EF4444;
+  --red-100: #FEE2E2;
+  --red-50: #FEF2F2;
+
+  --accent: var(--sky-700);
+  --accent-light: var(--sky-500);
+  --accent-bg: var(--sky-50);
+  --secondary: var(--coral-500);
+  --secondary-light: var(--coral-500);
+  --bg-primary: var(--warm-white);
+  --bg-card: #FFFFFF;
+  --text-primary: var(--charcoal);
+  --text-secondary: #44403C;
+  --text-muted: var(--stone-500);
+}
+
+/* ── Base ── */
+body {
+  font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at 10% 0%, rgba(2,132,199,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 100%, rgba(249,115,22,0.03) 0%, transparent 50%);
+}
+
+/* ── Dashboard Heading ── */
+.heading-dash {
+  font-family: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--bg-card);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 4px 16px rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card:hover {
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.06),
+    0 8px 32px rgba(0,0,0,0.06);
+}
+
+/* ── Metric Card ── */
+.metric-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.05);
+  position: relative;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(2,132,199,0.12);
+}
+.metric-card-accent {
+  height: 4px;
+  width: 100%;
+}
+.metric-card-accent.optimal { background: linear-gradient(90deg, var(--green-600), var(--green-500)); }
+.metric-card-accent.warning { background: linear-gradient(90deg, var(--amber-500), #FBBF24); }
+.metric-card-accent.critical { background: linear-gradient(90deg, var(--red-600), var(--red-500)); }
+.metric-card-accent.neutral { background: linear-gradient(90deg, var(--stone-500), var(--stone-400)); }
+.metric-card-accent.sky { background: linear-gradient(90deg, var(--sky-700), var(--sky-500)); }
+
+/* ── Status Badge ── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.status-badge.open { background: var(--sky-50); color: var(--sky-700); }
+.status-badge.in_review { background: var(--amber-50); color: var(--amber-600); }
+.status-badge.approved { background: var(--green-50); color: var(--green-700); }
+.status-badge.denied { background: var(--red-50); color: var(--red-600); }
+
+/* ── Severity Badge ── */
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.severity-badge.low { background: var(--green-50); color: var(--green-700); }
+.severity-badge.moderate { background: var(--amber-50); color: var(--amber-600); }
+.severity-badge.high { background: var(--coral-50); color: var(--coral-600); }
+.severity-badge.critical { background: var(--red-50); color: var(--red-600); border: 1px solid rgba(220,38,38,0.2); }
+
+/* ── Evidence Quality Badge ── */
+.evidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.evidence-badge.excellent { background: var(--green-50); color: var(--green-700); }
+.evidence-badge.good { background: var(--sky-50); color: var(--sky-700); }
+.evidence-badge.fair { background: var(--amber-50); color: var(--amber-600); }
+.evidence-badge.poor { background: var(--red-50); color: var(--red-600); }
+
+/* ── Confidence Badge ── */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.confidence-badge.high { background: var(--green-50); color: var(--green-700); }
+.confidence-badge.medium { background: var(--amber-50); color: var(--amber-600); }
+.confidence-badge.low { background: var(--stone-100); color: var(--stone-500); }
+
+/* ── Document Tag ── */
+.doc-tag {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: var(--sky-50);
+  color: var(--sky-700);
+  border: 1px solid rgba(2,132,199,0.15);
+}
+
+/* ── Detail Tag ── */
+.detail-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.375rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--stone-100);
+  color: var(--text-secondary);
+}
+
+/* ── Claims Pulse ── */
+.claims-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sky-500);
+  animation: claimsPulse 2s ease-in-out infinite;
+}
+.claims-pulse.open { background: var(--sky-500); }
+.claims-pulse.processing { background: var(--amber-500); }
+.claims-pulse.resolved { background: var(--green-500); }
+.claims-pulse.flagged { background: var(--red-500); }
+
+/* ── Progress Bar ── */
+.progress-bar {
+  height: 8px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--stone-100);
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s ease-out;
+}
+
+/* ── Cost Bar ── */
+.cost-bar {
+  height: 6px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--stone-100);
+  position: relative;
+}
+.cost-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s ease-out;
+}
+
+/* ── Radial Progress ── */
+.radial-progress {
+  --size: 72px;
+  --stroke: 6px;
+  width: var(--size);
+  height: var(--size);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.radial-progress svg {
+  transform: rotate(-90deg);
+  width: var(--size);
+  height: var(--size);
+}
+.radial-progress .track {
+  fill: none;
+  stroke: var(--stone-100);
+  stroke-width: var(--stroke);
+}
+.radial-progress .fill {
+  fill: none;
+  stroke: var(--sky-700);
+  stroke-width: var(--stroke);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out;
+}
+.radial-progress .label {
+  position: absolute;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ── Finding Card ── */
+.finding-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--stone-200);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.finding-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+.finding-card.high::before { background: var(--coral-500); }
+.finding-card.medium::before { background: var(--amber-500); }
+.finding-card.low::before { background: var(--green-600); }
+.finding-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* ── Comparable Card ── */
+.comparable-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--stone-200);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.comparable-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--sky-700);
+}
+.comparable-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+
+/* ── Coverage Tag ── */
+.coverage-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.375rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--coral-50);
+  color: var(--coral-600);
+  border: 1px solid rgba(249,115,22,0.15);
+}
+
+/* ── Animations ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes claimsPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+@keyframes scanLine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes signalReveal {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-6px) rotate(0.5deg); }
+  66% { transform: translateY(-3px) rotate(-0.3deg); }
+}
+@keyframes pulseSky {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(2,132,199,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(2,132,199,0); }
+}
+
+.animate-fadeSlideUp {
+  animation: fadeSlideUp 0.6s ease-out both;
+}
+.animate-floatCard {
+  animation: floatCard 4s ease-in-out infinite;
+}
+.animate-signalReveal {
+  animation: signalReveal 0.5s ease-out both;
+}
+.animate-pulseSky {
+  animation: pulseSky 2s ease-in-out infinite;
+}
+
+/* ── Utility ── */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }

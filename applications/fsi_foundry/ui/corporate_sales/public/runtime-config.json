@@ -1,0 +1,51 @@
+{
+  "use_case_id": "corporate_sales",
+  "use_case_name": "Corporate Sales",
+  "description": "Lead scoring, opportunity analysis, and pitch preparation for corporate banking",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "lead_scorer",
+      "name": "Lead Scorer",
+      "description": "Scores and prioritizes corporate leads based on firmographic and behavioral data"
+    },
+    {
+      "id": "opportunity_analyst",
+      "name": "Opportunity Analyst",
+      "description": "Analyzes deal probability, competitive landscape, and pricing strategy"
+    },
+    {
+      "id": "pitch_preparer",
+      "name": "Pitch Preparer",
+      "description": "Generates customized pitch materials and ROI projections"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Client / Lead ID",
+    "id_placeholder": "e.g. LEAD001",
+    "type_field": "analysis_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "lead_scoring",
+        "label": "Lead Scoring"
+      },
+      {
+        "value": "opportunity_analysis",
+        "label": "Opportunity Analysis"
+      },
+      {
+        "value": "pitch_preparation",
+        "label": "Pitch Preparation"
+      }
+    ],
+    "test_entities": [
+      "CORP001"
+    ]
+  }
+}

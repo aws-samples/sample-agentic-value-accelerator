@@ -1,0 +1,89 @@
+AVA - Agentic Value Accelerator
+Copyright 2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+This product includes software developed at Amazon Web Services, Inc.
+(https://aws.amazon.com/).
+
+================================================================================
+THIRD-PARTY DEPENDENCIES
+================================================================================
+
+This project uses the following third-party libraries:
+
+FastAPI (https://fastapi.tiangolo.com/)
+  License: MIT License
+  Copyright (c) 2018 Sebastián Ramírez
+
+Uvicorn (https://www.uvicorn.org/)
+  License: BSD 3-Clause License
+  Copyright (c) 2017-present, Encode OSS Ltd.
+
+Pydantic (https://docs.pydantic.dev/)
+  License: MIT License
+  Copyright (c) 2017-present Pydantic Services Inc. and individual contributors
+
+LangChain (https://www.langchain.com/)
+  License: MIT License
+  Copyright (c) LangChain, Inc.
+
+LangGraph (https://langchain-ai.github.io/langgraph/)
+  License: MIT License
+  Copyright (c) LangChain, Inc.
+
+Boto3 (https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)
+  License: Apache License 2.0
+  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+Structlog (https://www.structlog.org/)
+  License: Apache License 2.0 / MIT License (dual-licensed)
+  Copyright (c) 2013 Hynek Schlawack
+
+python-dotenv (https://github.com/theskumar/python-dotenv)
+  License: BSD 3-Clause License
+  Copyright (c) 2014, Saurabh Kumar
+
+HTTPX (https://www.python-httpx.org/)
+  License: BSD 3-Clause License
+  Copyright (c) 2019, Encode OSS Ltd.
+
+Strands Agents SDK (https://github.com/strands-agents/sdk-python)
+  License: Apache License 2.0
+  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+Hypothesis (https://hypothesis.readthedocs.io/)
+  License: Mozilla Public License 2.0
+  Copyright (c) 2013-2024 David R. MacIver
+
+pytest (https://docs.pytest.org/)
+  License: MIT License
+  Copyright (c) 2004 Holger Krekel and others
+
+================================================================================
+AWS SERVICES
+================================================================================
+
+This project is designed to work with the following AWS services:
+- Amazon Bedrock
+- Amazon S3
+- AWS Lambda
+- AWS Step Functions
+- Amazon EC2
+- Amazon ECR
+- Amazon Bedrock AgentCore
+
+Use of these services is subject to the AWS Customer Agreement
+(https://aws.amazon.com/agreement/) and the AWS Service Terms
+(https://aws.amazon.com/service-terms/).
+
+================================================================================
+AI/ML MODELS
+================================================================================
+
+This project uses foundation models available through Amazon Bedrock,
+including models from Anthropic (Claude). Use of these models is subject
+to the applicable model provider's terms of use and Amazon Bedrock's
+service terms.
+
+AI-generated outputs from this system are advisory in nature and should
+be reviewed by qualified personnel before being used for financial
+decision-making.

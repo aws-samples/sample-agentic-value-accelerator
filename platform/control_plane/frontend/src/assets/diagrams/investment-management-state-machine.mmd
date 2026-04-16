@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: management_type = full
+    Router --> AllocationOptimizer: management_type = allocation_optimizer_only
+    Router --> RebalancingAgent: management_type = rebalancing_agent_only
+    Router --> PerformanceAttributor: management_type = performance_attributor_only
+    ParallelAssessment --> Synthesize
+    AllocationOptimizer --> Synthesize
+    RebalancingAgent --> Synthesize
+    PerformanceAttributor --> Synthesize
+    Synthesize --> [*]

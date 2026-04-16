@@ -1,0 +1,63 @@
+{
+  "payment_id": "PMT001",
+  "sender": {
+    "account_id": "ACC001",
+    "name": "Acme Corporation",
+    "account_number": "1234567890",
+    "routing_number": "021000021",
+    "bank": "Chase Bank",
+    "address": {
+      "street": "123 Business Ave",
+      "city": "New York",
+      "state": "NY",
+      "zip": "10001",
+      "country": "USA"
+    }
+  },
+  "receiver": {
+    "account_id": "ACC002",
+    "name": "Global Suppliers Inc",
+    "account_number": "9876543210",
+    "routing_number": "026009593",
+    "bank": "Bank of America",
+    "address": {
+      "street": "456 Commerce St",
+      "city": "Los Angeles",
+      "state": "CA",
+      "zip": "90001",
+      "country": "USA"
+    }
+  },
+  "amount": 125000.00,
+  "currency": "USD",
+  "payment_type": "wire",
+  "description": "Payment for Q4 inventory shipment",
+  "status": "pending",
+  "initiated_date": "2024-03-15T10:30:00Z",
+  "requested_settlement_date": "2024-03-15T16:00:00Z",
+  "transaction_history": [
+    {
+      "timestamp": "2024-03-15T10:30:00Z",
+      "event": "payment_initiated",
+      "details": "Payment request submitted by Acme Corporation"
+    },
+    {
+      "timestamp": "2024-03-15T10:30:15Z",
+      "event": "validation_started",
+      "details": "Payment validation in progress"
+    }
+  ],
+  "compliance": {
+    "sanctions_screening_required": true,
+    "aml_check_required": true,
+    "high_value_transaction": true,
+    "cross_border": false
+  },
+  "metadata": {
+    "invoice_number": "INV-2024-Q4-001",
+    "purchase_order": "PO-456789",
+    "payment_reference": "WIRE-PMT001-2024",
+    "business_unit": "Procurement",
+    "cost_center": "CC-1000"
+  }
+}

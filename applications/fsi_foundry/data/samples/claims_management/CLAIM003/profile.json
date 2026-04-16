@@ -1,0 +1,22 @@
+{
+  "claim_id": "CLAIM003",
+  "policy_id": "POL-2024-00401",
+  "claimant_name": "[name]",
+  "claim_type": "liability",
+  "incident_date": "2024-03-20",
+  "description": "Slip and fall incident at insured commercial property. Visitor claims injury from wet floor without signage.",
+  "coverage_details": {
+    "policy_type": "commercial_general_liability",
+    "deductible": 2500,
+    "coverage_limit": 1000000,
+    "bodily_injury_coverage": true,
+    "legal_defense_coverage": true
+  },
+  "estimated_damage": 75000.00,
+  "supporting_documents": [
+    {"type": "incident_report", "id": "IR-2024-0234", "status": "received"},
+    {"type": "security_footage", "id": "VID-2024-0078", "status": "received"},
+    {"type": "medical_records", "id": "MED-2024-0312", "status": "pending"},
+    {"type": "witness_statements", "id": "WIT-2024-0045", "status": "pending"}
+  ]
+}

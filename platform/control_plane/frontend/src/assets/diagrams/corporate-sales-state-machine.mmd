@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: analysis_type = full
+    Router --> LeadScorer: analysis_type = lead_scorer_only
+    Router --> OpportunityAnalyst: analysis_type = opportunity_analyst_only
+    Router --> PitchPreparer: analysis_type = pitch_preparer_only
+    ParallelAssessment --> Synthesize
+    LeadScorer --> Synthesize
+    OpportunityAnalyst --> Synthesize
+    PitchPreparer --> Synthesize
+    Synthesize --> [*]

@@ -1,0 +1,18 @@
+flowchart TD
+    A["ServiceRequest\n(entity_id, request_type)"] --> B["Orchestrator\nCustomer Service Agent Supervisor"]
+    B -->|"request_type = full"| C["Parallel Execution"]
+    C --> D["Inquiry Handler Agent"]
+    C --> E["Transaction Specialist Agent"]
+    C --> F["Product Advisor Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Inquiry Handler Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Transaction Specialist Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Product Advisor Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(ServiceResponse)"]
+    H --> I["ServiceResponse\n(resolution, recommendations,
+next_steps)"]

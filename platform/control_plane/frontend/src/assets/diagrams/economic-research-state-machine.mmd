@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: research_type = full
+    Router --> DataAggregator: research_type = data_aggregator_only
+    Router --> TrendAnalyst: research_type = trend_analyst_only
+    Router --> ResearchWriter: research_type = research_writer_only
+    ParallelAssessment --> Synthesize
+    DataAggregator --> Synthesize
+    TrendAnalyst --> Synthesize
+    ResearchWriter --> Synthesize
+    Synthesize --> [*]

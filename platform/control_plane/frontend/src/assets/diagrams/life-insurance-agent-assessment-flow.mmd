@@ -1,0 +1,18 @@
+flowchart TD
+    A["InsuranceRequest\n(entity_id, request_type)"] --> B["Orchestrator\nLife Insurance Agent Supervisor"]
+    B -->|"request_type = full"| C["Parallel Execution"]
+    C --> D["Needs Analyst Agent"]
+    C --> E["Product Matcher Agent"]
+    C --> F["Underwriting Assistant Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Needs Analyst Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Product Matcher Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Underwriting Assistant Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(InsuranceResponse)"]
+    H --> I["InsuranceResponse\n(needs_analysis, product_match,
+underwriting)"]

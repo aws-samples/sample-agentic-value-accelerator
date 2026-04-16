@@ -1,0 +1,51 @@
+{
+  "use_case_id": "data_analytics",
+  "use_case_name": "Data Analytics Agent",
+  "description": "AI-powered data analytics for exploring datasets, performing statistical analysis, and generating actionable insights",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "data_explorer",
+      "name": "Data Explorer",
+      "description": "Discovers and profiles data sources, assesses data quality, and identifies key variables for analysis"
+    },
+    {
+      "id": "statistical_analyst",
+      "name": "Statistical Analyst",
+      "description": "Performs statistical tests, builds regression models, and detects significant patterns in datasets"
+    },
+    {
+      "id": "insight_generator",
+      "name": "Insight Generator",
+      "description": "Synthesizes analytical findings into actionable business insights with visualization recommendations"
+    }
+  ],
+  "api_endpoint": "https://PLACEHOLDER.cloudfront.net/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. DAT001",
+    "type_field": "assessment_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "data_exploration",
+        "label": "Data Exploration"
+      },
+      {
+        "value": "statistical_analysis",
+        "label": "Statistical Analysis"
+      },
+      {
+        "value": "insight_generation",
+        "label": "Insight Generation"
+      }
+    ],
+    "test_entities": [
+      "ASSET001"
+    ]
+  }
+}

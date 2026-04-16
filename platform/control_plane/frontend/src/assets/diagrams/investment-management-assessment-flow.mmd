@@ -1,0 +1,18 @@
+flowchart TD
+    A["ManagementRequest\n(entity_id, management_type)"] --> B["Orchestrator\nInvestment Management Supervisor"]
+    B -->|"management_type = full"| C["Parallel Execution"]
+    C --> D["Allocation Optimizer Agent"]
+    C --> E["Rebalancing Agent Agent"]
+    C --> F["Performance Attributor Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Allocation Optimizer Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Rebalancing Agent Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Performance Attributor Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(ManagementResponse)"]
+    H --> I["ManagementResponse\n(allocation, rebalancing,
+performance)"]

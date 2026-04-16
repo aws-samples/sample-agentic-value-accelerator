@@ -1,0 +1,51 @@
+{
+  "use_case_id": "customer_engagement",
+  "use_case_name": "Customer Engagement Agent",
+  "description": "AI-powered customer retention analysis including churn prediction, personalized outreach planning, and policy optimization",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "churn_predictor",
+      "name": "Churn Predictor",
+      "description": "Analyzes behavioral signals, calculates churn probability, identifies risk factors, and estimates retention windows"
+    },
+    {
+      "id": "outreach_agent",
+      "name": "Outreach Agent",
+      "description": "Plans optimal outreach strategies including channel selection, messaging themes, timing, and personalization"
+    },
+    {
+      "id": "policy_optimizer",
+      "name": "Policy Optimizer",
+      "description": "Identifies coverage adjustments, bundling opportunities, estimated savings, and value improvements"
+    }
+  ],
+  "api_endpoint": "https://example.cloudfront.net/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. ENG001",
+    "type_field": "assessment_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "churn_prediction_only",
+        "label": "Churn Prediction Only"
+      },
+      {
+        "value": "outreach_only",
+        "label": "Outreach Only"
+      },
+      {
+        "value": "policy_optimization_only",
+        "label": "Policy Optimization Only"
+      }
+    ],
+    "test_entities": [
+      "POLICY001"
+    ]
+  }
+}

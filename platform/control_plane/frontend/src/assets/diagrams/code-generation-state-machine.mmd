@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: generation_type = full
+    Router --> RequirementAnalyst: generation_type = requirement_analyst_only
+    Router --> CodeScaffolder: generation_type = code_scaffolder_only
+    Router --> TestGenerator: generation_type = test_generator_only
+    ParallelAssessment --> Synthesize
+    RequirementAnalyst --> Synthesize
+    CodeScaffolder --> Synthesize
+    TestGenerator --> Synthesize
+    Synthesize --> [*]

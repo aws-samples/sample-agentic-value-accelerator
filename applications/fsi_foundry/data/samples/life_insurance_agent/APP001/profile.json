@@ -1,0 +1,29 @@
+{
+  "applicant_id": "APP001",
+  "name": "[name]",
+  "age": 35,
+  "life_stage": "family_building",
+  "annual_income": 120000,
+  "dependents": [
+    {"name": "[name]", "relationship": "spouse", "age": 33},
+    {"name": "[name]", "relationship": "child", "age": 5},
+    {"name": "[name]", "relationship": "child", "age": 2}
+  ],
+  "existing_coverage": {
+    "employer_group_life": 240000,
+    "individual_policies": []
+  },
+  "health_summary": {
+    "general_health": "good",
+    "smoker": false,
+    "bmi": 24.5,
+    "chronic_conditions": [],
+    "family_history": ["heart_disease_father_age_62"]
+  },
+  "financial_goals": [
+    "income_replacement_10_years",
+    "mortgage_payoff_350000",
+    "children_education_fund_200000",
+    "final_expenses_25000"
+  ]
+}

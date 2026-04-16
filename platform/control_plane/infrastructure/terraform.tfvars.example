@@ -1,0 +1,46 @@
+# AWS Configuration
+aws_region = "us-east-1"
+environment = "dev"
+
+# Project Configuration
+app_name     = "control-plane"
+project_name = "ava"
+
+# VPC Configuration (Optional - leave empty to create new VPC)
+# If using existing VPC, provide these values:
+# vpc_id             = "vpc-xxxxx"
+# public_subnet_ids  = ["subnet-xxxxx", "subnet-yyyyy"]
+# private_subnet_ids = ["subnet-aaaaa", "subnet-bbbbb"]
+
+# VPC Configuration (For new VPC creation)
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Domain Configuration (Optional)
+domain_name    = "ava-platform.example.com"
+hosted_zone_id = "" # Leave empty if not using custom domain
+
+# ECS Configuration
+ecs_task_cpu       = 512
+ecs_task_memory    = 1024
+ecs_desired_count  = 2
+ecs_min_capacity   = 1
+ecs_max_capacity   = 4
+container_image    = "" # Will use ECR repository URL
+
+# S3 Configuration
+project_archive_retention_days = 7
+
+# Cognito Configuration
+cognito_user_pool_name = "control-plane-users"
+cognito_enable_mfa     = false
+
+# Tags
+tags = {
+  Project   = "ava"
+  Component = "control-plane"
+  ManagedBy = "terraform"
+}
+
+owner       = "platform-team"
+cost_center = "ai-platform"

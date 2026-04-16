@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: engagement_type = full
+    Router --> ChurnPredictor: engagement_type = churn_predictor_only
+    Router --> OutreachAgent: engagement_type = outreach_agent_only
+    Router --> PolicyOptimizer: engagement_type = policy_optimizer_only
+    ParallelAssessment --> Synthesize
+    ChurnPredictor --> Synthesize
+    OutreachAgent --> Synthesize
+    PolicyOptimizer --> Synthesize
+    Synthesize --> [*]

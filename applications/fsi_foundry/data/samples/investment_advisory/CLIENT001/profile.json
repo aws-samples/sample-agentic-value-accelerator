@@ -1,0 +1,19 @@
+{
+  "client_id": "CLIENT001",
+  "name": "Sarah Chen",
+  "risk_tolerance": "moderate",
+  "investment_goals": ["retirement", "wealth_preservation", "income_generation"],
+  "time_horizon": "15_years",
+  "account_type": "individual_brokerage",
+  "account_value": 750000.00,
+  "member_since": "2019-03-15",
+  "portfolio_holdings": [
+    {"symbol": "VTI", "name": "Vanguard Total Stock Market ETF", "asset_class": "equities", "value": 300000, "weight": 40.0},
+    {"symbol": "BND", "name": "Vanguard Total Bond Market ETF", "asset_class": "fixed_income", "value": 187500, "weight": 25.0},
+    {"symbol": "VXUS", "name": "Vanguard Total International Stock ETF", "asset_class": "equities", "value": 112500, "weight": 15.0},
+    {"symbol": "VNQ", "name": "Vanguard Real Estate ETF", "asset_class": "real_estate", "value": 75000, "weight": 10.0},
+    {"symbol": "CASH", "name": "Money Market", "asset_class": "cash", "value": 75000, "weight": 10.0}
+  ],
+  "target_allocation": {"equities": 55, "fixed_income": 25, "real_estate": 10, "cash": 10},
+  "annual_contribution": 50000
+}

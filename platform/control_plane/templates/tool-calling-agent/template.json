@@ -1,0 +1,124 @@
+{
+  "id": "tool-calling-agent",
+  "name": "Tool-Calling Agent",
+  "description": "Agent that can dynamically invoke external tools and APIs to accomplish tasks. Demonstrates tool registration, invocation, error handling, and result processing.",
+  "version": "1.0.0",
+  "pattern_type": "tool_calling",
+  "frameworks": [
+    {
+      "id": "langchain_langgraph",
+      "name": "LangChain + LangGraph",
+      "description": "LangGraph framework with tool calling support",
+      "path": "src/langraph"
+    },
+    {
+      "id": "strands",
+      "name": "Strands",
+      "description": "AWS Strands framework with tool calling",
+      "path": "src/strands"
+    }
+  ],
+  "deployment_patterns": [
+    {
+      "id": "terraform",
+      "name": "Terraform",
+      "description": "Infrastructure as Code using Terraform",
+      "path": "iac/terraform_agentcore"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "description": "Name of the project",
+      "type": "string",
+      "required": true,
+      "default": "my-tool-agent"
+    },
+    {
+      "name": "aws_region",
+      "description": "AWS region for deployment",
+      "type": "string",
+      "required": false,
+      "default": "us-east-1",
+      "enum": [
+        "us-east-1",
+        "us-east-2",
+        "us-west-1",
+        "us-west-2",
+        "eu-west-1",
+        "eu-central-1",
+        "ap-southeast-1",
+        "ap-northeast-1"
+      ]
+    },
+    {
+      "name": "llm_model",
+      "description": "LLM model for the agent",
+      "type": "string",
+      "required": false,
+      "default": "anthropic.claude-sonnet-4-20250514-v1:0",
+      "enum": [
+        "anthropic.claude-sonnet-4-20250514-v1:0",
+        "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "anthropic.claude-3-haiku-20240307-v1:0",
+        "amazon.nova-pro-v1:0",
+        "amazon.nova-lite-v1:0"
+      ]
+    },
+    {
+      "name": "langfuse_host",
+      "type": "string",
+      "description": "Langfuse server endpoint URL",
+      "required": false,
+      "default": "https://cloud.langfuse.com"
+    },
+    {
+      "name": "langfuse_secret_name",
+      "type": "string",
+      "description": "Secrets Manager secret name for Langfuse API keys",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "max_iterations",
+      "description": "Maximum tool invocation iterations",
+      "type": "integer",
+      "required": false,
+      "default": 10
+    }
+  ],
+  "architecture_diagram": "docs/architecture.png",
+  "example_use_cases": [
+    "Data retrieval and processing agents",
+    "API integration agents",
+    "Calculation and computation agents",
+    "Search and information gathering agents",
+    "Multi-step task automation"
+  ],
+  "tags": [
+    "tool-calling",
+    "function-calling",
+    "api-integration",
+    "automation"
+  ],
+  "type": "usecase",
+  "outputs": {
+    "agent_endpoint": "Agent invocation endpoint",
+    "runtime_id": "Runtime identifier"
+  },
+  "jobs": [
+    {
+      "name": "onboarding",
+      "incoming_event": "tool_calling_onboarding_request",
+      "outgoing_event": "tool_calling_onboarding_success"
+    },
+    {
+      "name": "offboarding",
+      "incoming_event": "tool_calling_offboarding_request",
+      "outgoing_event": "tool_calling_offboarding_success"
+    }
+  ],
+  "dependencies": [
+    "foundation-stack"
+  ]
+}

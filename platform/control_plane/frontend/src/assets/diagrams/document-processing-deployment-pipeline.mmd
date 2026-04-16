@@ -1,0 +1,14 @@
+flowchart LR
+    A["Select Document Processing
+in FSI Foundry UI"] --> B["Choose Framework
+& Configure"]
+    B --> C["Step Functions
+Orchestration"]
+    C --> D["CodeBuild
+Stage 1: Infra"]
+    D --> E["CodeBuild
+Stage 2: Docker"]
+    E --> F["CodeBuild
+Stage 3: Runtime"]
+    F --> G["AgentCore
+Runtime Live"]

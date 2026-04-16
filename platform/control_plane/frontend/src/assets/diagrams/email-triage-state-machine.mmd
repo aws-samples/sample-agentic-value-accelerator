@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: triage_type = full
+    Router --> EmailClassifier: triage_type = email_classifier_only
+    Router --> ActionExtractor: triage_type = action_extractor_only
+    ParallelAssessment --> Synthesize
+    EmailClassifier --> Synthesize
+    ActionExtractor --> Synthesize
+    Synthesize --> [*]

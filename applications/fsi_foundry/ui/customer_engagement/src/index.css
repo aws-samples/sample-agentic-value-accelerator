@@ -1,0 +1,500 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+:root {
+  /* Retention Dashboard — Warm Teal Palette */
+  --teal: #0F766E;
+  --teal-light: #14B8A6;
+  --teal-glow: rgba(20, 184, 166, 0.4);
+  --rose: #E11D48;
+  --rose-glow: rgba(225, 29, 72, 0.4);
+  --amber: #F59E0B;
+  --amber-glow: rgba(245, 158, 11, 0.4);
+  --green: #22C55E;
+  --green-glow: rgba(34, 197, 94, 0.4);
+  --charcoal: #1C1917;
+
+  --accent: var(--teal-light);
+  --accent-dim: var(--teal);
+  --accent-glow: var(--teal-glow);
+
+  --risk-low: var(--green);
+  --risk-medium: var(--amber);
+  --risk-high: var(--rose);
+
+  --bg-primary: #FAFAF9;
+  --bg-secondary: #F5F5F4;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FAFAF9;
+  --border: #E7E5E4;
+  --border-accent: rgba(15, 118, 110, 0.2);
+  --text-primary: #1C1917;
+  --text-secondary: #57534E;
+  --text-muted: #A8A29E;
+
+  --glass: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(15, 118, 110, 0.12);
+  --glass-shine: rgba(255, 255, 255, 0.6);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(15,118,110,0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(15,118,110,0.3); }
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes heroFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes float3d {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes warmPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(20,184,166,0.1), 0 4px 20px rgba(15,118,110,0.08);
+    border-color: rgba(15,118,110,0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(20,184,166,0.04), 0 4px 30px rgba(15,118,110,0.12);
+    border-color: rgba(15,118,110,0.25);
+  }
+}
+
+@keyframes rosePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(225,29,72,0.1);
+    border-color: rgba(225,29,72,0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(225,29,72,0.04);
+    border-color: rgba(225,29,72,0.25);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0; transform: scale(0.5); }
+  30% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.6); }
+}
+
+@keyframes progress-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes check-draw {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes gradientWarm {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes scanLine {
+  0% { top: -2px; }
+  100% { top: 100%; }
+}
+
+@keyframes orbitSlow {
+  from { transform: rotate(0deg) translateX(100px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(100px) rotate(-360deg); }
+}
+
+@keyframes orbitFast {
+  from { transform: rotate(120deg) translateX(70px) rotate(-120deg); }
+  to { transform: rotate(480deg) translateX(70px) rotate(-480deg); }
+}
+
+@keyframes orbitMid {
+  from { transform: rotate(240deg) translateX(85px) rotate(-240deg); }
+  to { transform: rotate(600deg) translateX(85px) rotate(-600deg); }
+}
+
+@keyframes cubeRotate {
+  0% { transform: rotateX(0) rotateY(0) rotateZ(0); }
+  25% { transform: rotateX(90deg) rotateY(90deg) rotateZ(0); }
+  50% { transform: rotateX(180deg) rotateY(180deg) rotateZ(90deg); }
+  75% { transform: rotateX(270deg) rotateY(90deg) rotateZ(180deg); }
+  100% { transform: rotateX(360deg) rotateY(360deg) rotateZ(360deg); }
+}
+
+.animate-fade-in { animation: fadeIn 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-fade-in-scale { animation: fadeInScale 0.7s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-slide-left { animation: slideInLeft 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-slide-right { animation: slideInRight 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; opacity: 0; }
+.animate-float { animation: float3d 6s ease-in-out infinite; }
+.animate-hero-float { animation: heroFloat 5s ease-in-out infinite; }
+.animate-warm-pulse { animation: warmPulse 3s ease-in-out infinite; }
+.animate-rose-pulse { animation: rosePulse 3s ease-in-out infinite; }
+.animate-pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+.animate-spin { animation: spin 1s linear infinite; }
+
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* ============================================
+   SCENE
+   ============================================ */
+
+.scene-3d {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* ============================================
+   GLASSMORPHISM — Warm Style
+   ============================================ */
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(20,184,166,0.2), rgba(245,158,11,0.1), transparent);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(15, 118, 110, 0.1);
+  border-radius: 20px;
+}
+
+/* ============================================
+   CARDS — Warm Elevation
+   ============================================ */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(20,184,166,0.1), transparent);
+}
+.card:hover {
+  border-color: rgba(15, 118, 110, 0.2);
+  box-shadow: 0 8px 30px rgba(15,118,110,0.06), 0 1px 3px rgba(28,25,23,0.04);
+  transform: translateY(-2px);
+}
+
+.card-3d {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  transform-style: preserve-3d;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+}
+.card-3d::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 10%, var(--teal-light), var(--amber), transparent 90%);
+  opacity: 0.4;
+}
+
+.card-glow {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+}
+.card-glow:hover {
+  border-color: rgba(15,118,110,0.2);
+  box-shadow: 0 4px 20px rgba(15,118,110,0.06);
+  transform: translateY(-1px);
+}
+.card-glow::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(20,184,166,0.15), transparent);
+}
+
+/* ============================================
+   3D ROTATING CUBE
+   ============================================ */
+
+.cube-scene {
+  width: 80px;
+  height: 80px;
+  perspective: 300px;
+}
+
+.cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  animation: cubeRotate 6s linear infinite;
+}
+
+.cube-face {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border: 1px solid rgba(15, 118, 110, 0.3);
+  background: rgba(20, 184, 166, 0.05);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.cube-face.front  { transform: translateZ(40px); }
+.cube-face.back   { transform: rotateY(180deg) translateZ(40px); }
+.cube-face.right  { transform: rotateY(90deg) translateZ(40px); }
+.cube-face.left   { transform: rotateY(-90deg) translateZ(40px); }
+.cube-face.top    { transform: rotateX(90deg) translateZ(40px); }
+.cube-face.bottom { transform: rotateX(-90deg) translateZ(40px); }
+
+/* ============================================
+   WARM GRADIENT TEXT
+   ============================================ */
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--teal), var(--teal-light), var(--amber));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientWarm 6s ease-in-out infinite;
+}
+
+/* ============================================
+   BACKGROUNDS
+   ============================================ */
+
+.bg-warm-mesh {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(20,184,166,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(245,158,11,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(34,197,94,0.03) 0%, transparent 40%),
+    radial-gradient(ellipse at 90% 80%, rgba(225,29,72,0.02) 0%, transparent 40%);
+}
+
+.bg-dots {
+  background-image: radial-gradient(rgba(15,118,110,0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* ============================================
+   COMPONENTS
+   ============================================ */
+
+.btn-primary {
+  @apply inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border-0 cursor-pointer transition-all;
+  background: linear-gradient(135deg, var(--teal), var(--teal-light));
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(15,118,110,0.25), 0 1px 3px rgba(15,118,110,0.1);
+}
+.btn-primary:hover {
+  box-shadow: 0 6px 20px rgba(15,118,110,0.35), 0 2px 4px rgba(15,118,110,0.15);
+  transform: translateY(-2px);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm cursor-pointer transition-all;
+  background: transparent;
+  color: var(--teal);
+  border: 1px solid rgba(15,118,110,0.3);
+}
+.btn-secondary:hover {
+  background: rgba(20,184,166,0.05);
+  box-shadow: 0 4px 14px rgba(15,118,110,0.08);
+  border-color: rgba(15,118,110,0.5);
+}
+
+.input-field {
+  @apply w-full px-4 py-3 rounded-xl text-sm outline-none transition-all;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.input-field::placeholder { color: var(--text-muted); }
+.input-field:focus {
+  border-color: var(--teal-light);
+  box-shadow: 0 0 0 3px rgba(20,184,166,0.1), 0 2px 8px rgba(15,118,110,0.06);
+}
+
+.label {
+  @apply block text-xs font-semibold uppercase tracking-wider mb-2;
+  color: var(--text-secondary);
+}
+
+/* ============================================
+   ASSESSMENT TYPE CARDS
+   ============================================ */
+
+.inquiry-card {
+  @apply relative flex items-center gap-3 p-4 rounded-xl cursor-pointer;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.inquiry-card:hover {
+  border-color: rgba(15,118,110,0.25);
+  box-shadow: 0 2px 12px rgba(15,118,110,0.06);
+}
+.inquiry-card.selected {
+  border-color: var(--teal-light);
+  background: rgba(20,184,166,0.04);
+  box-shadow: 0 0 0 1px rgba(20,184,166,0.2), 0 4px 14px rgba(15,118,110,0.08);
+}
+
+/* ============================================
+   TIMELINE
+   ============================================ */
+
+.timeline-dot {
+  @apply w-10 h-10 rounded-full flex items-center justify-center shrink-0 relative z-10;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+}
+.timeline-dot.active {
+  border-color: var(--teal-light);
+  background: rgba(20,184,166,0.06);
+  box-shadow: 0 0 12px rgba(20,184,166,0.15);
+}
+.timeline-dot.complete {
+  border-color: var(--green);
+  background: rgba(34,197,94,0.06);
+  box-shadow: 0 0 12px rgba(34,197,94,0.15);
+}
+
+.ticket-badge {
+  @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider;
+}
+
+/* ============================================
+   RISK METER
+   ============================================ */
+
+.risk-meter {
+  @apply relative w-full h-3 rounded-full overflow-hidden;
+  background: var(--bg-secondary);
+}
+
+.risk-meter-fill {
+  @apply h-full rounded-full transition-all duration-1000 ease-out;
+}
+
+/* ============================================
+   SCAN LINE OVERLAY
+   ============================================ */
+
+.scan-overlay {
+  position: relative;
+  overflow: hidden;
+}
+.scan-overlay::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--teal-light), transparent);
+  animation: scanLine 3s linear infinite;
+  opacity: 0.15;
+  pointer-events: none;
+}

@@ -1,0 +1,55 @@
+{
+  "use_case_id": "investment_advisory",
+  "use_case_name": "Investment Advisory",
+  "description": "AI-powered portfolio analysis, market research, and client profiling for personalized wealth management advisory",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "portfolio_analyst",
+      "name": "Portfolio Analyst",
+      "description": "Analyzes portfolio composition, risk exposure, asset allocation efficiency, and identifies concentration risks and rebalancing opportunities"
+    },
+    {
+      "id": "market_researcher",
+      "name": "Market Researcher",
+      "description": "Researches current market conditions, sector trends, macroeconomic indicators, and identifies emerging investment opportunities"
+    },
+    {
+      "id": "client_profiler",
+      "name": "Client Profiler",
+      "description": "Evaluates client risk tolerance, investment objectives, time horizons, and ensures advisory recommendations align with client suitability profiles"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "client_id",
+    "id_label": "Client ID",
+    "id_placeholder": "e.g. ADV001",
+    "type_field": "advisory_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "portfolio_review",
+        "label": "Portfolio Review"
+      },
+      {
+        "value": "market_analysis",
+        "label": "Market Analysis"
+      },
+      {
+        "value": "client_profiling",
+        "label": "Client Profiling"
+      },
+      {
+        "value": "rebalancing",
+        "label": "Rebalancing"
+      }
+    ],
+    "test_entities": [
+      "CLIENT001"
+    ]
+  }
+}

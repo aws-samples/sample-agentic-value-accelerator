@@ -1,0 +1,51 @@
+{
+  "use_case_id": "document_processing",
+  "use_case_name": "Document Processing",
+  "description": "Document classification, data extraction, and validation for compliance",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "document_classifier",
+      "name": "Document Classifier",
+      "description": "Specialized AI agent: Document Classifier"
+    },
+    {
+      "id": "data_extractor",
+      "name": "Data Extractor",
+      "description": "Specialized AI agent: Data Extractor"
+    },
+    {
+      "id": "validation_agent",
+      "name": "Validation Agent",
+      "description": "Specialized AI agent: Validation Agent"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "document_id",
+    "id_label": "Document ID",
+    "id_placeholder": "e.g. DOC001",
+    "type_field": "processing_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "classification_only",
+        "label": "Classification Only"
+      },
+      {
+        "value": "extraction_only",
+        "label": "Extraction Only"
+      },
+      {
+        "value": "validation_only",
+        "label": "Validation Only"
+      }
+    ],
+    "test_entities": [
+      "DOC001"
+    ]
+  }
+}

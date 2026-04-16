@@ -1,0 +1,14 @@
+flowchart TD
+    A["SearchRequest\n(entity_id, request_type)"] --> B["Orchestrator\nDocument Search Supervisor"]
+    B -->|"request_type = full"| C["Parallel Execution"]
+    C --> D["Document Indexer Agent"]
+    C --> E["Search Agent Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Document Indexer Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Search Agent Analysis"]
+    D2 --> F["Synthesis"]
+    E2 --> F["Synthesis"]
+    F --> G["Structured Output\n(SearchResults)"]
+    G --> H["SearchResults\n(documents, relevance_scores,
+summaries)"]

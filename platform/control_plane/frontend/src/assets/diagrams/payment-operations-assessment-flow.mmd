@@ -1,0 +1,14 @@
+flowchart TD
+    A["OperationRequest\n(entity_id, operation_type)"] --> B["Orchestrator\nPayment Operations Supervisor"]
+    B -->|"operation_type = full"| C["Parallel Execution"]
+    C --> D["Exception Handler Agent"]
+    C --> E["Settlement Agent Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Exception Handler Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Settlement Agent Analysis"]
+    D2 --> F["Synthesis"]
+    E2 --> F["Synthesis"]
+    F --> G["Structured Output\n(OperationResponse)"]
+    G --> H["OperationResponse\n(exception_status, settlement_result,
+resolution)"]

@@ -1,0 +1,19 @@
+{
+  "customer_id": "CORP001",
+  "company_name": "Meridian Technologies Inc.",
+  "industry": "technology",
+  "annual_revenue": 250000000,
+  "employee_count": 1200,
+  "existing_products": ["business_checking", "commercial_lending"],
+  "contact_info": {
+    "primary_contact": "[name]",
+    "title": "CFO",
+    "email": "[email]",
+    "phone": "[phone_number]"
+  },
+  "engagement_history": [
+    {"date": "2024-01-10", "type": "meeting", "notes": "Discussed treasury management needs"},
+    {"date": "2024-01-05", "type": "email", "notes": "Sent product overview for cash management"},
+    {"date": "2023-12-15", "type": "referral", "notes": "Referred by existing client CORP008"}
+  ]
+}

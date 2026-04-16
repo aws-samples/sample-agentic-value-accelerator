@@ -1,0 +1,51 @@
+{
+  "use_case_id": "call_center_analytics",
+  "use_case_name": "Call Center Analytics",
+  "description": "Call monitoring, agent performance analysis, and operational insights",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "call_monitor",
+      "name": "Call Monitor",
+      "description": "Specialized AI agent: Call Monitor"
+    },
+    {
+      "id": "agent_performance_analyst",
+      "name": "Agent Performance Analyst",
+      "description": "Specialized AI agent: Agent Performance Analyst"
+    },
+    {
+      "id": "operations_insight_generator",
+      "name": "Operations Insight Generator",
+      "description": "Specialized AI agent: Operations Insight Generator"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "call_center_id",
+    "id_label": "Call Center ID",
+    "id_placeholder": "e.g. CC001",
+    "type_field": "analysis_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "call_monitoring_only",
+        "label": "Call Monitoring Only"
+      },
+      {
+        "value": "performance_only",
+        "label": "Performance Only"
+      },
+      {
+        "value": "operations_only",
+        "label": "Operations Only"
+      }
+    ],
+    "test_entities": [
+      "CC001"
+    ]
+  }
+}

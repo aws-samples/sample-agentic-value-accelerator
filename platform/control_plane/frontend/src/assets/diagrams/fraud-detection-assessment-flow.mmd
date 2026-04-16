@@ -1,0 +1,18 @@
+flowchart TD
+    A["FraudRequest\n(entity_id, detection_type)"] --> B["Orchestrator\nFraud Detection Supervisor"]
+    B -->|"detection_type = full"| C["Parallel Execution"]
+    C --> D["Transaction Monitor Agent"]
+    C --> E["Pattern Analyst Agent"]
+    C --> F["Alert Generator Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Transaction Monitor Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Pattern Analyst Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Alert Generator Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(FraudResponse)"]
+    H --> I["FraudResponse\n(fraud_score, patterns_detected,
+alerts)"]

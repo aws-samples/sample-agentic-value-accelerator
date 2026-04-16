@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: intent_type = full
+    Router --> ConversationManager: intent_type = conversation_manager_only
+    Router --> AccountAgent: intent_type = account_agent_only
+    Router --> TransactionAgent: intent_type = transaction_agent_only
+    ParallelAssessment --> Synthesize
+    ConversationManager --> Synthesize
+    AccountAgent --> Synthesize
+    TransactionAgent --> Synthesize
+    Synthesize --> [*]

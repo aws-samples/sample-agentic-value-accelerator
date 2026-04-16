@@ -1,0 +1,51 @@
+{
+  "use_case_id": "investment_management",
+  "use_case_name": "Investment Management",
+  "description": "AI-powered portfolio optimization, rebalancing intelligence, and performance attribution analysis for institutional investment management",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "allocation_optimizer",
+      "name": "Allocation Optimizer",
+      "description": "Analyzes portfolio composition against target allocations, evaluates risk-adjusted returns, and generates optimized allocation strategies across asset classes"
+    },
+    {
+      "id": "rebalancing_agent",
+      "name": "Rebalancing Agent",
+      "description": "Monitors portfolio drift, identifies rebalance triggers, and produces trade recommendations to restore target allocation with minimal transaction cost"
+    },
+    {
+      "id": "performance_attributor",
+      "name": "Performance Attributor",
+      "description": "Decomposes portfolio returns into attribution factors including asset selection, sector allocation, currency effects, and timing contributions"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. MGT001",
+    "type_field": "assessment_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "allocation_optimization",
+        "label": "Allocation Optimization"
+      },
+      {
+        "value": "rebalancing",
+        "label": "Rebalancing"
+      },
+      {
+        "value": "performance_attribution",
+        "label": "Performance Attribution"
+      }
+    ],
+    "test_entities": [
+      "PORT001"
+    ]
+  }
+}

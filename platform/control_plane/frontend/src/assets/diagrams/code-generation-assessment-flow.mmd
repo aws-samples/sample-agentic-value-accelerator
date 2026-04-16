@@ -1,0 +1,18 @@
+flowchart TD
+    A["GenerationRequest\n(entity_id, generation_type)"] --> B["Orchestrator\nCode Generation Supervisor"]
+    B -->|"generation_type = full"| C["Parallel Execution"]
+    C --> D["Requirement Analyst Agent"]
+    C --> E["Code Scaffolder Agent"]
+    C --> F["Test Generator Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Requirement Analyst Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Code Scaffolder Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Test Generator Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(GenerationResponse)"]
+    H --> I["GenerationResponse\n(requirements, scaffolded_code,
+tests)"]

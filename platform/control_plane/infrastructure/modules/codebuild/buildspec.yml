@@ -1,0 +1,357 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - echo "Installing tools..."
+      - yum install -y yum-utils unzip jq 2>/dev/null || true
+      - |
+        if ! command -v terraform &>/dev/null; then
+          curl -fsSL https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_arm64.zip -o tf.zip
+          unzip -o tf.zip -d /usr/local/bin && rm tf.zip
+        fi
+      - terraform --version
+      - npm install -g aws-cdk typescript ts-node
+      - cdk --version 2>/dev/null || true
+  pre_build:
+    commands:
+      - |
+        # Pre-cache common base images from ECR to avoid Docker Hub rate limits
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        ECR_BASE="${ACCOUNT_ID}.dkr.ecr.${AWS_TARGET_REGION}.amazonaws.com"
+        aws ecr get-login-password --region ${AWS_TARGET_REGION} | docker login --username AWS --password-stdin ${ECR_BASE} 2>/dev/null
+        for img in python:3.11-slim; do
+          docker pull "${ECR_BASE}/cached/${img}" 2>/dev/null && \
+            docker tag "${ECR_BASE}/cached/${img}" "${img}" 2>/dev/null && \
+            echo "Cached ${img} from ECR" || echo "Cache miss for ${img}, will pull from Docker Hub"
+        done
+        # Also pre-pull so BuildKit has it in the build cache
+        DOCKER_BUILDKIT=0 docker pull python:3.11-slim 2>/dev/null || true
+      - echo "Deployment $DEPLOYMENT_ID for template $TEMPLATE_ID (IaC=$IAC_TYPE)"
+      - mkdir -p /tmp/workspace
+      - aws s3 cp s3://$ARCHIVE_BUCKET/$ARCHIVE_KEY /tmp/template.zip
+      - unzip -o /tmp/template.zip -d /tmp/workspace
+      - echo "Template extracted" && ls -la /tmp/workspace/
+      - |
+        if [ -n "$TARGET_ROLE_ARN" ]; then
+          echo "Assuming cross-account role $TARGET_ROLE_ARN"
+          CREDS=$(aws sts assume-role --role-arn "$TARGET_ROLE_ARN" --role-session-name "deploy-$DEPLOYMENT_ID" --output json)
+          export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')
+          export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')
+          export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')
+        fi
+      - |
+        cat > /tmp/merge_outputs.py << 'PYEOF'
+        import json, sys
+        merged = {}
+        for path in sys.argv[1:]:
+            try:
+                raw = json.load(open(path))
+                for k, v in raw.items():
+                    merged[k] = str(v.get('value','') if isinstance(v, dict) else v)
+            except: pass
+        import os
+        merged['deployment_id'] = os.environ['DEPLOYMENT_ID']
+        merged['status'] = 'success'
+        merged['iac_type'] = os.environ.get('IAC_TYPE', 'terraform')
+        json.dump(merged, open('/tmp/outputs.json', 'w'))
+        PYEOF
+  build:
+    commands:
+      - cd /tmp/workspace
+      - |
+        # Check for destroy action with custom destroy.sh
+        if [ "${ACTION:-deploy}" = "destroy" ] && [ -f "/tmp/workspace/destroy.sh" ]; then
+          echo "Custom destroy.sh detected — running template destroy script"
+          chmod +x /tmp/workspace/destroy.sh
+          /tmp/workspace/destroy.sh
+          if [ -f /tmp/outputs.json ]; then
+            echo "Outputs collected from destroy.sh"
+          else
+            echo '{"deployment_id":"'$DEPLOYMENT_ID'","status":"destroyed"}' > /tmp/outputs.json
+          fi
+        # If the template includes a custom deploy.sh, run it instead of the default flow
+        elif [ -f "/tmp/workspace/deploy.sh" ]; then
+          echo "Custom deploy.sh detected — running template deployment script"
+          chmod +x /tmp/workspace/deploy.sh
+          if /tmp/workspace/deploy.sh; then
+            # Collect outputs if any were written
+            if [ -f /tmp/outputs.json ]; then
+              echo "Outputs collected from deploy.sh"
+            else
+              echo '{"deployment_id":"'$DEPLOYMENT_ID'","status":"success"}' > /tmp/outputs.json
+            fi
+          else
+            echo "ERROR: deploy.sh failed with exit code $?"
+            echo '{"deployment_id":"'$DEPLOYMENT_ID'","status":"failed","error":"deploy.sh exited with non-zero status"}' > /tmp/outputs.json
+            exit 1
+          fi
+        else
+        case "$IAC_TYPE" in
+          terraform)
+            if [ -d "/tmp/workspace/infra" ] && [ -d "/tmp/workspace/runtime" ]; then
+              echo "Multi-stage Terraform detected (infra + runtime)"
+              # Inject S3 backend config into each Terraform directory (keeps source IaC clean)
+              for tf_dir in /tmp/workspace/infra /tmp/workspace/runtime; do
+                if ! grep -rq 'backend "s3"' "$tf_dir"/*.tf 2>/dev/null; then
+                  printf 'terraform {\n  backend "s3" {}\n}\n' > "$tf_dir/backend_override.tf"
+                fi
+              done
+              # Fix shared module path: source IaC uses ../../shared but zip has ../shared
+              if [ -d /tmp/workspace/shared ]; then
+                ln -sf /tmp/workspace/shared /tmp/shared 2>/dev/null || true
+              fi
+              # Generate tfvars from environment variables
+              cat > /tmp/workspace/infra/deploy.auto.tfvars << TFVARS
+        aws_region    = "$AWS_TARGET_REGION"
+        use_case_id   = "${USE_CASE_ID:-unknown}"
+        use_case_name = "${USE_CASE_ID:-unknown}"
+        framework     = "${FRAMEWORK:-strands}"
+        data_path     = "/tmp/workspace/data/samples"
+        TFVARS
+              cat > /tmp/workspace/runtime/deploy.auto.tfvars << TFVARS
+        aws_region         = "$AWS_TARGET_REGION"
+        use_case_id        = "${USE_CASE_ID:-unknown}"
+        use_case_name      = "${USE_CASE_ID:-unknown}"
+        framework          = "${FRAMEWORK:-strands}"
+        image_tag          = "${FRAMEWORK:-strands}-latest"
+        TFVARS
+              echo "=== Stage 1: Infrastructure ==="
+              cd /tmp/workspace/infra
+              terraform init -input=false \
+                -backend-config="bucket=$STATE_BUCKET" \
+                -backend-config="key=foundry/${USE_CASE_ID}/${FRAMEWORK}/infra/terraform.tfstate" \
+                -backend-config="region=$AWS_TARGET_REGION" \
+                -backend-config="dynamodb_table=$LOCK_TABLE"
+              # Import pre-existing infra resources to avoid AlreadyExists errors
+              USE_CASE_CFN=$(echo "${USE_CASE_ID:-unknown}" | tr '_' '-')
+              REGION_SUFFIX=$(echo "$AWS_TARGET_REGION" | tr -d '-')
+              # Derive short use case name (same mapping as terraform locals)
+              printf 'import os\nm={"customer_engagement":"custeng","customer_service":"custsvc","customer_chatbot":"custbot","customer_support":"custsup","kyc_banking":"kyc","agentic_payments":"agpay","agentic_commerce":"agcom","payment_operations":"payops","corporate_sales":"corpsales","document_processing":"docproc","document_search":"docsrch","fraud_detection":"fraud","credit_risk":"credrisk","compliance_investigation":"compinv","adverse_media":"advmedia","market_surveillance":"mktsurv","investment_advisory":"invadv","investment_management":"invmgmt","earnings_summarization":"earnsum","economic_research":"econres","email_triage":"emailtri","trading_assistant":"tradeast","trading_insights":"tradeins","research_credit_memo":"credmemo","data_analytics":"dataanly","call_center_analytics":"ccanalytics","post_call_analytics":"postcall","call_summarization":"callsum","claims_management":"claims","life_insurance_agent":"lifeins","legacy_migration":"legmig","code_generation":"codegen","mainframe_migration":"mfmig","ai_assistant":"aiasst"}\nprint(m.get(os.environ.get("USE_CASE_ID",""),"unknown"))\n' > /tmp/uc_short.py
+              UC_SHORT=$(python3 /tmp/uc_short.py)
+              FW_SHORT="langgraph"; [ "$FRAMEWORK" = "strands" ] && FW_SHORT="strands"
+              RES_PREFIX="ava-${UC_SHORT}-${FW_SHORT}"
+              # IAM Role
+              aws iam get-role --role-name "AgentCoreRuntime-${RES_PREFIX}-${REGION_SUFFIX}" 2>/dev/null && \
+                terraform import -input=false aws_iam_role.agentcore_runtime "AgentCoreRuntime-${RES_PREFIX}-${REGION_SUFFIX}" 2>/dev/null || true
+              # IAM Policies
+              ACCT_ID=$(aws sts get-caller-identity --query Account --output text)
+              aws iam get-policy --policy-arn "arn:aws:iam::${ACCT_ID}:policy/${RES_PREFIX}-agentcore-xray-${REGION_SUFFIX}" 2>/dev/null && \
+                terraform import -input=false aws_iam_policy.agentcore_xray "arn:aws:iam::${ACCT_ID}:policy/${RES_PREFIX}-agentcore-xray-${REGION_SUFFIX}" 2>/dev/null || true
+              aws iam get-policy --policy-arn "arn:aws:iam::${ACCT_ID}:policy/${RES_PREFIX}-agentcore-ecr-${REGION_SUFFIX}" 2>/dev/null && \
+                terraform import -input=false aws_iam_policy.agentcore_ecr "arn:aws:iam::${ACCT_ID}:policy/${RES_PREFIX}-agentcore-ecr-${REGION_SUFFIX}" 2>/dev/null || true
+              aws iam get-policy --policy-arn "arn:aws:iam::${ACCT_ID}:policy/${RES_PREFIX}-agentcore-code-access-${REGION_SUFFIX}" 2>/dev/null && \
+                terraform import -input=false aws_iam_policy.agentcore_code_access "arn:aws:iam::${ACCT_ID}:policy/${RES_PREFIX}-agentcore-code-access-${REGION_SUFFIX}" 2>/dev/null || true
+              # ECR Repository
+              aws ecr describe-repositories --repository-names "${RES_PREFIX}-agentcore-${REGION_SUFFIX}" 2>/dev/null && \
+                terraform import -input=false aws_ecr_repository.agentcore "${RES_PREFIX}-agentcore-${REGION_SUFFIX}" 2>/dev/null || true
+              # S3 Code Bucket
+              UC_S3=$(echo "$UC_SHORT" | tr '_' '-')
+              FW_S3=$(echo "$FW_SHORT" | tr '_' '-')
+              CODE_BUCKET="agentcore-code-${UC_S3}-${FW_S3}-${REGION_SUFFIX}-${ACCT_ID}"
+              aws s3api head-bucket --bucket "$CODE_BUCKET" 2>/dev/null && \
+                terraform import -input=false aws_s3_bucket.agentcore_code "$CODE_BUCKET" 2>/dev/null || true
+              terraform plan -input=false -out=tfplan
+              terraform apply -input=false -auto-approve tfplan
+              terraform output -json > /tmp/infra_outputs.json 2>/dev/null || echo '{}' > /tmp/infra_outputs.json
+              # Download infra state locally so runtime's terraform_remote_state "local" backend works
+              aws s3 cp "s3://$STATE_BUCKET/foundry/${USE_CASE_ID}/${FRAMEWORK}/infra/terraform.tfstate" \
+                /tmp/workspace/infra/terraform.tfstate
+              # === Stage 2: Docker Build + Push ===
+              ECR_REPO=$(cd /tmp/workspace/infra && terraform output -raw agentcore_ecr_repository 2>/dev/null | grep -E '^[0-9]+\.dkr\.ecr\.' || true)
+              if [ -n "$ECR_REPO" ] && [ -f /tmp/workspace/docker/Dockerfile.agentcore ]; then
+                echo "=== Stage 2: Docker Build + Push ==="
+                ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                aws ecr get-login-password --region $AWS_TARGET_REGION | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_TARGET_REGION}.amazonaws.com
+                IMAGE_TAG="${FRAMEWORK}-latest"
+                docker build \
+                  --build-arg USE_CASE_ID="$USE_CASE_ID" \
+                  --build-arg FRAMEWORK="$FRAMEWORK" \
+                  -t "${ECR_REPO}:${IMAGE_TAG}" \
+                  -f /tmp/workspace/docker/Dockerfile.agentcore \
+                  /tmp/workspace || { echo "ERROR: Docker build failed"; exit 1; }
+                docker push "${ECR_REPO}:${IMAGE_TAG}" || { echo "ERROR: Docker push failed"; exit 1; }
+                echo "Image pushed: ${ECR_REPO}:${IMAGE_TAG}"
+              else
+                echo "Skipping Docker build (no Dockerfile or ECR repo)"
+              fi
+              echo "=== Stage 3: Runtime ==="
+              cd /tmp/workspace/runtime
+              # Import pre-existing runtime CloudFormation stack
+              RT_STACK="ava-${USE_CASE_CFN}-$(echo $FW_SHORT | tr '_' '-')-agentcore-runtime-${REGION_SUFFIX}"
+              RT_STATUS=$(aws cloudformation describe-stacks --stack-name "$RT_STACK" --query 'Stacks[0].StackStatus' --output text --region $AWS_TARGET_REGION 2>/dev/null || true)
+              if [ "$RT_STATUS" = "ROLLBACK_COMPLETE" ]; then
+                echo "Deleting ROLLBACK_COMPLETE stack: $RT_STACK"
+                aws cloudformation delete-stack --stack-name "$RT_STACK" --region $AWS_TARGET_REGION
+                aws cloudformation wait stack-delete-complete --stack-name "$RT_STACK" --region $AWS_TARGET_REGION 2>/dev/null || true
+              fi
+              terraform init -input=false \
+                -backend-config="bucket=$STATE_BUCKET" \
+                -backend-config="key=foundry/${USE_CASE_ID}/${FRAMEWORK}/runtime/terraform.tfstate" \
+                -backend-config="region=$AWS_TARGET_REGION" \
+                -backend-config="dynamodb_table=$LOCK_TABLE"
+              # Import existing CloudFormation stack if it exists and is healthy
+              if echo "$RT_STATUS" | grep -qE "CREATE_COMPLETE|UPDATE_COMPLETE"; then
+                echo "Importing existing runtime stack: $RT_STACK"
+                terraform import -input=false aws_cloudformation_stack.agentcore_runtime "$RT_STACK" 2>/dev/null || true
+              fi
+              terraform plan -input=false -out=tfplan
+              terraform apply -input=false -auto-approve tfplan || { echo "ERROR: Runtime terraform apply failed"; exit 1; }
+              terraform output -json > /tmp/runtime_outputs.json 2>/dev/null || echo '{}' > /tmp/runtime_outputs.json
+              # === Stage 4: UI (conditional — only if ui/ directory was packaged) ===
+              if [ -d "/tmp/workspace/ui_iac" ] && [ -d "/tmp/workspace/ui" ]; then
+                UI_USE_CASE=$(find /tmp/workspace/ui/ -maxdepth 2 -name "package.json" -printf '%h\n' 2>/dev/null | head -1 | xargs -r basename)
+                if [ -n "$UI_USE_CASE" ]; then
+                  echo "=== Stage 4: UI Deployment for $UI_USE_CASE ==="
+                  RUNTIME_ARN=$(cd /tmp/workspace/runtime && terraform output -raw agentcore_runtime_arn 2>/dev/null || true)
+                  if [ -n "$RUNTIME_ARN" ]; then
+                    # Inject S3 backend config
+                    if ! grep -rq 'backend "s3"' /tmp/workspace/ui_iac/*.tf 2>/dev/null; then
+                      printf 'terraform {\n  backend "s3" {}\n}\n' > /tmp/workspace/ui_iac/backend_override.tf
+                    fi
+                    cat > /tmp/workspace/ui_iac/deploy.auto.tfvars << TFVARS
+        aws_region           = "$AWS_TARGET_REGION"
+        use_case_id          = "${USE_CASE_ID:-unknown}"
+        use_case_name        = "${USE_CASE_ID:-unknown}"
+        framework            = "${FRAMEWORK:-strands}"
+        agentcore_runtime_arn = "$RUNTIME_ARN"
+        TFVARS
+                    cd /tmp/workspace/ui_iac
+                    terraform init -input=false \
+                      -backend-config="bucket=$STATE_BUCKET" \
+                      -backend-config="key=foundry/${USE_CASE_ID}/${FRAMEWORK}/ui/terraform.tfstate" \
+                      -backend-config="region=$AWS_TARGET_REGION" \
+                      -backend-config="dynamodb_table=$LOCK_TABLE"
+                    # Import pre-existing UI resources to avoid AlreadyExists errors
+                    USE_CASE_CFN=$(echo "${USE_CASE_ID:-unknown}" | tr '_' '-')
+                    REGION_SUFFIX=$(echo "$AWS_TARGET_REGION" | tr -d '-')
+                    FW_SHORT="lg"; [ "$FRAMEWORK" = "strands" ] && FW_SHORT="st"
+                    UI_PREFIX="ava-${USE_CASE_CFN}-ui"
+                    UI_BUCKET_NAME="ava-${USE_CASE_CFN}-${FW_SHORT}-ui-${REGION_SUFFIX}-$(aws sts get-caller-identity --query Account --output text)"
+                    aws s3api head-bucket --bucket "$UI_BUCKET_NAME" 2>/dev/null && \
+                      terraform import -input=false aws_s3_bucket.ui "$UI_BUCKET_NAME" 2>/dev/null || true
+                    aws iam get-role --role-name "${UI_PREFIX}-proxy-role-${REGION_SUFFIX}" 2>/dev/null && \
+                      terraform import -input=false aws_iam_role.proxy_role "${UI_PREFIX}-proxy-role-${REGION_SUFFIX}" 2>/dev/null || true
+                    aws iam get-role --role-name "${UI_PREFIX}-worker-role-${REGION_SUFFIX}" 2>/dev/null && \
+                      terraform import -input=false aws_iam_role.worker_role "${UI_PREFIX}-worker-role-${REGION_SUFFIX}" 2>/dev/null || true
+                    aws cloudfront list-functions --query "FunctionList.Items[?Name=='${UI_PREFIX}-spa-rw-${REGION_SUFFIX}'].Name" --output text 2>/dev/null | grep -q . && \
+                      terraform import -input=false aws_cloudfront_function.spa_rewrite "${UI_PREFIX}-spa-rw-${REGION_SUFFIX}" 2>/dev/null || true
+                    aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='${UI_PREFIX}-s3-oac'].Id" --output text 2>/dev/null | grep -v None | while read -r OAC_ID; do
+                      [ -n "$OAC_ID" ] && terraform import -input=false aws_cloudfront_origin_access_control.s3_oac "$OAC_ID" 2>/dev/null || true
+                    done
+                    terraform plan -input=false -out=tfplan
+                    terraform apply -input=false -auto-approve tfplan || { echo "WARNING: UI terraform apply failed"; }
+                    terraform output -json > /tmp/ui_outputs.json 2>/dev/null || echo '{}' > /tmp/ui_outputs.json
+                    # Build React app and deploy to S3
+                    UI_BUCKET=$(terraform output -raw ui_bucket_name 2>/dev/null || true)
+                    CF_DIST_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || true)
+                    API_ENDPOINT=$(terraform output -raw api_endpoint 2>/dev/null || true)
+                    if [ -n "$UI_BUCKET" ]; then
+                      # Ensure Node 22+ for Vite 8 / React build
+                      NODE_VER=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
+                      if [ -z "$NODE_VER" ] || [ "$NODE_VER" -lt 22 ]; then
+                        echo "Upgrading Node.js (current: $(node --version 2>/dev/null || echo none))..."
+                        curl -fsSL https://nodejs.org/dist/v22.15.0/node-v22.15.0-linux-arm64.tar.xz | tar -xJ -C /usr/local --strip-components=1
+                        echo "Node.js: $(node --version)"
+                      fi
+                      cd /tmp/workspace/ui/$UI_USE_CASE
+                      npm install --legacy-peer-deps
+                      # Inject runtime config with API endpoint
+                      if [ -n "$API_ENDPOINT" ]; then
+                        cat public/runtime-config.json | jq --arg api "$API_ENDPOINT" '.api_endpoint = $api' > /tmp/rc.json && mv /tmp/rc.json public/runtime-config.json
+                      fi
+                      npm run build || { echo "ERROR: UI build failed"; exit 1; }
+                      if [ ! -f dist/index.html ]; then echo "ERROR: Build produced no output"; exit 1; fi
+                      aws s3 sync dist/ s3://$UI_BUCKET/ --delete --region $AWS_TARGET_REGION
+                      if [ -n "$CF_DIST_ID" ]; then
+                        aws cloudfront create-invalidation --distribution-id $CF_DIST_ID --paths "/*" --region $AWS_TARGET_REGION || true
+                      fi
+                      echo "UI deployed to s3://$UI_BUCKET"
+                    fi
+                  else
+                    echo "Skipping UI — no runtime ARN available"
+                    echo '{}' > /tmp/ui_outputs.json
+                  fi
+                fi
+              else
+                echo "No UI directory found — skipping UI deployment"
+                echo '{}' > /tmp/ui_outputs.json
+              fi
+              python3 /tmp/merge_outputs.py /tmp/infra_outputs.json /tmp/runtime_outputs.json /tmp/ui_outputs.json
+            else
+              TF_DIR=$(find /tmp/workspace -name "*.tf" -printf '%h\n' | sort -u | head -1)
+              if [ -z "$TF_DIR" ]; then echo "ERROR: No terraform files found"; exit 1; fi
+              echo "Running terraform in $TF_DIR"
+              cd "$TF_DIR"
+              # Inject S3 backend config if not already present
+              if ! grep -rq 'backend "s3"' *.tf 2>/dev/null; then
+                printf 'terraform {\n  backend "s3" {}\n}\n' > backend_override.tf
+              fi
+              terraform init -input=false \
+                -backend-config="bucket=$STATE_BUCKET" \
+                -backend-config="key=deployments/$DEPLOYMENT_ID/terraform.tfstate" \
+                -backend-config="region=$AWS_TARGET_REGION" \
+                -backend-config="dynamodb_table=$LOCK_TABLE"
+              terraform plan -input=false -out=tfplan
+              terraform apply -input=false -auto-approve tfplan
+              terraform output -json > /tmp/tf_outputs.json 2>/dev/null || echo '{}' > /tmp/tf_outputs.json
+              python3 /tmp/merge_outputs.py /tmp/tf_outputs.json
+            fi
+            ;;
+          cdk)
+            CDK_DIR=$(find /tmp/workspace -name "cdk.json" -printf '%h\n' | head -1)
+            if [ -z "$CDK_DIR" ]; then echo "ERROR: No cdk.json found"; exit 1; fi
+            echo "Running CDK in $CDK_DIR"
+            cd "$CDK_DIR"
+            npm install
+            cdk deploy --all --require-approval never \
+              --context deploymentId=$DEPLOYMENT_ID \
+              --context projectName=$DEPLOYMENT_NAME \
+              --outputs-file /tmp/cdk_outputs.json 2>&1 || true
+            python3 /tmp/merge_outputs.py /tmp/cdk_outputs.json
+            ;;
+          cloudformation)
+            CFN_TEMPLATE=$(find /tmp/workspace -name "template.yaml" -o -name "template.json" | head -1)
+            if [ -z "$CFN_TEMPLATE" ]; then echo "ERROR: No CloudFormation template found"; exit 1; fi
+            STACK_NAME="ava-${DEPLOYMENT_NAME}-${DEPLOYMENT_ID}"
+            STACK_NAME=$(echo "$STACK_NAME" | cut -c1-128 | sed 's/[^a-zA-Z0-9-]/-/g')
+            echo "Deploying CloudFormation stack $STACK_NAME"
+            aws cloudformation deploy \
+              --template-file "$CFN_TEMPLATE" \
+              --stack-name "$STACK_NAME" \
+              --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+              --parameter-overrides ProjectName=$DEPLOYMENT_NAME \
+              --region $AWS_TARGET_REGION \
+              --no-fail-on-empty-changeset 2>&1 || true
+            aws cloudformation describe-stacks \
+              --stack-name "$STACK_NAME" \
+              --region $AWS_TARGET_REGION \
+              --query 'Stacks[0].Outputs' --output json > /tmp/cfn_outputs.json 2>/dev/null || echo '[]' > /tmp/cfn_outputs.json
+            python3 /tmp/merge_outputs.py /tmp/cfn_outputs.json
+            ;;
+          *)
+            echo "Unsupported IAC_TYPE: $IAC_TYPE" && exit 1
+            ;;
+        esac
+        fi
+      - aws s3 cp /tmp/outputs.json s3://$STATE_BUCKET/$DEPLOYMENT_ID/outputs.json
+  post_build:
+    commands:
+      - echo "Deployment $DEPLOYMENT_ID completed"
+      - cat /tmp/outputs.json
+      - |
+        python3 -c "
+        import boto3, json, os
+        ddb = boto3.resource('dynamodb', region_name=os.environ['AWS_TARGET_REGION'])
+        table = ddb.Table(os.environ['DEPLOYMENTS_TABLE'])
+        with open('/tmp/outputs.json') as f:
+            outputs = json.load(f)
+        outputs.pop('deployment_id', None)
+        outputs.pop('status', None)
+        if outputs:
+            table.update_item(
+                Key={'pk': f'DEPLOY#{os.environ[\"DEPLOYMENT_ID\"]}', 'sk': 'META'},
+                UpdateExpression='SET outputs = :o',
+                ExpressionAttributeValues={':o': outputs}
+            )
+            print(f'Stored {len(outputs)} outputs to DynamoDB')
+        " || echo "Warning: failed to write outputs to DynamoDB"

@@ -1,0 +1,51 @@
+{
+  "use_case_id": "agentic_commerce",
+  "use_case_name": "Agentic Commerce",
+  "description": "AI-powered offer engines, fulfillment, and product matching for banking products",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "offer_engine",
+      "name": "Offer Engine",
+      "description": "Generates personalized product offers based on customer profile and behavior"
+    },
+    {
+      "id": "fulfillment_agent",
+      "name": "Fulfillment Agent",
+      "description": "Determines optimal fulfillment channel and tracks completion"
+    },
+    {
+      "id": "product_matcher",
+      "name": "Product Matcher",
+      "description": "Matches customer needs to banking products with confidence scoring"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. COM001",
+    "type_field": "commerce_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "offer_only",
+        "label": "Offer Only"
+      },
+      {
+        "value": "fulfillment_only",
+        "label": "Fulfillment Only"
+      },
+      {
+        "value": "matching_only",
+        "label": "Matching Only"
+      }
+    ],
+    "test_entities": [
+      "OFFER001"
+    ]
+  }
+}

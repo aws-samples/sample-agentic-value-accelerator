@@ -1,0 +1,25 @@
+{
+  "entity_id": "TRADE001",
+  "trader_name": "[name]",
+  "desk": "Equity Trading",
+  "asset_classes": ["equities", "equity_options", "etfs"],
+  "strategy_type": "systematic_momentum",
+  "risk_limits": {
+    "max_position_size_pct": 5.0,
+    "max_sector_exposure_pct": 20.0,
+    "daily_var_limit": 500000,
+    "max_drawdown_pct": 10.0
+  },
+  "current_positions": [
+    {"symbol": "AAPL", "quantity": 5000, "avg_price": 185.50, "current_price": 192.30, "pnl": 34000},
+    {"symbol": "SPY", "quantity": -2000, "avg_price": 475.00, "current_price": 472.50, "pnl": 5000},
+    {"symbol": "NVDA", "quantity": 1500, "avg_price": 720.00, "current_price": 745.80, "pnl": 38700}
+  ],
+  "market_data_snapshot": {
+    "timestamp": "2024-01-15T14:30:00Z",
+    "spx_level": 4783.45,
+    "vix_level": 13.2,
+    "ten_year_yield": 4.05,
+    "market_regime": "low_volatility_bullish"
+  }
+}

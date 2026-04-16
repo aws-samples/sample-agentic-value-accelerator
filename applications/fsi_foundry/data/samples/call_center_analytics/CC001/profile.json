@@ -1,0 +1,33 @@
+{
+  "entity_id": "CC001",
+  "name": "Northeast Financial Services Center",
+  "location": "Boston, MA",
+  "total_agents": 150,
+  "operating_hours": {
+    "weekday": "08:00-22:00 EST",
+    "weekend": "09:00-18:00 EST"
+  },
+  "call_volume": {
+    "daily_average": 2500,
+    "peak_hour_average": 350,
+    "monthly_total": 75000
+  },
+  "service_level_agreement": {
+    "target_answer_time_seconds": 30,
+    "target_abandonment_rate": 0.05,
+    "target_first_call_resolution": 0.75,
+    "target_csat": 4.2
+  },
+  "recent_metrics": {
+    "average_handle_time_seconds": 285,
+    "first_call_resolution_rate": 0.72,
+    "customer_satisfaction_score": 4.1,
+    "abandonment_rate": 0.06,
+    "service_level_percentage": 0.82
+  },
+  "agent_roster": [
+    {"agent_id": "AGT001", "name": "Alex Rivera", "team": "general_inquiries", "tenure_months": 24, "performance_rating": 4.5},
+    {"agent_id": "AGT002", "name": "Jordan Chen", "team": "disputes", "tenure_months": 18, "performance_rating": 3.8},
+    {"agent_id": "AGT003", "name": "Morgan Taylor", "team": "products", "tenure_months": 36, "performance_rating": 4.7}
+  ]
+}

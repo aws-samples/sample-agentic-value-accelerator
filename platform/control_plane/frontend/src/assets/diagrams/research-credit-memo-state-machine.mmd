@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: memo_type = full
+    Router --> DataGatherer: memo_type = data_gatherer_only
+    Router --> CreditAnalyst: memo_type = credit_analyst_only
+    Router --> MemoWriter: memo_type = memo_writer_only
+    ParallelAssessment --> Synthesize
+    DataGatherer --> Synthesize
+    CreditAnalyst --> Synthesize
+    MemoWriter --> Synthesize
+    Synthesize --> [*]

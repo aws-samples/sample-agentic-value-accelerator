@@ -1,0 +1,24 @@
+# Multi-Agent Orchestration Dependencies
+
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.9.2
+
+# LangChain and LangGraph
+langchain==0.1.0
+langchain-core==0.1.0
+langgraph==0.0.20
+langchain-openai==0.0.5
+langchain-aws==0.0.1
+
+# AWS
+boto3==1.34.34
+botocore==1.34.34
+
+# Observability
+langfuse==3.14.0
+
+# Utilities
+python-dotenv==1.0.0
+pydantic-settings==2.5.2

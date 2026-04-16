@@ -1,0 +1,42 @@
+{
+  "use_case_id": "payment_operations",
+  "use_case_name": "Payment Operations",
+  "description": "Payment exception handling and settlement operations",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "exception_handler",
+      "name": "Exception Handler",
+      "description": "Analyzes payment exceptions, determines root cause and severity, recommends resolution actions"
+    },
+    {
+      "id": "settlement_agent",
+      "name": "Settlement Agent",
+      "description": "Verifies settlement readiness, reconciles payments, tracks settlement timelines"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Payment / Customer ID",
+    "id_placeholder": "e.g. OPS001",
+    "type_field": "operation_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "exception_only",
+        "label": "Exception Only"
+      },
+      {
+        "value": "settlement_only",
+        "label": "Settlement Only"
+      }
+    ],
+    "test_entities": [
+      "PAY001"
+    ]
+  }
+}

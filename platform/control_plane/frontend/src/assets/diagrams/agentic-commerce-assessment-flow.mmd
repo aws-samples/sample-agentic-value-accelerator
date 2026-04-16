@@ -1,0 +1,18 @@
+flowchart TD
+    A["CommerceRequest\n(entity_id, request_type)"] --> B["Orchestrator\nAgentic Commerce Supervisor"]
+    B -->|"request_type = full"| C["Parallel Execution"]
+    C --> D["Offer Engine Agent"]
+    C --> E["Fulfillment Agent Agent"]
+    C --> F["Product Matcher Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Offer Engine Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Fulfillment Agent Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Product Matcher Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(CommerceResponse)"]
+    H --> I["CommerceResponse\n(offers, fulfillment_plan,
+product_matches)"]

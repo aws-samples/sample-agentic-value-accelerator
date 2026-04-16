@@ -1,0 +1,1 @@
+k8s-langfuse-langfuse-3c54c58fa5-588375705.us-west-2.elb.amazonaws.com

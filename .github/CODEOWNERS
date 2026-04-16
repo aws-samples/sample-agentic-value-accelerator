@@ -1,0 +1,33 @@
+# CODEOWNERS
+#
+# This file defines code ownership for the Agentic Value Accelerator repository.
+# GitHub automatically requests reviews from code owners when PRs affect their files.
+#
+# Syntax: <file-pattern> <owner(s)>
+# @vivibui is the primary owner and must approve all changes
+
+# Default: All files require approval from @vivibui
+* @vivibui
+
+# Critical directories - require explicit approval
+/.github/ @vivibui
+/platform/ @vivibui
+/applications/ @vivibui
+/strategy @vivibui
+
+# Infrastructure code - requires approval
+*.tf @vivibui
+*.tfvars @vivibui
+/infrastructure/ @vivibui
+
+# CI/CD pipelines - requires approval
+/.github/workflows/ @vivibui
+.gitlab-ci.yml @vivibui
+
+# Documentation - requires approval
+README.md @vivibui
+/docs/ @vivibui
+
+# Security and compliance
+SECURITY.md @vivibui
+LICENSE @vivibui

@@ -1,0 +1,243 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+:root {
+  /* Migration Console Palette — dark, terminal green, blue, amber, red */
+  --dark: #0A0A0A;
+  --dark-surface: #171717;
+  --dark-elevated: #1E1E1E;
+  --dark-border: #2A2A2A;
+  --green-term: #22C55E;
+  --green-light: #4ADE80;
+  --green-dim: #16A34A;
+  --blue: #3B82F6;
+  --blue-light: #60A5FA;
+  --amber: #F59E0B;
+  --amber-light: #FBBF24;
+  --red: #EF4444;
+  --red-light: #F87171;
+  --white: #FFFFFF;
+  --white-dim: #E5E5E5;
+
+  --accent: var(--green-term);
+  --accent-light: var(--green-light);
+  --accent-dim: var(--green-dim);
+
+  --bg-primary: var(--dark);
+  --bg-secondary: var(--dark-surface);
+  --bg-card: var(--dark-surface);
+  --bg-card-hover: var(--dark-elevated);
+  --border: var(--dark-border);
+  --border-accent: rgba(34, 197, 94, 0.2);
+  --text-primary: var(--white);
+  --text-secondary: #A3A3A3;
+  --text-muted: #525252;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(34,197,94,0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(34,197,94,0.3); }
+
+/* ============================================
+   ANIMATIONS — Terminal / Developer
+   ============================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+@keyframes progress-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0; transform: scale(0.5); }
+  30% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes terminalScan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; opacity: 0; }
+.animate-fade-in-scale { animation: fadeInScale 0.4s ease-out forwards; opacity: 0; }
+.animate-slide-left { animation: slideInLeft 0.4s ease-out forwards; opacity: 0; }
+.animate-slide-right { animation: slideInRight 0.4s ease-out forwards; opacity: 0; }
+.animate-pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+.animate-spin { animation: spin 1s linear infinite; }
+.animate-blink { animation: blink 1s step-end infinite; }
+
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* ============================================
+   CARDS — Terminal Aesthetic
+   ============================================ */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+.card:hover {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 20px rgba(34,197,94,0.04);
+}
+
+.card-terminal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.card-terminal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,197,94,0.3), transparent);
+}
+
+.card-glow {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+.card-glow:hover {
+  border-color: rgba(34,197,94,0.3);
+  box-shadow: 0 0 30px rgba(34,197,94,0.06);
+}
+
+/* ============================================
+   COMPONENTS
+   ============================================ */
+
+.btn-primary {
+  @apply inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border-0 cursor-pointer transition-all;
+  background: var(--green-term);
+  color: var(--dark);
+  box-shadow: 0 0 20px rgba(34,197,94,0.2);
+}
+.btn-primary:hover {
+  box-shadow: 0 0 30px rgba(34,197,94,0.35);
+  transform: translateY(-1px);
+  background: var(--green-light);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm cursor-pointer transition-all;
+  background: transparent;
+  color: var(--green-term);
+  border: 1px solid rgba(34,197,94,0.3);
+}
+.btn-secondary:hover {
+  background: rgba(34,197,94,0.05);
+  border-color: rgba(34,197,94,0.5);
+}
+
+.input-field {
+  @apply w-full px-4 py-3 rounded-xl text-sm outline-none transition-all;
+  background: var(--dark);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+.input-field::placeholder { color: var(--text-muted); }
+.input-field:focus {
+  border-color: var(--green-term);
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.08);
+}
+
+.label {
+  @apply block text-xs font-semibold uppercase tracking-wider mb-2;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* ============================================
+   SCOPE SELECTION CARDS
+   ============================================ */
+
+.scope-card {
+  @apply relative flex items-center gap-3 p-4 rounded-xl cursor-pointer;
+  background: var(--dark);
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+}
+.scope-card:hover {
+  border-color: rgba(34,197,94,0.2);
+}
+.scope-card.selected {
+  border-color: var(--green-term);
+  background: rgba(34,197,94,0.04);
+  box-shadow: 0 0 0 1px var(--green-term), 0 0 20px rgba(34,197,94,0.06);
+}
+
+/* ============================================
+   TERMINAL PROMPT
+   ============================================ */
+
+.terminal-prompt::before {
+  content: '$ ';
+  color: var(--green-term);
+  font-family: var(--font-mono);
+  font-weight: bold;
+}

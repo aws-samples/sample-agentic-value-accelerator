@@ -1,0 +1,51 @@
+{
+  "use_case_id": "trading_insights",
+  "use_case_name": "Trading Insights",
+  "description": "AI-powered signal generation, cross-asset analysis, and scenario modeling for real-time trading intelligence",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "signal_generator",
+      "name": "Signal Generator",
+      "description": "Scans market data streams, detects technical and fundamental signals, and quantifies signal strength across asset classes in real time"
+    },
+    {
+      "id": "cross_asset_analyst",
+      "name": "Cross Asset Analyst",
+      "description": "Identifies cross-asset correlations, divergences, and arbitrage opportunities spanning equities, fixed income, commodities, and FX"
+    },
+    {
+      "id": "scenario_modeler",
+      "name": "Scenario Modeler",
+      "description": "Constructs probabilistic scenario outcomes using Monte Carlo simulation, stress testing, and macro regime analysis"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. SIG001",
+    "type_field": "assessment_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "signal_generation",
+        "label": "Signal Generation"
+      },
+      {
+        "value": "cross_asset_analysis",
+        "label": "Cross Asset Analysis"
+      },
+      {
+        "value": "scenario_modeling",
+        "label": "Scenario Modeling"
+      }
+    ],
+    "test_entities": [
+      "TRADE001"
+    ]
+  }
+}

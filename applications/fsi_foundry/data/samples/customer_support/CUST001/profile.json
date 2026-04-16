@@ -1,0 +1,17 @@
+{
+  "customer_id": "CUST001",
+  "name": "John Davis",
+  "account_type": "premium_checking",
+  "products": ["checking", "savings", "credit_card"],
+  "contact_info": {
+    "email": "[email]",
+    "phone": "[phone_number]"
+  },
+  "account_status": "active",
+  "member_since": "2019-06-20",
+  "recent_tickets": [
+    {"id": "TKT001", "date": "2024-01-15", "type": "billing", "subject": "Unexpected fee charge", "status": "resolved"},
+    {"id": "TKT002", "date": "2024-01-10", "type": "technical", "subject": "Mobile app login issue", "status": "resolved"},
+    {"id": "TKT003", "date": "2024-01-18", "type": "account", "subject": "Address update request", "status": "open"}
+  ]
+}

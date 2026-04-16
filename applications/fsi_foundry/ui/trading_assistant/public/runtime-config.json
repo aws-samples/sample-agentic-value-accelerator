@@ -1,0 +1,51 @@
+{
+  "use_case_id": "trading_assistant",
+  "use_case_name": "Trading Assistant",
+  "description": "AI-powered market analysis, trade idea generation, and execution planning for institutional trading desks",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "market_analyst",
+      "name": "Market Analyst",
+      "description": "Monitors real-time market conditions, analyzes price action, volatility regimes, and macro catalysts to assess current trading environment"
+    },
+    {
+      "id": "trade_idea_generator",
+      "name": "Trade Idea Generator",
+      "description": "Generates actionable trade ideas with entry/exit levels, risk-reward profiles, and conviction scores based on multi-factor analysis"
+    },
+    {
+      "id": "execution_planner",
+      "name": "Execution Planner",
+      "description": "Designs optimal execution strategies including timing, sizing, venue selection, and slippage minimization for proposed trades"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. TRD001",
+    "type_field": "analysis_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "market_analysis",
+        "label": "Market Analysis"
+      },
+      {
+        "value": "trade_idea",
+        "label": "Trade Idea"
+      },
+      {
+        "value": "execution_plan",
+        "label": "Execution Plan"
+      }
+    ],
+    "test_entities": [
+      "TRADE001"
+    ]
+  }
+}
