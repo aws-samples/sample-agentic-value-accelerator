@@ -27,7 +27,7 @@ pgvector==0.2.4
 sentence-transformers==2.3.1
 
 # Document Processing
-pypdf==4.0.0
+pypdf==6.10.2
 python-docx==1.1.0
 beautifulsoup4==4.12.3
 markdown==3.5.2
