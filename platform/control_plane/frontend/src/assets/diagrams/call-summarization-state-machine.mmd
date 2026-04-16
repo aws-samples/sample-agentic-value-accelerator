@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: summary_type = full
+    Router --> KeyPointExtractor: summary_type = key_point_extractor_only
+    Router --> SummaryGenerator: summary_type = summary_generator_only
+    ParallelAssessment --> Synthesize
+    KeyPointExtractor --> Synthesize
+    SummaryGenerator --> Synthesize
+    Synthesize --> [*]

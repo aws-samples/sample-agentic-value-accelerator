@@ -1,0 +1,13 @@
+{
+  "document_id": "DOC001",
+  "title": "Anti-Money Laundering Policy",
+  "document_type": "policy",
+  "category": "compliance",
+  "content_summary": "Comprehensive AML policy covering customer due diligence, transaction monitoring, suspicious activity reporting, and regulatory compliance requirements for all banking operations.",
+  "tags": ["aml", "compliance", "kyc", "regulatory", "bsa"],
+  "effective_date": "2024-01-01",
+  "status": "active",
+  "version": "3.2",
+  "department": "Compliance",
+  "last_reviewed": "2024-06-15"
+}

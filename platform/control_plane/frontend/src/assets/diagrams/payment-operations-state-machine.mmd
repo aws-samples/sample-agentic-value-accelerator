@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: operation_type = full
+    Router --> ExceptionHandler: operation_type = exception_handler_only
+    Router --> SettlementAgent: operation_type = settlement_agent_only
+    ParallelAssessment --> Synthesize
+    ExceptionHandler --> Synthesize
+    SettlementAgent --> Synthesize
+    Synthesize --> [*]

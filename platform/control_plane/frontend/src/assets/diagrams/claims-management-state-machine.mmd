@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: claim_type = full
+    Router --> ClaimsIntakeAgent: claim_type = claims_intake_agent_only
+    Router --> DamageAssessor: claim_type = damage_assessor_only
+    Router --> SettlementRecommender: claim_type = settlement_recommender_only
+    ParallelAssessment --> Synthesize
+    ClaimsIntakeAgent --> Synthesize
+    DamageAssessor --> Synthesize
+    SettlementRecommender --> Synthesize
+    Synthesize --> [*]

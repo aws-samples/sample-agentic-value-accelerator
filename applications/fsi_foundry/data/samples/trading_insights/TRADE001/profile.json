@@ -1,0 +1,33 @@
+{
+  "entity_id": "TRADE001",
+  "portfolio_name": "Global Macro Opportunities Fund",
+  "asset_class": "Multi-Asset",
+  "market": "Global",
+  "strategy": "macro_relative_value",
+  "positions_summary": {
+    "total_positions": 45,
+    "long_positions": 28,
+    "short_positions": 17,
+    "gross_exposure_pct": 185.0,
+    "net_exposure_pct": 32.0,
+    "asset_allocation": {
+      "equities": 40.0,
+      "fixed_income": 30.0,
+      "commodities": 15.0,
+      "fx": 15.0
+    }
+  },
+  "risk_metrics": {
+    "portfolio_var_95": -2.3,
+    "portfolio_cvar_99": -4.1,
+    "sharpe_ratio": 1.45,
+    "max_drawdown_pct": -8.7,
+    "beta_to_spx": 0.35,
+    "correlation_to_benchmark": 0.42
+  },
+  "signal_history": [
+    {"date": "2024-12-15", "signal": "buy", "asset": "US_10Y_FUTURES", "confidence": 0.82, "status": "active"},
+    {"date": "2024-12-10", "signal": "sell", "asset": "EUR/USD", "confidence": 0.71, "status": "closed"},
+    {"date": "2024-12-01", "signal": "buy", "asset": "GOLD_FUTURES", "confidence": 0.88, "status": "active"}
+  ]
+}

@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: monitoring_type = full
+    Router --> TradePatternAnalyst: monitoring_type = trade_pattern_analyst_only
+    Router --> CommunicationMonitor: monitoring_type = communication_monitor_only
+    Router --> SurveillanceAlertGenerator: monitoring_type = surveillance_alert_generator_only
+    ParallelAssessment --> Synthesize
+    TradePatternAnalyst --> Synthesize
+    CommunicationMonitor --> Synthesize
+    SurveillanceAlertGenerator --> Synthesize
+    Synthesize --> [*]

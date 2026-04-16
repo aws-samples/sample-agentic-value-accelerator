@@ -1,0 +1,42 @@
+{
+  "use_case_id": "call_summarization",
+  "use_case_name": "Call Summarization Agent",
+  "description": "AI-powered call summarization that extracts key points, generates executive summaries, and identifies action items from customer calls",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "key_point_extractor",
+      "name": "Key Point Extractor",
+      "description": "Extracts key discussion points, call outcomes, and topics from call transcripts"
+    },
+    {
+      "id": "summary_generator",
+      "name": "Summary Generator",
+      "description": "Generates executive summaries, identifies action items, and assesses customer sentiment"
+    }
+  ],
+  "api_endpoint": "https://placeholder.cloudfront.net/api/invoke",
+  "input_schema": {
+    "id_field": "call_id",
+    "id_label": "Call ID",
+    "id_placeholder": "e.g. SUM001",
+    "type_field": "summarization_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "key_points_only",
+        "label": "Key Points Only"
+      },
+      {
+        "value": "summary_only",
+        "label": "Summary Only"
+      }
+    ],
+    "test_entities": [
+      "CALL001"
+    ]
+  }
+}

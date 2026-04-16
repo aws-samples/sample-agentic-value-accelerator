@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: investigation_type = full
+    Router --> EvidenceGatherer: investigation_type = evidence_gatherer_only
+    Router --> PatternMatcher: investigation_type = pattern_matcher_only
+    Router --> RegulatoryMapper: investigation_type = regulatory_mapper_only
+    ParallelAssessment --> Synthesize
+    EvidenceGatherer --> Synthesize
+    PatternMatcher --> Synthesize
+    RegulatoryMapper --> Synthesize
+    Synthesize --> [*]

@@ -1,0 +1,51 @@
+{
+  "use_case_id": "legacy_migration",
+  "use_case_name": "Legacy Migration Agent",
+  "description": "AI-powered legacy code migration that analyzes codebases, plans migration strategies, and converts code to modern frameworks",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "code_analyzer",
+      "name": "Code Analyzer",
+      "description": "Analyzes legacy codebases to detect languages, dependencies, patterns, and risks"
+    },
+    {
+      "id": "migration_planner",
+      "name": "Migration Planner",
+      "description": "Creates phased migration plans with effort estimates, risk assessments, and rollback strategies"
+    },
+    {
+      "id": "conversion_agent",
+      "name": "Conversion Agent",
+      "description": "Converts legacy code to modern frameworks with confidence scoring and manual review flags"
+    }
+  ],
+  "api_endpoint": "https://placeholder.cloudfront.net/api/invoke",
+  "input_schema": {
+    "id_field": "project_id",
+    "id_label": "Project ID",
+    "id_placeholder": "e.g. MIG001",
+    "type_field": "migration_scope",
+    "type_options": [
+      {
+        "value": "FULL",
+        "label": "Full Migration"
+      },
+      {
+        "value": "CODE_ANALYSIS",
+        "label": "Code Analysis Only"
+      },
+      {
+        "value": "PLANNING",
+        "label": "Planning Only"
+      },
+      {
+        "value": "CONVERSION",
+        "label": "Conversion Only"
+      }
+    ],
+    "test_entities": [
+      "PROJ001"
+    ]
+  }
+}

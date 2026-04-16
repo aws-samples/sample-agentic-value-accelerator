@@ -1,0 +1,42 @@
+{
+  "id": "foundation-stack",
+  "name": "Foundation Stack",
+  "description": "Combined foundation template providing networking (VPC, subnets, security groups) and observability (Langfuse, OpenTelemetry). Deploy once per account/region, consumed by all use case templates.",
+  "version": "1.0.0",
+  "pattern_type": "single_agent",
+  "type": "foundation",
+  "frameworks": [
+    {"id": "infrastructure", "name": "Infrastructure Only", "path": "src/infrastructure", "description": "No agent framework — infrastructure only"}
+  ],
+  "deployment_patterns": [
+    {"id": "terraform", "name": "Langfuse on ECS", "description": "ECS Fargate with managed Aurora PostgreSQL, ElastiCache Redis, and ClickHouse", "path": "iac/terraform"},
+    {"id": "terraform_eks", "name": "Langfuse on EKS (coming soon)", "description": "EKS with managed Aurora PostgreSQL, ElastiCache Redis, and ClickHouse via Helm", "path": "iac/terraform_eks", "disabled": true},
+    {"id": "terraform_eks_pods", "name": "Langfuse on EKS — all pods (coming soon)", "description": "EKS with all backing services as in-cluster pods (PostgreSQL, Redis, ClickHouse, MinIO)", "path": "iac/terraform_eks_pods", "disabled": true}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "foundation"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1"},
+    {"name": "vpc_cidr", "type": "string", "description": "VPC CIDR block", "required": false, "default": "10.0.0.0/16"},
+    {"name": "environment", "type": "string", "description": "Deployment environment (dev, staging, prod)", "required": false, "default": "dev"},
+    {"name": "langfuse_admin_email", "type": "string", "description": "Langfuse admin email", "required": true, "input_type": "email"},
+    {"name": "langfuse_admin_password", "type": "string", "description": "Langfuse admin password", "required": true, "input_type": "password"},
+    {"name": "existing_vpc_id", "type": "string", "description": "Existing VPC ID to reuse (leave empty to create new)", "required": false, "default": ""}
+  ],
+  "outputs": {
+    "vpc_id": "VPC identifier",
+    "private_subnet_ids": "Comma-separated private subnet IDs",
+    "security_group_id": "Default security group ID",
+    "langfuse_host": "Langfuse server URL",
+    "langfuse_secret_name": "Secrets Manager secret name containing Langfuse API keys",
+    "otel_collector_endpoint": "OpenTelemetry collector endpoint"
+  },
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "foundation_onboarding_request", "outgoing_event": "foundation_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "foundation_offboarding_request", "outgoing_event": "foundation_offboarding_success"}
+  ],
+  "dependencies": [],
+  "example_use_cases": ["Shared VPC for all agent deployments", "Network isolation for FSI workloads", "Agent tracing and monitoring", "LLM call observability", "Cost tracking across agents"],
+  "tags": ["foundation", "networking", "vpc", "security-groups", "observability", "langfuse", "opentelemetry", "tracing"],
+  "author": "FSI Agent Kit Team",
+  "license": "Apache-2.0"
+}

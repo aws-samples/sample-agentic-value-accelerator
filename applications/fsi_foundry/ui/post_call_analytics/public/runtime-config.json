@@ -1,0 +1,51 @@
+{
+  "use_case_id": "post_call_analytics",
+  "use_case_name": "Post Call Analytics",
+  "description": "Transcription processing, sentiment analysis, and action extraction for post-call analysis",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "transcription_processor",
+      "name": "Transcription Processor",
+      "description": "Specialized AI agent: Transcription Processor"
+    },
+    {
+      "id": "sentiment_analyst",
+      "name": "Sentiment Analyst",
+      "description": "Specialized AI agent: Sentiment Analyst"
+    },
+    {
+      "id": "action_extractor",
+      "name": "Action Extractor",
+      "description": "Specialized AI agent: Action Extractor"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "call_id",
+    "id_label": "Call ID",
+    "id_placeholder": "e.g. CALL001",
+    "type_field": "analysis_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "transcription",
+        "label": "Transcription"
+      },
+      {
+        "value": "sentiment",
+        "label": "Sentiment"
+      },
+      {
+        "value": "action_extraction",
+        "label": "Action Extraction"
+      }
+    ],
+    "test_entities": [
+      "CALL001"
+    ]
+  }
+}

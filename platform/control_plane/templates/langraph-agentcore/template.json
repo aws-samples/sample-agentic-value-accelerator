@@ -1,0 +1,124 @@
+{
+  "id": "langraph-agentcore",
+  "name": "LangGraph Agent on AgentCore",
+  "description": "A single agent application built with LangGraph framework, deployed on AWS Bedrock AgentCore. Includes complete infrastructure setup, observability with Langfuse, and a simple example agent to get started.",
+  "version": "1.0.0",
+  "pattern_type": "single_agent",
+  "frameworks": [
+    {
+      "id": "langraph",
+      "name": "LangChain + LangGraph",
+      "path": "src/langraph",
+      "description": "LangGraph framework for building stateful, multi-actor agents"
+    }
+  ],
+  "deployment_patterns": [
+    {
+      "id": "terraform",
+      "name": "Terraform",
+      "description": "Infrastructure as Code using Terraform",
+      "path": "iac/terraform"
+    },
+    {
+      "id": "cdk",
+      "name": "AWS CDK",
+      "description": "Infrastructure as Code using AWS CDK (Python)",
+      "path": "iac/cdk"
+    },
+    {
+      "id": "cloudformation",
+      "name": "CloudFormation",
+      "description": "Infrastructure as Code using AWS CloudFormation",
+      "path": "iac/cloudformation"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "Name of your project (lowercase, alphanumeric, hyphens only)",
+      "required": true,
+      "pattern": "^[a-z][a-z0-9-]{2,49}$"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "description": "AWS region for deployment",
+      "required": false,
+      "default": "us-east-1",
+      "enum": [
+        "us-east-1",
+        "us-east-2",
+        "us-west-1",
+        "us-west-2",
+        "eu-west-1",
+        "eu-central-1",
+        "ap-southeast-1",
+        "ap-northeast-1"
+      ]
+    },
+    {
+      "name": "langfuse_host",
+      "type": "string",
+      "description": "Langfuse server endpoint URL",
+      "required": false,
+      "default": "https://cloud.langfuse.com"
+    },
+    {
+      "name": "langfuse_secret_name",
+      "type": "string",
+      "description": "Secrets Manager secret name for Langfuse API keys",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "llm_model",
+      "type": "string",
+      "description": "LLM model for the agent",
+      "required": false,
+      "default": "anthropic.claude-sonnet-4-20250514-v1:0",
+      "enum": [
+        "anthropic.claude-sonnet-4-20250514-v1:0",
+        "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "anthropic.claude-3-haiku-20240307-v1:0",
+        "amazon.nova-pro-v1:0",
+        "amazon.nova-lite-v1:0"
+      ]
+    }
+  ],
+  "example_use_cases": [
+    "Simple conversational agents",
+    "Single-purpose assistants",
+    "Quick prototypes and demos",
+    "Foundation for more complex agents"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": [
+    "langraph",
+    "agentcore",
+    "single-agent",
+    "starter",
+    "bedrock"
+  ],
+  "type": "usecase",
+  "outputs": {
+    "agent_endpoint": "AgentCore agent invocation endpoint",
+    "runtime_id": "AgentCore runtime identifier"
+  },
+  "jobs": [
+    {
+      "name": "onboarding",
+      "incoming_event": "langraph_agentcore_onboarding_request",
+      "outgoing_event": "langraph_agentcore_onboarding_success"
+    },
+    {
+      "name": "offboarding",
+      "incoming_event": "langraph_agentcore_offboarding_request",
+      "outgoing_event": "langraph_agentcore_offboarding_success"
+    }
+  ],
+  "dependencies": [
+    "foundation-stack"
+  ]
+}

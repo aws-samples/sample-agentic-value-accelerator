@@ -1,0 +1,55 @@
+{
+  "use_case_id": "agentic_payments",
+  "use_case_name": "Agentic Payments",
+  "description": "AI-powered payment validation, routing, and reconciliation",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "payment_validator",
+      "name": "Payment Validator",
+      "description": "Validates payment requests against business rules and compliance"
+    },
+    {
+      "id": "routing_agent",
+      "name": "Routing Agent",
+      "description": "Determines optimal payment rails and routing paths"
+    },
+    {
+      "id": "reconciliation_agent",
+      "name": "Reconciliation Agent",
+      "description": "Matches and reconciles payments across systems"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "payment_id",
+    "id_label": "Payment ID",
+    "id_placeholder": "e.g. PMT001",
+    "type_field": "payment_type",
+    "type_options": [
+      {
+        "value": "wire",
+        "label": "Wire"
+      },
+      {
+        "value": "ach",
+        "label": "Ach"
+      },
+      {
+        "value": "real_time",
+        "label": "Real Time"
+      },
+      {
+        "value": "international",
+        "label": "International"
+      },
+      {
+        "value": "domestic",
+        "label": "Domestic"
+      }
+    ],
+    "test_entities": [
+      "PMT001"
+    ]
+  }
+}

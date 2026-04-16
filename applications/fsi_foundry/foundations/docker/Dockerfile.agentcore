@@ -1,0 +1,38 @@
+# AgentCore Dockerfile for control plane pipeline deployments
+# Adapted from foundations/docker/patterns/agentcore.Dockerfile
+# Uses zip-relative paths instead of repo-root paths
+
+ARG USE_CASE_ID=fraud_detection
+ARG FRAMEWORK=strands
+
+FROM public.ecr.aws/docker/library/python:3.11-slim AS base
+ARG USE_CASE_ID
+ARG FRAMEWORK
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+COPY app_src/requirements/requirements.txt ./requirements/
+COPY app_src/requirements/requirements_agentcore.txt ./requirements/
+COPY app_src/requirements/requirements_strands.txt ./requirements/
+
+RUN pip install --no-cache-dir -r requirements/requirements.txt && \
+    pip install --no-cache-dir -r requirements/requirements_agentcore.txt && \
+    pip install --no-cache-dir aws-opentelemetry-distro>=0.10.1
+
+RUN if [ "$FRAMEWORK" = "strands" ]; then \
+        pip install --no-cache-dir -r requirements/requirements_strands.txt; \
+    fi
+
+COPY app_src/ .
+RUN mkdir -p use_cases
+COPY use_cases/${USE_CASE_ID}/src/${FRAMEWORK}/ ./use_cases/${USE_CASE_ID}/
+RUN echo '"""AVA Use Cases."""' > use_cases/__init__.py
+
+ENV DEPLOYMENT_MODE=agentcore USE_CASE_ID=${USE_CASE_ID} FRAMEWORK=${FRAMEWORK}
+RUN useradd -m -u 1000 appuser
+USER appuser
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+CMD ["opentelemetry-instrument", "python", "-m", "main"]

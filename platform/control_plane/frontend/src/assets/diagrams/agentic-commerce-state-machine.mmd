@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: request_type = full
+    Router --> OfferEngine: request_type = offer_engine_only
+    Router --> FulfillmentAgent: request_type = fulfillment_agent_only
+    Router --> ProductMatcher: request_type = product_matcher_only
+    ParallelAssessment --> Synthesize
+    OfferEngine --> Synthesize
+    FulfillmentAgent --> Synthesize
+    ProductMatcher --> Synthesize
+    Synthesize --> [*]

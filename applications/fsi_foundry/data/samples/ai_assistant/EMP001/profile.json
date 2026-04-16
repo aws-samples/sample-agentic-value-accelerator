@@ -1,0 +1,17 @@
+{
+  "employee_id": "EMP001",
+  "name": "John Davis",
+  "department": "Commercial Banking",
+  "role": "Relationship Manager",
+  "access_level": "senior",
+  "preferences": {
+    "report_format": "pdf",
+    "summary_length": "detailed",
+    "notification_channel": "email"
+  },
+  "recent_tasks": [
+    {"id": "TASK001", "date": "2024-01-15", "type": "data_lookup", "subject": "Q4 Portfolio Review", "status": "completed"},
+    {"id": "TASK002", "date": "2024-01-14", "type": "report_generation", "subject": "Client Risk Summary", "status": "completed"},
+    {"id": "TASK003", "date": "2024-01-13", "type": "document_summary", "subject": "Regulatory Update Analysis", "status": "in_progress"}
+  ]
+}

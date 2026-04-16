@@ -1,0 +1,32 @@
+{
+  "id": "observability-stack",
+  "name": "Observability Stack",
+  "description": "Foundation template providing Langfuse observability server and OpenTelemetry collector for agent tracing and monitoring. Deploy once, connect all agent use cases.",
+  "version": "1.0.0",
+  "pattern_type": "single_agent",
+  "type": "foundation",
+  "frameworks": [
+    {"id": "infrastructure", "name": "Infrastructure Only", "path": "src/infrastructure", "description": "No agent framework — infrastructure only"}
+  ],
+  "deployment_patterns": [
+    {"id": "terraform", "name": "Terraform", "description": "Infrastructure as Code using Terraform", "path": "iac/terraform"}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "observability"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1"},
+    {"name": "langfuse_version", "type": "string", "description": "Langfuse server version", "required": false, "default": "latest"}
+  ],
+  "outputs": {
+    "langfuse_endpoint": "Langfuse server URL",
+    "otel_collector_endpoint": "OpenTelemetry collector endpoint"
+  },
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "observability_onboarding_request", "outgoing_event": "observability_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "observability_offboarding_request", "outgoing_event": "observability_offboarding_success"}
+  ],
+  "dependencies": [],
+  "example_use_cases": ["Agent tracing and monitoring", "LLM call observability", "Cost tracking across agents"],
+  "tags": ["foundation", "observability", "langfuse", "opentelemetry", "tracing"],
+  "author": "AVA Team",
+  "license": "Apache-2.0"
+}

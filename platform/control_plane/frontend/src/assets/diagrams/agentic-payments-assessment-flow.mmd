@@ -1,0 +1,18 @@
+flowchart TD
+    A["PaymentRequest\n(entity_id, validation_type)"] --> B["Orchestrator\nAgentic Payments Supervisor"]
+    B -->|"validation_type = full"| C["Parallel Execution"]
+    C --> D["Payment Validator Agent"]
+    C --> E["Routing Agent Agent"]
+    C --> F["Reconciliation Agent Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Payment Validator Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Routing Agent Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Reconciliation Agent Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(PaymentResponse)"]
+    H --> I["PaymentResponse\n(validation_status, routing_path,
+reconciliation_result)"]
