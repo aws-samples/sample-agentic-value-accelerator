@@ -11,9 +11,7 @@ import DeploymentCreate from './components/DeploymentCreate';
 import DeploymentDetail from './components/DeploymentDetail';
 import Documentation from './components/Documentation';
 import FSIFoundryCatalog from './components/FSIFoundryCatalog';
-import ReferenceImplementations from './components/ReferenceImplementations';
 import AppDeployCreate from './components/AppDeployCreate';
-import RefImplDeployCreate from './components/RefImplDeployCreate';
 import Observability from './components/Observability';
 import Guardrails from './components/Guardrails';
 import Policy from './components/Policy';
@@ -48,9 +46,7 @@ function AuthGate() {
         <Route path="/accelerator-guide" element={<Strategy />} />
         <Route path="/strategy" element={<Strategy />} />
         <Route path="/applications/fsi-foundry" element={<FSIFoundryCatalog />} />
-        <Route path="/applications/reference-implementations" element={<ReferenceImplementations />} />
         <Route path="/applications/deploy/:useCaseId" element={<AppDeployCreate />} />
-        <Route path="/applications/reference-implementations/deploy/:implId" element={<RefImplDeployCreate />} />
         <Route path="/applications/templates" element={<TemplateCatalog />} />
         <Route path="/applications/app-factory" element={<AppFactory />} />
         <Route path="/templates" element={<TemplateCatalog />} />
