@@ -1,0 +1,18 @@
+flowchart TD
+    A["AssistantRequest\n(entity_id, task_type)"] --> B["Orchestrator\nBanking AI Assistant Supervisor"]
+    B -->|"task_type = full"| C["Parallel Execution"]
+    C --> D["Task Router Agent"]
+    C --> E["Data Lookup Agent Agent"]
+    C --> F["Report Generator Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Task Router Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Data Lookup Agent Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Report Generator Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(AssistantResponse)"]
+    H --> I["AssistantResponse\n(task_result, data,
+report)"]

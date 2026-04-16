@@ -1,0 +1,44 @@
+# RAG Application Dependencies
+
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.9.2
+
+# LangChain
+langchain==0.1.0
+langchain-core==0.1.0
+langchain-community==0.0.13
+langchain-openai==0.0.5
+langchain-aws==0.0.1
+
+# Vector Stores
+# OpenSearch
+opensearch-py==2.4.2
+
+# Pinecone
+pinecone-client==3.0.0
+
+# PostgreSQL with pgvector
+psycopg2-binary==2.9.9
+pgvector==0.2.4
+
+# Embeddings
+sentence-transformers==2.3.1
+
+# Document Processing
+pypdf==4.0.0
+python-docx==1.1.0
+beautifulsoup4==4.12.3
+markdown==3.5.2
+
+# AWS
+boto3==1.34.34
+botocore==1.34.34
+
+# Observability
+langfuse==3.14.0
+
+# Utilities
+python-dotenv==1.0.0
+pydantic-settings==2.5.2

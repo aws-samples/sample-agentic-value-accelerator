@@ -1,0 +1,25 @@
+{
+  "entity_id": "POLICY001",
+  "name": "Sarah Mitchell",
+  "policy_type": "comprehensive_auto",
+  "coverage": {
+    "auto": {"policy_id": "AUTO-2022-00891", "premium": 1800, "deductible": 500},
+    "home": {"policy_id": "HOME-2021-00342", "premium": 2400, "deductible": 1000}
+  },
+  "status": "active",
+  "tenure_years": 5,
+  "claims_history": [
+    {"claim_id": "CLM-2023-0412", "type": "auto", "amount": 3200, "date": "2023-06-15", "status": "settled"},
+    {"claim_id": "CLM-2024-0089", "type": "auto", "amount": 850, "date": "2024-01-20", "status": "settled"}
+  ],
+  "payment_history": {
+    "on_time_rate": 0.92,
+    "missed_payments": 1,
+    "payment_method": "auto_debit",
+    "last_payment_date": "2024-01-01"
+  },
+  "engagement_score": 0.65,
+  "last_interaction": "2024-01-10",
+  "communication_preferences": ["email", "in_app"],
+  "renewal_date": "2024-06-15"
+}

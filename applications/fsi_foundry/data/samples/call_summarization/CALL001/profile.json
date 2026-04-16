@@ -1,0 +1,20 @@
+{
+  "call_id": "CALL001",
+  "customer_id": "CUST-2024-0891",
+  "agent_id": "AGT-0042",
+  "call_date": "2024-02-15",
+  "call_duration_seconds": 847,
+  "call_type": "inbound",
+  "department": "retail_banking",
+  "reason": "mortgage_inquiry",
+  "transcript": "Agent: Thank you for calling First National Bank, this is Sarah speaking. How can I help you today?\n\nCustomer: Hi Sarah, I'm calling about my mortgage application. I submitted it two weeks ago and haven't heard back.\n\nAgent: I'd be happy to help you with that. Can I have your application reference number?\n\nCustomer: Yes, it's MRT-2024-0567.\n\nAgent: Thank you. Let me pull that up... I can see your application is currently in the underwriting review stage. The delay is due to a pending property appraisal.\n\nCustomer: Oh, I see. When can I expect the appraisal to be completed?\n\nAgent: Typically appraisals take 5-7 business days. Yours was ordered 3 days ago, so you should hear back within the next week. Once the appraisal is complete, the underwriter will finalize the review.\n\nCustomer: That's helpful. I also wanted to ask about the interest rate. I was quoted 6.5% but I've seen rates dropping recently.\n\nAgent: Great question. Your rate is locked at 6.5% for 60 days from your application date. However, if rates drop significantly before closing, we do offer a float-down option. I can have our mortgage specialist reach out to discuss your options.\n\nCustomer: Yes, please do that. Also, I need to update my employment information. I recently got a promotion.\n\nAgent: Congratulations! I'll note that on your file. You'll need to submit an updated employment verification letter. I'll send you an email with the details on what's needed.\n\nCustomer: Perfect. One more thing - what documents do I need for closing?\n\nAgent: For closing, you'll need: government-issued ID, proof of homeowner's insurance, final employment verification, and a cashier's check for closing costs. I'll include a complete checklist in the email.\n\nCustomer: Thank you so much, Sarah. You've been very helpful.\n\nAgent: You're welcome! Is there anything else I can help you with today?\n\nCustomer: No, that's everything. Thank you.\n\nAgent: Thank you for calling First National Bank. Have a great day!",
+  "resolution_status": "resolved",
+  "follow_up_required": true,
+  "follow_up_actions": [
+    "Send employment verification requirements email",
+    "Schedule mortgage specialist callback for rate discussion",
+    "Send closing document checklist"
+  ],
+  "customer_sentiment": "positive",
+  "compliance_flags": []
+}

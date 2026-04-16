@@ -1,0 +1,18 @@
+flowchart TD
+    A["ChatRequest\n(entity_id, intent_type)"] --> B["Orchestrator\nCustomer Facing Chatbot Supervisor"]
+    B -->|"intent_type = full"| C["Parallel Execution"]
+    C --> D["Conversation Manager Agent"]
+    C --> E["Account Agent Agent"]
+    C --> F["Transaction Agent Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Conversation Manager Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Account Agent Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Transaction Agent Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(ChatResponse)"]
+    H --> I["ChatResponse\n(message, actions,
+recommendations)"]

@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: processing_type = full
+    Router --> DocumentClassifier: processing_type = document_classifier_only
+    Router --> DataExtractor: processing_type = data_extractor_only
+    Router --> ValidationAgent: processing_type = validation_agent_only
+    ParallelAssessment --> Synthesize
+    DocumentClassifier --> Synthesize
+    DataExtractor --> Synthesize
+    ValidationAgent --> Synthesize
+    Synthesize --> [*]

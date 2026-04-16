@@ -1,0 +1,33 @@
+{
+  "id": "networking-base",
+  "name": "Networking Base",
+  "description": "Foundation template providing VPC, subnets, and security groups for agent deployments. Deploy once per account/region, consumed by all use case templates.",
+  "version": "1.0.0",
+  "pattern_type": "single_agent",
+  "type": "foundation",
+  "frameworks": [
+    {"id": "infrastructure", "name": "Infrastructure Only", "path": "src/infrastructure", "description": "No agent framework — infrastructure only"}
+  ],
+  "deployment_patterns": [
+    {"id": "terraform", "name": "Terraform", "description": "Infrastructure as Code using Terraform", "path": "iac/terraform"}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "networking"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1"},
+    {"name": "vpc_cidr", "type": "string", "description": "VPC CIDR block", "required": false, "default": "10.0.0.0/16"}
+  ],
+  "outputs": {
+    "vpc_id": "VPC identifier",
+    "private_subnet_ids": "Comma-separated private subnet IDs",
+    "security_group_id": "Default security group ID"
+  },
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "networking_onboarding_request", "outgoing_event": "networking_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "networking_offboarding_request", "outgoing_event": "networking_offboarding_success"}
+  ],
+  "dependencies": [],
+  "example_use_cases": ["Shared VPC for all agent deployments", "Network isolation for FSI workloads"],
+  "tags": ["foundation", "networking", "vpc", "security-groups"],
+  "author": "AVA Team",
+  "license": "Apache-2.0"
+}

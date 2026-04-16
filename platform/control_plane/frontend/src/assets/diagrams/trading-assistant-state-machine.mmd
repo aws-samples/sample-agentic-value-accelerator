@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: analysis_type = full
+    Router --> MarketAnalyst: analysis_type = market_analyst_only
+    Router --> TradeIdeaGenerator: analysis_type = trade_idea_generator_only
+    Router --> ExecutionPlanner: analysis_type = execution_planner_only
+    ParallelAssessment --> Synthesize
+    MarketAnalyst --> Synthesize
+    TradeIdeaGenerator --> Synthesize
+    ExecutionPlanner --> Synthesize
+    Synthesize --> [*]

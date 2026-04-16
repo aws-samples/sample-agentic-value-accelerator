@@ -1,0 +1,24 @@
+{
+  "document_id": "DOC001",
+  "document_type": "loan_application",
+  "title": "Commercial Loan Application - Acme Corp",
+  "jurisdiction": "United States",
+  "submitted_by": "John Smith",
+  "submission_date": "2024-01-15",
+  "document_metadata": {
+    "pages": 12,
+    "format": "pdf",
+    "size_mb": 2.4,
+    "language": "en"
+  },
+  "extracted_fields": {
+    "applicant_name": "Acme Corporation Ltd",
+    "loan_amount": "$5,000,000",
+    "loan_purpose": "Business expansion",
+    "term_years": 5
+  },
+  "validation_history": [
+    {"date": "2024-01-15", "status": "submitted", "reviewer": "auto"},
+    {"date": "2024-01-16", "status": "in_review", "reviewer": "compliance_team"}
+  ]
+}

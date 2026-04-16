@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: migration_type = full
+    Router --> CodeAnalyzer: migration_type = code_analyzer_only
+    Router --> MigrationPlanner: migration_type = migration_planner_only
+    Router --> ConversionAgent: migration_type = conversion_agent_only
+    ParallelAssessment --> Synthesize
+    CodeAnalyzer --> Synthesize
+    MigrationPlanner --> Synthesize
+    ConversionAgent --> Synthesize
+    Synthesize --> [*]

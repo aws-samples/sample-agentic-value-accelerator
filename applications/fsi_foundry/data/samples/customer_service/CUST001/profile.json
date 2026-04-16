@@ -1,0 +1,17 @@
+{
+  "customer_id": "CUST001",
+  "name": "Jane Smith",
+  "account_type": "premium_checking",
+  "products": ["checking", "savings", "credit_card", "mortgage"],
+  "contact_info": {
+    "email": "[email]",
+    "phone": "[phone_number]"
+  },
+  "account_status": "active",
+  "member_since": "2018-03-15",
+  "recent_transactions": [
+    {"id": "TXN001", "date": "2024-01-15", "amount": -250.00, "merchant": "Online Store", "status": "completed"},
+    {"id": "TXN002", "date": "2024-01-14", "amount": 3500.00, "type": "deposit", "status": "completed"},
+    {"id": "TXN003", "date": "2024-01-13", "amount": -89.99, "merchant": "Subscription Service", "status": "disputed"}
+  ]
+}

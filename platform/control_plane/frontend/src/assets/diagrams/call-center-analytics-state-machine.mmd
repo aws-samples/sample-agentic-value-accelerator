@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: analysis_type = full
+    Router --> CallMonitor: analysis_type = call_monitor_only
+    Router --> AgentPerformanceAnalyst: analysis_type = agent_performance_analyst_only
+    Router --> OperationsInsightGenerator: analysis_type = operations_insight_generator_only
+    ParallelAssessment --> Synthesize
+    CallMonitor --> Synthesize
+    AgentPerformanceAnalyst --> Synthesize
+    OperationsInsightGenerator --> Synthesize
+    Synthesize --> [*]

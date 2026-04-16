@@ -1,0 +1,35 @@
+{
+  "entity_id": "PORT001",
+  "portfolio_name": "Global Balanced Growth Fund",
+  "asset_class": "Multi-Asset",
+  "market": "Global",
+  "sector": "Diversified",
+  "holdings": [
+    {"asset": "US Large Cap Equity", "ticker": "SPY", "weight_pct": 35.2, "target_pct": 30.0},
+    {"asset": "International Equity", "ticker": "EFA", "weight_pct": 18.5, "target_pct": 20.0},
+    {"asset": "US Aggregate Bond", "ticker": "AGG", "weight_pct": 22.1, "target_pct": 25.0},
+    {"asset": "High Yield Bond", "ticker": "HYG", "weight_pct": 8.3, "target_pct": 10.0},
+    {"asset": "Real Estate", "ticker": "VNQ", "weight_pct": 6.9, "target_pct": 5.0},
+    {"asset": "Commodities", "ticker": "DJP", "weight_pct": 4.2, "target_pct": 5.0},
+    {"asset": "Cash", "ticker": "BIL", "weight_pct": 4.8, "target_pct": 5.0}
+  ],
+  "target_allocation": {
+    "equities": 50.0,
+    "fixed_income": 35.0,
+    "alternatives": 10.0,
+    "cash": 5.0
+  },
+  "benchmark": {
+    "name": "60/40 Global Balanced Index",
+    "ytd_return_pct": 8.2,
+    "one_year_return_pct": 12.5
+  },
+  "performance_history": {
+    "mtd_return_pct": 1.3,
+    "qtd_return_pct": 3.8,
+    "ytd_return_pct": 9.1,
+    "one_year_return_pct": 13.2,
+    "inception_date": "2019-06-01",
+    "inception_return_pct": 42.7
+  }
+}

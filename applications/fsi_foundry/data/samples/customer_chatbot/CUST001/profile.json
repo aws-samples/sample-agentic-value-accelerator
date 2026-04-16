@@ -1,0 +1,24 @@
+{
+  "customer_id": "CUST001",
+  "name": "Alex Johnson",
+  "account_type": "premium_checking",
+  "accounts": [
+    {"id": "ACC001", "type": "checking", "balance": 5420.50, "currency": "USD"},
+    {"id": "ACC002", "type": "savings", "balance": 12800.00, "currency": "USD"},
+    {"id": "ACC003", "type": "credit_card", "limit": 10000.00, "balance": -1250.75, "currency": "USD"}
+  ],
+  "contact_info": {
+    "email": "<email>",
+    "phone": "<phone_number>"
+  },
+  "preferences": {
+    "language": "en",
+    "notification_channel": "push",
+    "statement_frequency": "monthly"
+  },
+  "recent_transactions": [
+    {"id": "TXN001", "date": "2024-01-15", "amount": -85.50, "merchant": "Grocery Store", "account": "ACC001", "status": "completed"},
+    {"id": "TXN002", "date": "2024-01-14", "amount": -500.00, "type": "transfer", "to_account": "ACC002", "status": "completed"},
+    {"id": "TXN003", "date": "2024-01-13", "amount": -120.00, "merchant": "Utility Company", "type": "bill_payment", "status": "completed"}
+  ]
+}

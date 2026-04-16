@@ -1,0 +1,23 @@
+{
+  "surveillance_id": "SURV-2024-001",
+  "trader_id": "TRD-4521",
+  "trader_name": "Michael Chen",
+  "desk": "Equities",
+  "trades": [
+    {"id": "T001", "symbol": "ACME", "side": "BUY", "quantity": 50000, "price": 45.20, "timestamp": "2024-01-15T09:30:00Z"},
+    {"id": "T002", "symbol": "ACME", "side": "BUY", "quantity": 75000, "price": 45.50, "timestamp": "2024-01-15T10:15:00Z"},
+    {"id": "T003", "symbol": "ACME", "side": "SELL", "quantity": 120000, "price": 48.90, "timestamp": "2024-01-15T14:45:00Z"}
+  ],
+  "communications": [
+    {"type": "chat", "counterparty": "External Broker A", "timestamp": "2024-01-15T09:15:00Z", "summary": "Discussed ACME earnings expectations ahead of announcement"},
+    {"type": "email", "counterparty": "Internal Analyst", "timestamp": "2024-01-15T09:25:00Z", "summary": "Received non-public revenue forecast for ACME Q4"}
+  ],
+  "market_events": [
+    {"symbol": "ACME", "event": "Earnings announcement", "timestamp": "2024-01-15T16:00:00Z", "impact": "Stock rose 8% after-hours"}
+  ],
+  "flags": {
+    "pre_announcement_trading": true,
+    "unusual_volume": true,
+    "communication_with_external": true
+  }
+}

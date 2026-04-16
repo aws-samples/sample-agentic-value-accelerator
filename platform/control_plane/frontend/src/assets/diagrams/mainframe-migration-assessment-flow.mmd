@@ -1,0 +1,18 @@
+flowchart TD
+    A["MainframeRequest\n(entity_id, migration_type)"] --> B["Orchestrator\nMainframe Migration Supervisor"]
+    B -->|"migration_type = full"| C["Parallel Execution"]
+    C --> D["Mainframe Analyzer Agent"]
+    C --> E["Business Rule Extractor Agent"]
+    C --> F["Cloud Code Generator Agent"]
+    D -->|"s3_retriever_tool"| D1["Retrieve: data,\nprofiles, history"]
+    D1 --> D2["Mainframe Analyzer Analysis"]
+    E -->|"s3_retriever_tool"| E1["Retrieve: data,\nprofiles, history"]
+    E1 --> E2["Business Rule Extractor Analysis"]
+    F -->|"s3_retriever_tool"| F1["Retrieve: data,\nprofiles, history"]
+    F1 --> F2["Cloud Code Generator Analysis"]
+    D2 --> G["Synthesis"]
+    E2 --> G["Synthesis"]
+    F2 --> G["Synthesis"]
+    G --> H["Structured Output\n(MainframeResponse)"]
+    H --> I["MainframeResponse\n(mainframe_analysis, business_rules,
+cloud_code)"]

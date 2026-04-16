@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AgentCore Runtime for Financial Risk Assessment (Container-based)'
+
+Parameters:
+  AgentName:
+    Type: String
+    Default: financial_risk_assessment
+    Description: Name of the AgentCore runtime
+  
+  RoleArn:
+    Type: String
+    Description: ARN of the IAM role for AgentCore runtime
+  
+  ECRRepository:
+    Type: String
+    Description: ECR repository URI for container image
+  
+  ImageTag:
+    Type: String
+    Default: latest
+    Description: Container image tag
+  
+  DataBucket:
+    Type: String
+    Description: S3 bucket for customer data
+  
+  BedrockModelId:
+    Type: String
+    Default: us.anthropic.claude-sonnet-4-20250514-v1:0
+    Description: Bedrock model ID
+  
+  UseCaseId:
+    Type: String
+    Description: Use case ID for resource naming (e.g., b01, i03)
+
+  UseCaseName:
+    Type: String
+    Description: Use case name for application configuration (e.g., kyc_banking, customer_engagement)
+
+  Framework:
+    Type: String
+    Default: langchain_langgraph
+    Description: AI agent framework (langchain_langgraph or strands)
+
+  Description:
+    Type: String
+    Default: AVA AgentCore Runtime
+    Description: Description of the AgentCore runtime
+
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name
+
+  AwsRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS region
+
+
+Resources:
+  AgentCoreRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Ref AgentName
+      Description: !Ref Description
+      RoleArn: !Ref RoleArn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Sub '${ECRRepository}:${ImageTag}'
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      EnvironmentVariables:
+        DEPLOYMENT_MODE: agentcore
+        AWS_REGION: !Ref AwsRegion
+        AGENT_FRAMEWORK: !Ref Framework
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        S3_BUCKET_NAME: !Ref DataBucket
+        APP_ENV: !Ref Environment
+        USE_CASE_ID: !Ref UseCaseName
+        AGENT_NAME: !Ref UseCaseName
+        DATA_PREFIX: !Sub "samples/${UseCaseName}"
+      Tags:
+        Name: !Sub '${AgentName}-agentcore_runtime'
+        Environment: !Ref Environment
+
+Outputs:
+  AgentRuntimeId:
+    Description: ID of the AgentCore Runtime
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeId
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeId'
+  
+  AgentRuntimeArn:
+    Description: ARN of the AgentCore Runtime
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeArn
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeArn'
+  
+  AgentRuntimeName:
+    Description: Name of the AgentCore Runtime
+    Value: !Ref AgentName
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeName'

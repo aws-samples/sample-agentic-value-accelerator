@@ -1,0 +1,18 @@
+{
+  "entity_id": "EARN001",
+  "company_name": "TechGrowth Inc",
+  "ticker": "TGRO",
+  "quarter": "Q4",
+  "fiscal_year": 2024,
+  "call_date": "2024-01-25",
+  "sector": "Technology",
+  "key_metrics": {
+    "revenue": "$2.8B",
+    "eps": "$1.45",
+    "gross_margin": "62%",
+    "operating_margin": "28%",
+    "yoy_revenue_growth": "18%"
+  },
+  "prior_quarter_sentiment": "positive",
+  "analyst_consensus_eps": "$1.38"
+}

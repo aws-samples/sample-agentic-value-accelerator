@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: analysis_type = full
+    Router --> TranscriptionProcessor: analysis_type = transcription_processor_only
+    Router --> SentimentAnalyst: analysis_type = sentiment_analyst_only
+    Router --> ActionExtractor: analysis_type = action_extractor_only
+    ParallelAssessment --> Synthesize
+    TranscriptionProcessor --> Synthesize
+    SentimentAnalyst --> Synthesize
+    ActionExtractor --> Synthesize
+    Synthesize --> [*]

@@ -1,0 +1,217 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+/* Scale everything to 90% (14.4px base instead of 16px) */
+html {
+  font-size: 14.4px;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #ffffff;
+  color: #191c1d;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cfd4d6;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ea3a6;
+}
+
+/* ─── Animations ─── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.98) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+@keyframes gradientDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(2%, -1%) scale(1.02); }
+  66% { transform: translate(-1%, 1%) scale(0.98); }
+}
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  10% { transform: scale(1.15); }
+  20% { transform: scale(1); }
+  30% { transform: scale(1.15); }
+  40% { transform: scale(1); }
+}
+
+.animate-heartbeat {
+  animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+
+/* ─── Dot Grid Background ─── */
+.bg-dot-grid {
+  background-image: radial-gradient(circle, #d4d8da 0.8px, transparent 0.8px);
+  background-size: 20px 20px;
+}
+
+/* ─── Glass Effect ─── */
+.glass {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ─── Buttons ─── */
+.btn-primary {
+  @apply inline-flex items-center justify-center px-4 py-2 text-white rounded-lg font-medium text-sm border-0 cursor-pointer transition-all duration-150;
+  background: #2563eb;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-primary:active {
+  transform: translateY(0.5px);
+}
+
+.btn-primary:disabled {
+  @apply opacity-40 cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-lg font-medium text-sm cursor-pointer transition-all duration-150;
+}
+
+.btn-secondary:hover {
+  @apply bg-slate-50 text-slate-800 border-slate-300;
+}
+
+/* ─── Form inputs ─── */
+.input-field {
+  @apply w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-sm outline-none transition-all duration-150;
+}
+
+.input-field::placeholder {
+  @apply text-slate-400;
+}
+
+.input-field:focus {
+  @apply border-blue-400;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.label {
+  @apply block text-sm font-medium text-slate-600 mb-1.5;
+}
+
+/* ─── Cards ─── */
+.card {
+  @apply bg-white rounded-xl border border-slate-200 p-6 transition-all duration-150;
+}
+
+.card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.card-interactive {
+  @apply bg-white rounded-xl border border-slate-200 p-6 transition-all duration-150 cursor-pointer;
+}
+
+.card-interactive:hover {
+  @apply border-slate-300;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+/* Rainbow glow hover for homepage cards */
+.home-card {
+  position: relative;
+  border: 1.5px solid rgba(226, 232, 240, 0.8);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899, #f59e0b, #10b981, #3b82f6);
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  z-index: 0;
+}
+
+.home-card:hover::before {
+  opacity: 1;
+  animation: rainbowShift 3s linear infinite;
+}
+
+.home-card:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow:
+    0 4px 20px rgba(59, 130, 246, 0.12),
+    0 8px 40px rgba(139, 92, 246, 0.08),
+    0 2px 8px rgba(236, 72, 153, 0.06);
+  transform: translateY(-4px);
+}
+
+@keyframes rainbowShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}

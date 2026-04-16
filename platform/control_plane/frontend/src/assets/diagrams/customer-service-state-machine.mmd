@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Router
+    Router --> ParallelAssessment: request_type = full
+    Router --> InquiryHandler: request_type = inquiry_handler_only
+    Router --> TransactionSpecialist: request_type = transaction_specialist_only
+    Router --> ProductAdvisor: request_type = product_advisor_only
+    ParallelAssessment --> Synthesize
+    InquiryHandler --> Synthesize
+    TransactionSpecialist --> Synthesize
+    ProductAdvisor --> Synthesize
+    Synthesize --> [*]

@@ -1,0 +1,19 @@
+{
+  "account_id": "ACCT001",
+  "customer_name": "John Doe",
+  "account_type": "business_checking",
+  "risk_profile": "medium",
+  "transaction_history": [
+    {"id": "TXN001", "date": "2024-01-15", "amount": 15000.00, "type": "wire_transfer", "destination": "offshore_bank", "status": "completed"},
+    {"id": "TXN002", "date": "2024-01-15", "amount": 9800.00, "type": "cash_deposit", "location": "branch_042", "status": "completed"},
+    {"id": "TXN003", "date": "2024-01-14", "amount": 9700.00, "type": "cash_deposit", "location": "branch_015", "status": "completed"},
+    {"id": "TXN004", "date": "2024-01-13", "amount": 9900.00, "type": "cash_deposit", "location": "branch_042", "status": "flagged"}
+  ],
+  "flagged_patterns": [
+    {"pattern": "structuring", "confidence": 0.85, "description": "Multiple cash deposits just below $10,000 reporting threshold"},
+    {"pattern": "velocity_anomaly", "confidence": 0.72, "description": "Unusual increase in transaction frequency over 7-day period"}
+  ],
+  "alert_history": [
+    {"alert_id": "ALT001", "date": "2024-01-10", "severity": "warning", "type": "unusual_activity", "status": "reviewed"}
+  ]
+}
