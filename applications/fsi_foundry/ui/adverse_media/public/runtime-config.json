@@ -1,0 +1,51 @@
+{
+  "use_case_id": "adverse_media",
+  "use_case_name": "Adverse Media Screening",
+  "description": "AI-powered media screening, sentiment analysis, and risk signal extraction for entity due diligence",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "media_screener",
+      "name": "Media Screener",
+      "description": "Scans global media sources to identify adverse mentions, news articles, and public records related to screened entities"
+    },
+    {
+      "id": "sentiment_analyst",
+      "name": "Sentiment Analyst",
+      "description": "Performs deep sentiment analysis on discovered media content to classify tone, bias, and reputational impact"
+    },
+    {
+      "id": "risk_signal_extractor",
+      "name": "Risk Signal Extractor",
+      "description": "Extracts structured risk signals from media findings, linking entities to regulatory, financial, and reputational risk indicators"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. MED001",
+    "type_field": "screening_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "media_screening",
+        "label": "Media Screening"
+      },
+      {
+        "value": "sentiment_analysis",
+        "label": "Sentiment Analysis"
+      },
+      {
+        "value": "risk_extraction",
+        "label": "Risk Extraction"
+      }
+    ],
+    "test_entities": [
+      "ENT001"
+    ]
+  }
+}

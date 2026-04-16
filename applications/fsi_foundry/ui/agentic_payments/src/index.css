@@ -1,0 +1,521 @@
+@import "tailwindcss";
+
+:root {
+  /* Primary palette */
+  --white: #FFFFFF;
+  --slate-900: #1E293B;
+  --slate-700: #334155;
+  --slate-500: #64748B;
+  --slate-400: #94A3B8;
+  --slate-300: #CBD5E1;
+  --slate-200: #E2E8F0;
+  --slate-100: #F1F5F9;
+  --slate-50: #F8FAFC;
+
+  /* Accent colors */
+  --emerald-600: #059669;
+  --emerald-500: #10B981;
+  --emerald-400: #34D399;
+  --emerald-100: #D1FAE5;
+  --emerald-50: #ECFDF5;
+
+  --blue-500: #3B82F6;
+  --blue-400: #60A5FA;
+  --blue-100: #DBEAFE;
+  --blue-50: #EFF6FF;
+
+  --red-500: #EF4444;
+  --red-400: #F87171;
+  --red-100: #FEE2E2;
+  --red-50: #FEF2F2;
+
+  --amber-500: #F59E0B;
+  --amber-400: #FBBF24;
+  --amber-100: #FEF3C7;
+  --amber-50: #FFFBEB;
+
+  --purple-500: #8B5CF6;
+  --purple-100: #EDE9FE;
+
+  --teal-500: #14B8A6;
+  --teal-100: #CCFBF1;
+
+  --orange-500: #F97316;
+  --orange-100: #FFEDD5;
+
+  /* Semantic tokens */
+  --bg-primary: var(--slate-50);
+  --bg-card: var(--white);
+  --text-primary: var(--slate-900);
+  --text-secondary: var(--slate-500);
+  --text-muted: var(--slate-400);
+  --border-color: var(--slate-200);
+  --accent: var(--emerald-600);
+  --accent-light: var(--emerald-500);
+  --accent-bg: var(--emerald-50);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, Oxygen, Ubuntu, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ── Card styles ────────────────────────────────── */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.stat-card .stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.stat-card .stat-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* ── Payment rail badges ────────────────────────── */
+
+.payment-rail-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.payment-rail-badge.fedwire {
+  background: var(--blue-100);
+  color: var(--blue-500);
+}
+
+.payment-rail-badge.ach {
+  background: var(--emerald-100);
+  color: var(--emerald-600);
+}
+
+.payment-rail-badge.rtp {
+  background: var(--purple-100);
+  color: var(--purple-500);
+}
+
+.payment-rail-badge.swift {
+  background: var(--orange-100);
+  color: var(--orange-500);
+}
+
+.payment-rail-badge.sepa {
+  background: var(--teal-100);
+  color: var(--teal-500);
+}
+
+/* ── Status pills ───────────────────────────────── */
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.status-pill.approved,
+.status-pill.matched {
+  background: var(--emerald-100);
+  color: var(--emerald-600);
+}
+
+.status-pill.rejected,
+.status-pill.discrepancy {
+  background: var(--red-100);
+  color: var(--red-500);
+}
+
+.status-pill.requires_review,
+.status-pill.pending {
+  background: var(--amber-100);
+  color: var(--amber-500);
+}
+
+.status-pill.unmatched {
+  background: var(--slate-100);
+  color: var(--slate-500);
+}
+
+/* ── Risk meter ─────────────────────────────────── */
+
+.risk-meter {
+  width: 100%;
+  height: 8px;
+  background: var(--slate-100);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.risk-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s ease-out;
+  animation: progressFill 1s ease-out;
+}
+
+.risk-meter-fill.low {
+  background: linear-gradient(90deg, var(--emerald-400), var(--emerald-500));
+}
+
+.risk-meter-fill.medium {
+  background: linear-gradient(90deg, var(--amber-400), var(--amber-500));
+}
+
+.risk-meter-fill.high {
+  background: linear-gradient(90deg, var(--red-400), var(--red-500));
+}
+
+/* ── Pipeline steps ─────────────────────────────── */
+
+.pipeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex: 1;
+}
+
+.pipeline-step-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  transition: all 0.4s ease;
+  border: 2px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.pipeline-step.active .pipeline-step-icon {
+  border-color: var(--emerald-500);
+  background: var(--emerald-50);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+.pipeline-step.complete .pipeline-step-icon {
+  border-color: var(--emerald-500);
+  background: var(--emerald-500);
+  color: white;
+}
+
+.pipeline-step-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
+}
+
+.pipeline-step.active .pipeline-step-label,
+.pipeline-step.complete .pipeline-step-label {
+  color: var(--text-primary);
+}
+
+.pipeline-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border-color);
+  margin-top: 28px;
+  position: relative;
+  min-width: 40px;
+}
+
+.pipeline-connector.active {
+  background: linear-gradient(90deg, var(--emerald-500), var(--emerald-400));
+}
+
+/* ── Progress bar ───────────────────────────────── */
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--slate-100);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--emerald-500), var(--emerald-400));
+  transition: width 0.6s ease;
+}
+
+/* ── Animations ─────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes progressFill {
+  from { width: 0; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out both;
+}
+
+.animate-slide-up-delay-1 {
+  animation: slideUp 0.5s ease-out 0.1s both;
+}
+
+.animate-slide-up-delay-2 {
+  animation: slideUp 0.5s ease-out 0.2s both;
+}
+
+.animate-slide-up-delay-3 {
+  animation: slideUp 0.5s ease-out 0.3s both;
+}
+
+.animate-slide-up-delay-4 {
+  animation: slideUp 0.5s ease-out 0.4s both;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.animate-count-up {
+  animation: countUp 0.6s ease-out both;
+}
+
+/* ── Scroll reveal ──────────────────────────────── */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Transaction table ──────────────────────────── */
+
+.tx-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tx-table thead th {
+  background: var(--slate-50);
+  padding: 12px 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tx-table thead th:first-child {
+  border-radius: 8px 0 0 0;
+}
+
+.tx-table thead th:last-child {
+  border-radius: 0 8px 0 0;
+}
+
+.tx-table tbody td {
+  padding: 14px 16px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.tx-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tx-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.tx-table tbody tr:hover {
+  background: var(--slate-50);
+}
+
+/* ── Button styles ──────────────────────────────── */
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--emerald-600), var(--emerald-500));
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Accordion ──────────────────────────────────── */
+
+.accordion-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--slate-50);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: background 0.15s ease;
+}
+
+.accordion-toggle:hover {
+  background: var(--slate-100);
+}
+
+.accordion-content {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease;
+}
+
+.accordion-content.open {
+  max-height: 600px;
+}
+
+/* ── Agent status dot ───────────────────────────── */
+
+.agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.agent-dot.idle {
+  background: var(--slate-300);
+}
+
+.agent-dot.running {
+  background: var(--emerald-500);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.agent-dot.complete {
+  background: var(--emerald-500);
+}
+
+.agent-dot.error {
+  background: var(--red-500);
+}
+
+/* ── Misc ───────────────────────────────────────── */
+
+.shimmer-bg {
+  background: linear-gradient(90deg, var(--slate-100) 25%, var(--slate-50) 50%, var(--slate-100) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

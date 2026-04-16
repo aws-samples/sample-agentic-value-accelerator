@@ -1,0 +1,351 @@
+@import "tailwindcss";
+
+/* ── Credit Research Theme Variables ── */
+:root {
+  --charcoal-900: #18181B;
+  --charcoal-800: #27272A;
+  --charcoal-700: #3F3F46;
+  --charcoal-600: #52525B;
+  --charcoal-500: #71717A;
+  --charcoal-400: #A1A1AA;
+  --charcoal-100: #F4F4F5;
+  --charcoal-50: #FAFAFA;
+  --warm-white: #FAFAF9;
+  --blue: #2563EB;
+  --blue-light: #3B82F6;
+  --blue-50: #EFF6FF;
+  --blue-100: #DBEAFE;
+  --amber: #D97706;
+  --amber-light: #F59E0B;
+  --amber-50: #FFFBEB;
+  --emerald: #059669;
+  --emerald-light: #10B981;
+  --emerald-50: #ECFDF5;
+  --slate: #64748B;
+  --slate-light: #94A3B8;
+  --slate-200: #E2E8F0;
+  --slate-100: #F1F5F9;
+  --slate-50: #F8FAFC;
+  --red-600: #DC2626;
+  --red-500: #EF4444;
+  --red-50: #FEF2F2;
+
+  --accent: var(--blue);
+  --accent-light: var(--blue-light);
+  --accent-bg: var(--blue-50);
+  --secondary: var(--amber);
+  --secondary-light: var(--amber-light);
+  --bg-primary: var(--warm-white);
+  --bg-card: #FFFFFF;
+  --text-primary: var(--charcoal-900);
+  --text-secondary: #3F3F46;
+  --text-muted: var(--slate);
+}
+
+/* ── Base ── */
+body {
+  font-family: 'Inter', 'Source Sans Pro', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at 10% 0%, rgba(37,99,235,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 100%, rgba(217,119,6,0.03) 0%, transparent 50%);
+}
+
+/* ── Formal Document Headings ── */
+.heading-serif {
+  font-family: 'Georgia', 'Cambria', 'Times New Roman', serif;
+  letter-spacing: -0.01em;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--bg-card);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 4px 16px rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card:hover {
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.06),
+    0 8px 32px rgba(0,0,0,0.06);
+}
+
+/* ── Memo Document Card ── */
+.memo-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.05);
+  position: relative;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.memo-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(37,99,235,0.12);
+}
+.memo-card-accent {
+  height: 4px;
+  width: 100%;
+}
+.memo-card-accent.aaa { background: linear-gradient(90deg, var(--emerald), var(--emerald-light)); }
+.memo-card-accent.aa { background: linear-gradient(90deg, var(--emerald), var(--emerald-light)); }
+.memo-card-accent.a { background: linear-gradient(90deg, var(--blue), var(--blue-light)); }
+.memo-card-accent.bbb { background: linear-gradient(90deg, var(--blue), var(--blue-light)); }
+.memo-card-accent.bb { background: linear-gradient(90deg, var(--amber), var(--amber-light)); }
+.memo-card-accent.b { background: linear-gradient(90deg, var(--amber), var(--amber-light)); }
+.memo-card-accent.ccc { background: linear-gradient(90deg, var(--red-500), var(--red-600)); }
+.memo-card-accent.default { background: linear-gradient(90deg, var(--slate), var(--slate-light)); }
+
+/* ── Credit Rating Badge ── */
+.rating-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  font-family: 'Georgia', 'Cambria', serif;
+}
+.rating-badge.aaa, .rating-badge.aa { background: var(--emerald-50); color: var(--emerald); border: 2px solid var(--emerald); }
+.rating-badge.a, .rating-badge.bbb { background: var(--blue-50); color: var(--blue); border: 2px solid var(--blue); }
+.rating-badge.bb, .rating-badge.b { background: var(--amber-50); color: var(--amber); border: 2px solid var(--amber); }
+.rating-badge.ccc, .rating-badge.cc, .rating-badge.c, .rating-badge.d { background: var(--red-50); color: var(--red-600); border: 2px solid var(--red-500); }
+
+/* ── Ratio Status Badge ── */
+.ratio-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ratio-status.strong { background: var(--emerald-50); color: var(--emerald); }
+.ratio-status.adequate { background: var(--blue-50); color: var(--blue); }
+.ratio-status.weak { background: var(--red-50); color: var(--red-600); }
+
+/* ── Confidence Badge ── */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.confidence-badge.high { background: var(--emerald-50); color: var(--emerald); }
+.confidence-badge.medium { background: var(--amber-50); color: var(--amber); }
+.confidence-badge.low { background: var(--slate-100); color: var(--slate); }
+
+/* ── Risk Factor Tag ── */
+.risk-tag {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: var(--red-50);
+  color: var(--red-600);
+  border: 1px solid rgba(239,68,68,0.15);
+}
+
+/* ── Peer Note Tag ── */
+.peer-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.375rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--slate-100);
+  color: var(--text-secondary);
+}
+
+/* ── Analysis Pulse ── */
+.analysis-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: analysisPulse 2s ease-in-out infinite;
+}
+.analysis-pulse.strong { background: var(--emerald); }
+.analysis-pulse.adequate { background: var(--blue); }
+.analysis-pulse.weak { background: var(--red-500); }
+
+/* ── Confidence Bar ── */
+.confidence-bar {
+  height: 6px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--slate-100);
+}
+.confidence-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s ease-out;
+}
+
+/* ── Radial Progress ── */
+.radial-progress {
+  --size: 72px;
+  --stroke: 6px;
+  width: var(--size);
+  height: var(--size);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.radial-progress svg {
+  transform: rotate(-90deg);
+  width: var(--size);
+  height: var(--size);
+}
+.radial-progress .track {
+  fill: none;
+  stroke: var(--blue-50);
+  stroke-width: var(--stroke);
+}
+.radial-progress .fill {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: var(--stroke);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out;
+}
+.radial-progress .label {
+  position: absolute;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ── Recommendation Card ── */
+.recommendation-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--slate-200);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.recommendation-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+.recommendation-card.high::before { background: var(--emerald); }
+.recommendation-card.medium::before { background: var(--amber); }
+.recommendation-card.low::before { background: var(--slate); }
+.recommendation-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* ── Ratio Table ── */
+.ratio-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.ratio-table th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  font-weight: 800;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--slate);
+  background: var(--slate-50);
+  border-bottom: 2px solid var(--slate-200);
+}
+.ratio-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--slate-100);
+  color: var(--text-secondary);
+}
+.ratio-table tr:last-child td {
+  border-bottom: none;
+}
+.ratio-table tr:hover td {
+  background: var(--blue-50);
+}
+
+/* ── Source Badge ── */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--blue-50);
+  color: var(--blue);
+  border: 1px solid rgba(37,99,235,0.15);
+}
+
+/* ── Animations ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes analysisPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+@keyframes signalReveal {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-6px) rotate(0.5deg); }
+  66% { transform: translateY(-3px) rotate(-0.3deg); }
+}
+@keyframes pulseBlue {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(37,99,235,0); }
+}
+
+.animate-fadeSlideUp {
+  animation: fadeSlideUp 0.6s ease-out both;
+}
+.animate-floatCard {
+  animation: floatCard 4s ease-in-out infinite;
+}
+.animate-signalReveal {
+  animation: signalReveal 0.5s ease-out both;
+}
+.animate-pulseBlue {
+  animation: pulseBlue 2s ease-in-out infinite;
+}
+
+/* ── Utility ── */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }

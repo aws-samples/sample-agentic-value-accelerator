@@ -1,0 +1,51 @@
+{
+  "use_case_id": "research_credit_memo",
+  "use_case_name": "Credit Research Memo",
+  "description": "AI-powered credit research memo generation with comprehensive data gathering, credit analysis, and formal memo writing for institutional credit decisions",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "data_gatherer",
+      "name": "Data Gatherer",
+      "description": "Collects financial statements, market data, industry benchmarks, and regulatory filings to build a comprehensive credit profile for the target entity"
+    },
+    {
+      "id": "credit_analyst",
+      "name": "Credit Analyst",
+      "description": "Performs quantitative credit analysis including ratio computation, peer comparison, risk factor identification, and credit rating assessment"
+    },
+    {
+      "id": "memo_writer",
+      "name": "Memo Writer",
+      "description": "Generates formal credit research memos with structured sections, rating recommendations, and institutional-grade documentation"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. CRD001",
+    "type_field": "analysis_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "data_gathering",
+        "label": "Data Gathering"
+      },
+      {
+        "value": "credit_analysis",
+        "label": "Credit Analysis"
+      },
+      {
+        "value": "memo_generation",
+        "label": "Memo Generation"
+      }
+    ],
+    "test_entities": [
+      "ENTITY001"
+    ]
+  }
+}

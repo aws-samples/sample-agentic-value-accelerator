@@ -1,0 +1,298 @@
+@import "tailwindcss";
+
+/* ── Wealth Management Theme Variables ── */
+:root {
+  --forest-900: #064E3B;
+  --forest-800: #065F46;
+  --forest-700: #047857;
+  --forest-600: #059669;
+  --forest-500: #10B981;
+  --forest-100: #D1FAE5;
+  --forest-50: #ECFDF5;
+  --gold-600: #D4A017;
+  --gold-500: #EAB308;
+  --gold-400: #FACC15;
+  --gold-300: #FCD34D;
+  --gold-100: #FEF9C3;
+  --gold-50: #FEFCE8;
+  --cream: #FFFDF7;
+  --charcoal: #1F2937;
+  --charcoal-light: #374151;
+  --warm-gray: #6B7280;
+  --warm-gray-200: #E5E7EB;
+  --warm-gray-100: #F3F4F6;
+  --red-500: #EF4444;
+  --red-50: #FEF2F2;
+  --amber-500: #F59E0B;
+  --amber-50: #FFFBEB;
+
+  --accent: var(--forest-800);
+  --accent-light: var(--forest-600);
+  --accent-bg: var(--forest-50);
+  --secondary: var(--gold-600);
+  --secondary-light: var(--gold-300);
+  --bg-primary: var(--cream);
+  --bg-card: #FFFFFF;
+  --text-primary: var(--charcoal);
+  --text-secondary: #4B5563;
+  --text-muted: var(--warm-gray);
+}
+
+/* ── Base ── */
+body {
+  font-family: 'Inter', 'Nunito', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgba(6,78,59,0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 100%, rgba(212,160,23,0.04) 0%, transparent 50%);
+}
+
+/* ── Serif headings for premium feel ── */
+.heading-serif {
+  font-family: 'Georgia', 'Times New Roman', 'Playfair Display', serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--bg-card);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.04),
+    0 4px 16px rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card:hover {
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.06),
+    0 8px 32px rgba(0,0,0,0.06);
+}
+
+/* ── Risk Level Badge ── */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.risk-badge.conservative { background: var(--forest-50); color: var(--forest-800); }
+.risk-badge.moderate     { background: var(--gold-50); color: #92400E; }
+.risk-badge.aggressive   { background: #FFF7ED; color: #C2410C; }
+.risk-badge.very_aggressive { background: var(--red-50); color: #B91C1C; }
+
+/* ── Priority Badge ── */
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.priority-badge.high   { background: var(--red-50); color: #B91C1C; }
+.priority-badge.medium { background: var(--amber-50); color: #B45309; }
+.priority-badge.low    { background: var(--forest-50); color: #15803D; }
+
+/* ── Allocation Segment Tag ── */
+.allocation-tag {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: var(--forest-50);
+  color: var(--forest-800);
+  border: 1px solid rgba(6,95,70,0.15);
+}
+
+/* ── Metric Tag ── */
+.metric-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.375rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--warm-gray-100);
+  color: var(--text-secondary);
+}
+
+/* ── Portfolio Pulse ── */
+.portfolio-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--forest-600);
+  animation: portfolioPulse 2s ease-in-out infinite;
+}
+.portfolio-pulse.warning { background: var(--gold-600); }
+.portfolio-pulse.alert   { background: var(--red-500); }
+
+/* ── Performance Bar ── */
+.performance-bar {
+  height: 6px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--warm-gray-100);
+}
+.performance-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s ease-out;
+}
+
+/* ── Pie Chart (CSS) ── */
+.pie-chart {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+}
+.pie-chart-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+  z-index: 2;
+}
+
+/* ── Radial Progress ── */
+.radial-progress {
+  --size: 72px;
+  --stroke: 6px;
+  width: var(--size);
+  height: var(--size);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.radial-progress svg {
+  transform: rotate(-90deg);
+  width: var(--size);
+  height: var(--size);
+}
+.radial-progress .track {
+  fill: none;
+  stroke: var(--forest-50);
+  stroke-width: var(--stroke);
+}
+.radial-progress .fill {
+  fill: none;
+  stroke: var(--forest-800);
+  stroke-width: var(--stroke);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out;
+}
+.radial-progress .label {
+  position: absolute;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ── Recommendation Card ── */
+.recommendation-card {
+  background: var(--bg-card);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--warm-gray-200);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.recommendation-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+.recommendation-card.high::before   { background: var(--red-500); }
+.recommendation-card.medium::before { background: var(--amber-500); }
+.recommendation-card.low::before    { background: var(--forest-500); }
+.recommendation-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* ── Gold Accent Divider ── */
+.gold-divider {
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold-600), var(--gold-300), var(--gold-600));
+  border-radius: 9999px;
+  opacity: 0.6;
+}
+
+/* ── Animations ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes portfolioPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-6px) rotate(0.5deg); }
+  66% { transform: translateY(-3px) rotate(-0.3deg); }
+}
+@keyframes pulseForest {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(6,95,70,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(6,95,70,0); }
+}
+@keyframes signalReveal {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pieReveal {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-fadeSlideUp {
+  animation: fadeSlideUp 0.6s ease-out both;
+}
+.animate-floatCard {
+  animation: floatCard 4s ease-in-out infinite;
+}
+.animate-signalReveal {
+  animation: signalReveal 0.5s ease-out both;
+}
+.animate-pulseForest {
+  animation: pulseForest 2s ease-in-out infinite;
+}
+.animate-pieReveal {
+  animation: pieReveal 0.8s ease-out both;
+}
+
+/* ── Utility ── */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }

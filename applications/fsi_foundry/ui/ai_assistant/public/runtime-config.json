@@ -1,0 +1,55 @@
+{
+  "use_case_id": "ai_assistant",
+  "use_case_name": "Banking AI Assistant",
+  "description": "General-purpose AI assistant for banking operations with task routing and data lookup",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "task_router",
+      "name": "Task Router",
+      "description": "Classifies and routes requests to appropriate specialist capabilities"
+    },
+    {
+      "id": "data_lookup_agent",
+      "name": "Data Lookup Agent",
+      "description": "Retrieves and contextualizes data from internal banking systems"
+    },
+    {
+      "id": "report_generator",
+      "name": "Report Generator",
+      "description": "Generates formatted reports and actionable insights"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "employee_id",
+    "id_label": "Employee ID",
+    "id_placeholder": "e.g. EMP001",
+    "type_field": "task_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "data_lookup",
+        "label": "Data Lookup"
+      },
+      {
+        "value": "report_generation",
+        "label": "Report Generation"
+      },
+      {
+        "value": "document_summary",
+        "label": "Document Summary"
+      },
+      {
+        "value": "task_automation",
+        "label": "Task Automation"
+      }
+    ],
+    "test_entities": [
+      "EMP001"
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "use_case_id": "code_generation",
+  "use_case_name": "Code Generation",
+  "description": "Requirement analysis, code scaffolding, and test generation for code generation",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "requirement_analyst",
+      "name": "Requirement Analyst",
+      "description": "Specialized AI agent: Requirement Analyst"
+    },
+    {
+      "id": "code_scaffolder",
+      "name": "Code Scaffolder",
+      "description": "Specialized AI agent: Code Scaffolder"
+    },
+    {
+      "id": "test_generator",
+      "name": "Test Generator",
+      "description": "Specialized AI agent: Test Generator"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "project_id",
+    "id_label": "Project ID",
+    "id_placeholder": "e.g. PROJ001",
+    "type_field": "",
+    "type_options": [
+      {
+        "value": "default",
+        "label": "Default"
+      }
+    ],
+    "test_entities": [
+      "PROJ001"
+    ]
+  }
+}

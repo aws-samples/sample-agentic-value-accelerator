@@ -1,0 +1,44 @@
+{
+  "use_case_id": "kyc_banking",
+  "use_case_name": "KYC Risk Assessment - Banking",
+  "description": "Know Your Customer risk assessment for corporate banking customers including credit analysis and compliance checks",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "credit_analyst",
+      "name": "Credit Analyst",
+      "description": "Specialized AI agent: Credit Analyst"
+    },
+    {
+      "id": "compliance_officer",
+      "name": "Compliance Officer",
+      "description": "Specialized AI agent: Compliance Officer"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. CUST001",
+    "type_field": "assessment_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "credit_only",
+        "label": "Credit Only"
+      },
+      {
+        "value": "compliance_only",
+        "label": "Compliance Only"
+      }
+    ],
+    "test_entities": [
+      "CUST001",
+      "CUST002",
+      "CUST003"
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "use_case_id": "customer_service",
+  "use_case_name": "Customer Service Agent",
+  "description": "AI-powered customer service for banking support including inquiry handling, transaction investigation, and product advisory",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "inquiry_handler",
+      "name": "Inquiry Handler",
+      "description": "Specialized AI agent: Inquiry Handler"
+    },
+    {
+      "id": "transaction_specialist",
+      "name": "Transaction Specialist",
+      "description": "Specialized AI agent: Transaction Specialist"
+    },
+    {
+      "id": "product_advisor",
+      "name": "Product Advisor",
+      "description": "Specialized AI agent: Product Advisor"
+    }
+  ],
+  "api_endpoint": "https://d3txi0se9a5j5s.cloudfront.net/api/invoke",
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. CUST001",
+    "type_field": "inquiry_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "general",
+        "label": "General"
+      },
+      {
+        "value": "transaction_dispute",
+        "label": "Transaction Dispute"
+      },
+      {
+        "value": "product_inquiry",
+        "label": "Product Inquiry"
+      },
+      {
+        "value": "service_request",
+        "label": "Service Request"
+      }
+    ],
+    "test_entities": [
+      "CUST001"
+    ]
+  }
+}

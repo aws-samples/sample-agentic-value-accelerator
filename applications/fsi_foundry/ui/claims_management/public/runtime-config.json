@@ -1,0 +1,53 @@
+{
+  "use_case_id": "claims_management",
+  "use_case_name": "Claims Management",
+  "description": "AI-powered claims intake, damage assessment, and settlement recommendation engine for insurance claims processing",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "claims_intake_agent",
+      "name": "Claims Intake Agent",
+      "description": "Processes initial claim submissions, validates documentation completeness, identifies claim type and priority, and flags missing documents for expedited resolution"
+    },
+    {
+      "id": "damage_assessor",
+      "name": "Damage Assessor",
+      "description": "Analyzes submitted evidence and documentation to evaluate damage severity, estimate repair and replacement costs, and assess evidence quality for accurate claim valuation"
+    },
+    {
+      "id": "settlement_recommender",
+      "name": "Settlement Recommender",
+      "description": "Generates settlement recommendations based on policy coverage, damage assessment, comparable settlements, and confidence scoring for fair and consistent claim resolution"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "claim_id",
+    "id_label": "Claim ID",
+    "id_placeholder": "e.g. CLM001",
+    "type_field": "assessment_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "claims_intake_only",
+        "label": "Claims Intake Only"
+      },
+      {
+        "value": "damage_assessment_only",
+        "label": "Damage Assessment Only"
+      },
+      {
+        "value": "settlement_only",
+        "label": "Settlement Only"
+      }
+    ],
+    "test_entities": [
+      "CLAIM001",
+      "CLAIM002",
+      "CLAIM003"
+    ]
+  }
+}

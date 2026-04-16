@@ -1,0 +1,55 @@
+{
+  "use_case_id": "economic_research",
+  "use_case_name": "Economic Research",
+  "description": "AI-powered economic data aggregation, trend analysis, and research report generation for financial intelligence",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "data_aggregator",
+      "name": "Data Aggregator",
+      "description": "Collects and normalizes economic indicators from global data sources including central banks, statistical bureaus, and market data providers"
+    },
+    {
+      "id": "trend_analyst",
+      "name": "Trend Analyst",
+      "description": "Performs statistical trend analysis, identifies correlations between economic indicators, and detects anomalies in macroeconomic data"
+    },
+    {
+      "id": "research_writer",
+      "name": "Research Writer",
+      "description": "Generates research-grade economic reports with forecasts, policy impact assessments, and actionable investment recommendations"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "entity_id",
+    "id_label": "Entity ID",
+    "id_placeholder": "e.g. ECO001",
+    "type_field": "research_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full"
+      },
+      {
+        "value": "data_aggregation",
+        "label": "Data Aggregation"
+      },
+      {
+        "value": "trend_analysis",
+        "label": "Trend Analysis"
+      },
+      {
+        "value": "report_generation",
+        "label": "Report Generation"
+      },
+      {
+        "value": "indicator_focus",
+        "label": "Indicator Focus"
+      }
+    ],
+    "test_entities": [
+      "ECON001"
+    ]
+  }
+}
