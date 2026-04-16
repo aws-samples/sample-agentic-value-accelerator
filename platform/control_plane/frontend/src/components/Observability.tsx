@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { deploymentsApi } from '../api/client';
+import type { Deployment } from '../types';
 
 type TabId = 'agent-safety' | 'langfuse';
 
@@ -9,11 +11,31 @@ export default function Observability() {
   const [activeTab, setActiveTab] = useState<TabId>(
     tabParam === 'langfuse' ? 'langfuse' : 'agent-safety'
   );
+  const [foundationDeployment, setFoundationDeployment] = useState<Deployment | null>(null);
+  const [loadingFoundation, setLoadingFoundation] = useState(true);
+  const [iframeError, setIframeError] = useState(false);
 
   useEffect(() => {
     if (tabParam === 'langfuse') setActiveTab('langfuse');
     else if (tabParam === 'agent-safety') setActiveTab('agent-safety');
   }, [tabParam]);
+
+  useEffect(() => {
+    const fetchFoundation = async () => {
+      try {
+        const deployments = await deploymentsApi.list(undefined, 'foundation-stack');
+        const active = deployments.find(
+          (d) => (d.status === 'deployed' || d.status === 'delivered') && d.outputs?.langfuse_host
+        );
+        setFoundationDeployment(active || null);
+      } catch {
+        setFoundationDeployment(null);
+      } finally {
+        setLoadingFoundation(false);
+      }
+    };
+    fetchFoundation();
+  }, []);
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'agent-safety', label: 'Agent Safety' },
@@ -145,6 +167,118 @@ export default function Observability() {
               </div>
             </div>
 
+            {/* Langfuse Server Status */}
+            {loadingFoundation ? (
+              <div className="card">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin"></div>
+                  <p className="text-sm text-slate-500">Checking for Langfuse deployment...</p>
+                </div>
+              </div>
+            ) : foundationDeployment?.outputs?.langfuse_host ? (
+              <>
+                <div className="card border-violet-200 bg-violet-50/30">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-base font-semibold text-slate-900">Langfuse Server</h3>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Active
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-500 truncate">{foundationDeployment.outputs.langfuse_host}</p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                          <span>Region: {foundationDeployment.aws_region}</span>
+                          <span>Deployment: {foundationDeployment.deployment_name}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <a
+                      href={foundationDeployment.outputs.langfuse_host}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+                    >
+                      Open in New Tab
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                      </svg>
+                    </a>
+                  </div>
+                </div>
+
+                {/* Embedded Langfuse Dashboard */}
+                {!iframeError ? (
+                  <div className="rounded-xl border border-violet-200 overflow-hidden bg-white" style={{ height: 'calc(100vh - 20rem)' }}>
+                    <iframe
+                      src={foundationDeployment.outputs.langfuse_host}
+                      className="w-full h-full border-0"
+                      title="Langfuse Dashboard"
+                      onError={() => setIframeError(true)}
+                      onLoad={(e) => {
+                        // Detect X-Frame-Options block (iframe loads but shows blank/error)
+                        try {
+                          const iframe = e.target as HTMLIFrameElement;
+                          // If we can't access contentWindow, it's likely blocked
+                          if (iframe.contentWindow?.location.href === 'about:blank') {
+                            setIframeError(true);
+                          }
+                        } catch {
+                          // Cross-origin access denied means iframe loaded successfully
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="card border-amber-200 bg-amber-50/30">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-medium text-amber-900">Unable to embed Langfuse dashboard</p>
+                        <p className="text-sm text-amber-700/80 mt-1">
+                          The Langfuse server's security headers prevent embedding. Use the "Open in New Tab" button above to access the dashboard directly.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="card border-slate-200 bg-slate-50/50">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900 mb-1">No Langfuse Server Detected</h3>
+                    <p className="text-sm text-slate-500">
+                      Deploy the <strong>Foundation Stack</strong> template to automatically provision a Langfuse instance. Once deployed, your Langfuse dashboard will appear here.
+                    </p>
+                    <Link
+                      to="/deployments"
+                      className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-violet-600 hover:text-violet-700 transition-colors"
+                    >
+                      Go to Deployments
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="card">
                 <h3 className="text-base font-semibold text-slate-900 mb-3">Tracing</h3>
@@ -201,20 +335,6 @@ export default function Observability() {
                     Model comparison
                   </li>
                 </ul>
-              </div>
-            </div>
-
-            <div className="card bg-violet-50/50 border-violet-200/60">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                </div>
-                <div>
-                  <p className="text-sm text-violet-900 font-semibold">Langfuse Integration</p>
-                  <p className="text-sm text-violet-700/80 mt-1">
-                    Langfuse is deployed as part of the Observability Stack foundation template. Once deployed, all FSI Foundry agents automatically send traces to your Langfuse instance. Configure your Langfuse endpoint in the deployment settings.
-                  </p>
-                </div>
               </div>
             </div>
           </div>

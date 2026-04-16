@@ -34,7 +34,7 @@ export default function DeploymentList() {
     </svg>
   );
 
-  const REFIMPL_IDS = ['shopping-concierge-agent', 'market-surveillance', 'trade-surveillance', 'intelligent-document-processing'];
+  const REFIMPL_IDS = ['trade-surveillance', 'intelligent-document-processing'];
   const getDeploymentType = (templateId: string): 'template' | 'foundry' | 'refimpl' => {
     if (templateId.startsWith('foundry-')) return 'foundry';
     if (templateId.startsWith('refimpl-') || REFIMPL_IDS.includes(templateId)) return 'refimpl';

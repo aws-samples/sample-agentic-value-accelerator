@@ -92,18 +92,6 @@ export default function Navigation() {
               </button>
               {appsOpen && (
                 <div className="absolute top-full left-0 mt-1.5 w-72 bg-white rounded-xl border border-slate-200 py-2 z-50 animate-fade-in-scale" style={{ animationDuration: '0.12s', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
-                  <Link to="/applications/reference-implementations" onClick={() => setAppsOpen(false)}
-                    className="flex items-center px-3 py-3 hover:bg-blue-500 hover:text-white hover:scale-105 transition-all duration-200 rounded-lg mx-1.5 hover:shadow-md">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-50 mr-3 group-hover:bg-white transition-colors">
-                      <svg className="w-4.5 h-4.5 text-emerald-600 group-hover:text-emerald-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Reference Implementations</div>
-                      <div className="text-xs text-slate-400 group-hover:text-blue-100 transition-colors">End-to-end full-stack solutions</div>
-                    </div>
-                  </Link>
                   <Link to="/applications/fsi-foundry" onClick={() => setAppsOpen(false)}
                     className="flex items-center px-3 py-3 hover:bg-blue-500 hover:text-white hover:scale-105 transition-all duration-200 rounded-lg mx-1.5 hover:shadow-md group">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 mr-3 group-hover:bg-white transition-colors">
@@ -281,13 +269,6 @@ export default function Navigation() {
 
             <div className="py-2">
               <div className="px-4 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wide">Applications</div>
-              <Link
-                to="/applications/reference-implementations"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-              >
-                Reference Implementations
-              </Link>
               <Link
                 to="/applications/fsi-foundry"
                 onClick={() => setMobileMenuOpen(false)}
