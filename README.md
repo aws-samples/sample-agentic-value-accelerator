@@ -278,23 +278,6 @@ ava/
 │   │       ├── deploy/                          # Per-pattern deploy scripts
 │   │       ├── use_cases/                       # Per-use-case test scripts
 │   │       └── cleanup/                         # Resource teardown scripts
-│   │
-│   │   ├── market-surveillance/                 # Capital Markets surveillance system
-│   │   │   ├── agent-backend/                   # Strands multi-agent backend
-│   │   │   ├── trade-alerts-app/                # Next.js frontend
-│   │   │   ├── infrastructure/                  # Terraform (multi-module)
-│   │   │   └── seeding_scripts/                 # Data seeding and DB setup
-│   │   │
-│   │   ├── shopping-concierge-agent/            # Agentic payments concierge
-│   │   │   ├── concierge_agent/                 # Strands agent + MCP tools
-│   │   │   ├── web-ui/                          # React frontend
-│   │   │   ├── amplify/                         # Amplify backend (Cognito, AppSync, DynamoDB)
-│   │   │   └── infrastructure/                  # CDK stacks (Agent, MCP, Frontend)
-│   │   │
-│   │       ├── cost-controls/                   # Budget and rate limiting
-│   │       ├── hil-interventions/               # Human-in-the-loop checkpoints
-│   │       └── dashboard/                       # Safety monitoring dashboard
-│   │
 └── └── app_factory/                             # Blueprint-Driven App Generation
                                               # Markdown specs → AI coding assistant → complete app
 
@@ -357,11 +340,13 @@ cp .env.example .env
 
 ## Contributors
 
-| Contributor | Contributions                                                                                                                                                 |
-|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Contributor&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Contributions |
+|-------------|---------------|
 | [Vivian Bui](https://www.linkedin.com/in/vivian-bui-413a561b6/) | Control Plane platform, FSI Foundry foundations, 34 use case agentic design and service implementations, CI/CD pipeline, testing panel, deployment automation |
-| [Ethan Almeida](https://www.linkedin.com/in/ethanalmeida/) | App Factory form, Strands AgentCore integration, deployment scripts                                                                                           |
-| [Adarsh Parakh](https://www.linkedin.com/in/adarshparakh/) | FSI Foundry 34 frontend UIs, guidance design, workflow-driven orchestration pattern                                                                           |
+| [Ethan Almeida](https://www.linkedin.com/in/ethanalmeida/) | App Factory form, Strands AgentCore integration, deployment scripts |
+| [Adarsh Parakh](https://www.linkedin.com/in/adarshparakh/) | FSI Foundry 34 frontend UIs, guidance design, workflow-driven orchestration pattern |
+| [Daniela Vargas](https://www.linkedin.com/in/daniela-vargas-msda/) | Langfuse observability integration |
+| &#8226;&nbsp;[Prasanth Ponnoth](https://www.linkedin.com/in/prasanthponnoth/) <br/> &#8226;&nbsp;[Milan Bavadiya](https://www.linkedin.com/in/milanbavadiya/) <br/> &#8226;&nbsp;[Rhia Bipin Roy](https://www.linkedin.com/in/rhia-bipin-roy-b306ba191/) <br/> &#8226;&nbsp;[Sonia Mahankali](https://www.linkedin.com/in/soniamahankali/) | Agent Safety framework |
 
 ## Contacts
 

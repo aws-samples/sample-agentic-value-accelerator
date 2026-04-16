@@ -67,41 +67,27 @@ export default function Home() {
               </div>
             </div>
 
-            <div onClick={() => navigate('/applications/reference-implementations')}
+            <div onClick={() => navigate('/applications/templates')}
               className="group bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer flex flex-col overflow-hidden">
               <div className="h-16 relative bg-gradient-to-br from-violet-600 to-purple-700 overflow-hidden flex-shrink-0">
                 <img src="/images/refimpl-hero.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-lighten" />
+                <div className="absolute top-2.5 left-3">
+                  <span className="text-[9px] font-bold text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full">8 templates</span>
+                </div>
               </div>
               <div className="p-3.5 flex flex-col flex-1">
-                <h3 className="text-base font-semibold text-slate-900 mb-0.5 group-hover:text-violet-900 transition-colors">Reference Implementations</h3>
-                <p className="text-xs text-slate-500 leading-relaxed flex-1">Complete end-to-end applications with frontend, backend agents, and cloud infrastructure — ready to customize.</p>
+                <h3 className="text-base font-semibold text-slate-900 mb-0.5 group-hover:text-violet-900 transition-colors">Templates</h3>
+                <p className="text-xs text-slate-500 leading-relaxed flex-1">Scaffold agent projects with Terraform, CDK, or CloudFormation — IaC, agent code, and deployment scripts included.</p>
                 <div className="flex gap-1 mt-1.5">
-                  {['Market Surveillance', 'Shopping Concierge'].map(t => (
-                    <span key={t} className="text-[8px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-full">{t}</span>
+                  {['Terraform', 'CDK', 'CFN'].map(t => (
+                    <span key={t} className="text-[8px] font-medium text-violet-500/80 bg-violet-50 px-1.5 py-0.5 rounded-full">{t}</span>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div onClick={() => navigate('/applications/templates')}
-              className="group bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer p-3.5 flex flex-col">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center group-hover:bg-teal-100 transition-colors">
-                  <svg className="w-3.5 h-3.5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-                </div>
-                <svg className="w-3.5 h-3.5 text-slate-300 group-hover:text-teal-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
-              </div>
-              <h3 className="text-base font-semibold text-slate-900 mb-0.5 group-hover:text-teal-900 transition-colors">Templates</h3>
-              <p className="text-xs text-slate-500 leading-relaxed flex-1">Scaffold agent projects with Terraform, CDK, or CloudFormation — IaC, agent code, and deployment scripts included.</p>
-              <div className="flex gap-1 mt-auto pt-1.5">
-                {['Terraform', 'CDK', 'CFN'].map(t => (
-                  <span key={t} className="text-[8px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-full">{t}</span>
-                ))}
-              </div>
-            </div>
-
             <div onClick={() => navigate('/applications/app-factory')}
-              className="group bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer p-3.5 flex flex-col">
+              className="col-span-2 group bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer p-3.5 flex flex-col">
               <div className="flex items-center justify-between mb-1.5">
                 <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center group-hover:bg-slate-100 transition-colors">
                   <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 001.591 1.591L19 14.5" /></svg>

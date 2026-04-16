@@ -145,7 +145,6 @@ export default function Sidebar() {
             {!isCollapsed && (
               <div className="mt-0.5 space-y-0.5">
                 {subLink('/applications/fsi-foundry', 'FSI Foundry', isActive('/applications/fsi-foundry'))}
-                {subLink('/applications/reference-implementations', 'Reference Apps', isActive('/applications/reference-implementations'))}
                 {subLink('/applications/templates', 'Templates', isActive('/applications/templates'))}
                 {subLink('/applications/app-factory', 'App Factory', isActive('/applications/app-factory'))}
               </div>
@@ -227,9 +226,6 @@ export default function Sidebar() {
         <div className="flex items-center gap-1 px-3 py-2">
           <Link to="/applications/fsi-foundry" onClick={() => setAppsDropdownOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-blue-500 hover:text-white rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-md whitespace-nowrap">
             FSI Foundry
-          </Link>
-          <Link to="/applications/reference-implementations" onClick={() => setAppsDropdownOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-blue-500 hover:text-white rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-md whitespace-nowrap">
-            Reference Apps
           </Link>
           <Link to="/applications/templates" onClick={() => setAppsDropdownOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-blue-500 hover:text-white rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-md whitespace-nowrap">
             Templates
