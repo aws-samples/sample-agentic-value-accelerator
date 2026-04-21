@@ -16,4 +16,4 @@ langfuse==3.14.0
 # Configuration
 pydantic==2.9.2
 pydantic-settings==2.5.2
-python-dotenv==1.0.1
+python-dotenv==1.2.2
