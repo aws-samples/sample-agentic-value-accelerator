@@ -34,6 +34,10 @@ An open-source platform with 34 multi-agent use cases, a full control plane, and
 - **One-Click Deployment** — Deploy any use case from the control plane UI with infrastructure provisioned automatically
 - **Built for AWS** — Bedrock AgentCore, ECS, Lambda, DynamoDB, CloudFront, Cognito, S3, and more
 
+<div align="center">
+<video src="https://github.com/user-attachments/assets/4d55eba1-dd90-4a92-930d-ad4b220141aa" width="90%" controls></video>
+</div>
+
 ---
 
 ## Plan
