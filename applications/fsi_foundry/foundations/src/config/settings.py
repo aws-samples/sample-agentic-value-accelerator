@@ -6,7 +6,7 @@ from functools import lru_cache
 from typing import Optional
 
 
-def get_regional_model_id(region: str, base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0") -> str:
+def get_regional_model_id(region: str, base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0") -> str:
     """
     Get the appropriate inference profile ID based on AWS region.
     
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # Amazon Bedrock Configuration
     # Note: This is the base model ID. Use get_bedrock_model_id() for regional inference profile.
-    _bedrock_base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _bedrock_base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
     bedrock_model_id: Optional[str] = None  # Will be computed based on region
     
     @property

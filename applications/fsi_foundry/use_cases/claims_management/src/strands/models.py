@@ -61,9 +61,9 @@ class ClaimRequest(BaseModel):
 
 class IntakeSummary(BaseModel):
     """Summary of the claims intake process."""
-    claim_type: ClaimType = Field(..., description="Classified claim type")
-    status: ClaimStatus = Field(default=ClaimStatus.SUBMITTED)
-    documentation_complete: str = Field(default="false", description="Whether documentation is complete: true or false")
+    claim_type: str | None = Field(default=None, description="Classified claim type")
+    status: str = Field(default="submitted")
+    documentation_complete: str | None = Field(default=None, description="Whether documentation is complete: true or false")
     missing_documents: list[str] = Field(default_factory=list)
     key_details: dict = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
@@ -71,7 +71,7 @@ class IntakeSummary(BaseModel):
 
 class DamageAssessment(BaseModel):
     """Details of the damage assessment."""
-    severity: Severity = Field(..., description="Damage severity level")
+    severity: str | None = Field(default=None, description="Damage severity level")
     estimated_repair_cost: float = Field(default=0.0)
     estimated_replacement_cost: float = Field(default=0.0)
     evidence_quality: str = Field(default="adequate")

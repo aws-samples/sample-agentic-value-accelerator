@@ -53,9 +53,9 @@ class SearchResult(BaseModel):
     document_id: str = Field(..., description="Unique document identifier")
     title: str = Field(..., description="Document title")
     snippet: str = Field(..., description="Relevant content snippet")
-    relevance: RelevanceLevel = Field(default=RelevanceLevel.MEDIUM, description="Relevance level")
-    document_type: DocumentType = Field(..., description="Type of document")
-    status: DocumentStatus = Field(default=DocumentStatus.ACTIVE, description="Document status")
+    relevance: str | None = Field(default=None, description="Relevance level")
+    document_type: str | None = Field(default=None, description="Type of document")
+    status: str | None = Field(default=None, description="Document status")
 
 
 class SearchResponse(BaseModel):

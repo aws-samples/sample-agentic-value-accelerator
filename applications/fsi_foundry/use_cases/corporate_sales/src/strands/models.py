@@ -53,14 +53,14 @@ class SalesRequest(BaseModel):
 class LeadScore(BaseModel):
     """Lead scoring details."""
     score: int = Field(..., ge=0, le=100, description="Lead score from 0-100")
-    tier: LeadTier = Field(..., description="Lead tier classification")
+    tier: str | None = Field(default=None, description="Lead tier classification")
     factors: list[str] = Field(default_factory=list, description="Contributing scoring factors")
     recommendations: list[str] = Field(default_factory=list, description="Engagement recommendations")
 
 
 class OpportunityDetail(BaseModel):
     """Opportunity analysis details."""
-    stage: OpportunityStage = Field(..., description="Current opportunity stage")
+    stage: str | None = Field(default=None, description="Current opportunity stage")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Deal confidence score")
     estimated_value: float = Field(default=0.0, description="Estimated deal value")
     key_drivers: list[str] = Field(default_factory=list, description="Key opportunity drivers")

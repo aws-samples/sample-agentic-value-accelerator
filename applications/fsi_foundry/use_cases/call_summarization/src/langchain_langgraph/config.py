@@ -3,8 +3,8 @@ from config.settings import Settings
 
 class CallSummarizationSettings(Settings):
     data_prefix: str = "samples/call_summarization"
-    key_point_extractor_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    summary_generator_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    key_point_extractor_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    summary_generator_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     max_summary_length: int = 500
     key_point_confidence_threshold: float = 0.75
     min_key_points: int = 3

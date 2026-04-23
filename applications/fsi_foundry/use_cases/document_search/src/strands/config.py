@@ -15,7 +15,7 @@ class DocumentSearchSettings(Settings):
     data_prefix: str = "samples/document_search"
 
     # Agent configuration - use regional model IDs
-    _base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @property
     def document_indexer_model(self) -> str:

@@ -280,7 +280,7 @@ main() {
     echo ""
     echo -e "${YELLOW}Test the deployment:${NC}"
     echo ""
-    echo "  $PROJECT_ROOT/applications/scripts/test/test_agentcore.sh"
+    echo "  $PROJECT_ROOT/applications/fsi_foundry/scripts/use_cases/$USE_CASE_ID/test/test_agentcore.sh"
     echo ""
     
     return 0

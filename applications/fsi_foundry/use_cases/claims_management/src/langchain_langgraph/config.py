@@ -23,9 +23,9 @@ class ClaimsManagementSettings(Settings):
 
     data_prefix: str = "samples/claims_management"
 
-    claims_intake_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    damage_assessor_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    settlement_recommender_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    claims_intake_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    damage_assessor_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    settlement_recommender_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     auto_approve_threshold: float = 0.85
     max_settlement_amount: float = 500000.0

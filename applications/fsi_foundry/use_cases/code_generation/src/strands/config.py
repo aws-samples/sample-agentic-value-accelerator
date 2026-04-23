@@ -4,7 +4,7 @@ from config.settings import Settings, get_regional_model_id
 
 class CodeGenerationSettings(Settings):
     data_prefix: str = "samples/code_generation"
-    _base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @property
     def requirement_analyst_model(self) -> str:

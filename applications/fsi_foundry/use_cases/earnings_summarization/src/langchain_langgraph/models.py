@@ -28,7 +28,7 @@ class SummarizationRequest(BaseModel):
     additional_context: str | None = Field(default=None)
 
 class EarningsOverview(BaseModel):
-    sentiment: SentimentRating = Field(default=SentimentRating.NEUTRAL)
+    sentiment: str = Field(default="neutral")
     key_metrics: dict = Field(default_factory=dict)
     guidance_changes: list[str] = Field(default_factory=list)
     notable_quotes: list[str] = Field(default_factory=list)

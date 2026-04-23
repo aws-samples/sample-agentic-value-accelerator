@@ -15,9 +15,9 @@ class AgenticPaymentsSettings(Settings):
     data_prefix: str = "samples/agentic_payments"
 
     # Agent configuration - direct model IDs for LangGraph
-    payment_validator_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
-    routing_agent_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
-    reconciliation_agent_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    payment_validator_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
+    routing_agent_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
+    reconciliation_agent_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Use case specific thresholds
     max_transaction_amount: float = 1000000.0  # Maximum transaction amount in USD

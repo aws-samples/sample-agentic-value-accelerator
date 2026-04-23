@@ -30,7 +30,7 @@ class MainframeAnalysisResult(BaseModel):
     jcl_jobs_analyzed: int = Field(default=0)
     copybooks_found: int = Field(default=0)
     total_lines: int = Field(default=0)
-    complexity_level: ComplexityLevel = Field(default=ComplexityLevel.MEDIUM)
+    complexity_level: str = Field(default="medium")
     dependencies: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
 

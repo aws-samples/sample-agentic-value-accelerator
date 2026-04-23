@@ -43,5 +43,5 @@ variable "tags" {
 variable "llm_model" {
   description = "LLM model for the agents"
   type        = string
-  default     = "anthropic.claude-sonnet-4-20250514-v1:0"
+  default     = "anthropic.claude-haiku-4-5-20251001-v1:0"
 }

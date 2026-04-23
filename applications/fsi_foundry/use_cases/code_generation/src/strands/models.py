@@ -46,7 +46,7 @@ class ScaffoldedCodeResult(BaseModel):
     files_generated: int = Field(default=0)
     project_structure: list[str] = Field(default_factory=list)
     design_patterns_applied: list[str] = Field(default_factory=list)
-    code_quality: CodeQuality = Field(default=CodeQuality.MEDIUM)
+    code_quality: str = Field(default="medium")
     boilerplate_components: list[str] = Field(default_factory=list)
     configuration_files: list[str] = Field(default_factory=list)
 

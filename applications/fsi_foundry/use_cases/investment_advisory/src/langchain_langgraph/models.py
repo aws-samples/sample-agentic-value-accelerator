@@ -36,7 +36,7 @@ class AdvisoryRequest(BaseModel):
 
 
 class PortfolioAnalysis(BaseModel):
-    risk_level: RiskLevel = Field(..., description="Assessed portfolio risk level")
+    risk_level: str | None = Field(default=None, description="Assessed portfolio risk level")
     asset_allocation: dict[str, float] = Field(default_factory=dict, description="Current asset allocation percentages")
     performance_summary: str = Field(default="", description="Portfolio performance summary")
     rebalancing_needed: bool = Field(default=False, description="Whether rebalancing is recommended")

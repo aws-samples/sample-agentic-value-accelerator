@@ -57,8 +57,8 @@ class AnalyticsRequest(BaseModel):
 
 class CallMonitoringResult(BaseModel):
     """Call monitoring analysis results."""
-    overall_quality: CallQuality = Field(default=CallQuality.GOOD, description="Overall call quality rating")
-    average_sentiment: SentimentLevel = Field(default=SentimentLevel.NEUTRAL, description="Average customer sentiment")
+    overall_quality: str | None = Field(default=None, description="Overall call quality rating")
+    average_sentiment: str | None = Field(default=None, description="Average customer sentiment")
     compliance_score: float = Field(default=0.0, description="Compliance adherence score 0-1")
     calls_reviewed: int = Field(default=0, description="Number of calls reviewed")
     quality_issues: list[str] = Field(default_factory=list, description="Identified quality issues")
@@ -71,7 +71,7 @@ class PerformanceMetrics(BaseModel):
     average_handle_time: float = Field(default=0.0, description="Average handle time in seconds")
     first_call_resolution_rate: float = Field(default=0.0, description="First call resolution rate 0-1")
     customer_satisfaction_score: float = Field(default=0.0, description="Average CSAT score 0-5")
-    coaching_priority: CoachingPriority = Field(default=CoachingPriority.MEDIUM, description="Coaching priority level")
+    coaching_priority: str | None = Field(default=None, description="Coaching priority level")
     top_performers: list[str] = Field(default_factory=list, description="Top performing agents")
     coaching_opportunities: list[str] = Field(default_factory=list, description="Identified coaching opportunities")
     kpi_summary: dict = Field(default_factory=dict, description="Key performance indicator summary")

@@ -158,6 +158,15 @@ generate_runtime_config() {
     test_entities=$(jq -c --arg name "$use_case_name" \
         '.use_cases[] | select(.use_case_name == $name) | .test_customers // []' "$REGISTRY_FILE")
 
+    # Read per-use-case input schema fields from registry
+    id_field=$(jq -r --arg name "$use_case_name" \
+        '.use_cases[] | select(.use_case_name == $name) | .id_field // "customer_id"' "$REGISTRY_FILE")
+    id_label=$(echo "$id_field" | sed 's/_/ /g; s/\b\(.\)/\u\1/g')
+    type_field=$(jq -r --arg name "$use_case_name" \
+        '.use_cases[] | select(.use_case_name == $name) | .type_field // "assessment_type"' "$REGISTRY_FILE")
+    type_options=$(jq -c --arg name "$use_case_name" \
+        '.use_cases[] | select(.use_case_name == $name) | .type_values // ["full"] | [.[] | {value: ., label: (. | gsub("_"; " ") | gsub("\\b."; .[:1] | ascii_upcase + .[1:]))}]' "$REGISTRY_FILE")
+
     # Build agents array with descriptions
     local agents_with_desc
     agents_with_desc=$(echo "$agents_json" | jq -c '[.[] | {id: .id, name: .name, description: ("Specialized AI agent: " + .name)}]')
@@ -172,13 +181,11 @@ generate_runtime_config() {
   "agents": $agents_with_desc,
   "api_endpoint": "$API_ENDPOINT/invoke",
   "input_schema": {
-    "id_field": "customer_id",
-    "id_label": "Customer ID",
+    "id_field": "$id_field",
+    "id_label": "$id_label",
     "id_placeholder": "e.g. CUST001",
-    "type_field": "assessment_type",
-    "type_options": [
-      {"value": "full", "label": "Full Assessment"}
-    ],
+    "type_field": "$type_field",
+    "type_options": $type_options,
     "test_entities": $test_entities
   }
 }

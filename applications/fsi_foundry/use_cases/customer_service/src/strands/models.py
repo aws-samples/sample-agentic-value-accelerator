@@ -50,8 +50,8 @@ class ServiceRequest(BaseModel):
 
 class ResolutionDetail(BaseModel):
     """Details of the service resolution."""
-    status: ResolutionStatus = Field(..., description="Resolution status")
-    priority: Priority = Field(default=Priority.MEDIUM, description="Inquiry priority")
+    status: str | None = Field(default=None, description="Resolution status")
+    priority: str | None = Field(default=None, description="Inquiry priority")
     actions_taken: list[str] = Field(default_factory=list, description="Actions taken to resolve")
     follow_up_required: bool = Field(default=False, description="Whether follow-up is needed")
     notes: list[str] = Field(default_factory=list, description="Resolution notes")

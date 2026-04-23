@@ -15,9 +15,9 @@ class CustomerEngagementSettings(Settings):
     data_prefix: str = "samples/customer_engagement"
 
     # Agent configuration
-    churn_predictor_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    outreach_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    policy_optimizer_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    churn_predictor_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    outreach_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    policy_optimizer_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Use case specific thresholds
     churn_risk_threshold: float = 0.7

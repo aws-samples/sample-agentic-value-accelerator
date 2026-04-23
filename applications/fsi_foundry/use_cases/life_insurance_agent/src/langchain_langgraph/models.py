@@ -60,7 +60,7 @@ class InsuranceRequest(BaseModel):
 
 class NeedsAnalysis(BaseModel):
     """Results of the life insurance needs analysis."""
-    life_stage: LifeStage = Field(..., description="Applicant life stage")
+    life_stage: str | None = Field(default=None, description="Applicant life stage")
     recommended_coverage: float = Field(default=0.0, description="Recommended coverage amount")
     coverage_gap: float = Field(default=0.0, description="Gap between existing and recommended coverage")
     income_replacement_years: int = Field(default=10, description="Years of income replacement needed")
@@ -70,7 +70,7 @@ class NeedsAnalysis(BaseModel):
 
 class ProductRecommendations(BaseModel):
     """Product matching recommendations."""
-    primary_product: ProductType = Field(..., description="Primary recommended product type")
+    primary_product: str | None = Field(default=None, description="Primary recommended product type")
     recommended_products: list[dict] = Field(default_factory=list, description="Ranked product recommendations")
     coverage_amount: float = Field(default=0.0, description="Recommended coverage amount")
     estimated_premium: float = Field(default=0.0, description="Estimated monthly premium")
@@ -80,7 +80,7 @@ class ProductRecommendations(BaseModel):
 
 class UnderwritingAssessment(BaseModel):
     """Underwriting risk assessment results."""
-    risk_category: RiskCategory = Field(default=RiskCategory.STANDARD, description="Risk classification")
+    risk_category: str | None = Field(default=None, description="Risk classification")
     confidence_score: float = Field(default=0.0, description="Assessment confidence score")
     health_factors: list[str] = Field(default_factory=list, description="Identified health risk factors")
     lifestyle_factors: list[str] = Field(default_factory=list, description="Identified lifestyle risk factors")

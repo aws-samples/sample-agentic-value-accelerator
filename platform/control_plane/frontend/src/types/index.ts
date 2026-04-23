@@ -178,8 +178,11 @@ export interface AppUseCase {
   supported_frameworks: string[];
   supported_patterns: string[];
   agents: AppAgent[];
+  id_field?: string;
   type_field?: string;
   type_values?: string[];
+  test_entities?: string[];
+  test_accounts?: string[];
 }
 
 export interface TestDeploymentRequest {

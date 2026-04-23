@@ -13,9 +13,9 @@ class CustomerSupportSettings(Settings):
 
     data_prefix: str = "samples/customer_support"
 
-    ticket_classifier_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    resolution_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    escalation_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    ticket_classifier_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    resolution_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    escalation_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     max_resolution_time_seconds: int = 30
     escalation_confidence_threshold: float = 0.85

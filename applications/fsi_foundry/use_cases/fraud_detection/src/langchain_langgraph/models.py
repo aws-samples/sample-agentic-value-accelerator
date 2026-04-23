@@ -38,14 +38,14 @@ class MonitoringRequest(BaseModel):
 
 class RiskAssessment(BaseModel):
     score: int = Field(..., ge=0, le=100, description="Risk score from 0-100")
-    level: RiskLevel = Field(..., description="Risk level classification")
+    level: str | None = Field(default=None, description="Risk level classification")
     factors: list[str] = Field(default_factory=list, description="Contributing risk factors")
     recommendations: list[str] = Field(default_factory=list, description="Risk mitigation recommendations")
 
 
 class FraudAlert(BaseModel):
     alert_id: str = Field(..., description="Unique alert identifier")
-    severity: AlertSeverity = Field(..., description="Alert severity level")
+    severity: str | None = Field(default=None, description="Alert severity level")
     description: str = Field(..., description="Alert description")
     evidence: list[str] = Field(default_factory=list, description="Supporting evidence")
     recommended_actions: list[str] = Field(default_factory=list, description="Recommended actions")

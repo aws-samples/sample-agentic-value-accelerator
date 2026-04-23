@@ -3,8 +3,8 @@ from config.settings import Settings
 
 class EmailTriageSettings(Settings):
     data_prefix: str = "samples/email_triage"
-    email_classifier_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    action_extractor_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    email_classifier_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    action_extractor_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     urgency_threshold: float = 0.7
     max_actions_per_email: int = 10
     classification_confidence_threshold: float = 0.8

@@ -59,7 +59,7 @@ class EngagementRequest(BaseModel):
 
 class ChurnPrediction(BaseModel):
     """Churn prediction details."""
-    risk_level: ChurnRisk = Field(..., description="Predicted churn risk level")
+    risk_level: str | None = Field(default=None, description="Predicted churn risk level")
     churn_probability: float = Field(default=0.0, description="Churn probability score 0-1")
     risk_factors: list[str] = Field(default_factory=list, description="Key risk factors identified")
     behavioral_signals: list[str] = Field(default_factory=list, description="Behavioral signals observed")
@@ -69,7 +69,7 @@ class ChurnPrediction(BaseModel):
 
 class OutreachPlan(BaseModel):
     """Personalized outreach plan details."""
-    recommended_channel: OutreachChannel = Field(..., description="Primary outreach channel")
+    recommended_channel: str | None = Field(default=None, description="Primary outreach channel")
     secondary_channels: list[OutreachChannel] = Field(default_factory=list)
     messaging_theme: str = Field(default="", description="Core messaging theme")
     talking_points: list[str] = Field(default_factory=list, description="Key talking points")

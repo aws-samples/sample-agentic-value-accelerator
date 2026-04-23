@@ -12,9 +12,9 @@ class DataAnalyticsSettings(Settings):
 
     data_prefix: str = "samples/data_analytics"
 
-    data_explorer_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    statistical_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    insight_generator_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    data_explorer_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    statistical_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    insight_generator_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     significance_level: float = 0.05
     min_sample_size: int = 30

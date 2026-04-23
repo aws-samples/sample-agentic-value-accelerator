@@ -10,9 +10,9 @@ from config.settings import Settings
 class AdverseMediaSettings(Settings):
     data_prefix: str = "samples/adverse_media"
 
-    media_screener_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    sentiment_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    risk_signal_extractor_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    media_screener_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    sentiment_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    risk_signal_extractor_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     max_screening_time_seconds: int = 60
     sentiment_negativity_threshold: float = 0.7

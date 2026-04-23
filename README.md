@@ -315,6 +315,8 @@ cp .env.example .env
 | Deploy the Control Plane | `cd platform/control_plane/infrastructure && ./deploy-full.sh` |
 | Deploy an FSI Foundry use case | `cd applications/fsi_foundry && ./scripts/main/deploy.sh` |
 
+> **⚠️ Model Access:** AWS accounts that have not used a legacy model in the last 30 days will receive an error when calling that model, resulting in **"Error: No Response"** in the frontends. Check the Model Catalog to select the right model. 
+
 [**Detailed Deployment Guide &#8594;**](applications/fsi_foundry/docs/foundations/deployment/)
 
 ---

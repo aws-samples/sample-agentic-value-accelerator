@@ -4,7 +4,7 @@ from config.settings import Settings, get_regional_model_id
 
 class PostCallAnalyticsSettings(Settings):
     data_prefix: str = "samples/post_call_analytics"
-    _base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @property
     def transcription_processor_model(self) -> str:

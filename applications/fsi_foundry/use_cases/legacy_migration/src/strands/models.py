@@ -31,7 +31,7 @@ class CodeAnalysisResult(BaseModel):
     languages_detected: list[str] = Field(default_factory=list)
     total_files: int = Field(default=0)
     total_lines: int = Field(default=0)
-    complexity_level: ComplexityLevel = Field(default=ComplexityLevel.MEDIUM)
+    complexity_level: str = Field(default="medium")
     dependencies: list[str] = Field(default_factory=list)
     patterns_identified: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)

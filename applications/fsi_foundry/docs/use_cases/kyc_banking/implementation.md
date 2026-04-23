@@ -94,7 +94,7 @@ The Credit Analyst agent evaluates financial health and creditworthiness by anal
 
 **Output:** Risk score, risk level (LOW/MEDIUM/HIGH/CRITICAL), detailed analysis
 
-**Model:** `us.anthropic.claude-sonnet-4-20250514-v1:0` (configurable)
+**Model:** `us.anthropic.claude-haiku-4-5-20251001-v1:0` (configurable)
 
 ### Compliance Officer
 
@@ -111,7 +111,7 @@ The Compliance Officer agent performs regulatory compliance assessments:
 
 **Output:** Compliance status, risk flags, regulatory concerns
 
-**Model:** `us.anthropic.claude-sonnet-4-20250514-v1:0` (configurable)
+**Model:** `us.anthropic.claude-haiku-4-5-20251001-v1:0` (configurable)
 
 ## Orchestrator
 
@@ -156,8 +156,8 @@ Configuration is managed in `applications/fsi_foundry/use_cases/kyc_banking/src/
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `data_prefix` | `samples/kyc_banking` | S3 path prefix for customer data |
-| `credit_analyst_model` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | Model for credit analysis |
-| `compliance_officer_model` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | Model for compliance checks |
+| `credit_analyst_model` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Model for credit analysis |
+| `compliance_officer_model` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Model for compliance checks |
 | `risk_threshold_high` | `75` | Score threshold for HIGH risk level |
 | `risk_threshold_critical` | `90` | Score threshold for CRITICAL risk level |
 
@@ -168,7 +168,7 @@ Settings can be overridden via environment variables:
 ```bash
 export AWS_REGION=us-east-1
 export S3_BUCKET_NAME=my-financial-data
-export BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
+export BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
 export APP_ENV=production
 ```
 

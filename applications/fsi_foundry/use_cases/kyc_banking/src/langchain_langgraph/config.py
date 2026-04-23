@@ -15,8 +15,8 @@ class KYCSettings(Settings):
     data_prefix: str = "samples/kyc_banking"
     
     # Agent configuration
-    credit_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    compliance_officer_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    credit_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    compliance_officer_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     
     # Use case specific thresholds
     risk_threshold_high: int = 75

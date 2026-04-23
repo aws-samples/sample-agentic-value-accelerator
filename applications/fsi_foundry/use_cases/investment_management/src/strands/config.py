@@ -12,7 +12,7 @@ class InvestmentManagementSettings(Settings):
 
     data_prefix: str = "samples/investment_management"
 
-    _base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @property
     def allocation_optimizer_model(self) -> str:

@@ -48,7 +48,7 @@ class ManagementRequest(BaseModel):
 
 class PortfolioAnalysisDetail(BaseModel):
     """Details of the portfolio analysis."""
-    risk_profile: RiskProfile = Field(..., description="Portfolio risk profile")
+    risk_profile: str | None = Field(default=None, description="Portfolio risk profile")
     rebalance_urgency: RebalanceUrgency = Field(
         default=RebalanceUrgency.LOW, description="Rebalancing urgency"
     )

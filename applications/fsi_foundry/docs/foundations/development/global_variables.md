@@ -819,10 +819,10 @@ The FSI Foundry automatically selects the correct regional Bedrock inference pro
 
 | Region Pattern | Prefix | Example Model ID |
 |----------------|--------|------------------|
-| `us-*` (US regions) | `us.` | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
-| `eu-*` (EU regions) | `eu.` | `eu.anthropic.claude-sonnet-4-20250514-v1:0` |
-| `ap-*` (APAC regions) | `apac.` | `apac.anthropic.claude-sonnet-4-20250514-v1:0` |
-| Other | `us.` (default) | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
+| `us-*` (US regions) | `us.` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
+| `eu-*` (EU regions) | `eu.` | `eu.anthropic.claude-haiku-4-5-20251001-v1:0` |
+| `ap-*` (APAC regions) | `apac.` | `apac.anthropic.claude-haiku-4-5-20251001-v1:0` |
+| Other | `us.` (default) | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
 
 #### How It Works
 
@@ -837,7 +837,7 @@ locals {
     startswith(var.aws_region, "eu-") ? "eu" :
     startswith(var.aws_region, "ap-") ? "apac" : "us"
   )
-  base_model_id = "anthropic.claude-sonnet-4-20250514-v1:0"
+  base_model_id = "anthropic.claude-haiku-4-5-20251001-v1:0"
   effective_bedrock_model_id = var.bedrock_model_id != "" ? var.bedrock_model_id : "${local.region_prefix}.${local.base_model_id}"
 }
 ```
@@ -871,11 +871,11 @@ To use a specific model (e.g., a different Claude version), set the `bedrock_mod
 
 ```bash
 # Via Terraform variable
-export TF_VAR_bedrock_model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+export TF_VAR_bedrock_model_id="us.anthropic.claude-haiku-4-5-20251001-v1:0"
 terraform apply
 
 # Or via environment variable for the application
-export BEDROCK_MODEL_ID="us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+export BEDROCK_MODEL_ID="us.anthropic.claude-haiku-4-5-20251001-v1:0"
 ```
 
 **Important:** When overriding, ensure you use the correct regional prefix for your deployment region.
