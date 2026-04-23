@@ -5,8 +5,8 @@ from config.settings import Settings
 
 class PaymentOpsSettings(Settings):
     data_prefix: str = "samples/payment_operations"
-    exception_handler_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    settlement_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    exception_handler_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    settlement_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     class Config:
         env_file = ".env"

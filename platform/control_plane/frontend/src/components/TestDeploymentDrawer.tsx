@@ -13,13 +13,9 @@ interface Props {
 
 function getTestEntityInfo(useCase?: AppUseCase): { field: string; entities: string[] } {
   if (!useCase) return { field: 'entity_id', entities: ['ENTITY001'] };
-  const uc = useCase as any;
 
-  // Use id_field from offerings.json (matches UI runtime-config.json)
-  const idField = uc.id_field || 'entity_id';
-
-  // Use test_entities as the universal array (with fallback to test_customers for backwards compatibility)
-  const entities = uc.test_entities || uc.test_customers || ['ENTITY001'];
+  const idField = useCase.id_field || 'entity_id';
+  const entities = useCase.test_entities || useCase.test_accounts || ['ENTITY001'];
 
   return { field: idField, entities };
 }

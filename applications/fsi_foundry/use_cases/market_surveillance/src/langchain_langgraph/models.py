@@ -32,7 +32,7 @@ class CommsMonitorResult(BaseModel):
     compliance_concerns: list[str] = Field(default_factory=list)
 
 class AlertResult(BaseModel):
-    severity: AlertSeverity = Field(default=AlertSeverity.MEDIUM)
+    severity: str = Field(default="medium")
     alert_type: str = Field(default="")
     recommended_actions: list[str] = Field(default_factory=list)
     escalation_required: bool = Field(default=False)

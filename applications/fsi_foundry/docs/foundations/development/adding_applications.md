@@ -164,7 +164,7 @@ async def run_your_app(request: YourRequest) -> YourResponse:
     """Main entry point for your application."""
     
     # Initialize agents
-    agent = YourAgent(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0")
+    agent = YourAgent(model_id="us.anthropic.claude-haiku-4-5-20251001-v1:0")
     
     # Build workflow
     workflow = StateGraph(WorkflowState)

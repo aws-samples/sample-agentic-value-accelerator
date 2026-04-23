@@ -33,7 +33,7 @@ class ProcessingRequest(BaseModel):
 
 
 class DocumentClassification(BaseModel):
-    document_type: DocumentType = Field(..., description="Classified document type")
+    document_type: str | None = Field(default=None, description="Classified document type")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Classification confidence")
     jurisdiction: str = Field(default="", description="Applicable jurisdiction")
     regulatory_relevance: list[str] = Field(default_factory=list, description="Relevant regulations")
@@ -47,7 +47,7 @@ class ExtractedData(BaseModel):
 
 
 class ValidationResult(BaseModel):
-    status: ValidationStatus = Field(..., description="Validation status")
+    status: str | None = Field(default=None, description="Validation status")
     checks_passed: list[str] = Field(default_factory=list, description="Passed checks")
     checks_failed: list[str] = Field(default_factory=list, description="Failed checks")
     notes: list[str] = Field(default_factory=list, description="Validation notes")

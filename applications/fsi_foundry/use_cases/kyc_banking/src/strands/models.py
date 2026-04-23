@@ -49,14 +49,14 @@ class AssessmentRequest(BaseModel):
 class RiskScore(BaseModel):
     """Credit risk score details."""
     score: int = Field(..., ge=0, le=100, description="Risk score from 0-100")
-    level: RiskLevel = Field(..., description="Risk level classification")
+    level: str | None = Field(default=None, description="Risk level classification")
     factors: list[str] = Field(default_factory=list, description="Contributing factors")
     recommendations: list[str] = Field(default_factory=list, description="Risk mitigation recommendations")
 
 
 class ComplianceStatus(BaseModel):
     """Compliance check results."""
-    status: ComplianceStatusEnum = Field(..., description="Overall compliance status")
+    status: str | None = Field(default=None, description="Overall compliance status")
     checks_passed: list[str] = Field(default_factory=list, description="Compliance checks that passed")
     checks_failed: list[str] = Field(default_factory=list, description="Compliance checks that failed")
     regulatory_notes: list[str] = Field(default_factory=list, description="Regulatory notes and observations")

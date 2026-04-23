@@ -119,7 +119,7 @@ AWS_ACCESS_KEY_ID=your-access-key-id
 AWS_SECRET_ACCESS_KEY=your-secret-access-key
 
 # Bedrock Configuration
-BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
+BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
 
 # S3 Configuration
 S3_BUCKET_NAME=your-bucket-name
@@ -388,7 +388,7 @@ docker run -d \
   -e AWS_REGION=us-east-1 \
   -e AWS_ACCESS_KEY_ID=your-key \
   -e AWS_SECRET_ACCESS_KEY=your-secret \
-  -e BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0 \
+  -e BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0 \
   -e S3_BUCKET_NAME=your-bucket \
   -e AGENT_NAME=kyc \
   ava:latest
@@ -506,7 +506,7 @@ pip install --upgrade -r requirements/requirements.txt
 Never hardcode credentials:
 ```python
 # Bad
-bedrock_model_id = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+bedrock_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Good
 bedrock_model_id = os.getenv("BEDROCK_MODEL_ID")

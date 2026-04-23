@@ -10,7 +10,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     from pydantic_settings import BaseSettings as Settings
 
-    def get_regional_model_id(region: str, base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0") -> str:
+    def get_regional_model_id(region: str, base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0") -> str:
         if region.startswith("us-"):
             return f"us.{base_model}"
         elif region.startswith("eu-"):
@@ -23,7 +23,7 @@ class ClaimsManagementSettings(Settings):
 
     data_prefix: str = "samples/claims_management"
 
-    _base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @property
     def claims_intake_agent_model(self) -> str:

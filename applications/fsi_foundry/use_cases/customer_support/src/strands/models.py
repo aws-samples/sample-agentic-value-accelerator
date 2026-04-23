@@ -51,7 +51,7 @@ class SupportRequest(BaseModel):
 class TicketClassification(BaseModel):
     """Ticket classification details."""
     category: str = Field(..., description="Ticket category")
-    urgency: UrgencyLevel = Field(default=UrgencyLevel.MEDIUM, description="Ticket urgency level")
+    urgency: str | None = Field(default=None, description="Ticket urgency level")
     required_expertise: list[str] = Field(default_factory=list, description="Required expertise areas")
     tags: list[str] = Field(default_factory=list, description="Classification tags")
 
@@ -67,7 +67,7 @@ class ResolutionSuggestion(BaseModel):
 
 class EscalationDecision(BaseModel):
     """Escalation decision details."""
-    status: EscalationStatus = Field(..., description="Escalation status")
+    status: str | None = Field(default=None, description="Escalation status")
     reason: str | None = Field(default=None, description="Reason for escalation decision")
     recommended_team: str | None = Field(default=None, description="Recommended team for escalation")
     priority_override: UrgencyLevel | None = Field(default=None, description="Priority override if escalated")

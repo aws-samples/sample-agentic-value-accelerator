@@ -36,8 +36,8 @@ class ResearchRequest(BaseModel):
 
 
 class EconomicOverview(BaseModel):
-    primary_indicator: EconomicIndicator = Field(..., description="Primary indicator analyzed")
-    trend_direction: TrendDirection = Field(..., description="Overall trend direction")
+    primary_indicator: str | None = Field(default=None, description="Primary indicator analyzed")
+    trend_direction: str | None = Field(default=None, description="Overall trend direction")
     data_sources_used: list[str] = Field(default_factory=list, description="Data sources aggregated")
     key_findings: dict[str, str] = Field(default_factory=dict, description="Key findings")
     correlations_identified: list[str] = Field(default_factory=list, description="Correlations identified")

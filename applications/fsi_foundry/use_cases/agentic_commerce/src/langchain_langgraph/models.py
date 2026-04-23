@@ -27,13 +27,13 @@ class CommerceRequest(BaseModel):
     additional_context: str | None = Field(default=None)
 
 class OfferResult(BaseModel):
-    status: OfferStatus = Field(default=OfferStatus.PENDING_REVIEW)
+    status: str = Field(default="pending_review")
     offers: list[str] = Field(default_factory=list)
     personalization_score: float = Field(default=0.0, ge=0.0, le=1.0)
     notes: list[str] = Field(default_factory=list)
 
 class FulfillmentResult(BaseModel):
-    status: FulfillmentStatus = Field(default=FulfillmentStatus.IN_PROGRESS)
+    status: str = Field(default="in_progress")
     channel: str = Field(default="digital")
     steps_completed: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)

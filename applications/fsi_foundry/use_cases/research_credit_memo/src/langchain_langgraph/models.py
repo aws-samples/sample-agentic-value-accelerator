@@ -53,8 +53,8 @@ class MemoRequest(BaseModel):
 
 class CreditAnalysisDetail(BaseModel):
     """Details of the credit analysis."""
-    rating: CreditRating = Field(..., description="Recommended credit rating")
-    memo_format: MemoFormat = Field(default=MemoFormat.STANDARD, description="Memo format level")
+    rating: str = Field(default="AAA", description="Recommended credit rating")
+    memo_format: str | None = Field(default=None, description="Memo format level")
     confidence_score: float = Field(default=0.5, description="Analysis confidence score 0-1")
     key_ratios: list[str] = Field(default_factory=list, description="Key financial ratios computed")
     risk_factors: list[str] = Field(default_factory=list, description="Identified risk factors")

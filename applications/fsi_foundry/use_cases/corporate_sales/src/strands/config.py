@@ -13,7 +13,7 @@ class CorporateSalesSettings(Settings):
 
     data_prefix: str = "samples/corporate_sales"
 
-    _base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @property
     def lead_scorer_model(self) -> str:

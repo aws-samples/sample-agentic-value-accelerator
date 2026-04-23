@@ -11,7 +11,7 @@ class CallCenterAnalyticsSettings(Settings):
     """Call center analytics specific settings."""
 
     data_prefix: str = "samples/call_center_analytics"
-    _base_model: str = "anthropic.claude-sonnet-4-20250514-v1:0"
+    _base_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @property
     def call_monitor_model(self) -> str:

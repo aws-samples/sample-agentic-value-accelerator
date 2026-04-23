@@ -15,8 +15,8 @@ class DocumentSearchSettings(Settings):
     data_prefix: str = "samples/document_search"
 
     # Agent configuration
-    document_indexer_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    search_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    document_indexer_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    search_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     # Document IDs available in the corpus (add new IDs as data grows)
     document_ids: list[str] = ["DOC001"]

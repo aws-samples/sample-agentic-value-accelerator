@@ -3,9 +3,9 @@ from config.settings import Settings
 
 class InvestmentAdvisorySettings(Settings):
     data_prefix: str = "samples/investment_advisory"
-    portfolio_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    market_researcher_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    client_profiler_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    portfolio_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    market_researcher_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    client_profiler_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     max_analysis_time_seconds: int = 60
     risk_tolerance_threshold: float = 0.7
     rebalancing_trigger_pct: float = 0.05

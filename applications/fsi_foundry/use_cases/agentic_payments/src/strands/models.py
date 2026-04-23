@@ -56,7 +56,7 @@ class PaymentRequest(BaseModel):
 
 class ValidationResult(BaseModel):
     """Payment validation result details."""
-    status: ValidationStatus = Field(..., description="Validation status")
+    status: str | None = Field(default=None, description="Validation status")
     rules_checked: list[str] = Field(default_factory=list, description="Rules and limits checked")
     violations: list[str] = Field(default_factory=list, description="Rule violations detected")
     sanctions_clear: bool = Field(default=True, description="Sanctions screening result")
@@ -66,7 +66,7 @@ class ValidationResult(BaseModel):
 
 class RoutingDecision(BaseModel):
     """Payment routing decision details."""
-    selected_rail: PaymentRail = Field(..., description="Selected payment rail")
+    selected_rail: str | None = Field(default=None, description="Selected payment rail")
     alternative_rails: list[PaymentRail] = Field(default_factory=list, description="Alternative payment rails")
     estimated_settlement_time: str = Field(..., description="Estimated settlement time")
     routing_cost: float = Field(..., ge=0, description="Estimated routing cost")

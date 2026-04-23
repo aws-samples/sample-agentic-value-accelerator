@@ -13,9 +13,9 @@ class CorporateSalesSettings(Settings):
 
     data_prefix: str = "samples/corporate_sales"
 
-    lead_scorer_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    opportunity_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    pitch_preparer_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    lead_scorer_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    opportunity_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    pitch_preparer_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     lead_score_hot_threshold: int = 80
     lead_score_warm_threshold: int = 50

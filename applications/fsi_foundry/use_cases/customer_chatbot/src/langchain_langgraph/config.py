@@ -13,9 +13,9 @@ class CustomerChatbotSettings(Settings):
 
     data_prefix: str = "samples/customer_chatbot"
 
-    conversation_manager_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    account_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    transaction_agent_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    conversation_manager_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    account_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    transaction_agent_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     max_response_time_seconds: int = 15
     context_window_turns: int = 10

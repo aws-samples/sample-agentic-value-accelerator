@@ -12,9 +12,9 @@ class CallCenterAnalyticsSettings(Settings):
 
     data_prefix: str = "samples/call_center_analytics"
 
-    call_monitor_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    agent_performance_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    operations_insight_generator_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    call_monitor_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    agent_performance_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    operations_insight_generator_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     quality_score_threshold: float = 0.8
     average_handle_time_target: int = 300

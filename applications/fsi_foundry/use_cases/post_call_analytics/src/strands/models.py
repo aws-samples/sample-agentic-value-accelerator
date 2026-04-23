@@ -46,19 +46,19 @@ class TranscriptionResult(BaseModel):
 
 
 class SentimentResult(BaseModel):
-    overall_sentiment: SentimentLevel = Field(default=SentimentLevel.NEUTRAL, description="Overall call sentiment")
-    customer_sentiment: SentimentLevel = Field(default=SentimentLevel.NEUTRAL, description="Customer sentiment")
-    agent_sentiment: SentimentLevel = Field(default=SentimentLevel.NEUTRAL, description="Agent sentiment")
+    overall_sentiment: str | None = Field(default=None, description="Overall call sentiment")
+    customer_sentiment: str | None = Field(default=None, description="Customer sentiment")
+    agent_sentiment: str | None = Field(default=None, description="Agent sentiment")
     satisfaction_score: float = Field(default=0.5, ge=0.0, le=1.0, description="Customer satisfaction score 0-1")
     emotional_shifts: list[str] = Field(default_factory=list, description="Notable emotional shifts during call")
 
 
 class ActionItem(BaseModel):
     description: str = Field(..., description="Action item description")
-    assignee: str = Field(default="unassigned", description="Who is responsible")
-    priority: ActionPriority = Field(default=ActionPriority.MEDIUM, description="Priority level")
+    assignee: str | None = Field(default=None, description="Who is responsible")
+    priority: str | None = Field(default=None, description="Priority level")
     deadline: str | None = Field(default=None, description="Deadline if mentioned")
-    status: ActionStatus = Field(default=ActionStatus.PENDING, description="Current status")
+    status: str | None = Field(default=None, description="Current status")
 
 
 class PostCallResponse(BaseModel):

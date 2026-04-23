@@ -12,9 +12,9 @@ class LifeInsuranceAgentSettings(Settings):
 
     data_prefix: str = "samples/life_insurance_agent"
 
-    needs_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    product_matcher_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    underwriting_assistant_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    needs_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    product_matcher_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    underwriting_assistant_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     min_coverage_ratio: float = 0.8
     max_premium_to_income_ratio: float = 0.1

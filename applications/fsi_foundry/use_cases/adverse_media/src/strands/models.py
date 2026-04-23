@@ -45,7 +45,7 @@ class ScreeningRequest(BaseModel):
 
 class RiskSignal(BaseModel):
     signal_type: str = Field(..., description="Type of risk signal")
-    severity: RiskSeverity = Field(default=RiskSeverity.MEDIUM, description="Signal severity")
+    severity: str | None = Field(default=None, description="Signal severity")
     confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Confidence score")
     description: str = Field(..., description="Description of the risk signal")
     source_references: list[str] = Field(default_factory=list, description="References to source articles")
@@ -55,7 +55,7 @@ class RiskSignal(BaseModel):
 class MediaFindings(BaseModel):
     articles_screened: int = Field(default=0, description="Number of articles screened")
     adverse_mentions: int = Field(default=0, description="Number of adverse mentions found")
-    sentiment: SentimentLevel = Field(default=SentimentLevel.NEUTRAL, description="Overall sentiment")
+    sentiment: str | None = Field(default=None, description="Overall sentiment")
     categories: list[str] = Field(default_factory=list, description="Categories of adverse media")
     key_findings: list[str] = Field(default_factory=list, description="Key findings from media screening")
     sources: list[str] = Field(default_factory=list, description="Media sources reviewed")

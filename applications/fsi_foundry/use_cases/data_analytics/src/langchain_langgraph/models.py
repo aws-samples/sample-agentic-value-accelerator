@@ -49,7 +49,7 @@ class AnalyticsRequest(BaseModel):
 
 class AnalyticsDetail(BaseModel):
     """Details of the analytics assessment."""
-    data_quality: DataQuality = Field(..., description="Data quality classification")
+    data_quality: str | None = Field(default=None, description="Data quality classification")
     insight_confidence: InsightConfidence = Field(
         default=InsightConfidence.MEDIUM, description="Insight confidence level"
     )

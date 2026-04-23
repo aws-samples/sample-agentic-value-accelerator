@@ -40,12 +40,12 @@ class RegulatoryMapping(BaseModel):
     regulation: str = Field(..., description="Regulatory framework (e.g., AML, BSA, GDPR)")
     requirement: str = Field(..., description="Specific regulatory requirement")
     violation_type: str = Field(..., description="Classification of the violation")
-    severity: ViolationSeverity = Field(default=ViolationSeverity.MEDIUM, description="Violation severity")
+    severity: str | None = Field(default=None, description="Violation severity")
     evidence_references: list[str] = Field(default_factory=list, description="References to supporting evidence")
 
 
 class InvestigationFindings(BaseModel):
-    status: InvestigationStatus = Field(..., description="Investigation status")
+    status: str | None = Field(default=None, description="Investigation status")
     violations_found: int = Field(default=0, description="Number of violations identified")
     evidence_items: list[str] = Field(default_factory=list, description="Collected evidence items")
     patterns_identified: list[str] = Field(default_factory=list, description="Identified violation patterns")

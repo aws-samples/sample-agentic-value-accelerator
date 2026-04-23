@@ -382,13 +382,13 @@ To use Claude Sonnet 4.5 instead of 4.0:
 1. **Update Terraform variables** (`platform/iac/agentcore/runtime/variables.tf`):
 ```hcl
 variable "bedrock_model_id" {
-  default = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  default = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 ```
 
 2. **Update application settings** (`platform/src/config/settings.py`):
 ```python
-bedrock_model_id: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+bedrock_model_id: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 ```
 
 3. **Rebuild and redeploy:**
@@ -566,7 +566,7 @@ To deploy to a different region (e.g., us-west-2):
 # Create region-specific tfvars
 cat > platform/iac/agentcore/terraform.tfvars.us-west-2 << EOF
 aws_region = "us-west-2"
-bedrock_model_id = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+bedrock_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 EOF
 
 # Deploy with region override

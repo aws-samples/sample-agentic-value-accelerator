@@ -39,10 +39,6 @@ venv/
 .bedrock_agentcore.yaml
 .bedrock_agentcore/
 
-# Docker
-# Ignore root-level Dockerfile (pattern-specific Dockerfiles are in docker/)
-Dockerfile
-
 # Ignore Docker build artifacts but keep docker/ directory structure
 docker/**/*.tar.gz
 docker/**/*.zip

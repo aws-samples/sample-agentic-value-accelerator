@@ -48,8 +48,8 @@ class AssistantRequest(BaseModel):
 
 class TaskResult(BaseModel):
     """Details of the assistant task result."""
-    status: TaskStatus = Field(..., description="Task completion status")
-    priority: Priority = Field(default=Priority.MEDIUM, description="Task priority")
+    status: str | None = Field(default=None, description="Task completion status")
+    priority: str | None = Field(default=None, description="Task priority")
     output_data: dict = Field(default_factory=dict, description="Generated output data")
     actions_performed: list[str] = Field(default_factory=list, description="Actions performed")
     follow_up_items: list[str] = Field(default_factory=list, description="Suggested follow-up items")

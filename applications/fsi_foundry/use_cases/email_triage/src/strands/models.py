@@ -28,8 +28,8 @@ class TriageRequest(BaseModel):
     additional_context: str | None = Field(default=None, description="Additional context")
 
 class ClassificationDetail(BaseModel):
-    category: EmailCategory = Field(..., description="Email category")
-    urgency: UrgencyLevel = Field(default=UrgencyLevel.MEDIUM, description="Urgency level")
+    category: str | None = Field(default=None, description="Email category")
+    urgency: str | None = Field(default=None, description="Urgency level")
     sender_importance: float = Field(default=0.5, description="Sender importance score 0-1")
     topics: list[str] = Field(default_factory=list, description="Identified topics")
     actions_required: list[str] = Field(default_factory=list, description="Extracted action items")

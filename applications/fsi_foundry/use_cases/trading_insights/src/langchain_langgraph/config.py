@@ -13,9 +13,9 @@ class TradingInsightsSettings(Settings):
 
     data_prefix: str = "samples/trading_insights"
 
-    signal_generator_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    cross_asset_analyst_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    scenario_modeler_model: str = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    signal_generator_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    cross_asset_analyst_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    scenario_modeler_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     signal_confidence_threshold: float = 0.7
     correlation_lookback_days: int = 90

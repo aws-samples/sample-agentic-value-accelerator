@@ -128,7 +128,7 @@ Test the agent logic locally without deploying to AWS:
 ```bash
 export DEPLOYMENT_MODE=local
 export AWS_REGION=us-east-1
-export BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
+export BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
 export S3_BUCKET_NAME=your-bucket-name
 export AWS_ACCESS_KEY_ID=your-key
 export AWS_SECRET_ACCESS_KEY=your-secret

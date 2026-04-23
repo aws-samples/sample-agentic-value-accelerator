@@ -44,8 +44,8 @@ class AssessmentRequest(BaseModel):
 
 class CreditRiskScore(BaseModel):
     score: int = Field(..., ge=0, le=100, description="Risk score from 0-100")
-    level: RiskLevel = Field(..., description="Risk level classification")
-    rating: CreditRating = Field(..., description="Credit rating")
+    level: str | None = Field(default=None, description="Risk level classification")
+    rating: str = Field(default="AAA", description="Credit rating")
     probability_of_default: float = Field(..., ge=0.0, le=1.0, description="Probability of default")
     loss_given_default: float = Field(..., ge=0.0, le=1.0, description="Loss given default")
     factors: list[str] = Field(default_factory=list, description="Contributing risk factors")

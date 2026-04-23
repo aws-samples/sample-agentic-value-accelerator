@@ -54,9 +54,9 @@ class ChatRequest(BaseModel):
 
 class ActionDetail(BaseModel):
     """Details of an action taken during the conversation."""
-    action_type: ActionType = Field(..., description="Type of action performed")
+    action_type: str | None = Field(default=None, description="Type of action performed")
     description: str = Field(..., description="Description of the action")
-    status: ConversationStatus = Field(default=ConversationStatus.RESOLVED, description="Action status")
+    status: str | None = Field(default=None, description="Action status")
     details: dict = Field(default_factory=dict, description="Additional action details")
 
 

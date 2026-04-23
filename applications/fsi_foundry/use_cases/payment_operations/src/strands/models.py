@@ -32,14 +32,14 @@ class OperationsRequest(BaseModel):
 
 
 class ExceptionResolution(BaseModel):
-    severity: ExceptionSeverity = Field(default=ExceptionSeverity.MEDIUM)
+    severity: str = Field(default="medium")
     resolution: str = Field(default="Pending review")
     actions_taken: list[str] = Field(default_factory=list)
     requires_escalation: bool = Field(default=False)
 
 
 class SettlementResult(BaseModel):
-    status: SettlementStatus = Field(default=SettlementStatus.PENDING)
+    status: str = Field(default="pending")
     settlement_date: str | None = Field(default=None)
     reconciled: bool = Field(default=False)
     notes: list[str] = Field(default_factory=list)

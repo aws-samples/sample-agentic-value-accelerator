@@ -33,8 +33,8 @@ class TradingRequest(BaseModel):
 
 
 class MarketAnalysisDetail(BaseModel):
-    condition: MarketCondition = Field(..., description="Overall market condition")
-    urgency: ExecutionUrgency = Field(default=ExecutionUrgency.MEDIUM, description="Execution urgency")
+    condition: str | None = Field(default=None, description="Overall market condition")
+    urgency: str | None = Field(default=None, description="Execution urgency")
     confidence_score: float = Field(default=0.5, description="Analysis confidence 0-1")
     key_levels: list[str] = Field(default_factory=list, description="Key price levels")
     trade_ideas: list[str] = Field(default_factory=list, description="Generated trade ideas")

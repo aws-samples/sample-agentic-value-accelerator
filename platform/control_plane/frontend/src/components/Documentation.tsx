@@ -546,7 +546,7 @@ use_cases/kyc_banking/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent risk scoring) |
 | **Risk Threshold (High)** | 75 |
@@ -887,7 +887,7 @@ use_cases/customer_service/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -1181,7 +1181,7 @@ use_cases/document_search/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -1488,7 +1488,7 @@ use_cases/agentic_payments/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -1772,7 +1772,7 @@ use_cases/payment_operations/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -2065,7 +2065,7 @@ use_cases/customer_chatbot/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -2369,7 +2369,7 @@ use_cases/customer_support/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -2668,7 +2668,7 @@ use_cases/ai_assistant/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -2976,7 +2976,7 @@ use_cases/corporate_sales/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -3284,7 +3284,7 @@ use_cases/agentic_commerce/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -3607,7 +3607,7 @@ use_cases/fraud_detection/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent risk scoring) |
 
@@ -3931,7 +3931,7 @@ use_cases/document_processing/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent extraction) |
 
@@ -4250,7 +4250,7 @@ use_cases/credit_risk/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent risk scoring) |
 
@@ -4559,7 +4559,7 @@ use_cases/compliance_investigation/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent analysis) |
 
@@ -4870,7 +4870,7 @@ use_cases/adverse_media/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent screening) |
 
@@ -5178,7 +5178,7 @@ use_cases/investment_advisory/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -5478,7 +5478,7 @@ use_cases/earnings_summarization/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -5778,7 +5778,7 @@ use_cases/economic_research/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -6058,7 +6058,7 @@ use_cases/email_triage/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -6357,7 +6357,7 @@ use_cases/trading_assistant/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -6654,7 +6654,7 @@ use_cases/research_credit_memo/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -6960,7 +6960,7 @@ use_cases/investment_management/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -7261,7 +7261,7 @@ use_cases/data_analytics/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -7562,7 +7562,7 @@ use_cases/trading_insights/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -7875,7 +7875,7 @@ use_cases/claims_management/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -8178,7 +8178,7 @@ use_cases/life_insurance_agent/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -8484,7 +8484,7 @@ use_cases/customer_engagement/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -8792,7 +8792,7 @@ use_cases/call_center_analytics/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -9096,7 +9096,7 @@ use_cases/post_call_analytics/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -9377,7 +9377,7 @@ use_cases/call_summarization/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -9692,7 +9692,7 @@ use_cases/legacy_migration/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -9998,7 +9998,7 @@ use_cases/code_generation/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -10306,7 +10306,7 @@ use_cases/mainframe_migration/
 
 | Setting | Value |
 |---------|-------|
-| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-haiku-4-5-20251001-v1:0\`) |
 | **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
 | **Temperature** | 0.1 (deterministic for consistent output) |
 
@@ -10704,7 +10704,7 @@ POST /api/v1/applications/foundry/deploy
   "framework": "strands",
   "aws_region": "us-east-1",
   "parameters": {
-    "model_id": "anthropic.claude-sonnet-4-20250514-v1:0"
+    "model_id": "anthropic.claude-haiku-4-5-20251001-v1:0"
   }
 }
 \`\`\`
@@ -10732,7 +10732,7 @@ POST /api/v1/deployments
   "aws_region": "us-east-1",
   "parameters": {
     "project_name": "my-agent",
-    "model_id": "anthropic.claude-sonnet-4-20250514-v1:0"
+    "model_id": "anthropic.claude-haiku-4-5-20251001-v1:0"
   }
 }
 \`\`\`

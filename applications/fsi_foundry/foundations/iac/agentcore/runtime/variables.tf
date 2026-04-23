@@ -30,7 +30,7 @@ variable "agent_name" {
 variable "bedrock_model_id" {
   description = "Bedrock model ID for the agent"
   type        = string
-  default     = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 
 variable "image_tag" {
