@@ -1,0 +1,291 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Agent Safety — Kill Switch Infrastructure.
+  Creates: Kill Switch Lambda with IAM permissions to attach/remove
+  deny policies on agent execution roles.
+
+Parameters:
+  RegistryTableName:
+    Type: String
+    Default: agent-registry
+    Description: DynamoDB table for agent registry (must exist)
+
+  InterventionTableName:
+    Type: String
+    Default: intervention-log
+    Description: DynamoDB table for intervention audit log (must exist)
+
+  CostSignalsTableName:
+    Type: String
+    Default: cost-signals
+
+  ObsSignalsTableName:
+    Type: String
+    Default: observability-signals
+
+  EvalSignalsTableName:
+    Type: String
+    Default: evaluation-signals
+
+Resources:
+
+  KillSwitchLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-KillSwitchRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: KillSwitchPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: IAMPolicyManagement
+                Effect: Allow
+                Action:
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                Resource: '*'
+              - Sid: AgentCoreReadAccess
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetAgentRuntime
+                  - bedrock-agentcore:ListAgentRuntimes
+                Resource: '*'
+              - Sid: DynamoDBAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${InterventionTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CostSignalsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ObsSignalsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EvalSignalsTableName}'
+
+  KillSwitchLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: KillSwitchLambdaRole
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-KillSwitch'
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 256
+      Role: !GetAtt KillSwitchLambdaRole.Arn
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          REGISTRY_TABLE: !Ref RegistryTableName
+          INTERVENTION_TABLE: !Ref InterventionTableName
+          COST_SIGNALS_TABLE: !Ref CostSignalsTableName
+          OBS_SIGNALS_TABLE: !Ref ObsSignalsTableName
+          EVAL_SIGNALS_TABLE: !Ref EvalSignalsTableName
+      Code:
+        ZipFile: |
+          import json, logging, os, uuid, boto3
+          from concurrent.futures import ThreadPoolExecutor
+          from datetime import datetime, timezone
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          REGION = os.environ.get("REGION", "us-east-1")
+          REGISTRY_TABLE = os.environ.get("REGISTRY_TABLE", "agent-registry")
+          INTERVENTION_TABLE = os.environ.get("INTERVENTION_TABLE", "intervention-log")
+          COST_SIGNALS_TABLE = os.environ.get("COST_SIGNALS_TABLE", "cost-signals")
+          OBS_SIGNALS_TABLE = os.environ.get("OBS_SIGNALS_TABLE", "observability-signals")
+          EVAL_SIGNALS_TABLE = os.environ.get("EVAL_SIGNALS_TABLE", "evaluation-signals")
+          POLICY_NAME = "AgentSafety-KillSwitch"
+          POLICY_DOC = json.dumps({"Version":"2012-10-17","Statement":[{"Sid":"AgentSafetyKillSwitch","Effect":"Deny","Action":["bedrock:InvokeModel","bedrock:InvokeModelWithResponseStream"],"Resource":"*"}]})
+          retry = Config(retries={"max_attempts":3,"mode":"adaptive"})
+          iam = boto3.client("iam", config=retry)
+          agentcore = boto3.client("bedrock-agentcore-control", region_name=REGION, config=retry)
+          dynamodb = boto3.resource("dynamodb", region_name=REGION)
+
+          def _scan_all(table):
+              items, resp = [], table.scan()
+              items.extend(resp.get("Items", []))
+              while "LastEvaluatedKey" in resp:
+                  resp = table.scan(ExclusiveStartKey=resp["LastEvaluatedKey"])
+                  items.extend(resp.get("Items", []))
+              return items
+
+          def _get_agents():
+              return _scan_all(dynamodb.Table(REGISTRY_TABLE))
+
+          def _resolve_role_from_arn(arn):
+              """Get IAM role name from AgentCore runtime ARN."""
+              try:
+                  rid = arn.rsplit("/", 1)[-1] if "/" in arn else arn
+                  rt = agentcore.get_agent_runtime(agentRuntimeId=rid)
+                  role_arn = rt.get("roleArn", "")
+                  if role_arn:
+                      return role_arn.rsplit("/", 1)[-1]
+              except ClientError as e:
+                  logger.warning(f"Cannot resolve role for {arn}: {e}")
+              return None
+
+          def _unique_roles(agents):
+              """Map unique IAM role names to agent names. Resolves from registry field or AgentCore API."""
+              m = {}
+              for a in agents:
+                  name = a.get("agent_name", "")
+                  # Skip deleted agents
+                  if a.get("runtime_status") == "DELETED" or a.get("status") == "deleted":
+                      continue
+                  # Try iam_role_name first
+                  role = a.get("iam_role_name", "")
+                  # If not set, resolve from AgentCore API using runtime ARN
+                  if not role:
+                      arn = a.get("agent_runtime_arn", "")
+                      if arn:
+                          role = _resolve_role_from_arn(arn)
+                          # Cache it back to registry for next time
+                          if role:
+                              try:
+                                  dynamodb.Table(REGISTRY_TABLE).update_item(
+                                      Key={"agent_name": name},
+                                      UpdateExpression="SET iam_role_name = :r",
+                                      ExpressionAttributeValues={":r": role})
+                              except: pass
+                  if role:
+                      m.setdefault(role, []).append(name)
+                  else:
+                      logger.warning(f"[SKIP] {name} — no role found")
+              return m
+
+          def _attach(role):
+              try:
+                  iam.put_role_policy(RoleName=role, PolicyName=POLICY_NAME, PolicyDocument=POLICY_DOC)
+                  return "revoked"
+              except ClientError as e:
+                  if e.response["Error"]["Code"] == "NoSuchEntity": return "role_not_found"
+                  logger.error(f"Attach failed for {role}: {e}")
+                  return "error"
+
+          def _remove(role):
+              try:
+                  iam.delete_role_policy(RoleName=role, PolicyName=POLICY_NAME)
+                  return "restored"
+              except ClientError as e:
+                  if e.response["Error"]["Code"] == "NoSuchEntity": return "not_revoked"
+                  logger.error(f"Remove failed for {role}: {e}")
+                  return "error"
+
+          def _check(role):
+              try:
+                  iam.get_role_policy(RoleName=role, PolicyName=POLICY_NAME)
+                  return True
+              except ClientError:
+                  return False
+
+          def _update_registry(names, status):
+              t = dynamodb.Table(REGISTRY_TABLE)
+              now = datetime.now(timezone.utc).isoformat()
+              for n in names:
+                  try: t.update_item(Key={"agent_name":n},UpdateExpression="SET #s=:st,updated_at=:now,kill_switch_at=:now",ExpressionAttributeNames={"#s":"status"},ExpressionAttributeValues={":st":status,":now":now})
+                  except: pass
+
+          def _cascade(names, action):
+              now = datetime.now(timezone.utc).isoformat()
+              for name in names:
+                  try: dynamodb.Table(COST_SIGNALS_TABLE).update_item(Key={"agent_name":name},UpdateExpression="SET last_action=:a,last_action_at=:t",ExpressionAttributeValues={":a":action,":t":now})
+                  except: pass
+                  for tbl in [OBS_SIGNALS_TABLE, EVAL_SIGNALS_TABLE]:
+                      try:
+                          for i in dynamodb.Table(tbl).scan().get("Items",[]):
+                              if i.get("agent_name")==name:
+                                  dynamodb.Table(tbl).update_item(Key={"agent_name":i["agent_name"],"signal_key":i["signal_key"]},UpdateExpression="SET last_action=:a,last_action_at=:t",ExpressionAttributeValues={":a":action,":t":now})
+                      except: pass
+
+          def _log(names, action, reason, admin_user, role_results):
+              t = dynamodb.Table(INTERVENTION_TABLE)
+              now = datetime.now(timezone.utc).isoformat()
+              ids = []
+              for n in names:
+                  iid = str(uuid.uuid4())
+                  try:
+                      t.put_item(Item={"intervention_id":iid,"timestamp":now,"agent_name":n,"action":action,"triggered_by":"human","reason":reason,"admin_user":admin_user,"role_results":role_results,"rollback_status":"none"})
+                      ids.append(iid)
+                  except: pass
+              return ids
+
+          def handler(event, context):
+              action = event.get("action","")
+              reason = event.get("reason","")
+              admin = event.get("admin_user","")
+
+              if action == "status":
+                  agents = _get_agents()
+                  rm = _unique_roles(agents)
+                  revoked_roles = {}
+                  with ThreadPoolExecutor(max_workers=20) as pool:
+                      futs = {pool.submit(_check, r): r for r in rm}
+                      for f in futs: revoked_roles[futs[f]] = f.result()
+                  agent_list = []
+                  any_rev, all_rev = False, bool(rm)
+                  for a in agents:
+                      name = a.get("agent_name","")
+                      if a.get("runtime_status") == "DELETED" or a.get("status") == "deleted":
+                          continue
+                      r = a.get("iam_role_name","")
+                      rev = revoked_roles.get(r, False) if r else False
+                      if rev: any_rev = True
+                      else: all_rev = False
+                      agent_list.append({"agent_name":name,"iam_role_name":r,"revoked":rev,"registry_status":a.get("status",""),"team":a.get("team","")})
+                  return {"statusCode":200,"body":json.dumps({"kill_switch_active":all_rev and any_rev,"any_revoked":any_rev,"all_revoked":all_rev,"agents":agent_list,"roles_checked":len(rm),"total_agents":len(agent_list),"revoked_agents":sum(1 for a in agent_list if a["revoked"]),"timestamp":datetime.now(timezone.utc).isoformat()})}
+
+              if action in ("revoke","restore"):
+                  if not reason or not admin:
+                      return {"statusCode":400,"body":json.dumps({"error":"reason and admin_user required"})}
+                  target_agent = event.get("agent_name", "")
+                  agents = _get_agents()
+                  # If agent_name provided, filter to just that agent
+                  if target_agent:
+                      agents = [a for a in agents if a.get("agent_name") == target_agent]
+                      if not agents:
+                          return {"statusCode":404,"body":json.dumps({"error":f"Agent '{target_agent}' not found in registry"})}
+                  rm = _unique_roles(agents)
+                  if not rm:
+                      return {"statusCode":200,"body":json.dumps({"status":"warning","detail":"no active agents with resolvable IAM roles","roles_affected":0,"agents_affected":0})}
+                  fn = _attach if action=="revoke" else _remove
+                  ok_vals = ["revoked"] if action=="revoke" else ["restored","not_revoked"]
+                  rr = {}
+                  with ThreadPoolExecutor(max_workers=20) as pool:
+                      futs = {pool.submit(fn, r): r for r in rm}
+                      for f in futs: rr[futs[f]] = f.result()
+                  affected = [n for r, names in rm.items() if rr.get(r) in ok_vals for n in names]
+                  new_status = "revoked" if action=="revoke" else "active"
+                  sig_action = "access_revoked" if action=="revoke" else "access_restored"
+                  _update_registry(affected, new_status)
+                  _cascade(affected, sig_action)
+                  iids = _log(affected, f"{action}_access", reason, admin, rr)
+                  cnt = sum(1 for s in rr.values() if s in ok_vals)
+                  return {"statusCode":200,"body":json.dumps({"status":new_status,"roles_affected":cnt,"roles_total":len(rm),"agents_affected":len(affected),"agents_total":len(agents),"role_results":rr,"intervention_ids":iids,"reason":reason,"admin_user":admin,"timestamp":datetime.now(timezone.utc).isoformat()})}
+
+              return {"statusCode":400,"body":json.dumps({"error":f"Unknown action: {action}"})}
+      Tags:
+        - Key: component
+          Value: agent-safety-kill-switch
+
+Outputs:
+  KillSwitchLambdaArn:
+    Description: Lambda for kill switch operations (invoked by dashboard)
+    Value: !GetAtt KillSwitchLambda.Arn
+
+  KillSwitchLambdaName:
+    Description: Lambda function name (set as KILL_SWITCH_LAMBDA in dashboard)
+    Value: !Sub '${AWS::StackName}-KillSwitch'

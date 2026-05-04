@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Agent Safety — Observability Controls Infrastructure.
+  Creates: Auto Alarms Lambda + EventBridge rule.
+  When any AgentCore agent is created/deleted, CloudWatch threshold-based
+  alarms are auto-created/deleted and obs-signals DynamoDB table is updated.
+
+  Deploy: aws cloudformation deploy --template-file template.yaml \
+    --stack-name agent-safety-observability-controls --capabilities CAPABILITY_NAMED_IAM
+
+Parameters:
+  ObsSignalsTableName:
+    Type: String
+    Default: observability-signals
+    Description: DynamoDB table for observability signals (must exist)
+
+  RegistryTableName:
+    Type: String
+    Default: agent-registry
+    Description: DynamoDB table for agent registry (must exist)
+
+Resources:
+
+  # =========================================================================
+  # Auto Alarms Lambda — Creates/deletes CW threshold alarms on agent lifecycle
+  # =========================================================================
+  AutoAlarmsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-AutoAlarmsRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AutoAlarmsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CloudWatchAlarms
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:PutCompositeAlarm
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                Resource: '*'
+              - Sid: DynamoDBObsSignals
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ObsSignalsTableName}'
+
+  AutoAlarmsLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: AutoAlarmsLambdaRole
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-AutoAlarms'
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 128
+      Role: !GetAtt AutoAlarmsLambdaRole.Arn
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          OBS_SIGNALS_TABLE: !Ref ObsSignalsTableName
+      Code:
+        ZipFile: |
+          import json,logging,os,boto3
+          from datetime import datetime,timezone
+          from botocore.exceptions import ClientError
+          logger=logging.getLogger();logger.setLevel(logging.INFO)
+          REGION=os.environ.get("REGION","us-east-1")
+          OBS_TABLE=os.environ.get("OBS_SIGNALS_TABLE","observability-signals")
+          NS="AgentCore/Agents"
+          cw=boto3.client("cloudwatch",region_name=REGION)
+          ddb=boto3.resource("dynamodb",region_name=REGION)
+          DEFS=[
+            {"s":"high-latency","m":"InvocationLatency","st":"Average","th":10000,"op":"GreaterThanThreshold","d":"High latency — avg response time > 10s"},
+            {"s":"error-rate","m":"InvocationError","st":"Sum","th":5,"op":"GreaterThanThreshold","d":"Error rate — more than 5 errors per period"},
+            {"s":"token-usage","m":"TotalTokens","st":"Sum","th":100000,"op":"GreaterThanThreshold","d":"Token usage — over 100k tokens per period"},
+            {"s":"invocation-count","m":"InvocationCount","st":"Sum","th":200,"op":"GreaterThanThreshold","d":"Invocation count — over 200 invocations per period"},
+          ]
+          def _create(name):
+              children=[]
+              for d in DEFS:
+                  an=f"{name}-{d['s']}";children.append(an)
+                  try:cw.put_metric_alarm(AlarmName=an,AlarmDescription=f"{d['d']} for {name}",Namespace=NS,MetricName=d["m"],Dimensions=[{"Name":"AgentName","Value":name}],Statistic=d["st"],Period=300,EvaluationPeriods=3,DatapointsToAlarm=2,Threshold=d["th"],ComparisonOperator=d["op"],TreatMissingData="notBreaching")
+                  except ClientError as e:logger.error(f"alarm {an}: {e}")
+              cn=f"{name}-composite"
+              try:cw.put_composite_alarm(AlarmName=cn,AlarmDescription=f"Composite alarm for {name} — monitors latency, errors, tokens, invocations",AlarmRule=" OR ".join(f'ALARM("{n}")' for n in children))
+              except ClientError as e:logger.error(f"composite: {e}")
+              now=datetime.now(timezone.utc).isoformat();t=ddb.Table(OBS_TABLE)
+              try:t.put_item(Item={"agent_name":name,"signal_key":cn,"alarm_name":cn,"alarm_state":"OK","severity":"low","description":f"Composite alarm for {name} — monitors latency, errors, tokens, invocations","synced_at":now})
+              except:pass
+              return children+[cn]
+          def _delete(name):
+              ans=[f"{name}-{d['s']}" for d in DEFS];cn=f"{name}-composite"
+              try:cw.delete_alarms(AlarmNames=[cn])
+              except:pass
+              try:cw.delete_alarms(AlarmNames=ans)
+              except:pass
+              t=ddb.Table(OBS_TABLE)
+              try:
+                  for i in t.scan(FilterExpression="agent_name=:n",ExpressionAttributeValues={":n":name}).get("Items",[]):
+                      t.delete_item(Key={"agent_name":i["agent_name"],"signal_key":i["signal_key"]})
+              except:pass
+          def handler(event,context):
+              logger.info(json.dumps(event))
+              d=event.get("detail",{});en=d.get("eventName","")
+              rp=d.get("requestParameters",{});re=d.get("responseElements",{})
+              name=rp.get("agentRuntimeName","")
+              if not name:
+                  rid=rp.get("agentRuntimeId","") or re.get("agentRuntimeId","")
+                  if rid:p=rid.rsplit("-",1);name=p[0] if len(p)==2 else rid
+              if not name:return{"statusCode":200,"body":"no agent name"}
+              if en=="CreateAgentRuntime":a=_create(name);return{"statusCode":200,"body":json.dumps({"action":"created","agent":name,"alarms":a})}
+              elif en=="DeleteAgentRuntime":_delete(name);return{"statusCode":200,"body":json.dumps({"action":"deleted","agent":name})}
+              return{"statusCode":200,"body":f"unhandled: {en}"}
+      Tags:
+        - Key: component
+          Value: agent-safety-observability-controls
+
+  # =========================================================================
+  # EventBridge Rule — Triggers Auto Alarms Lambda on agent lifecycle
+  # =========================================================================
+  AgentObsLifecycleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-AgentObsLifecycle'
+      Description: Triggers auto alarm creation/deletion on AgentCore runtime events
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.bedrock-agentcore
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - bedrock-agentcore.amazonaws.com
+          eventName:
+            - CreateAgentRuntime
+            - DeleteAgentRuntime
+      Targets:
+        - Id: AutoAlarmsTarget
+          Arn: !GetAtt AutoAlarmsLambda.Arn
+
+  AutoAlarmsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AutoAlarmsLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AgentObsLifecycleRule.Arn
+
+Outputs:
+  AutoAlarmsLambdaArn:
+    Description: Lambda that auto-creates/deletes CloudWatch anomaly alarms on agent lifecycle
+    Value: !GetAtt AutoAlarmsLambda.Arn
+
+  EventBridgeRuleArn:
+    Description: EventBridge rule that triggers on agent create/delete for observability
+    Value: !GetAtt AgentObsLifecycleRule.Arn
+
+  DeployCommand:
+    Description: How to deploy this stack
+    Value: !Sub 'aws cloudformation deploy --template-file template.yaml --stack-name ${AWS::StackName} --capabilities CAPABILITY_NAMED_IAM'

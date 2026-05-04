@@ -1,0 +1,38 @@
+{
+  "id": "agent-safety",
+  "name": "Agent Safety Controls",
+  "description": "Human-in-the-loop safety toolkit for Amazon Bedrock AgentCore — centralized dashboard with cost, evaluation, and observability signals, plus a kill switch (IAM deny policy) and per-session intervention controls. Auto-provisions budgets, evaluation configs, and anomaly alarms per agent.",
+  "version": "1.0.0",
+  "pattern_type": "orchestration",
+  "type": "reference",
+  "frameworks": [
+    {"id": "strands", "name": "Strands Agents SDK", "path": "sample-agent", "description": "Strands framework with safety signal reporter"}
+  ],
+  "deployment_patterns": [
+    {"id": "bash", "name": "Bash orchestration", "description": "Modular deploy-all.sh across dashboard, cost/eval/obs controls, kill switch, and sample agent", "path": "."}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "agent-safety"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1", "enum": ["us-east-1", "us-east-2", "us-west-2"]},
+    {"name": "admin_email", "type": "string", "description": "Admin email for the Agent Safety dashboard Cognito user", "required": false, "default": "admin@agent-safety.local"},
+    {"name": "agent_name", "type": "string", "description": "Sample agent name", "required": false, "default": "safety_demo_agent"}
+  ],
+  "example_use_cases": [
+    "Unified safety dashboard for AgentCore agents",
+    "Kill switch for revoking Bedrock access instantly",
+    "Per-session intervention controls",
+    "Auto budgets + evaluation + observability alarms"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": ["safety", "governance", "hil", "agentcore", "cognito", "cloudfront", "dynamodb"],
+  "outputs": {
+    "dashboard_url": "Agent Safety dashboard URL",
+    "cognito_user_pool_id": "Cognito user pool ID"
+  },
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "agent_safety_onboarding_request", "outgoing_event": "agent_safety_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "agent_safety_offboarding_request", "outgoing_event": "agent_safety_offboarding_success"}
+  ],
+  "dependencies": []
+}

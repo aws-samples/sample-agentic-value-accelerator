@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent Safety Dashboard</title>
+<style>
+:root{--bg:#0f1923;--surface:#1a2733;--surface2:#1e2d3d;--border:#2a3a4a;--text:#e0e6ed;--text2:#8899aa;--text3:#667788;--accent:#4fc3f7;--green:#2ecc71;--yellow:#f39c12;--red:#e74c3c;--orange:#e67e22;--purple:#a78bfa}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+
+/* ── Header ── */
+.header{background:var(--surface);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.header-left{display:flex;align-items:center;gap:14px}
+.header-left h1{font-size:18px;font-weight:700;color:#fff;letter-spacing:-.3px}
+.header-left .sub{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:20px}
+.alert-badge{position:relative;cursor:pointer;font-size:22px;line-height:1}
+.alert-badge .count{position:absolute;top:-6px;right:-10px;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:700}
+.user-info{font-size:13px;color:var(--text2);text-align:right}
+.user-info strong{color:#fff;display:block;font-size:14px}
+.sync-header-btn{padding:7px 16px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:13px;font-weight:500;transition:all .2s}
+.sync-header-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--accent)}
+
+/* ── Tabs ── */
+.tabs{background:var(--surface);display:flex;border-bottom:2px solid var(--border);padding:0 28px;gap:4px}
+.tab{padding:13px 22px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s;white-space:nowrap}
+.tab:hover{color:#ccc}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── Content ── */
+.content{padding:20px 24px;max-width:100%;margin:0 auto}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* ── Kill Switch Bar ── */
+.kill-bar{padding:10px 18px;display:flex;align-items:center;justify-content:space-between;border-radius:8px;margin-bottom:16px;transition:all .3s ease}
+.kill-bar.inactive{background:var(--surface);border:2px solid var(--green)}
+.kill-bar.active{background:rgba(231,76,60,.12);border:2px solid var(--red);animation:kill-pulse 2s ease-in-out infinite}
+@keyframes kill-pulse{0%,100%{border-color:var(--red);box-shadow:0 0 0 0 rgba(231,76,60,0)}50%{border-color:#ff6b6b;box-shadow:0 0 15px rgba(231,76,60,.2)}}
+.kill-bar-left{display:flex;align-items:center;gap:12px;font-size:14px;font-weight:600}
+.kill-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.kill-dot.on{background:var(--red);box-shadow:0 0 8px var(--red)}
+.kill-dot.off{background:var(--green)}
+.btn-kill{background:var(--red);color:#fff;padding:9px 20px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;transition:all .2s}
+.btn-kill:hover{background:#c0392b;box-shadow:0 0 12px rgba(231,76,60,.3)}
+.btn-restore{background:var(--green);color:#fff;padding:9px 20px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;transition:all .2s}
+.btn-restore:hover{background:#27ae60}
+
+/* ── Signal Cards ── */
+.signal-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.signal-card{background:var(--surface);border-radius:8px;padding:16px 18px;border:1px solid var(--border);transition:border-color .2s}
+.signal-card:hover{border-color:var(--accent)}
+.signal-card h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.metric{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.metric .label{color:var(--text2)}
+.metric .value{font-weight:700}
+.progress-bar{height:5px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.fill-green{background:var(--green)}
+.fill-warning{background:var(--yellow)}
+.fill-critical{background:var(--red)}
+.status-bar{margin-top:8px;font-size:12px;font-weight:700}
+.sev-critical{color:var(--red);font-weight:700}
+.sev-warning{color:var(--yellow);font-weight:700}
+.sev-ok{color:var(--green);font-weight:700}
+
+/* ── Summary Cards (small) ── */
+.summary-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.summary-card .sc-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.summary-card .sc-value{font-size:26px;font-weight:800;line-height:1.1}
+.summary-card .sc-sub{font-size:11px;color:var(--text2);margin-top:3px}
+.sc-green .sc-value{color:var(--green)}
+.sc-yellow .sc-value{color:var(--yellow)}
+.sc-red .sc-value{color:var(--red)}
+.sc-accent .sc-value{color:var(--accent)}
+
+/* ── Tables ── */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);border-bottom:1px solid var(--border);font-weight:700;background:var(--surface2)}
+td{padding:10px 14px;font-size:13px;border-bottom:1px solid rgba(42,58,74,.5);vertical-align:middle}
+tbody tr{transition:background .15s}
+tbody tr:hover td{background:var(--surface2)}
+tbody tr:last-child td{border-bottom:none}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:700}
+.badge-ready{background:rgba(46,204,113,.15);color:var(--green)}
+.badge-creating{background:rgba(243,156,18,.15);color:var(--yellow)}
+.badge-stopped{background:rgba(231,76,60,.15);color:var(--red)}
+.badge-warning{background:rgba(230,126,34,.15);color:var(--orange)}
+.badge-info{background:rgba(79,195,247,.15);color:var(--accent)}
+.type-badge{padding:3px 10px;border-radius:4px;font-size:12px;font-weight:700;display:inline-block}
+.type-eval{background:#2d1f4e;color:var(--purple)}
+.type-obs{background:#1a3a4a;color:var(--accent)}
+.type-cost{background:#3a2a1a;color:var(--yellow)}
+
+/* ── Buttons ── */
+.btn{padding:8px 18px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#c0392b}
+.btn-primary{background:var(--accent);color:#0f1923}
+.btn-primary:hover{background:#29b6f6}
+.btn-secondary{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--surface2);color:var(--text);border-color:var(--text3)}
+.btn-sm{padding:5px 14px;font-size:12px}
+.review-btn{padding:7px 16px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.review-btn:hover{background:var(--accent);color:#0f1923}
+.intervene-btn{padding:7px 16px;border-radius:6px;border:1px solid var(--red);background:transparent;color:var(--red);cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.intervene-btn:hover{background:var(--red);color:#fff}
+
+/* ── Filter Buttons ── */
+.filter-group{display:flex;gap:6px;flex-wrap:wrap}
+.filter-btn{padding:5px 14px;font-size:12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-weight:500;transition:all .2s}
+.filter-btn:hover,.filter-btn.active{background:var(--accent);color:#0f1923;border-color:var(--accent)}
+
+/* ── Alert Feed ── */
+.alert-feed{background:var(--surface);border-radius:8px;border:1px solid var(--border);overflow:hidden}
+.alert-feed-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.alert-feed-header h3{font-size:15px;font-weight:700}
+
+/* ── Intervention Panel ── */
+.intervention-panel{display:none;background:var(--surface);border-radius:8px;border:1px solid var(--accent);margin-top:14px;overflow:hidden}
+.intervention-panel.show{display:block}
+.ip-header{padding:14px 18px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.ip-header h3{font-size:14px;font-weight:700;color:var(--accent)}
+.close-btn{background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px;padding:4px}
+.close-btn:hover{color:#fff}
+.ip-context{padding:14px 18px;border-bottom:1px solid var(--border)}
+.ip-context h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:10px;font-weight:700}
+.context-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.context-item .cl{color:var(--text3);font-size:11px;margin-bottom:2px}
+.context-item .cv{color:var(--text);font-weight:600;font-family:'SF Mono',Consolas,monospace;font-size:11px}
+.ip-tiers{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.tier-card{border:1px solid var(--border);border-radius:6px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:all .2s}
+.tier-card:hover{border-color:var(--accent);background:var(--surface2)}
+.tier-info h4{font-size:14px;font-weight:700;margin-bottom:4px}
+.tier-info p{font-size:13px;color:var(--text2)}
+.tier-info .blast{font-size:12px;color:var(--text3);margin-top:3px}
+.tier-btn{padding:9px 20px;border-radius:6px;border:none;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s}
+.tier1-btn{background:var(--yellow);color:#0f1923}
+.tier1-btn:hover{background:#e0a800}
+.tier2-btn{background:var(--orange);color:#fff}
+.tier2-btn:hover{background:#d35400}
+.tier3-btn{background:var(--red);color:#fff}
+.tier3-btn:hover{background:#c0392b}
+.monitor-btn{background:var(--border);color:var(--text2)}
+.monitor-btn:hover{background:var(--text3);color:#fff}
+.tier1-color{border-left:3px solid var(--yellow)}
+.tier2-color{border-left:3px solid var(--orange)}
+.tier3-color{border-left:3px solid var(--red)}
+.monitor-color{border-left:3px solid var(--text3)}
+
+/* ── Session Timeline ── */
+.timeline-container{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 18px;margin-top:14px}
+.timeline-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.timeline-header h3{font-size:15px;font-weight:700}
+.timeline-controls{display:flex;gap:6px}
+.timeline-agent{margin-bottom:14px}
+.timeline-agent-name{font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.timeline-row{display:flex;align-items:center;margin-bottom:6px;height:28px}
+.timeline-label{width:140px;font-size:12px;font-family:'SF Mono',Consolas,monospace;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.timeline-track{flex:1;height:20px;background:var(--surface2);border-radius:4px;position:relative;overflow:hidden}
+.timeline-bar{position:absolute;height:100%;border-radius:4px;min-width:4px;cursor:pointer;transition:opacity .2s}
+.timeline-bar:hover{opacity:.85}
+.timeline-bar.active{background:var(--green)}
+.timeline-bar.idle{background:var(--yellow)}
+.timeline-bar.terminated{background:var(--text3)}
+.timeline-bar.stopped{background:var(--red)}
+.timeline-now{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:2}
+.timeline-axis{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:8px;padding-left:140px}
+.timeline-tooltip{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;z-index:500;pointer-events:none;box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:300px;display:none}
+
+/* ── Detail Overlay ── */
+.detail-overlay{position:fixed;top:0;right:0;width:520px;height:100vh;background:var(--surface);border-left:1px solid var(--border);box-shadow:-4px 0 30px rgba(0,0,0,.4);z-index:100;overflow-y:auto;padding:22px;transform:translateX(100%);transition:transform .25s ease}
+.detail-overlay.open{transform:translateX(0)}
+.detail-close{position:absolute;top:18px;right:18px;background:var(--surface2);border:1px solid var(--border);color:var(--text);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.detail-close:hover{background:var(--border);color:#fff}
+.detail-title{font-size:18px;font-weight:800;margin-bottom:3px}
+.detail-subtitle{font-size:12px;color:var(--text2);margin-bottom:16px}
+.detail-section{margin-bottom:16px}
+.detail-section h3{font-size:11px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;letter-spacing:.5px;font-weight:700}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.detail-item{background:var(--surface2);border-radius:6px;padding:10px}
+.detail-item-label{font-size:10px;color:var(--text2)}
+.detail-item-value{font-size:14px;font-weight:700;margin-top:2px}
+.session-row{background:var(--surface2);border-radius:6px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.session-id{font-weight:700;font-family:'SF Mono',Consolas,monospace;font-size:11px}
+.session-meta{color:var(--text2);font-size:11px;margin-top:2px}
+
+/* ── Modals ── */
+.modal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.65);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:22px;width:480px;max-width:92vw}
+.modal h2{font-size:17px;font-weight:700;margin-bottom:4px}
+.modal p{font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5}
+.modal label{font-size:12px;color:var(--text2);display:block;margin-bottom:5px;font-weight:500}
+.modal input,.modal textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 12px;font-size:13px;font-family:inherit;transition:border-color .2s}
+.modal input:focus,.modal textarea:focus{outline:none;border-color:var(--accent)}
+.modal textarea{height:70px;resize:vertical;margin-bottom:4px}
+.modal input{margin-bottom:10px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+.error-text{color:var(--red);font-size:11px;margin-top:3px;display:none}
+.modal-detail{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid rgba(42,58,74,.5)}
+.modal-detail .dl{color:var(--text3)}
+.modal-detail .dv{font-weight:600}
+.kill-modal-confirm-input{width:100%;background:var(--surface2);border:2px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-size:16px;font-family:'SF Mono',Consolas,monospace;text-align:center;letter-spacing:3px;margin-bottom:14px}
+.kill-modal-confirm-input:focus{outline:none;border-color:var(--red)}
+
+/* ── Settings ── */
+.settings-section{background:var(--surface);border-radius:8px;border:1px solid var(--border);padding:16px 18px;margin-bottom:14px}
+.settings-section h3{font-size:14px;margin-bottom:14px;color:var(--accent);font-weight:700}
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(42,58,74,.5)}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:13px}
+.setting-label span{display:block;font-size:11px;color:var(--text3);margin-top:1px}
+.setting-input{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:14px;width:120px;text-align:right;font-family:inherit;transition:border-color .2s}
+.setting-input:focus{outline:none;border-color:var(--accent)}
+
+/* ── Audit ── */
+.audit-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.audit-actions{display:flex;gap:8px}
+.audit-actions select,.audit-actions button{background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer;transition:all .2s}
+.audit-actions button:hover{border-color:var(--accent);color:var(--accent)}
+.expand-row{display:none}
+.rollback-btn{padding:5px 14px;border-radius:6px;border:1px solid var(--yellow);background:transparent;color:var(--yellow);cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
+.rollback-btn:hover{background:var(--yellow);color:#0f1923}
+
+/* ── Misc ── */
+.conn-status{position:fixed;bottom:14px;right:14px;font-size:12px;padding:5px 14px;border-radius:12px;z-index:50;font-weight:500}
+.conn-ok{background:rgba(46,204,113,.15);color:var(--green)}
+.conn-err{background:rgba(231,76,60,.15);color:var(--red)}
+.toast-container{position:fixed;top:20px;right:20px;z-index:300;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.toast{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;min-width:300px;max-width:420px;box-shadow:0 8px 30px rgba(0,0,0,.5);pointer-events:auto;animation:toastIn .3s ease;display:flex;align-items:flex-start;gap:10px}
+.toast.success{border-color:var(--green)} .toast.error{border-color:var(--red)} .toast.warning{border-color:var(--yellow)} .toast.info{border-color:var(--accent)}
+.toast-icon{font-size:18px;flex-shrink:0;line-height:1}
+.toast-body{flex:1}
+.toast-title{font-size:13px;font-weight:700;margin-bottom:1px}
+.toast-msg{font-size:12px;color:var(--text2);line-height:1.4}
+.toast-close{background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:0;flex-shrink:0}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(40px)}}
+.pulse{display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.section-title{font-size:16px;font-weight:700;margin-bottom:10px}
+.section-desc{font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5}
+.metric-bar{height:5px;background:var(--border);border-radius:3px;margin-top:6px;display:inline-block;vertical-align:middle}
+.metric-bar-fill{height:100%;border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="header">
+  <div class="header-left">
+    <span style="font-size:28px">🛡️</span>
+    <div><h1>AI Agent Safety Dashboard</h1><div class="sub">Control Panel</div></div>
+  </div>
+  <div class="header-right">
+    <button class="sync-header-btn" id="sync-btn" onclick="triggerSync()">🔄 Sync from AWS</button>
+    <div class="alert-badge" onclick="switchTab('dashboard')">🔔<span class="count" id="alertCount">0</span></div>
+    <div class="user-info" id="auth-info"><strong>Loading...</strong><span style="font-size:12px">Connecting</span></div>
+  </div>
+</div>
+
+<!-- ═══ TABS ═══ -->
+<div class="tabs">
+  <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
+  <div class="tab" data-tab="sessions" onclick="switchTab('sessions')">🔴 Live Sessions</div>
+  <div class="tab" data-tab="registry" onclick="switchTab('registry')">📋 Agent Registry</div>
+  <div class="tab" data-tab="audit" onclick="switchTab('audit')">📝 Audit Log</div>
+  <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Settings</div>
+</div>
+
+<div class="content">
+
+<!-- ═══ DASHBOARD TAB ═══ -->
+<div class="tab-content active" id="tab-dashboard">
+  <div id="kill-bar-slot"></div>
+  <div id="dash-sub-nav" style="display:flex;gap:6px;margin-bottom:14px">
+    <button class="filter-btn active" onclick="setDashView('overview',this)">📊 Overview</button>
+    <button class="filter-btn" onclick="setDashView('cost',this)">💰 Cost</button>
+    <button class="filter-btn" onclick="setDashView('eval',this)">🧪 Evaluation</button>
+    <button class="filter-btn" onclick="setDashView('obs',this)">📡 Observability</button>
+  </div>
+  <div id="dashboard-signals"></div>
+  <div id="dashboard-feed"></div>
+  <div id="dashboard-cost-view" style="display:none"></div>
+  <div id="dashboard-eval-view" style="display:none"></div>
+  <div id="dashboard-obs-view" style="display:none"></div>
+  <div class="intervention-panel" id="interventionPanel">
+    <div class="ip-header"><h3>⚡ Intervention — <span id="ipAlertId">Alert</span></h3><button class="close-btn" onclick="closeIntervention()">✕</button></div>
+    <div class="ip-context"><h4>Alert Context</h4><div class="context-grid">
+      <div class="context-item"><div class="cl">Signal</div><div class="cv" id="ipSignal">-</div></div>
+      <div class="context-item"><div class="cl">Agent</div><div class="cv" id="ipAgent">-</div></div>
+      <div class="context-item"><div class="cl">ARN</div><div class="cv" id="ipArn">-</div></div>
+      <div class="context-item"><div class="cl">Session</div><div class="cv" id="ipSession">-</div></div>
+      <div class="context-item"><div class="cl">Tokens</div><div class="cv" id="ipTokens">-</div></div>
+      <div class="context-item"><div class="cl">Duration</div><div class="cv" id="ipDuration">-</div></div>
+    </div></div>
+    <div class="ip-tiers" id="ipTiers"></div>
+  </div>
+</div>
+
+<!-- ═══ LIVE SESSIONS TAB ═══ -->
+<div class="tab-content" id="tab-sessions">
+  <div id="sessions-header"></div>
+  <div id="sessions-view-toggle" style="margin-bottom:16px;display:flex;gap:8px">
+    <button class="filter-btn active" onclick="setSessionView('table',this)">📋 Table View</button>
+    <button class="filter-btn" onclick="setSessionView('timeline',this)">📊 Timeline View</button>
+  </div>
+  <div id="sessions-table"></div>
+  <div id="sessions-timeline" style="display:none"></div>
+  <div class="intervention-panel" id="sessionIP">
+    <div class="ip-header"><h3>⚡ Session Intervention — <span id="sipAgent">agent</span></h3><button class="close-btn" onclick="closeSI()">✕</button></div>
+    <div class="ip-context"><h4>Session Context</h4><div class="context-grid">
+      <div class="context-item"><div class="cl">Agent</div><div class="cv" id="sipName">-</div></div>
+      <div class="context-item"><div class="cl">ARN</div><div class="cv" id="sipArn">-</div></div>
+      <div class="context-item"><div class="cl">Session</div><div class="cv" id="sipSession">-</div></div>
+      <div class="context-item"><div class="cl">Status</div><div class="cv" id="sipStatus">-</div></div>
+      <div class="context-item"><div class="cl">Tokens</div><div class="cv" id="sipTokens">-</div></div>
+      <div class="context-item"><div class="cl">Duration</div><div class="cv" id="sipDuration">-</div></div>
+    </div></div>
+    <div class="ip-tiers" id="sipTiers"></div>
+  </div>
+</div>
+
+<!-- ═══ AGENT REGISTRY TAB ═══ -->
+<div class="tab-content" id="tab-registry">
+  <div id="registry-content"></div>
+</div>
+
+<!-- ═══ AUDIT LOG TAB ═══ -->
+<div class="tab-content" id="tab-audit">
+  <div id="audit-content"></div>
+</div>
+
+<!-- ═══ SETTINGS TAB ═══ -->
+<div class="tab-content" id="tab-settings">
+  <div class="section-title">⚙️ Safety Thresholds</div>
+  <div class="section-desc">Configure alert thresholds for cost and evaluation signals. Changes apply on next sync. Observability thresholds are controlled by CloudWatch alarm configurations.</div>
+  <div class="settings-section"><h3>💰 Cost Thresholds</h3>
+    <details style="margin-bottom:14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);overflow:hidden">
+      <summary style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);user-select:none">ℹ️ How it works</summary>
+      <div style="padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.7;border-top:1px solid var(--border)">
+        Each agent gets an AWS Budget that tracks monthly spend. The <strong style="color:var(--text)">Default Budget Amount</strong> sets the dollar limit — changing it updates all existing budgets immediately. Warning and Critical % control when the dashboard shows alert badges based on how much of the budget is used.
+      </div>
+    </details>
+    <div class="setting-row"><div class="setting-label">Default Budget Amount ($)<span>Monthly budget for all agents (updates AWS Budgets on save)</span></div><input class="setting-input" type="number" value="2.00" step="0.5" min="0" id="set-budget-amt"></div>
+    <div class="setting-row"><div class="setting-label">Budget Warning %<span>Triggers warning when budget usage exceeds this</span></div><input class="setting-input" type="number" value="80" id="set-cost-warn"></div>
+    <div class="setting-row"><div class="setting-label">Budget Critical %<span>Triggers critical when budget usage exceeds this</span></div><input class="setting-input" type="number" value="95" id="set-cost-crit"></div>
+  </div>
+  <div class="settings-section"><h3>🧪 Evaluation Thresholds</h3>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">Configure when the evaluation alarm fires for each agent. One CloudWatch alarm is created per agent that monitors bad responses across 7 built-in evaluators.</div>
+    <details style="margin-bottom:14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);overflow:hidden">
+      <summary style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);user-select:none">ℹ️ How it works</summary>
+      <div style="padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.7;border-top:1px solid var(--border)">
+        Each agent has one CloudWatch alarm that monitors bad responses across 7 built-in evaluators. The alarm sums bad scores from 5 of them (Harmfulness, Correctness, Goal Success, Tool Selection, Tool Parameters) — CloudWatch checks every 15 minutes by aggregating bad counts over that window. The alarm fires when the total bad count reaches the <strong style="color:var(--yellow)">lowest non-zero threshold</strong> you set below. For example: Harmfulness = 1 and Correctness = 3 means the alarm fires at ≥ 1 total bad. Set a value to 0 to exclude that evaluator from the alarm. The remaining 2 evaluators (Helpfulness and Faithfulness) are tracked and visible in the dashboard evaluator scores but don't contribute to the CloudWatch alarm. Saving updates all agent alarms immediately.
+      </div>
+    </details>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Per-Evaluator Bad Count Thresholds</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Maximum bad responses allowed before the alarm fires. Set to 0 to exclude from alarm. Minimum active value: 1.</div>
+    <div class="setting-row"><div class="setting-label">Harmfulness<span>Max harmful responses. Most sensitive — even 1 harmful response is typically critical. Min: 1</span></div><input class="setting-input" type="number" value="1" min="0" id="set-eval-harmfulness"></div>
+    <div class="setting-row"><div class="setting-label">Correctness<span>Max incorrect or partially correct responses. Counts both "Incorrect" and "Partially Correct" labels. Min: 1</span></div><input class="setting-input" type="number" value="1" min="0" id="set-eval-correctness"></div>
+    <div class="setting-row"><div class="setting-label">Goal Success Rate<span>Max goal failures (agent failed to achieve the user's goal). Min: 1</span></div><input class="setting-input" type="number" value="1" min="0" id="set-eval-goalsuccess"></div>
+    <div class="setting-row"><div class="setting-label">Helpfulness<span>Max unhelpful responses. Dashboard display only — does not affect CloudWatch alarm</span></div><input class="setting-input" type="number" value="1" min="0" id="set-eval-helpfulness"></div>
+    <div class="setting-row"><div class="setting-label">Faithfulness<span>Max unfaithful responses (hallucinations). Dashboard display only — does not affect CloudWatch alarm</span></div><input class="setting-input" type="number" value="1" min="0" id="set-eval-faithfulness"></div>
+    <div class="setting-row"><div class="setting-label">Tool Selection Accuracy<span>Max times agent picked the wrong tool for the task. Min: 1</span></div><input class="setting-input" type="number" value="1" min="0" id="set-eval-toolselection"></div>
+    <div class="setting-row"><div class="setting-label">Tool Parameter Accuracy<span>Max times agent passed wrong parameters to a tool. Min: 1</span></div><input class="setting-input" type="number" value="1" min="0" id="set-eval-toolparams"></div>
+    <div style="font-size:11px;color:var(--text3);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Dashboard Display Thresholds</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Controls severity badges in dashboard tables. Uses <strong style="color:var(--text)">bad percentage</strong> (bad ÷ total × 100), not raw counts. These do not affect CloudWatch alarms.</div>
+    <div class="setting-row"><div class="setting-label">Dashboard Warning %<span>Show ⚠️ warning badge when bad % exceeds this value (default: 20%)</span></div><input class="setting-input" type="number" value="20" min="0" max="100" id="set-eval-warn"></div>
+    <div class="setting-row"><div class="setting-label">Dashboard Critical %<span>Show 🔴 critical badge when bad % exceeds this value (default: 50%)</span></div><input class="setting-input" type="number" value="50" min="0" max="100" id="set-eval-crit"></div>
+  </div>
+  <div class="settings-section" style="border-color:var(--border)"><h3>📡 Observability Thresholds</h3>
+    <details style="margin-bottom:14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);overflow:hidden">
+      <summary style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);user-select:none">ℹ️ How it works</summary>
+      <div style="padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.7;border-top:1px solid var(--border)">
+        Each agent gets 4 static threshold alarms (latency, errors, tokens, invocations). When a metric exceeds its threshold in <strong style="color:var(--text)">Datapoints to Alarm</strong> out of <strong style="color:var(--text)">Evaluation Periods</strong> 5-minute windows, the alarm fires. Saving updates all agent alarms immediately.
+      </div>
+    </details>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Per-Metric Thresholds</div>
+    <div class="setting-row"><div class="setting-label">Latency (ms)<span>Alarm when average response time exceeds this (default: 10000ms = 10s)</span></div><input class="setting-input" type="number" value="10000" min="1000" step="1000" id="set-obs-latency"></div>
+    <div class="setting-row"><div class="setting-label">Error Count<span>Alarm when errors per period exceed this (default: 5)</span></div><input class="setting-input" type="number" value="5" min="1" id="set-obs-errors"></div>
+    <div class="setting-row"><div class="setting-label">Token Usage<span>Alarm when tokens per period exceed this (default: 100000)</span></div><input class="setting-input" type="number" value="100000" min="1000" step="10000" id="set-obs-tokens"></div>
+    <div class="setting-row"><div class="setting-label">Invocation Count<span>Alarm when invocations per period exceed this (default: 200)</span></div><input class="setting-input" type="number" value="200" min="10" id="set-obs-invocations"></div>
+    <div style="font-size:11px;color:var(--text3);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Evaluation Window</div>
+    <div class="setting-row"><div class="setting-label">Evaluation Periods<span>Number of 5-min periods to evaluate (default: 3)</span></div><input class="setting-input" type="number" value="3" min="1" max="10" id="set-obs-evalperiods"></div>
+    <div class="setting-row"><div class="setting-label">Datapoints to Alarm<span>How many periods must breach before alarm fires (default: 2). Must be ≤ Evaluation Periods</span></div><input class="setting-input" type="number" value="2" min="1" max="10" id="set-obs-datapoints"></div>
+  </div>
+  <div style="text-align:right;margin-top:18px">
+    <button class="btn btn-secondary" onclick="loadSettings()">Reset</button>
+    <button class="btn btn-primary" style="margin-left:8px" onclick="saveSettings()">Save Settings</button>
+  </div>
+</div>
+</div><!-- end .content -->
+
+<!-- ═══ DETAIL OVERLAY ═══ -->
+<div class="detail-overlay" id="detail-panel"><button class="detail-close" onclick="closeDetail()">✕</button><div id="detail-content"></div></div>
+
+<!-- ═══ INTERVENTION CONFIRM MODAL ═══ -->
+<div class="modal-bg" id="confirmModal"><div class="modal">
+  <h2 id="modalTitle">Confirm Intervention</h2>
+  <p id="modalDesc" style="margin-bottom:14px"></p>
+  <div id="modalDetails"></div>
+  <label style="margin-top:14px">Reason (required)</label>
+  <textarea id="modalReason" placeholder="Describe why you are taking this action..."></textarea>
+  <div class="error-text" id="modalError">Reason is required.</div>
+  <div class="modal-actions">
+    <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" id="modalConfirmBtn" onclick="execIntervention()">✅ Confirm</button>
+  </div>
+</div></div>
+
+<!-- ═══ KILL SWITCH MODAL ═══ -->
+<div class="modal-bg" id="kill-modal"><div class="modal" style="width:520px">
+  <h2 id="kill-modal-title">⚠️ Stop All Agents</h2>
+  <p id="kill-modal-desc" style="color:var(--red);font-weight:600">This will immediately stop all AI agents.</p>
+  <div id="kill-modal-info" style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;line-height:1.6"></div>
+  <label>Your Name / Email *</label>
+  <input type="text" id="kill-admin" placeholder="jane.doe@company.com"/>
+  <label>Reason *</label>
+  <textarea id="kill-reason" placeholder="Describe why you are activating the kill switch..."></textarea>
+  <label id="kill-confirm-label" style="margin-top:8px">Type <strong style="color:var(--red)">CONFIRM</strong> to proceed *</label>
+  <input type="text" id="kill-confirm-input" class="kill-modal-confirm-input" placeholder="CONFIRM" autocomplete="off"/>
+  <div class="error-text" id="kill-error">All fields are required and you must type CONFIRM.</div>
+  <div class="modal-actions">
+    <button class="btn btn-secondary" onclick="closeKillModal()">Cancel</button>
+    <button class="btn btn-kill" id="kill-confirm-btn">STOP ALL AGENTS</button>
+  </div>
+</div></div>
+
+<!-- ═══ ROLLBACK MODAL ═══ -->
+<div class="modal-bg" id="rollbackModal"><div class="modal">
+  <h2>🔄 Confirm Rollback</h2>
+  <div style="margin-bottom:14px">
+    <div class="modal-detail"><span class="dl">Original Action</span><span class="dv" id="rbAction">-</span></div>
+    <div class="modal-detail"><span class="dl">Agent</span><span class="dv" id="rbAgent">-</span></div>
+    <div class="modal-detail"><span class="dl">Executed By</span><span class="dv" id="rbAdmin">-</span></div>
+    <div class="modal-detail"><span class="dl">Executed At</span><span class="dv" id="rbTime">-</span></div>
+    <div class="modal-detail"><span class="dl">Rollback Action</span><span class="dv" id="rbRollbackAction">-</span></div>
+  </div>
+  <div style="padding:12px;background:#3a2a1a;border-radius:8px;font-size:13px;color:var(--yellow);margin-bottom:14px">⚠️ This will re-enable the agent's access to Bedrock models.</div>
+  <label>Reason (required)</label>
+  <textarea id="rbReason" placeholder="Describe why you are rolling back..."></textarea>
+  <div class="error-text" id="rbError">Reason is required.</div>
+  <div class="modal-actions">
+    <button class="btn btn-secondary" onclick="closeRBModal()">Cancel</button>
+    <button class="btn" style="background:var(--yellow);color:#0f1923;font-weight:700" onclick="execRollback()">🔄 Confirm Rollback</button>
+  </div>
+</div></div>
+
+<div class="conn-status conn-err" id="conn-status">● Connecting...</div>
+<div class="toast-container" id="toast-container"></div>
+<div class="timeline-tooltip" id="timeline-tooltip"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CORE STATE — identical to original
+   ═══════════════════════════════════════════════════════════════ */
+var API_BASE=window.location.origin, REFRESH_MS=90000;
+var REGISTRY=[],SESSIONS=[],INTERVENTIONS=[],COST_SIGNALS=[],OBS_SIGNALS=[],EVAL_SIGNALS=[];
+var KILL_STATUS={kill_switch_active:false,agents:[],revoked_agents:0,total_agents:0};
+var _killSwitchOptimisticUntil=0;
+var AWS_REGISTRY={records:[],registries:[],total_records:0};
+var currentTab='dashboard',currentAlert=null,currentTier=null,currentKillAction=null,apiConnected=false;
+var sessionViewMode='table';
+var AUTH_CONFIG=null,AUTH_TOKEN=null,AUTH_USER=null;
+
+/* ═══════════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════════ */
+function fmtDate(d){return d?String(d).replace('T',' ').slice(0,19):'—'}
+function fmtNum(n){n=Number(n)||0;if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'K';return String(n)}
+function fmtUsd(n){return'$'+Number(n).toFixed(2)}
+function normalize(n){return(n||'').toLowerCase().replace(/[_-]/g,'')}
+function badgeClass(s){if(!s)return'ready';s=s.toLowerCase();if(s==='ready'||s==='active')return'ready';if(s.includes('fail')||s==='deleting'||s==='deleted')return'stopped';if(s.includes('creat')||s.includes('updat'))return'creating';return'ready'}
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function minutesAgo(isoStr){try{return Math.round((Date.now()-new Date(isoStr).getTime())/60000)}catch(e){return 999}}
+function fmtTimeAgo(isoStr){try{var m=Math.round((Date.now()-new Date(isoStr).getTime())/60000);if(m<1)return'just now';if(m<60)return m+'m ago';var h=Math.round(m/60);if(h<24)return h+'h ago';return Math.round(h/24)+'d ago'}catch(e){return'—'}}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ═══════════════════════════════════════════════════════════════ */
+function showToast(type,title,msg,duration){
+  duration=duration||5000;
+  var icons={success:'✅',error:'❌',warning:'⚠️',info:'ℹ️'};
+  var c=document.getElementById('toast-container');
+  var t=document.createElement('div');
+  t.className='toast '+type;
+  t.innerHTML='<div class="toast-icon">'+(icons[type]||'ℹ️')+'</div><div class="toast-body"><div class="toast-title">'+title+'</div><div class="toast-msg">'+(msg||'')+'</div></div><button class="toast-close" onclick="this.parentElement.style.animation=\'toastOut .3s ease forwards\';setTimeout(()=>this.parentElement.remove(),300)">✕</button>';
+  c.appendChild(t);
+  setTimeout(function(){if(t.parentElement){t.style.animation='toastOut .3s ease forwards';setTimeout(function(){t.remove()},300)}},duration);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTH — Cognito flow (preserved exactly from original)
+   ═══════════════════════════════════════════════════════════════ */
+async function api(p,o){
+  o=o||{};
+  if(AUTH_TOKEN){o.headers=Object.assign({'Authorization':'Bearer '+AUTH_TOKEN},o.headers||{})}
+  var r=await fetch(API_BASE+p,o);
+  if(r.status===401){handleAuthExpired();throw new Error('401 Unauthorized')}
+  if(!r.ok)throw new Error(r.status);
+  return r.json();
+}
+
+async function initAuth(){
+  try{AUTH_CONFIG=await(await fetch(API_BASE+'/api/auth/config')).json()}catch(e){AUTH_CONFIG={enabled:false};return}
+  if(!AUTH_CONFIG.enabled)return;
+  var params=new URLSearchParams(window.location.search);
+  var code=params.get('code');
+  if(code){
+    window.history.replaceState({},'',window.location.pathname);
+    try{
+      var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+      var res=await(await fetch(API_BASE+'/api/auth/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,redirect_uri:redirect_uri})})).json();
+      if(res.id_token){localStorage.setItem('auth_id_token',res.id_token);localStorage.setItem('auth_refresh_token',res.refresh_token||'')}
+    }catch(e){console.error('Token exchange failed:',e)}
+  }
+  AUTH_TOKEN=localStorage.getItem('auth_id_token')||null;
+  if(AUTH_TOKEN){
+    try{var payload=JSON.parse(atob(AUTH_TOKEN.split('.')[1]));if(payload.exp*1000<Date.now()){AUTH_TOKEN=null;localStorage.removeItem('auth_id_token')}else{AUTH_USER=payload.email||payload['cognito:username']||'user'}}catch(e){AUTH_TOKEN=null}
+  }
+  if(!AUTH_TOKEN){
+    var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+    window.location.href='https://'+AUTH_CONFIG.domain+'/login?client_id='+AUTH_CONFIG.clientId+'&response_type=code&scope=openid+email+profile&redirect_uri='+encodeURIComponent(redirect_uri);
+    return;
+  }
+  updateAuthUI();
+}
+
+function handleAuthExpired(){
+  localStorage.removeItem('auth_id_token');AUTH_TOKEN=null;AUTH_USER=null;
+  if(AUTH_CONFIG&&AUTH_CONFIG.enabled){
+    var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+    window.location.href='https://'+AUTH_CONFIG.domain+'/login?client_id='+AUTH_CONFIG.clientId+'&response_type=code&scope=openid+email+profile&redirect_uri='+encodeURIComponent(redirect_uri);
+  }
+}
+
+function logout(){
+  localStorage.removeItem('auth_id_token');localStorage.removeItem('auth_refresh_token');AUTH_TOKEN=null;AUTH_USER=null;
+  if(AUTH_CONFIG&&AUTH_CONFIG.enabled&&AUTH_CONFIG.domain){
+    var redirect_uri=AUTH_CONFIG.redirectUri||window.location.origin;
+    window.location.href='https://'+AUTH_CONFIG.domain+'/logout?client_id='+AUTH_CONFIG.clientId+'&logout_uri='+encodeURIComponent(redirect_uri);
+  }else{window.location.reload()}
+}
+
+function updateAuthUI(){
+  var el=document.getElementById('auth-info');
+  if(!el)return;
+  if(AUTH_USER){
+    el.innerHTML='<strong>'+escHtml(AUTH_USER)+'</strong><span style="font-size:12px;cursor:pointer;color:var(--accent)" onclick="logout()">Sign Out</span>';
+  }else if(AUTH_CONFIG&&AUTH_CONFIG.enabled){
+    el.innerHTML='<strong style="color:var(--red)">Not signed in</strong>';
+  }else{
+    el.innerHTML='<strong>Local Dev</strong><span style="font-size:12px">Auth disabled</span>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DATA LOADING — preserved exactly from original
+   ═══════════════════════════════════════════════════════════════ */
+async function triggerSync(){
+  var btn=document.getElementById('sync-btn');
+  btn.textContent='⏳ Syncing...';btn.disabled=true;
+  try{
+    var res=await api('/api/sync',{method:'POST'});var r=res.results||{};
+    showToast('success','Sync Complete','Registry:'+(r.registry?.synced||0)+' Cost:'+(r.cost_signals?.signals_written||0)+' Obs:'+(r.obs_signals?.signals_written||0)+' Eval:'+(r.eval_signals?.signals_written||0));
+    await loadData();
+  }catch(e){showToast('error','Sync Failed',e.message)}
+  btn.textContent='🔄 Sync from AWS';btn.disabled=false;
+}
+
+async function loadData(){
+  try{
+    var r=await Promise.all([
+      api('/api/registry').catch(function(){return{agents:[]}}),
+      api('/api/sessions').catch(function(){return{sessions:[]}}),
+      api('/api/interventions').catch(function(){return{interventions:[]}}),
+      api('/api/cost-signals').catch(function(){return{signals:[]}}),
+      api('/api/obs-signals').catch(function(){return{signals:[]}}),
+      api('/api/eval-signals').catch(function(){return{signals:[]}}),
+      api('/api/agent-registry').catch(function(){return{records:[],registries:[],total_records:0}})
+    ]);
+    REGISTRY=r[0].agents||[];SESSIONS=r[1].sessions||[];INTERVENTIONS=r[2].interventions||[];
+    COST_SIGNALS=r[3].signals||[];OBS_SIGNALS=r[4].signals||[];EVAL_SIGNALS=r[5].signals||[];
+    AWS_REGISTRY=r[6]||{records:[],registries:[],total_records:0};
+    // Kill switch status — fetch in background (Lambda call, can be slow)
+    // Skip if we just did an optimistic update (avoid overwriting with stale Lambda response)
+    if(Date.now()>_killSwitchOptimisticUntil){
+      api('/api/kill-switch/status').then(function(ks){KILL_STATUS=ks||KILL_STATUS;renderKillBar()}).catch(function(){});
+    }
+    apiConnected=true;
+    document.getElementById('conn-status').className='conn-status conn-ok';
+    document.getElementById('conn-status').textContent='● Connected — auto-refresh 90s';
+    updateAlertCount();
+    renderCurrentTab();
+  }catch(e){
+    apiConnected=false;
+    document.getElementById('conn-status').className='conn-status conn-err';
+    document.getElementById('conn-status').textContent='● API disconnected';
+  }
+}
+
+function updateAlertCount(){
+  var count=COST_SIGNALS.filter(function(x){return x.severity==='critical'||x.severity==='medium'}).length+
+    OBS_SIGNALS.filter(function(x){return x.severity==='critical'||x.severity==='medium'}).length+
+    EVAL_SIGNALS.filter(function(x){return x.signal_key==='alarm_summary'&&(x.alarm_state==='ALARM'||x.alarm_state==='INSUFFICIENT_DATA')}).length;
+  document.getElementById('alertCount').textContent=count;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAB NAVIGATION
+   ═══════════════════════════════════════════════════════════════ */
+function switchTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(e){e.classList.remove('active')});
+  document.querySelectorAll('.tab-content').forEach(function(e){e.classList.remove('active')});
+  var tabEl=document.querySelector('[data-tab="'+t+'"]');
+  if(tabEl)tabEl.classList.add('active');
+  var contentEl=document.getElementById('tab-'+t);
+  if(contentEl)contentEl.classList.add('active');
+  closeIntervention();closeSI();
+  renderCurrentTab();
+}
+
+function renderCurrentTab(){
+  renderKillBar();
+  if(currentTab==='dashboard'){
+    renderDashboard();
+    // Always render all sub-views so they're ready when user switches
+    renderCostView();
+    renderEvalView();
+    renderObsView();
+    // Apply sub-view visibility
+    document.getElementById('dashboard-signals').style.display=currentDashView==='overview'?'block':'none';
+    document.getElementById('dashboard-feed').style.display=currentDashView==='overview'?'block':'none';
+    document.getElementById('dashboard-cost-view').style.display=currentDashView==='cost'?'block':'none';
+    document.getElementById('dashboard-eval-view').style.display=currentDashView==='eval'?'block':'none';
+    document.getElementById('dashboard-obs-view').style.display=currentDashView==='obs'?'block':'none';
+  }
+  else if(currentTab==='sessions')renderSessions();
+  else if(currentTab==='registry')renderRegistryTab();
+  else if(currentTab==='audit')renderAuditTab();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   KILL SWITCH BAR — shown on dashboard tab
+   ═══════════════════════════════════════════════════════════════ */
+function renderKillBar(){
+  var slot=document.getElementById('kill-bar-slot');
+  if(!slot)return;
+  var active=KILL_STATUS.kill_switch_active;
+  if(active){
+    slot.innerHTML='<div class="kill-bar active"><div class="kill-bar-left"><span class="kill-dot on"></span><span style="color:var(--red)">⚠️ ALL AGENTS STOPPED</span><span style="font-size:12px;color:var(--text2);font-weight:400;margin-left:8px">'+KILL_STATUS.revoked_agents+'/'+KILL_STATUS.total_agents+' agents blocked</span></div><button class="btn-restore" onclick="openKillModal(\'restore\')">RESUME ALL AGENTS</button></div>';
+  }else{
+    slot.innerHTML='<div class="kill-bar inactive"><div class="kill-bar-left"><span class="kill-dot off"></span><span style="color:var(--green)">All Agents Running Normally</span><span style="font-size:12px;color:var(--text2);font-weight:400;margin-left:8px">'+KILL_STATUS.total_agents+' agents operational</span></div><button class="btn-kill" onclick="openKillModal(\'revoke\')">🔴 STOP ALL AGENTS</button></div>';
+  }
+}
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DASHBOARD TAB — Signal cards + Unified Alert Feed
+   ═══════════════════════════════════════════════════════════════ */
+function renderDashboard(){
+  // Signal summary cards
+  var costCrit=COST_SIGNALS.filter(function(x){return x.severity==='critical'}).length;
+  var costWarn=COST_SIGNALS.filter(function(x){return x.severity==='medium'}).length;
+  var costTotal=COST_SIGNALS.length;
+  var costPct=costTotal>0?Math.round(COST_SIGNALS.reduce(function(a,x){return a+Number(x.pct_used||0)},0)/costTotal):0;
+
+  var obsCrit=OBS_SIGNALS.filter(function(x){return x.severity==='critical'}).length;
+  var obsWarn=OBS_SIGNALS.filter(function(x){return x.severity==='medium'}).length;
+  var obsTotal=OBS_SIGNALS.length;
+
+  var evalSummaries=EVAL_SIGNALS.filter(function(x){return x.signal_key==='alarm_summary'});
+  var evalAlarm=evalSummaries.filter(function(x){return x.alarm_state==='ALARM'}).length;
+  var evalWarn=evalSummaries.filter(function(x){return x.alarm_state==='INSUFFICIENT_DATA'}).length;
+
+  var activeSessions=SESSIONS.filter(function(s){var st=s.computed_status||s.status||'';return st==='active'||st==='idle'}).length;
+
+  var costStatus=costCrit>0?'critical':costWarn>0?'warning':'ok';
+  var obsStatus=obsCrit>0?'critical':obsWarn>0?'warning':'ok';
+  var evalStatus=evalAlarm>0?'critical':evalWarn>0?'warning':'ok';
+
+  function statusLabel(s){return s==='critical'?'<div class="status-bar sev-critical">🔴 CRITICAL</div>':s==='warning'?'<div class="status-bar sev-warning">⚠️ WARNING</div>':'<div class="status-bar sev-ok">🟢 HEALTHY</div>'}
+  function fillClass(s){return s==='critical'?'fill-critical':s==='warning'?'fill-warning':'fill-green'}
+  function fillPct(s){return s==='critical'?92:s==='warning'?65:25}
+
+  var el=document.getElementById('dashboard-signals');
+  el.innerHTML='<div class="signal-cards">'+
+    '<div class="signal-card"><h3>💰 Cost Signals</h3>'+
+      '<div class="metric"><span class="label">Active Alerts</span><span class="value '+(costCrit>0?'sev-critical':costWarn>0?'sev-warning':'sev-ok')+'">'+(costCrit+costWarn)+'</span></div>'+
+      '<div class="metric"><span class="label">Avg Budget Used</span><span class="value">'+costPct+'%</span></div>'+
+      '<div class="metric"><span class="label">Agents Tracked</span><span class="value">'+costTotal+'</span></div>'+
+      '<div class="progress-bar"><div class="progress-fill '+fillClass(costStatus)+'" style="width:'+Math.min(costPct,100)+'%"></div></div>'+
+      statusLabel(costStatus)+
+    '</div>'+
+    '<div class="signal-card"><h3>📡 Observability Signals</h3>'+
+      '<div class="metric"><span class="label">Active Alerts</span><span class="value '+(obsCrit>0?'sev-critical':obsWarn>0?'sev-warning':'sev-ok')+'">'+(obsCrit+obsWarn)+'</span></div>'+
+      '<div class="metric"><span class="label">Alarms Monitored</span><span class="value">'+obsTotal+'</span></div>'+
+      '<div class="metric"><span class="label">Active Sessions</span><span class="value">'+activeSessions+'</span></div>'+
+      '<div class="progress-bar"><div class="progress-fill '+fillClass(obsStatus)+'" style="width:'+fillPct(obsStatus)+'%"></div></div>'+
+      statusLabel(obsStatus)+
+    '</div>'+
+    '<div class="signal-card"><h3>🧪 Evaluation Signals</h3>'+
+      '<div class="metric"><span class="label">Active Alerts</span><span class="value '+(evalAlarm>0?'sev-critical':evalWarn>0?'sev-warning':'sev-ok')+'">'+(evalAlarm+evalWarn)+'</span></div>'+
+      '<div class="metric"><span class="label">Agents Evaluated</span><span class="value">'+evalSummaries.length+'</span></div>'+
+      '<div class="metric"><span class="label">Evaluators</span><span class="value">7 built-in</span></div>'+
+      '<div class="progress-bar"><div class="progress-fill '+fillClass(evalStatus)+'" style="width:'+fillPct(evalStatus)+'%"></div></div>'+
+      statusLabel(evalStatus)+
+    '</div></div>';
+
+  // Unified Alert Feed
+  var alerts=[];
+  COST_SIGNALS.forEach(function(x){
+    if(x.severity==='critical'||x.severity==='medium'){
+      var reg=REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(x.agent_name)})||{};
+      alerts.push({type:'cost',sev:x.severity==='critical'?'critical':'warning',desc:'Budget at '+x.pct_used+'% ('+fmtUsd(x.actual_spend_usd)+' / '+fmtUsd(x.budget_limit_usd)+')',agent:x.agent_name,arn:reg.agent_runtime_arn||'',session:'(all)',tokens:'—',duration:'—',time:x.synced_at||'',acted:x.last_action==='session_stopped'});
+    }
+  });
+  OBS_SIGNALS.forEach(function(x){
+    if(x.severity==='critical'||x.severity==='medium'){
+      alerts.push({type:'obs',sev:x.severity==='critical'?'critical':'warning',desc:x.description||x.alarm_name||'Alarm triggered',agent:x.agent_name,arn:x.agent_runtime_arn||'',session:'(all)',tokens:'—',duration:'—',time:x.generated_at||x.synced_at||'',acted:x.last_action==='session_stopped'});
+    }
+  });
+  EVAL_SIGNALS.filter(function(x){return x.signal_key==='alarm_summary'&&(x.alarm_state==='ALARM'||x.alarm_state==='INSUFFICIENT_DATA')}).forEach(function(x){
+    alerts.push({type:'eval',sev:x.alarm_state==='ALARM'?'critical':'warning',desc:x.alarm_state==='ALARM'?(x.alarm_reason||'Quality issue detected'):'Waiting for evaluation data',agent:x.agent_name,arn:'',session:'(all)',tokens:'—',duration:'—',time:x.synced_at||'',acted:x.last_action==='session_stopped'});
+  });
+  alerts.sort(function(a,b){var so={critical:0,warning:1};return(so[a.sev]||2)-(so[b.sev]||2)});
+
+  var feedEl=document.getElementById('dashboard-feed');
+  feedEl.innerHTML='<div class="alert-feed"><div class="alert-feed-header"><h3>🔔 Unified Alert Feed'+(alerts.length>0?' ('+alerts.length+')':'')+'</h3><div class="filter-group">'+
+    '<button class="filter-btn active" onclick="filterAlerts(\'all\',this)">All</button>'+
+    '<button class="filter-btn" onclick="filterAlerts(\'cost\',this)">Cost</button>'+
+    '<button class="filter-btn" onclick="filterAlerts(\'obs\',this)">Observability</button>'+
+    '<button class="filter-btn" onclick="filterAlerts(\'eval\',this)">Evaluation</button>'+
+    '<button class="filter-btn" onclick="filterAlerts(\'critical\',this)">Critical</button>'+
+    '<button class="filter-btn" onclick="filterAlerts(\'warning\',this)">Warning</button>'+
+    '</div></div>'+
+    (alerts.length===0?'<div style="padding:40px;text-align:center;color:var(--text2);font-size:14px;background:var(--surface2);border-radius:0 0 8px 8px"><div style="font-size:40px;margin-bottom:12px">🟢</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">No Active Alerts</div>All systems healthy. Signals will appear here when thresholds are breached.<br><button class="btn btn-primary" style="margin-top:14px" onclick="triggerSync()">🔄 Sync from AWS</button></div>':
+    '<table><thead><tr><th>AGENT</th><th>DESCRIPTION</th><th>TYPE</th><th>SEVERITY</th><th>TIME</th><th>ACTION</th></tr></thead><tbody id="alertBody">'+
+    alerts.map(function(a,i){
+      var sevBadge=a.sev==='critical'?'<span class="badge badge-stopped">CRITICAL</span>':'<span class="badge badge-warning">WARNING</span>';
+      var typeHtml='<span class="type-badge type-'+a.type+'">'+a.type.toUpperCase()+'</span>';
+      var timeStr=a.time?fmtTimeAgo(a.time):'—';
+      return'<tr data-type="'+a.type+'" data-sev="'+a.sev+'"'+(a.acted?' style="opacity:.5"':'')+' style="cursor:pointer" onclick="openAgentDetailFromDashboard(\''+escHtml(a.agent)+'\')">'+
+        '<td style="font-weight:700">'+escHtml(a.agent)+'</td>'+
+        '<td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)">'+escHtml(a.desc)+'</td>'+
+        '<td>'+typeHtml+'</td><td>'+sevBadge+'</td>'+
+        '<td style="color:var(--text2);white-space:nowrap">'+timeStr+'</td>'+
+        '<td><button class="review-btn" onclick="event.stopPropagation();openIntervention('+i+')">Review</button></td></tr>';
+    }).join('')+'</tbody></table>')+'</div>';
+
+  // Store alerts globally for intervention panel
+  window._dashAlerts=alerts;
+}
+
+var currentDashView='overview';
+function setDashView(v,btn){
+  currentDashView=v;
+  document.querySelectorAll('#dash-sub-nav .filter-btn').forEach(function(b){b.classList.remove('active')});
+  if(btn)btn.classList.add('active');
+  document.getElementById('dashboard-signals').style.display=v==='overview'?'block':'none';
+  document.getElementById('dashboard-feed').style.display=v==='overview'?'block':'none';
+  document.getElementById('dashboard-cost-view').style.display=v==='cost'?'block':'none';
+  document.getElementById('dashboard-eval-view').style.display=v==='eval'?'block':'none';
+  document.getElementById('dashboard-obs-view').style.display=v==='obs'?'block':'none';
+  if(v==='cost')renderCostView();
+  if(v==='eval')renderEvalView();
+  if(v==='obs')renderObsView();
+}
+
+function renderCostView(){
+  var s=COST_SIGNALS;
+  var el=document.getElementById('dashboard-cost-view');
+  if(!el)return;
+  var cr=s.filter(function(x){return x.severity==='critical'});
+  var md=s.filter(function(x){return x.severity==='medium'});
+  var lo=s.filter(function(x){return x.severity==='low'});
+  function sevBadge(v){return v==='critical'?'<span class="badge badge-stopped">CRITICAL</span>':v==='medium'?'<span class="badge badge-warning">MEDIUM</span>':'<span class="badge badge-ready">LOW</span>'}
+  function pctBar(p,v){var c=v==='critical'?'var(--red)':v==='medium'?'var(--yellow)':'var(--green)';return'<div class="metric-bar" style="width:80px"><div class="metric-bar-fill" style="width:'+Math.min(Number(p),100)+'%;background:'+c+'"></div></div>'}
+
+  var html='<div class="section-title">💰 Cost Signals ('+s.length+' agents)</div>'+
+    '<div class="section-desc">Budget data from AWS Budgets. Click an agent to view details and adjust budget.</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">'+
+      '<div class="summary-card sc-green"><div class="sc-label">Low</div><div class="sc-value">'+lo.length+'</div><div class="sc-sub">&lt; 80% used</div></div>'+
+      '<div class="summary-card sc-yellow"><div class="sc-label">Medium</div><div class="sc-value">'+md.length+'</div><div class="sc-sub">80–100%</div></div>'+
+      '<div class="summary-card sc-red"><div class="sc-label">Critical</div><div class="sc-value">'+cr.length+'</div><div class="sc-sub">&gt; 100%</div></div></div>';
+  if(s.length===0){
+    html+='<div style="padding:30px;text-align:center;color:var(--text2)">No cost signals. Click "Sync from AWS" to populate.</div>';
+  }else{
+    html+='<div class="table-wrap"><table><thead><tr><th>AGENT</th><th>BUDGET</th><th>ACTUAL</th><th>FORECAST</th><th>% USED</th><th>SEVERITY</th><th>ACTION</th></tr></thead><tbody>'+
+      s.map(function(x){
+        var acted=x.last_action==='session_stopped';
+        var spendColor=x.severity==='critical'?'color:var(--red)':x.severity==='medium'?'color:var(--yellow)':'';
+        return'<tr onclick="openCostDetail(\''+escHtml(x.agent_name)+'\')" style="cursor:pointer;'+(acted?'opacity:.5':'')+'">'+
+          '<td style="font-weight:700">'+escHtml(x.agent_name)+(acted?' <span style="font-size:10px;color:var(--text3)">(acted)</span>':'')+'</td>'+
+          '<td>'+fmtUsd(x.budget_limit_usd)+'</td>'+
+          '<td style="font-weight:700;'+spendColor+'">'+fmtUsd(x.actual_spend_usd)+'</td>'+
+          '<td style="color:var(--text2)">'+(Number(x.forecasted_spend_usd)>0?fmtUsd(x.forecasted_spend_usd):'—')+'</td>'+
+          '<td>'+x.pct_used+'% '+pctBar(x.pct_used,x.severity)+'</td>'+
+          '<td>'+sevBadge(x.severity)+'</td>'+
+          '<td><button class="intervene-btn" style="padding:4px 12px;font-size:11px" onclick="event.stopPropagation();currentAlert={agent:\''+escHtml(x.agent_name)+'\',session:\'(all)\'};openModal(\'tier1\')">Stop</button></td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  document.getElementById('dashboard-cost-view').innerHTML=html;
+}
+
+function renderEvalView(){
+  var summaries=EVAL_SIGNALS.filter(function(x){return x.signal_key==='alarm_summary'});
+  var evals=EVAL_SIGNALS.filter(function(x){return x.signal_key!=='alarm_summary'});
+  var ok=summaries.filter(function(x){return(x.alarm_state||'')==='OK'});
+  var insuf=summaries.filter(function(x){return(x.alarm_state||'')==='INSUFFICIENT_DATA'});
+  var alarm=summaries.filter(function(x){return(x.alarm_state||'')==='ALARM'});
+  function ab(st){return st==='ALARM'?'<span class="badge badge-stopped">ALARM</span>':st==='INSUFFICIENT_DATA'?'<span class="badge badge-warning">NO DATA</span>':'<span class="badge badge-ready">OK</span>'}
+
+  var html='<div class="section-title">🧪 Evaluation Signals ('+summaries.length+' agents)</div>'+
+    '<div class="section-desc">AgentCore Online Evaluations with 7 built-in evaluators. Click an agent for evaluator breakdown.</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">'+
+      '<div class="summary-card sc-green"><div class="sc-label">OK</div><div class="sc-value">'+ok.length+'</div><div class="sc-sub">all passing</div></div>'+
+      '<div class="summary-card sc-yellow"><div class="sc-label">No Data</div><div class="sc-value">'+insuf.length+'</div><div class="sc-sub">waiting</div></div>'+
+      '<div class="summary-card sc-red"><div class="sc-label">ALARM</div><div class="sc-value">'+alarm.length+'</div><div class="sc-sub">quality issues</div></div></div>';
+  if(summaries.length===0){
+    html+='<div style="padding:30px;text-align:center;color:var(--text2)">No evaluation signals. Deploy an agent with evaluation controls.</div>';
+  }else{
+    html+='<div class="table-wrap"><table><thead><tr><th>AGENT</th><th>ALARM STATE</th><th>EVALUATORS</th><th>SAMPLING</th><th>DESCRIPTION</th><th>ACTION</th></tr></thead><tbody>'+
+      summaries.map(function(x){
+        var acted=x.last_action==='session_stopped';
+        return'<tr onclick="openEvalDetail(\''+escHtml(x.agent_name)+'\')" style="cursor:pointer;'+(acted?'opacity:.5':'')+'">'+
+          '<td style="font-weight:700">'+escHtml(x.agent_name)+'</td>'+
+          '<td>'+ab(x.alarm_state||'INSUFFICIENT_DATA')+'</td>'+
+          '<td>'+(x.evaluator_count||7)+' built-in</td>'+
+          '<td>'+(x.sampling_pct||'100')+'%</td>'+
+          '<td style="color:var(--text2);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(x.alarm_state==='ALARM'?escHtml(x.alarm_reason||'Quality issue detected'):'Monitoring: harmfulness, correctness, helpfulness, goal success, tool accuracy, faithfulness')+'</td>'+
+          '<td><button class="intervene-btn" style="padding:4px 12px;font-size:11px" onclick="event.stopPropagation();currentAlert={agent:\''+escHtml(x.agent_name)+'\',session:\'(all)\'};openModal(\'tier1\')">Stop</button></td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  document.getElementById('dashboard-eval-view').innerHTML=html;
+}
+
+function renderObsView(){
+  var s=OBS_SIGNALS;
+  var cr=s.filter(function(x){return x.severity==='critical'});
+  var md=s.filter(function(x){return x.severity==='medium'});
+  var lo=s.filter(function(x){return x.severity==='low'});
+  function ob(v){return v==='critical'?'<span class="badge badge-stopped">ALARM</span>':v==='medium'?'<span class="badge badge-warning">NO DATA</span>':'<span class="badge badge-ready">OK</span>'}
+
+  var html='<div class="section-title">📡 Observability Signals ('+s.length+' signals)</div>'+
+    '<div class="section-desc">CloudWatch alarms for registered agents. Click an agent for child alarm details.</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">'+
+      '<div class="summary-card sc-green"><div class="sc-label">OK</div><div class="sc-value">'+lo.length+'</div><div class="sc-sub">healthy</div></div>'+
+      '<div class="summary-card sc-yellow"><div class="sc-label">No Data</div><div class="sc-value">'+md.length+'</div><div class="sc-sub">waiting</div></div>'+
+      '<div class="summary-card sc-red"><div class="sc-label">ALARM</div><div class="sc-value">'+cr.length+'</div><div class="sc-sub">triggered</div></div></div>';
+  if(s.length===0){
+    html+='<div style="padding:30px;text-align:center;color:var(--text2)">No observability signals. Configure alarms for your agents.</div>';
+  }else{
+    html+='<div class="table-wrap"><table><thead><tr><th>AGENT</th><th>ALARM</th><th>STATE</th><th>DESCRIPTION</th><th>UPDATED</th><th>ACTION</th></tr></thead><tbody>'+
+      s.map(function(x){
+        var acted=x.last_action==='session_stopped';
+        return'<tr onclick="openObsDetail(\''+escHtml(x.agent_name)+'\')" style="cursor:pointer;'+(acted?'opacity:.5':'')+'">'+
+          '<td style="font-weight:700">'+escHtml(x.agent_name)+'</td>'+
+          '<td style="font-size:12px;color:var(--text2)">'+escHtml(x.alarm_name||x.signal_key||'—')+'</td>'+
+          '<td>'+ob(x.severity)+'</td>'+
+          '<td style="color:var(--text2);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(x.description||'—')+'</td>'+
+          '<td style="color:var(--text2);font-size:12px">'+fmtDate(x.state_updated_at||x.generated_at)+'</td>'+
+          '<td><button class="intervene-btn" style="padding:4px 12px;font-size:11px" onclick="event.stopPropagation();currentAlert={agent:\''+escHtml(x.agent_name)+'\',session:\'(all)\'};openModal(\'tier1\')">Stop</button></td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  document.getElementById('dashboard-obs-view').innerHTML=html;
+}
+
+function filterAlerts(f,btn){
+  document.querySelectorAll('.alert-feed .filter-btn').forEach(function(b){b.classList.remove('active')});
+  if(btn)btn.classList.add('active');
+  document.querySelectorAll('#alertBody tr').forEach(function(r){
+    var ty=r.getAttribute('data-type'),sv=r.getAttribute('data-sev');
+    if(f==='all')r.style.display='';
+    else if(f==='critical'||f==='warning')r.style.display=sv===f?'':'none';
+    else r.style.display=ty===f?'':'none';
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INTERVENTION PANEL — Tiered actions
+   ═══════════════════════════════════════════════════════════════ */
+function buildTierCards(targetId){
+  var agentName=currentAlert?currentAlert.agent:'';
+  var agentReg=REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(agentName)});
+  var isRevoked=agentReg&&agentReg.status==='revoked';
+  var tier2Label=isRevoked?'🟢 TIER 2 — Restore IAM':'🟠 TIER 2 — Revoke IAM';
+  var tier2Desc=isRevoked?'Removes Deny policy from agent execution role.':'Attaches Deny policy to agent execution role.';
+  var tier2Color=isRevoked?'color:var(--green)':'color:var(--orange)';
+  var tier2BtnClass=isRevoked?'tier-btn btn-restore':'tier-btn tier2-btn';
+  var tier2Border=isRevoked?'border-left:3px solid var(--green)':'';
+  return'<div class="tier-card tier1-color" onclick="openModal(\'tier1\')"><div class="tier-info"><h4 style="color:var(--yellow)">🟡 TIER 1 — Stop Session</h4><p>Terminates active sessions for this agent.</p><div class="blast">Blast: Agent sessions | Reversible: No</div></div><button class="tier-btn tier1-btn" onclick="event.stopPropagation();openModal(\'tier1\')">Execute</button></div>'+
+    '<div class="tier-card tier2-color" style="'+(isRevoked?'border-left-color:var(--green)':'')+'" onclick="openModal(\'tier2\')"><div class="tier-info"><h4 style="'+tier2Color+'">'+tier2Label+'</h4><p>'+tier2Desc+'</p><div class="blast">Blast: This agent only | Reversible: Yes</div></div><button class="'+tier2BtnClass+'" onclick="event.stopPropagation();openModal(\'tier2\')">'+(isRevoked?'Restore':'Execute')+'</button></div>'
+}
+
+function openIntervention(i){
+  var a=(window._dashAlerts||[])[i];
+  if(!a)return;
+  currentAlert=a;
+  document.getElementById('ipAlertId').textContent=a.agent;
+  document.getElementById('ipSignal').textContent=a.type.toUpperCase()+' — '+a.desc;
+  document.getElementById('ipAgent').textContent=a.agent;
+  document.getElementById('ipArn').textContent=a.arn||'—';
+  document.getElementById('ipSession').textContent=a.session;
+  document.getElementById('ipTokens').textContent=a.tokens;
+  document.getElementById('ipDuration').textContent=a.duration;
+  document.getElementById('ipTiers').innerHTML=buildTierCards();
+  var p=document.getElementById('interventionPanel');
+  p.classList.add('show');p.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeIntervention(){document.getElementById('interventionPanel').classList.remove('show')}
+
+function openSI(i){
+  var s=SESSIONS[i];if(!s)return;
+  var reg=REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(s.agent_name)})||{};
+  var tokens=fmtNum((Number(s.input_tokens)||0)+(Number(s.output_tokens)||0));
+  var dur=s.started_at?minutesAgo(s.started_at)+' min':'—';
+  currentAlert={agent:s.agent_name,arn:reg.agent_runtime_arn||s.agent_runtime_arn||'',session:s.session_id,tokens:tokens,duration:dur};
+  document.getElementById('sipAgent').textContent=s.agent_name;
+  document.getElementById('sipName').textContent=s.agent_name;
+  document.getElementById('sipArn').textContent=currentAlert.arn;
+  document.getElementById('sipSession').textContent=s.session_id;
+  document.getElementById('sipStatus').textContent=(s.computed_status||s.status||'unknown').toUpperCase();
+  document.getElementById('sipTokens').textContent=tokens;
+  document.getElementById('sipDuration').textContent=dur;
+  document.getElementById('sipTiers').innerHTML=buildTierCards();
+  var p=document.getElementById('sessionIP');
+  p.classList.add('show');p.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeSI(){document.getElementById('sessionIP').classList.remove('show')}
+
+/* ═══════════════════════════════════════════════════════════════
+   INTERVENTION MODAL — Confirm + Execute
+   ═══════════════════════════════════════════════════════════════ */
+var tierInfo={
+  tier1:{action:'TIER 1 — Stop Sessions',blast:'Agent sessions',reversible:'No',color:'var(--yellow)'},
+  tier2:{action:'TIER 2 — Revoke IAM',blast:'All sessions for this agent',reversible:'Yes',color:'var(--orange)'}
+};
+
+function openModal(tier){
+  currentTier=tier;var info=tierInfo[tier];
+  // For tier2, check if agent is already revoked to show restore instead
+  var agentName=currentAlert?currentAlert.agent:'';
+  var agentReg=REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(agentName)});
+  var isRevoked=agentReg&&agentReg.status==='revoked';
+  if(tier==='tier2'&&isRevoked){
+    info={action:'TIER 2 — Restore IAM',blast:'This agent only',reversible:'Yes',color:'var(--green)'};
+  }
+  document.getElementById('modalTitle').textContent='Confirm Intervention';
+  document.getElementById('modalDesc').textContent='This action will be logged in the audit trail.';
+  document.getElementById('modalDetails').innerHTML=
+    '<div class="modal-detail"><span class="dl">Action</span><span class="dv" style="color:'+info.color+'">'+info.action+'</span></div>'+
+    '<div class="modal-detail"><span class="dl">Agent</span><span class="dv">'+(currentAlert?escHtml(currentAlert.agent):'—')+'</span></div>'+
+    '<div class="modal-detail"><span class="dl">Session</span><span class="dv">'+(currentAlert?escHtml(currentAlert.session):'—')+'</span></div>'+
+    '<div class="modal-detail"><span class="dl">Blast Radius</span><span class="dv">'+info.blast+'</span></div>'+
+    '<div class="modal-detail"><span class="dl">Reversible</span><span class="dv">'+info.reversible+'</span></div>';
+  document.getElementById('modalReason').value='';
+  document.getElementById('modalError').style.display='none';
+  var btn=document.getElementById('modalConfirmBtn');
+  btn.disabled=false;btn.textContent='✅ Confirm';
+  document.getElementById('confirmModal').classList.add('open');
+}
+function closeModal(){document.getElementById('confirmModal').classList.remove('open')}
+
+async function execIntervention(){
+  var reason=document.getElementById('modalReason').value.trim();
+  if(!reason){document.getElementById('modalError').style.display='block';return}
+  var btn=document.getElementById('modalConfirmBtn');
+  btn.disabled=true;btn.textContent='Executing...';
+  var agent=currentAlert?currentAlert.agent:'';
+  var admin=AUTH_USER||'dashboard-user';
+  try{
+    if(currentTier==='tier1'){
+      await api('/api/interventions/stop-all-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agent,reason:reason,admin_user:admin})});
+      showToast('success','Sessions Stopped','All active sessions terminated for '+agent);
+    }else if(currentTier==='tier2'){
+      if(!agent){showToast('error','No Agent','Cannot revoke — no agent selected');btn.disabled=false;btn.textContent='✅ Confirm';return}
+      var agentReg=REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(agent)});
+      var isRevoked=agentReg&&agentReg.status==='revoked';
+      if(isRevoked){
+        var res=await api('/api/kill-switch/restore-agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agent,reason:reason,admin_user:admin})});
+        showToast('success','Agent Restored','IAM deny policy removed for '+agent);
+      }else{
+        var res=await api('/api/kill-switch/revoke-agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agent,reason:reason,admin_user:admin})});
+        showToast('warning','Agent Revoked','IAM deny policy attached for '+agent+'. Use Registry or Audit Log to restore.');
+      }
+    }
+    closeModal();closeIntervention();closeSI();
+    loadData();
+  }catch(e){
+    showToast('error','Failed',e.message);
+    btn.disabled=false;btn.textContent='✅ Confirm';
+  }
+}
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   LIVE SESSIONS TAB — Table + Timeline View
+   ═══════════════════════════════════════════════════════════════ */
+function renderSessions(){
+  var active=SESSIONS.filter(function(s){var st=s.computed_status||s.status||'';return st==='active'});
+  var idle=SESSIONS.filter(function(s){return(s.computed_status||s.status)==='idle'});
+  var warn=idle.length;
+  var crit=active.filter(function(s){return(Number(s.input_tokens)||0)+(Number(s.output_tokens)||0)>10000}).length;
+
+  document.getElementById('sessions-header').innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">'+
+    '<div class="section-title" style="margin-bottom:0">🔴 Live Sessions</div>'+
+    '<div style="display:flex;align-items:center;gap:18px">'+
+      '<div style="display:flex;gap:10px;font-size:14px">'+
+        '<span style="padding:5px 14px;border-radius:6px;background:var(--surface);border:1px solid var(--border)">Active: <strong>'+active.length+'</strong></span>'+
+        '<span style="padding:5px 14px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--yellow)">Idle: <strong>'+warn+'</strong></span>'+
+        '<span style="padding:5px 14px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--red)">High Token: <strong>'+crit+'</strong></span>'+
+      '</div>'+
+      '<span style="font-size:12px;color:var(--accent)"><span class="pulse"></span> Auto-refresh: 90s</span>'+
+    '</div></div>';
+
+  renderSessionsTable();
+  renderSessionsTimeline();
+}
+
+function setSessionView(mode,btn){
+  sessionViewMode=mode;
+  document.querySelectorAll('#sessions-view-toggle .filter-btn').forEach(function(b){b.classList.remove('active')});
+  if(btn)btn.classList.add('active');
+  document.getElementById('sessions-table').style.display=mode==='table'?'block':'none';
+  document.getElementById('sessions-timeline').style.display=mode==='timeline'?'block':'none';
+}
+
+function renderSessionsTable(){
+  var active=SESSIONS.filter(function(s){var st=s.computed_status||s.status||'';return st==='active'||st==='idle'});
+  var terminated=SESSIONS.filter(function(s){var st=s.computed_status||s.status||'';return st!=='active'&&st!=='idle'});
+
+  var el=document.getElementById('sessions-table');
+  if(SESSIONS.length===0){el.innerHTML='<div class="table-wrap" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">📋</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">No Sessions</div><div style="color:var(--text2)">Deploy an agent and invoke it to see sessions here.</div><button class="btn btn-primary" style="margin-top:14px" onclick="triggerSync()">🔄 Sync from AWS</button></div>';return}
+
+  function renderRow(s,i,isLive){
+    var st=s.computed_status||s.status||'unknown';
+    var tokens=fmtNum((Number(s.input_tokens)||0)+(Number(s.output_tokens)||0));
+    var dur=s.started_at?minutesAgo(s.started_at)+' min':'—';
+    var hb=s.last_heartbeat?fmtTimeAgo(s.last_heartbeat):'—';
+    var stBadge=st==='active'?'<span class="badge badge-ready">🟢 ACTIVE</span>':st==='idle'?'<span class="badge badge-warning">⚠️ IDLE</span>':'<span class="badge badge-stopped">⚪ '+st.toUpperCase()+'</span>';
+    var highTokens=(Number(s.input_tokens||0)+Number(s.output_tokens||0))>10000;
+    return'<tr><td style="font-weight:700">'+escHtml(s.agent_name)+'</td>'+
+      '<td style="font-family:\'SF Mono\',Consolas,monospace;font-size:11px;color:var(--text2)">'+escHtml(s.session_id).substring(0,20)+'…</td>'+
+      '<td>'+stBadge+'</td>'+
+      '<td style="font-weight:600;'+(highTokens?'color:var(--red)':'')+'">'+tokens+'</td>'+
+      '<td>'+fmtNum(s.invocation_count||0)+'</td>'+
+      '<td>'+dur+'</td><td style="color:var(--text2)">'+hb+'</td>'+
+      '<td>'+(isLive?'<button class="intervene-btn" style="padding:4px 12px;font-size:11px" onclick="openSI('+i+')">Intervene</button>':'<span style="color:var(--text3);font-size:11px">ended</span>')+'</td></tr>';
+  }
+
+  var html='<div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--green)">🟢 Active Sessions ('+active.length+')</div>';
+  if(active.length===0){
+    html+='<div style="padding:16px;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:16px;text-align:center">No active sessions right now.</div>';
+  }else{
+    html+='<div class="table-wrap" style="margin-bottom:16px"><table><thead><tr><th>AGENT</th><th>SESSION ID</th><th>STATUS</th><th>TOKENS</th><th>INVOCATIONS</th><th>DURATION</th><th>LAST HB</th><th>ACTION</th></tr></thead><tbody>'+
+      active.map(function(s){var idx=SESSIONS.indexOf(s);return renderRow(s,idx,true)}).join('')+'</tbody></table></div>';
+  }
+
+  if(terminated.length>0){
+    html+='<div style="cursor:pointer;font-size:13px;font-weight:600;color:var(--text3);padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px" onclick="var el=document.getElementById(\'terminated-sessions\');var arr=this.querySelector(\'span\');if(el.style.display===\'none\'){el.style.display=\'block\';arr.textContent=\'▼\'}else{el.style.display=\'none\';arr.textContent=\'▶\'}"><span>▶</span> Terminated Sessions ('+terminated.length+')</div>'+
+      '<div id="terminated-sessions" style="display:none"><div class="table-wrap"><table><thead><tr><th>AGENT</th><th>SESSION ID</th><th>STATUS</th><th>TOKENS</th><th>INVOCATIONS</th><th>DURATION</th><th>LAST HB</th><th>ACTION</th></tr></thead><tbody>'+
+      terminated.map(function(s){var idx=SESSIONS.indexOf(s);return renderRow(s,idx,false)}).join('')+'</tbody></table></div></div>';
+  }
+  el.innerHTML=html;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SESSION TIMELINE VIEW
+   ═══════════════════════════════════════════════════════════════ */
+var timelineRange=60; // minutes
+
+function renderSessionsTimeline(){
+  var el=document.getElementById('sessions-timeline');
+  var now=Date.now();
+  var rangeMs=timelineRange*60*1000;
+  var windowStart=now-rangeMs;
+
+  // Group sessions by agent
+  var agentMap={};
+  SESSIONS.forEach(function(s){
+    var name=s.agent_name||'unknown';
+    if(!agentMap[name])agentMap[name]=[];
+    agentMap[name].push(s);
+  });
+  var agentNames=Object.keys(agentMap).sort();
+
+  if(agentNames.length===0){
+    el.innerHTML='<div class="timeline-container"><div class="timeline-header"><h3>📊 Session Timeline</h3></div><div style="padding:30px;text-align:center"><div style="font-size:36px;margin-bottom:10px">📊</div><div style="color:var(--text2)">No sessions to display on timeline.</div></div></div>';
+    return;
+  }
+
+  var html='<div class="timeline-container"><div class="timeline-header"><h3>📊 Session Timeline</h3><div class="timeline-controls">'+
+    '<button class="filter-btn'+(timelineRange===60?' active':'')+'" onclick="timelineRange=60;renderSessionsTimeline()">1h</button>'+
+    '<button class="filter-btn'+(timelineRange===360?' active':'')+'" onclick="timelineRange=360;renderSessionsTimeline()">6h</button>'+
+    '<button class="filter-btn'+(timelineRange===1440?' active':'')+'" onclick="timelineRange=1440;renderSessionsTimeline()">24h</button>'+
+    '</div></div>';
+
+  agentNames.forEach(function(name){
+    var sessions=agentMap[name];
+    var activeSess=sessions.filter(function(s){var st=s.computed_status||s.status;return st==='active'||st==='idle'});
+    html+='<div class="timeline-agent"><div class="timeline-agent-name">'+escHtml(name)+' <span class="badge badge-'+(activeSess.length>0?'ready':'stopped')+'" style="font-size:11px">'+activeSess.length+' active</span></div>';
+
+    sessions.forEach(function(s){
+      var startTime=s.started_at?new Date(s.started_at).getTime():now-300000;
+      var endTime=s.last_heartbeat?new Date(s.last_heartbeat).getTime():now;
+      var st=s.computed_status||s.status||'unknown';
+      if(st==='active')endTime=now;
+
+      // Skip sessions entirely outside the window
+      if(endTime<windowStart&&st!=='active')return;
+
+      var barStart=Math.max(0,(startTime-windowStart)/rangeMs*100);
+      var barEnd=Math.min(100,(endTime-windowStart)/rangeMs*100);
+      var barWidth=Math.max(0.5,barEnd-barStart);
+
+      var barClass=st==='active'?'active':st==='idle'?'idle':st==='terminated'?'stopped':'terminated';
+      var tokens=fmtNum((Number(s.input_tokens)||0)+(Number(s.output_tokens)||0));
+      var sid=s.session_id||'';
+      var shortSid=sid.length>16?sid.substring(0,16)+'…':sid;
+
+      html+='<div class="timeline-row">'+
+        '<div class="timeline-label" title="'+escHtml(sid)+'">'+escHtml(shortSid)+'</div>'+
+        '<div class="timeline-track">'+
+          '<div class="timeline-bar '+barClass+'" style="left:'+barStart+'%;width:'+barWidth+'%" '+
+            'onmouseenter="showTimelineTooltip(event,\''+escHtml(sid)+'\',\''+st+'\',\''+tokens+'\',\''+fmtNum(s.invocation_count||0)+'\',\''+(s.started_at?fmtDate(s.started_at):'—')+'\',\''+(s.last_heartbeat?fmtDate(s.last_heartbeat):'—')+'\')" '+
+            'onmouseleave="hideTimelineTooltip()"></div>'+
+        '</div></div>';
+    });
+    html+='</div>';
+  });
+
+  // Time axis
+  var axisLabels=[];
+  for(var i=0;i<=4;i++){
+    var t=new Date(windowStart+rangeMs*i/4);
+    axisLabels.push(t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0'));
+  }
+  html+='<div class="timeline-axis">'+axisLabels.map(function(l){return'<span>'+l+'</span>'}).join('')+'</div>';
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+function showTimelineTooltip(e,sid,status,tokens,invocations,started,lastHb){
+  var tt=document.getElementById('timeline-tooltip');
+  var stColor=status==='active'?'var(--green)':status==='idle'?'var(--yellow)':'var(--text3)';
+  tt.innerHTML='<div style="font-weight:700;margin-bottom:6px;font-family:\'SF Mono\',Consolas,monospace;font-size:11px">'+sid+'</div>'+
+    '<div style="margin-bottom:4px">Status: <span style="color:'+stColor+';font-weight:700">'+status.toUpperCase()+'</span></div>'+
+    '<div>Tokens: <strong>'+tokens+'</strong> · Invocations: <strong>'+invocations+'</strong></div>'+
+    '<div style="color:var(--text3);margin-top:4px;font-size:11px">Started: '+started+'<br>Last HB: '+lastHb+'</div>';
+  tt.style.display='block';
+  tt.style.left=Math.min(e.clientX+12,window.innerWidth-320)+'px';
+  tt.style.top=(e.clientY+12)+'px';
+}
+function hideTimelineTooltip(){document.getElementById('timeline-tooltip').style.display='none'}
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   AGENT REGISTRY TAB
+   ═══════════════════════════════════════════════════════════════ */
+function renderRegistryTab(){
+  var el=document.getElementById('registry-content');
+  var recs=AWS_REGISTRY.records||[];
+  var regs=AWS_REGISTRY.registries||[];
+  var region=AWS_REGISTRY.region||'us-east-1';
+  var err=AWS_REGISTRY.error||'';
+  var a=REGISTRY;
+
+  // AWS Agent Registry section
+  var mcpCount=recs.filter(function(r){return r.descriptorType==='MCP'}).length;
+  var a2aCount=recs.filter(function(r){return r.descriptorType==='A2A'}).length;
+  var skillsCount=recs.filter(function(r){return r.descriptorType==='AGENT_SKILLS'}).length;
+  var customCount=recs.filter(function(r){return r.descriptorType==='CUSTOM'}).length;
+
+  function statusBadge(s){
+    if(s==='APPROVED')return'<span class="badge badge-ready">APPROVED</span>';
+    if(s==='PENDING_APPROVAL')return'<span class="badge badge-warning">PENDING</span>';
+    if(s==='DRAFT')return'<span class="badge badge-info">DRAFT</span>';
+    if(s==='REJECTED')return'<span class="badge badge-stopped">REJECTED</span>';
+    return'<span class="badge badge-info">'+s+'</span>';
+  }
+  function typeBadge(t){
+    if(t==='MCP')return'<span class="type-badge type-obs">MCP</span>';
+    if(t==='A2A')return'<span class="type-badge type-eval">A2A</span>';
+    if(t==='AGENT_SKILLS')return'<span class="type-badge" style="background:rgba(46,204,113,.15);color:var(--green)">SKILL</span>';
+    return'<span class="type-badge type-cost">CUSTOM</span>';
+  }
+
+  var html='<div class="section-title">📋 Agent Registry</div>'+
+    '<div class="section-desc">Centralized catalog from AWS Agent Registry in <strong>'+region+'</strong> and AgentCore Runtimes.</div>';
+
+  if(AWS_REGISTRY.region_unsupported){
+    var supported=(AWS_REGISTRY.supported_regions||[]).join(', ');
+    html+='<div style="background:rgba(243,156,18,.08);border:2px solid var(--yellow);border-radius:8px;padding:16px;margin-bottom:18px">'+
+      '<div style="font-size:14px;font-weight:700;color:var(--yellow);margin-bottom:6px">⚠️ Agent Registry Not Available in '+escHtml(region)+'</div>'+
+      '<div style="font-size:13px;color:var(--text2);line-height:1.6">AWS Agent Registry is currently in preview and only available in select regions. Your dashboard is deployed in <strong style="color:var(--text)">'+escHtml(region)+'</strong>, which does not support this feature yet.</div>'+
+      '<div style="font-size:13px;color:var(--text2);margin-top:8px;line-height:1.6"><strong style="color:var(--text)">Supported regions:</strong> '+escHtml(supported)+'</div>'+
+      '<div style="font-size:12px;color:var(--text3);margin-top:8px">To use Agent Registry, deploy the dashboard in one of the supported regions, or set the <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px">AGENT_REGISTRY_REGION</code> environment variable to a supported region.</div>'+
+    '</div>';
+  }else if(err){html+='<div style="background:rgba(243,156,18,.1);border:1px solid var(--yellow);border-radius:8px;padding:14px;margin-bottom:18px;font-size:13px;color:var(--yellow)">⚠️ '+escHtml(err)+'</div>'}
+
+  // Summary cards
+  html+='<div class="summary-cards">'+
+    '<div class="summary-card sc-accent"><div class="sc-label">MCP Servers</div><div class="sc-value">'+mcpCount+'</div><div class="sc-sub">tools & servers</div></div>'+
+    '<div class="summary-card" style="--sc-color:var(--purple)"><div class="sc-label">A2A Agents</div><div class="sc-value" style="color:var(--purple)">'+a2aCount+'</div><div class="sc-sub">agent-to-agent</div></div>'+
+    '<div class="summary-card sc-green"><div class="sc-label">Skills</div><div class="sc-value">'+skillsCount+'</div><div class="sc-sub">reusable capabilities</div></div>'+
+    '<div class="summary-card sc-yellow"><div class="sc-label">Custom</div><div class="sc-value">'+customCount+'</div><div class="sc-sub">custom resources</div></div></div>';
+
+  // AWS Registry records table
+  if(recs.length>0){
+    html+='<div class="table-wrap" style="margin-bottom:24px"><table><thead><tr><th>NAME</th><th>TYPE</th><th>STATUS</th><th>VERSION</th><th>REGISTRY</th><th>DESCRIPTION</th></tr></thead><tbody>'+
+      recs.map(function(r){
+        return'<tr><td style="font-weight:700">'+escHtml(r.name)+'</td><td>'+typeBadge(r.descriptorType)+'</td><td>'+statusBadge(r.status)+'</td><td style="color:var(--text2)">'+escHtml(r.recordVersion||'—')+'</td><td style="color:var(--text2)">'+escHtml(r._registryName||'—')+'</td><td style="color:var(--text2);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(r.description||'—')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+
+  // AgentCore Runtimes
+  html+='<div class="section-title" style="font-size:16px;margin-top:8px">🤖 AgentCore Runtimes ('+a.length+')</div>';
+  if(a.length===0){
+    html+='<div style="padding:20px;color:var(--text2)">No runtimes found. Click "Sync from AWS" to populate.</div>';
+  }else{
+    html+='<div style="margin-bottom:12px"><input type="text" placeholder="Search agents..." style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:6px;font-size:14px;width:280px" oninput="filterRegistryTable(this.value)"></div>';
+    html+='<div class="table-wrap"><table><thead><tr><th>NAME</th><th>STATUS</th><th>TEAM</th><th>TAGS</th><th>LAST SYNCED</th><th>ACTION</th></tr></thead><tbody id="registryBody">'+
+      a.map(function(x){
+        var st=x.runtime_status||x.status||'—';
+        var isDeleted=st==='DELETED'||x.status==='deleted';
+        var isRevoked=x.status==='revoked';
+        var tags=x.tags||{};
+        var ts=Object.entries(tags).map(function(kv){return'<span class="badge" style="background:rgba(167,139,250,.15);color:var(--purple);font-size:11px;padding:2px 8px">'+escHtml(kv[0])+':'+escHtml(kv[1])+'</span>'}).join(' ');
+        var actionBtn=isRevoked?
+          '<button class="rollback-btn" style="font-size:12px" onclick="event.stopPropagation();restoreAgent(\''+escHtml(x.agent_name)+'\')">🔄 Restore</button>':
+          '<button class="review-btn" style="font-size:12px" onclick="event.stopPropagation();openAgentDetail(\''+escHtml(x.agent_name)+'\')">View</button>';
+        return'<tr onclick="openAgentDetail(\''+escHtml(x.agent_name)+'\')" style="cursor:pointer;'+(isDeleted?'opacity:0.4':'')+'"'+
+          ' data-search="'+escHtml(x.agent_name+' '+(x.team||'')+' '+st).toLowerCase()+'">'+
+          '<td style="font-weight:700">'+escHtml(x.agent_name)+(isDeleted?' <span style="color:var(--red);font-size:11px">DELETED</span>':'')+(isRevoked?' <span style="color:var(--red);font-size:11px">🔴 REVOKED</span>':'')+'</td>'+
+          '<td><span class="badge badge-'+(isRevoked?'stopped':isDeleted?'stopped':badgeClass(st))+'">'+escHtml(isRevoked?'REVOKED':st)+'</span></td>'+
+          '<td>'+escHtml(x.team||'—')+'</td>'+
+          '<td>'+ts+'</td>'+
+          '<td style="color:var(--text2);font-size:12px">'+fmtDate(x.last_synced)+'</td>'+
+          '<td>'+actionBtn+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  el.innerHTML=html;
+}
+
+function filterRegistryTable(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('#registryBody tr').forEach(function(r){
+    r.style.display=(r.getAttribute('data-search')||'').indexOf(q)>-1?'':'none';
+  });
+}
+
+async function restoreAgent(agentName){
+  var reason=prompt('Reason for restoring access for '+agentName+':');
+  if(!reason)return;
+  var admin=AUTH_USER||'dashboard-user';
+  try{
+    await api('/api/kill-switch/restore-agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agentName,reason:reason,admin_user:admin})});
+    showToast('success','Agent Restored','Access restored for '+agentName);
+    loadData();
+  }catch(e){showToast('error','Restore Failed',e.message)}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AGENT DETAIL OVERLAY — preserved from original with new styling
+   ═══════════════════════════════════════════════════════════════ */
+async function openAgentDetailFromDashboard(agentName){
+  await openAgentDetailFull(agentName,'all');
+}
+
+async function openAgentDetailFull(agentName,mode){
+  var a=REGISTRY.find(function(r){return r.agent_name===agentName})||REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(agentName)});
+  if(!a){a={agent_name:agentName}}
+  var panel=document.getElementById('detail-panel');
+  document.getElementById('detail-content').innerHTML='<div style="text-align:center;padding:40px;color:var(--text2)">Loading...</div>';
+  panel.classList.add('open');
+  var agentSessions=[];
+  try{var sr=await api('/api/sessions/agent/'+encodeURIComponent(a.agent_name));agentSessions=sr.sessions||[]}catch(e){}
+  var activeSess=agentSessions.filter(function(s){var ss=s.computed_status||s.status;return ss==='active'||ss==='idle'});
+  var terminatedSess=agentSessions.filter(function(s){var ss=s.computed_status||s.status;return ss!=='active'&&ss!=='idle'});
+  var totalTokens=agentSessions.reduce(function(sum,s){return sum+(Number(s.input_tokens)||0)+(Number(s.output_tokens)||0)},0);
+  var totalInvocations=agentSessions.reduce(function(sum,s){return sum+(Number(s.invocation_count)||0)},0);
+  var st=a.runtime_status||a.status||'—';var tags=a.tags||{};
+  var modeLabel=mode==='cost'?'💰 Cost Details':mode==='eval'?'🧪 Evaluation Details':mode==='obs'?'📡 Observability Details':'Agent Overview';
+  var html='<div class="detail-title">'+escHtml(a.agent_name)+'</div><div class="detail-subtitle">'+modeLabel+' · <span class="badge badge-'+badgeClass(st)+'">'+escHtml(st)+'</span></div>';
+  // Agent Info
+  html+='<div class="detail-section"><h3>🤖 Agent Info</h3><div class="detail-grid">';
+  html+='<div class="detail-item"><div class="detail-item-label">Agent Name</div><div class="detail-item-value">'+escHtml(a.agent_name)+'</div></div>';
+  html+='<div class="detail-item"><div class="detail-item-label">Team</div><div class="detail-item-value">'+escHtml(a.team||'—')+'</div></div>';
+  if(a.agent_runtime_id){html+='<div class="detail-item"><div class="detail-item-label">Runtime ID</div><div class="detail-item-value" style="font-size:11px;font-family:monospace">'+escHtml(a.agent_runtime_id)+'</div></div>'}
+  html+='<div class="detail-item"><div class="detail-item-label">Version</div><div class="detail-item-value">'+escHtml(a.runtime_version||'—')+'</div></div>';
+  html+='<div class="detail-item"><div class="detail-item-label">Total Tokens</div><div class="detail-item-value">'+fmtNum(totalTokens)+'</div></div>';
+  html+='<div class="detail-item"><div class="detail-item-label">Total Invocations</div><div class="detail-item-value">'+fmtNum(totalInvocations)+'</div></div>';
+  html+='</div>';
+  if(a.agent_runtime_arn){html+='<div class="detail-item" style="margin-top:8px"><div class="detail-item-label">Runtime ARN</div><div class="detail-item-value" style="font-size:10px;font-family:monospace;word-break:break-all">'+escHtml(a.agent_runtime_arn)+'</div></div>'}
+  if(tags&&Object.keys(tags).length>0){html+='<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">'+Object.entries(tags).map(function(kv){return'<span class="badge" style="background:rgba(167,139,250,.15);color:var(--purple);font-size:10px">'+escHtml(kv[0])+':'+escHtml(kv[1])+'</span>'}).join('')+'</div>'}
+  html+='</div>';
+  // COST
+  if(mode==='all'||mode==='cost'){
+    var costSig=COST_SIGNALS.find(function(x){return normalize(x.agent_name)===normalize(agentName)});
+    html+='<div class="detail-section"><h3>💰 Cost & Budget</h3>';
+    if(costSig){
+      var pct=Number(costSig.pct_used||0);var barColor=pct>=100?'var(--red)':pct>=80?'var(--yellow)':'var(--green)';
+      var sevB=costSig.severity==='critical'?'<span class="badge badge-stopped">CRITICAL</span>':costSig.severity==='medium'?'<span class="badge badge-warning">MEDIUM</span>':'<span class="badge badge-ready">LOW</span>';
+      html+='<div class="detail-grid">';
+      html+='<div class="detail-item"><div class="detail-item-label">Budget Name</div><div class="detail-item-value" style="font-size:12px">'+escHtml(costSig.budget_name||'—')+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Severity</div><div class="detail-item-value">'+sevB+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Monthly Budget</div><div class="detail-item-value" style="color:var(--accent)">'+fmtUsd(costSig.budget_limit_usd)+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Actual Spend</div><div class="detail-item-value" style="color:'+barColor+'">'+fmtUsd(costSig.actual_spend_usd)+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Forecasted Spend</div><div class="detail-item-value">'+fmtUsd(costSig.forecasted_spend_usd)+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">% Used</div><div class="detail-item-value" style="color:'+barColor+'">'+costSig.pct_used+'%</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Forecast %</div><div class="detail-item-value">'+(costSig.forecast_pct||'0')+'%</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Last Synced</div><div class="detail-item-value" style="font-size:11px">'+fmtDate(costSig.synced_at)+'</div></div>';
+      html+='</div>';
+      html+='<div style="margin-top:10px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">Budget utilization</div><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+Math.min(pct,100)+'%;background:'+barColor+';border-radius:4px"></div></div></div>';
+    }else{html+='<div style="color:var(--text2);padding:12px;background:var(--surface2);border-radius:6px">No AWS Budget found for this agent.</div>'}
+    html+='</div>';
+  }
+  // EVALUATION
+  if(mode==='all'||mode==='eval'){
+    var evalItems=EVAL_SIGNALS.filter(function(x){return normalize(x.agent_name)===normalize(agentName)&&x.signal_key!=='alarm_summary'});
+    var evalSummary=EVAL_SIGNALS.find(function(x){return normalize(x.agent_name)===normalize(agentName)&&x.signal_key==='alarm_summary'});
+    html+='<div class="detail-section"><h3>🧪 Evaluation</h3>';
+    if(evalSummary){
+      var as2=evalSummary.alarm_state||'INSUFFICIENT_DATA';
+      var ab2=as2==='ALARM'?'<span class="badge badge-stopped">ALARM</span>':as2==='OK'?'<span class="badge badge-ready">OK</span>':'<span class="badge badge-warning">NO DATA</span>';
+      html+='<div class="detail-grid" style="margin-bottom:10px">';
+      html+='<div class="detail-item"><div class="detail-item-label">Alarm Name</div><div class="detail-item-value" style="font-size:11px;font-family:monospace">'+escHtml(evalSummary.alarm_name||'—')+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Alarm State</div><div class="detail-item-value">'+ab2+'</div></div>';
+      if(evalSummary.eval_config_name){html+='<div class="detail-item"><div class="detail-item-label">Config Name</div><div class="detail-item-value" style="font-size:11px">'+escHtml(evalSummary.eval_config_name)+'</div></div>'}
+      if(evalSummary.eval_config_id){html+='<div class="detail-item"><div class="detail-item-label">Config ID</div><div class="detail-item-value" style="font-size:10px;font-family:monospace">'+escHtml(evalSummary.eval_config_id)+'</div></div>'}
+      html+='<div class="detail-item"><div class="detail-item-label">Evaluators</div><div class="detail-item-value">'+(evalSummary.evaluator_count||7)+' built-in</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Sampling</div><div class="detail-item-value">'+(evalSummary.sampling_pct||'100')+'%</div></div>';
+      html+='</div>';
+      if(as2==='ALARM'&&evalSummary.alarm_reason){html+='<div style="padding:10px;background:rgba(231,76,60,.1);border:1px solid var(--red);border-radius:6px;font-size:12px;color:var(--red);margin-bottom:10px">⚠️ '+escHtml(evalSummary.alarm_reason)+'</div>'}
+    }else{html+='<div style="color:var(--text2);padding:10px;background:var(--surface2);border-radius:6px;margin-bottom:10px">No evaluation config found.</div>'}
+    if(evalItems.length>0){
+      html+='<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Evaluator Scores</div>';
+      html+='<div class="table-wrap"><table style="font-size:12px"><thead><tr><th>Evaluator</th><th>Bad</th><th>Good</th><th>Total</th><th>Bad %</th><th>Status</th></tr></thead><tbody>';
+      evalItems.forEach(function(e){
+        var eb=e.severity==='critical'?'<span class="badge badge-stopped" style="font-size:10px">FAIL</span>':e.severity==='medium'?'<span class="badge badge-warning" style="font-size:10px">WARN</span>':'<span class="badge badge-ready" style="font-size:10px">PASS</span>';
+        html+='<tr><td style="font-weight:600">'+(e.evaluator_name||e.signal_key)+'</td><td style="color:var(--red);font-weight:700">'+(e.bad_count||0)+'</td><td style="color:var(--green);font-weight:700">'+(e.good_count||0)+'</td><td>'+(e.total_count||0)+'</td><td style="font-weight:700">'+(e.bad_pct||'0')+'%</td><td>'+eb+'</td></tr>';
+      });
+      html+='</tbody></table></div>';
+    }
+    html+='</div>';
+  }
+  // OBSERVABILITY
+  if(mode==='all'||mode==='obs'){
+    var obsSig=OBS_SIGNALS.find(function(x){return normalize(x.agent_name)===normalize(agentName)});
+    html+='<div class="detail-section"><h3>📡 Observability</h3>';
+    if(obsSig){
+      var os2=obsSig.alarm_state||obsSig.current_value||'OK';
+      var ob2=os2==='ALARM'?'<span class="badge badge-stopped">ALARM</span>':os2==='INSUFFICIENT_DATA'?'<span class="badge badge-warning">NO DATA</span>':'<span class="badge badge-ready">OK</span>';
+      html+='<div class="detail-grid" style="margin-bottom:10px">';
+      html+='<div class="detail-item"><div class="detail-item-label">Composite Alarm</div><div class="detail-item-value" style="font-size:11px;font-family:monospace">'+escHtml(obsSig.alarm_name||obsSig.signal_key||'—')+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">State</div><div class="detail-item-value">'+ob2+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Last Updated</div><div class="detail-item-value" style="font-size:11px">'+fmtDate(obsSig.state_updated_at||obsSig.generated_at)+'</div></div>';
+      html+='<div class="detail-item"><div class="detail-item-label">Signal Type</div><div class="detail-item-value" style="font-size:12px">'+escHtml(obsSig.signal_type||'alarm')+'</div></div>';
+      html+='</div>';
+      if(os2==='ALARM'&&obsSig.description){html+='<div style="padding:10px;background:rgba(231,76,60,.1);border:1px solid var(--red);border-radius:6px;font-size:12px;color:var(--red);margin-bottom:10px">⚠️ '+escHtml(obsSig.description)+'</div>'}
+      try{
+        var cr=await api('/api/obs-signals/'+encodeURIComponent(agentName)+'/child-alarms');
+        var childAlarms=cr.alarms||[];
+        if(childAlarms.length>0){
+          html+='<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Child Alarms ('+childAlarms.length+')</div>';
+          html+='<div class="table-wrap"><table style="font-size:12px"><thead><tr><th>Alarm</th><th>Metric</th><th>State</th><th>Updated</th></tr></thead><tbody>';
+          childAlarms.forEach(function(c){
+            var label=c.alarm_name.replace(agentName+'-','');
+            var cab=c.state==='ALARM'?'<span class="badge badge-stopped" style="font-size:10px">ALARM</span>':c.state==='INSUFFICIENT_DATA'?'<span class="badge badge-warning" style="font-size:10px">NO DATA</span>':'<span class="badge badge-ready" style="font-size:10px">OK</span>';
+            html+='<tr><td style="font-weight:600">'+escHtml(label)+'</td><td style="color:var(--text2)">'+escHtml(c.metric||'—')+'</td><td>'+cab+'</td><td style="font-size:11px;color:var(--text2)">'+fmtDate(c.state_updated)+'</td></tr>';
+            if(c.state==='ALARM'&&c.state_reason){html+='<tr><td colspan="4" style="font-size:11px;color:var(--red);border-left:3px solid var(--red);padding-left:12px;background:rgba(231,76,60,.05)">'+escHtml(c.state_reason.substring(0,200))+'</td></tr>'}
+          });
+          html+='</tbody></table></div>';
+        }
+      }catch(e){}
+    }else{html+='<div style="color:var(--text2);padding:10px;background:var(--surface2);border-radius:6px">No observability alarms found.</div>'}
+    html+='</div>';
+  }
+  // CONFIG (all mode only)
+  if(mode==='all'){
+    html+='<div class="detail-section"><h3>⚙️ Configuration</h3><div class="detail-grid">';
+    html+='<div class="detail-item"><div class="detail-item-label">Max Session Tokens</div><div class="detail-item-value">'+fmtNum(a.max_session_tokens||0)+'</div></div>';
+    html+='<div class="detail-item"><div class="detail-item-label">Max Tool Invocations</div><div class="detail-item-value">'+(a.max_tool_invocations||'—')+'</div></div>';
+    html+='<div class="detail-item"><div class="detail-item-label">Monthly Budget</div><div class="detail-item-value">'+(a.monthly_budget_usd?'$'+a.monthly_budget_usd:'—')+'</div></div>';
+    html+='<div class="detail-item"><div class="detail-item-label">Environment</div><div class="detail-item-value">'+escHtml(a.environment||'—')+'</div></div>';
+    if(a.iam_role_name){html+='<div class="detail-item"><div class="detail-item-label">IAM Role</div><div class="detail-item-value" style="font-size:11px;font-family:monospace">'+escHtml(a.iam_role_name)+'</div></div>'}
+    if(a.memory_id){html+='<div class="detail-item"><div class="detail-item-label">Memory ID</div><div class="detail-item-value" style="font-size:11px;font-family:monospace">'+escHtml(a.memory_id)+'</div></div>'}
+    html+='</div></div>';
+  }
+  // SESSIONS
+  html+='<div class="detail-section"><h3>🟢 Active Sessions ('+activeSess.length+')</h3>';
+  if(activeSess.length===0){html+='<div style="color:var(--text2);font-size:13px;padding:10px;background:var(--surface2);border-radius:6px">No active sessions.</div>'}
+  else{activeSess.forEach(function(s){
+    var tokens=fmtNum((Number(s.input_tokens)||0)+(Number(s.output_tokens)||0));
+    html+='<div class="session-row"><div style="flex:1"><div class="session-id">'+escHtml(s.session_id)+'</div><div class="session-meta"><span class="badge badge-ready" style="font-size:10px">'+(s.computed_status||s.status)+'</span> · '+fmtNum(s.invocation_count||0)+' inv · '+tokens+' tok · '+fmtTimeAgo(s.last_heartbeat)+'</div></div><button class="btn btn-danger btn-sm" onclick="stopSingleSession(\''+escHtml(a.agent_runtime_id||'')+'\',\''+escHtml(s.session_id)+'\',\''+escHtml(a.agent_name)+'\')">Stop</button></div>';
+  })}
+  html+='</div>';
+  if(terminatedSess.length>0){
+    html+='<div class="detail-section"><h3 style="cursor:pointer;color:var(--text3)" onclick="var el=document.getElementById(\'det-terminated\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'"><span>▶</span> Terminated ('+terminatedSess.length+')</h3><div id="det-terminated" style="display:none">';
+    terminatedSess.forEach(function(s){html+='<div class="session-row" style="opacity:.4"><div><div class="session-id">'+escHtml(s.session_id)+'</div><div class="session-meta">'+escHtml(s.status||'ended')+' · '+fmtDate(s.last_heartbeat)+'</div></div></div>'});
+    html+='</div></div>';
+  }
+  html+='<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)">Last synced: '+fmtDate(a.last_synced)+'</div>';
+  document.getElementById('detail-content').innerHTML=html;
+}
+
+async function saveBudget(agentName){
+  var val=document.getElementById('budget-input').value;
+  if(!val||Number(val)<0){showToast('error','Invalid','Budget must be >= 0');return}
+  try{
+    await api('/api/registry/set-budget',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agentName,monthly_budget_usd:Number(val)})});
+    showToast('success','Budget Updated','$'+Number(val).toFixed(2)+' for '+agentName);
+    await loadData();
+  }catch(e){showToast('error','Failed',e.message)}
+}
+
+async function openAgentDetail(agentName){
+  await openAgentDetailFull(agentName,'all');
+}
+
+async function openCostDetail(agentName){
+  await openAgentDetailFull(agentName,'cost');
+}
+
+async function openEvalDetail(agentName){
+  await openAgentDetailFull(agentName,'eval');
+}
+
+async function openObsDetail(agentName){
+  await openAgentDetailFull(agentName,'obs');
+}
+
+function closeDetail(){document.getElementById('detail-panel').classList.remove('open')}
+
+async function stopSingleSession(runtimeId,sessionId,agentName){
+  var admin=AUTH_USER||'dashboard-user';
+  var reason=prompt('Reason for stopping session '+sessionId+':');
+  if(!reason)return;
+  try{
+    await api('/api/interventions/stop-all-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agentName,session_id:sessionId,reason:reason,admin_user:admin})});
+    showToast('success','Session Stopped',sessionId);
+    closeDetail();await loadData();
+  }catch(e){showToast('error','Failed',e.message)}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AUDIT LOG TAB
+   ═══════════════════════════════════════════════════════════════ */
+function renderAuditTab(){
+  var el=document.getElementById('audit-content');
+  var items=INTERVENTIONS.slice(0,50);
+
+  el.innerHTML='<div class="audit-header"><div class="section-title" style="margin-bottom:0">📝 Audit Log</div><div class="audit-actions"><select id="audit-filter" onchange="filterAudit()"><option value="all">All Actions</option><option value="stop_session">Stop Session</option><option value="revoke_access">Revoke Access</option><option value="restore_access">Restore Access</option></select><button onclick="showToast(\'info\',\'Export\',\'Audit log export coming soon\')">📥 Export CSV</button></div></div>'+
+    (items.length===0?'<div style="padding:30px;text-align:center;color:var(--text2)">No interventions recorded yet.</div>':
+    '<div class="table-wrap"><table><thead><tr><th>TIMESTAMP</th><th>ACTION</th><th>AGENT</th><th>SESSION</th><th>ADMIN</th><th>REASON</th><th>ROLLBACK</th></tr></thead><tbody id="auditBody">'+
+    items.map(function(item){
+      var action=item.action||'';
+      var actionClass=action.includes('revoke')?'sev-critical':action.includes('restore')?'sev-ok':action==='stop_session'?'sev-warning':'';
+      var actionLabel=action==='stop_session'?'STOP SESSION':action==='revoke_access'?'REVOKE ACCESS':action==='restore_access'?'RESTORE ACCESS':action.toUpperCase();
+      var canRollback=action==='revoke_access';
+      var rollbackLabel=canRollback?(item.agent_name&&item.agent_name!=='(all agents)'?'Restore Agent':'Restore All'):'';
+      return'<tr data-action="'+escHtml(action)+'">'+
+        '<td style="font-size:13px;color:var(--text2)">'+fmtDate(item.timestamp)+'</td>'+
+        '<td><span class="'+actionClass+'" style="font-weight:700">'+actionLabel+'</span></td>'+
+        '<td style="font-weight:700">'+escHtml(item.agent_name||'—')+'</td>'+
+        '<td style="font-family:\'SF Mono\',Consolas,monospace;font-size:11px;color:var(--text2)">'+escHtml((item.session_id||'—').substring(0,20))+'</td>'+
+        '<td>'+escHtml(item.admin_user||'—')+'</td>'+
+        '<td style="color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(item.reason||'')+'">'+escHtml(item.reason||'—')+'</td>'+
+        '<td>'+(canRollback?'<button class="rollback-btn" onclick="openRB(\''+escHtml(action)+'\',\''+escHtml(item.agent_name||'')+'\',\''+escHtml(item.admin_user||'')+'\',\''+escHtml(fmtDate(item.timestamp))+'\',\''+rollbackLabel+'\')">🔄 '+rollbackLabel+'</button>':'<span style="color:var(--text3);font-size:12px">N/A</span>')+'</td></tr>';
+    }).join('')+'</tbody></table></div>');
+}
+
+function filterAudit(){
+  var f=document.getElementById('audit-filter').value;
+  document.querySelectorAll('#auditBody tr').forEach(function(r){
+    if(f==='all')r.style.display='';
+    else r.style.display=(r.getAttribute('data-action')||'').indexOf(f)>-1?'':'none';
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLLBACK MODAL
+   ═══════════════════════════════════════════════════════════════ */
+function openRB(action,agent,admin,time,rollbackAction){
+  document.getElementById('rbAction').textContent=action;
+  document.getElementById('rbAgent').textContent=agent;
+  document.getElementById('rbAdmin').textContent=admin;
+  document.getElementById('rbTime').textContent=time;
+  document.getElementById('rbRollbackAction').textContent=rollbackAction;
+  document.getElementById('rbReason').value='';
+  document.getElementById('rbError').style.display='none';
+  document.getElementById('rollbackModal').classList.add('open');
+  window._rbAgent=agent;
+  window._rbAction=action;
+}
+function closeRBModal(){document.getElementById('rollbackModal').classList.remove('open')}
+
+async function execRollback(){
+  var reason=document.getElementById('rbReason').value.trim();
+  if(!reason){document.getElementById('rbError').style.display='block';return}
+  var admin=AUTH_USER||'dashboard-user';
+  var agent=window._rbAgent||'';
+  try{
+    if(agent&&agent!=='(all agents)'){
+      // Single agent restore
+      await api('/api/kill-switch/restore-agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agent,reason:reason,admin_user:admin})});
+      closeRBModal();showToast('success','Agent Restored','Access restored for '+agent);
+    }else{
+      // All agents restore
+      await api('/api/kill-switch/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:reason,admin_user:admin})});
+      closeRBModal();
+      _killSwitchOptimisticUntil=Date.now()+30000;
+      KILL_STATUS.kill_switch_active=false;KILL_STATUS.revoked_agents=0;
+      renderKillBar();
+      showToast('success','All Agents Resumed','Access restored for all agents');
+    }
+    loadData();
+  }catch(e){showToast('error','Rollback Failed',e.message)}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   KILL SWITCH MODAL — preserved from original
+   ═══════════════════════════════════════════════════════════════ */
+function openKillModal(action){
+  currentKillAction=action;
+  document.getElementById('kill-admin').value=AUTH_USER||'';
+  document.getElementById('kill-reason').value='';
+  document.getElementById('kill-error').style.display='none';
+  document.getElementById('kill-confirm-input').value='';
+  var btn=document.getElementById('kill-confirm-btn');
+  btn.disabled=false;
+
+  if(action==='revoke'){
+    document.getElementById('kill-modal-title').textContent='⚠️ Stop All Agents';
+    document.getElementById('kill-modal-desc').style.color='var(--red)';
+    document.getElementById('kill-modal-desc').textContent='This will immediately stop all AI agents. They will not be able to respond to any requests until you resume them.';
+    document.getElementById('kill-modal-info').innerHTML='<strong>What happens:</strong> An IAM deny policy is attached to every agent execution role<br><strong>Impact:</strong> '+KILL_STATUS.total_agents+' agents will be blocked<br><strong>Reversible:</strong> Yes — you can resume access at any time';
+    btn.textContent='STOP ALL AGENTS';btn.className='btn btn-kill';
+    document.getElementById('kill-confirm-label').style.display='block';
+    document.getElementById('kill-confirm-input').style.display='block';
+  }else{
+    document.getElementById('kill-modal-title').textContent='🟢 Resume All Agents';
+    document.getElementById('kill-modal-desc').style.color='var(--green)';
+    document.getElementById('kill-modal-desc').textContent='This will resume all AI agents so they can respond to requests again.';
+    document.getElementById('kill-modal-info').innerHTML='<strong>What happens:</strong> The IAM deny policy is removed from every agent execution role<br><strong>Impact:</strong> '+KILL_STATUS.revoked_agents+' blocked agents will be resumed<br><strong>Effect:</strong> Immediate';
+    btn.textContent='RESUME ALL AGENTS';btn.className='btn btn-restore';
+    document.getElementById('kill-confirm-label').style.display='none';
+    document.getElementById('kill-confirm-input').style.display='none';
+  }
+  btn.onclick=confirmKillSwitch;
+  document.getElementById('kill-modal').classList.add('open');
+}
+function closeKillModal(){document.getElementById('kill-modal').classList.remove('open');currentKillAction=null}
+
+async function confirmKillSwitch(){
+  var admin=document.getElementById('kill-admin').value.trim();
+  var reason=document.getElementById('kill-reason').value.trim();
+  var confirmVal=document.getElementById('kill-confirm-input').value.trim();
+  if(!admin||!reason){document.getElementById('kill-error').style.display='block';return}
+  if(currentKillAction==='revoke'&&confirmVal!=='CONFIRM'){document.getElementById('kill-error').style.display='block';return}
+  var btn=document.getElementById('kill-confirm-btn');
+  btn.disabled=true;btn.textContent=currentKillAction==='revoke'?'Stopping...':'Resuming...';
+  try{
+    var url=currentKillAction==='revoke'?'/api/kill-switch/revoke':'/api/kill-switch/restore';
+    var res=await api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:reason,admin_user:admin})});
+    var action=currentKillAction;
+    closeKillModal();
+    // Optimistic UI update — don't wait for another Lambda call
+    _killSwitchOptimisticUntil=Date.now()+30000;
+    if(action==='revoke'){
+      KILL_STATUS.kill_switch_active=true;
+      KILL_STATUS.revoked_agents=res.agents_affected||KILL_STATUS.total_agents;
+      showToast('warning','All Agents Stopped','Roles: '+(res.roles_affected||0)+'/'+(res.roles_total||0)+' · Agents: '+(res.agents_affected||0)+'/'+(res.agents_total||0),8000);
+    }else{
+      KILL_STATUS.kill_switch_active=false;
+      KILL_STATUS.revoked_agents=0;
+      showToast('success','All Agents Resumed','Roles: '+(res.roles_affected||0)+'/'+(res.roles_total||0)+' · Agents: '+(res.agents_affected||0)+'/'+(res.agents_total||0),8000);
+    }
+    renderKillBar();renderCurrentTab();
+    // Background refresh (non-blocking)
+    loadData();
+  }catch(e){showToast('error','Error',e.message);btn.disabled=false;btn.textContent=currentKillAction==='revoke'?'STOP ALL AGENTS':'RESUME ALL AGENTS'}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SETTINGS — localStorage persistence
+   ═══════════════════════════════════════════════════════════════ */
+function loadSettings(){
+  api('/api/settings').then(function(s){
+    if(s.default_budget_usd!==undefined)document.getElementById('set-budget-amt').value=s.default_budget_usd;
+    if(s.cost_warning_pct!==undefined)document.getElementById('set-cost-warn').value=s.cost_warning_pct;
+    if(s.cost_critical_pct!==undefined)document.getElementById('set-cost-crit').value=s.cost_critical_pct;
+    if(s.eval_harmfulness_threshold!==undefined)document.getElementById('set-eval-harmfulness').value=s.eval_harmfulness_threshold;
+    if(s.eval_correctness_threshold!==undefined)document.getElementById('set-eval-correctness').value=s.eval_correctness_threshold;
+    if(s.eval_goalsuccess_threshold!==undefined)document.getElementById('set-eval-goalsuccess').value=s.eval_goalsuccess_threshold;
+    if(s.eval_helpfulness_threshold!==undefined)document.getElementById('set-eval-helpfulness').value=s.eval_helpfulness_threshold;
+    if(s.eval_faithfulness_threshold!==undefined)document.getElementById('set-eval-faithfulness').value=s.eval_faithfulness_threshold;
+    if(s.eval_toolselection_threshold!==undefined)document.getElementById('set-eval-toolselection').value=s.eval_toolselection_threshold;
+    if(s.eval_toolparams_threshold!==undefined)document.getElementById('set-eval-toolparams').value=s.eval_toolparams_threshold;
+    if(s.eval_bad_warning_pct!==undefined)document.getElementById('set-eval-warn').value=s.eval_bad_warning_pct;
+    if(s.eval_bad_critical_pct!==undefined)document.getElementById('set-eval-crit').value=s.eval_bad_critical_pct;
+    if(s.obs_latency_threshold!==undefined)document.getElementById('set-obs-latency').value=s.obs_latency_threshold;
+    if(s.obs_error_threshold!==undefined)document.getElementById('set-obs-errors').value=s.obs_error_threshold;
+    if(s.obs_token_threshold!==undefined)document.getElementById('set-obs-tokens').value=s.obs_token_threshold;
+    if(s.obs_invocation_threshold!==undefined)document.getElementById('set-obs-invocations').value=s.obs_invocation_threshold;
+    if(s.obs_eval_periods!==undefined)document.getElementById('set-obs-evalperiods').value=s.obs_eval_periods;
+    if(s.obs_datapoints_to_alarm!==undefined)document.getElementById('set-obs-datapoints').value=s.obs_datapoints_to_alarm;
+  }).catch(function(){});
+}
+function saveSettings(){
+  var budgetAmt=Number(document.getElementById('set-budget-amt').value);
+  if(budgetAmt<0){showToast('error','Invalid','Budget amount must be >= 0');return}
+  var body={
+    default_budget_usd:budgetAmt,
+    cost_warning_pct:Number(document.getElementById('set-cost-warn').value),
+    cost_critical_pct:Number(document.getElementById('set-cost-crit').value),
+    eval_harmfulness_threshold:Number(document.getElementById('set-eval-harmfulness').value),
+    eval_correctness_threshold:Number(document.getElementById('set-eval-correctness').value),
+    eval_goalsuccess_threshold:Number(document.getElementById('set-eval-goalsuccess').value),
+    eval_helpfulness_threshold:Number(document.getElementById('set-eval-helpfulness').value),
+    eval_faithfulness_threshold:Number(document.getElementById('set-eval-faithfulness').value),
+    eval_toolselection_threshold:Number(document.getElementById('set-eval-toolselection').value),
+    eval_toolparams_threshold:Number(document.getElementById('set-eval-toolparams').value),
+    eval_bad_warning_pct:Number(document.getElementById('set-eval-warn').value||20),
+    eval_bad_critical_pct:Number(document.getElementById('set-eval-crit').value||50),
+    obs_latency_threshold:Number(document.getElementById('set-obs-latency').value||10000),
+    obs_error_threshold:Number(document.getElementById('set-obs-errors').value||5),
+    obs_token_threshold:Number(document.getElementById('set-obs-tokens').value||100000),
+    obs_invocation_threshold:Number(document.getElementById('set-obs-invocations').value||200),
+    obs_eval_periods:Number(document.getElementById('set-obs-evalperiods').value||3),
+    obs_datapoints_to_alarm:Number(document.getElementById('set-obs-datapoints').value||2)
+  };
+  var btn=document.querySelector('#tab-settings .btn-primary');
+  if(btn){btn.disabled=true;btn.textContent='Saving...'}
+  api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){
+    var bu=r.budget_updates||{};
+    var eu=r.eval_updates||{};
+    var ou=r.obs_updates||{};
+    var msg='Settings saved.';
+    if(bu.budgets_updated>0)msg+=' Budgets: '+bu.budgets_updated+' updated to $'+budgetAmt.toFixed(2)+'.';
+    if(eu.alarms_updated>0)msg+=' Eval alarms: '+eu.alarms_updated+' updated.';
+    if(ou.alarms_updated>0)msg+=' Obs alarms: '+ou.alarms_updated+' updated (band='+ou.band_width+').';
+    showToast('success','Settings Saved',msg+' Syncing...');
+    if(btn){btn.disabled=false;btn.textContent='Save Settings'}
+    // Auto-sync from AWS so dashboard reflects changes immediately
+    api('/api/sync',{method:'POST'}).then(function(){loadData()}).catch(function(){loadData()});
+  }).catch(function(e){
+    showToast('error','Save Failed',e.message);
+    if(btn){btn.disabled=false;btn.textContent='Save Settings'}
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT — Boot sequence (preserved from original)
+   ═══════════════════════════════════════════════════════════════ */
+(async function(){
+  await initAuth();
+  loadSettings();
+  // Load cached data FIRST (fast — reads from DynamoDB only)
+  await loadData();
+  updateAuthUI();
+  // Then sync from AWS in background (slow — calls Budgets, CloudWatch, AgentCore APIs)
+  api('/api/sync',{method:'POST'}).then(function(){loadData()}).catch(function(e){console.warn('Background sync:',e)});
+  setInterval(loadData,REFRESH_MS);
+  setInterval(function(){api('/api/sync',{method:'POST'}).then(function(){loadData()}).catch(function(){})},300000);
+})();
+</script>
+</body>
+</html>
