@@ -1,0 +1,22 @@
+aws_region = "us-east-1"
+
+agent_space_name        = "FSIAgentKitAgentSpace"
+agent_space_description = "DevOps Agent Space for ava monitored workloads"
+
+# Optional: fixed role-name suffix so repeated applies in the same account don't
+# collide. Leave empty to use a random 4-byte hex on first apply.
+# name_postfix = "dev"
+
+# -------- Part 2 (optional): cross-account monitoring --------
+# 1. Apply Part 1 first and read `agent_space_arn` from the outputs.
+# 2. Set `service_account_id` + `agent_space_arn` below.
+# 3. Configure the `aws.service` provider alias in main.tf with credentials for
+#    the secondary account (named profile or assume_role).
+# 4. Re-run `terraform apply`.
+# service_account_id = "123456789012"
+# agent_space_arn    = "arn:aws:aidevops:us-east-1:<MONITORING_ACCOUNT_ID>:agentspace/<SPACE_ID>"
+
+tags = {
+  Project   = "ava"
+  Component = "frontier-agents/devops"
+}
