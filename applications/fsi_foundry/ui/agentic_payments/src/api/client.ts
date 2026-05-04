@@ -44,13 +44,30 @@ export async function invokeAgent(
     const data = (await statusRes.json()) as StatusResponse;
 
     if (data.status === 'COMPLETE' && data.result) {
-      return data.result;
+      return normalizeResponse(data.result);
     }
 
     if (data.status === 'ERROR') {
       throw new Error(data.error || 'Agent invocation failed');
     }
   }
+}
+
+function normalizeResponse(raw: PaymentResponse): PaymentResponse {
+  const r = { ...raw };
+  if (r.validation_result) {
+    r.validation_result = {
+      ...r.validation_result,
+      risk_score: Number(r.validation_result.risk_score),
+    };
+  }
+  if (r.routing_decision) {
+    r.routing_decision = {
+      ...r.routing_decision,
+      routing_cost: Number(r.routing_decision.routing_cost),
+    };
+  }
+  return r;
 }
 
 function sleep(ms: number): Promise<void> {

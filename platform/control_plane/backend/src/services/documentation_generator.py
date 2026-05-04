@@ -315,7 +315,7 @@ LangGraph provides:
         elif framework_id == "strands":
             arch_doc += """
 Strands SDK provides:
-- Production-ready agent framework
+- Opinionated agent framework for tools + memory
 - Built-in observability
 - Tool management
 - Error handling

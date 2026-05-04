@@ -57,6 +57,21 @@ Parameters:
     Default: us-east-1
     Description: AWS region
 
+  EnableTracing:
+    Type: String
+    Default: 'false'
+    Description: Enable Langfuse OTEL tracing
+
+  LangfuseHost:
+    Type: String
+    Default: ''
+    Description: Langfuse server URL
+
+  LangfuseSecretName:
+    Type: String
+    Default: ''
+    Description: Secrets Manager secret name for Langfuse API keys
+
 
 Resources:
   AgentCoreRuntime:
@@ -80,6 +95,9 @@ Resources:
         USE_CASE_ID: !Ref UseCaseName
         AGENT_NAME: !Ref UseCaseName
         DATA_PREFIX: !Sub "samples/${UseCaseName}"
+        ENABLE_TRACING: !Ref EnableTracing
+        LANGFUSE_HOST: !Ref LangfuseHost
+        LANGFUSE_SECRET_NAME: !Ref LangfuseSecretName
       Tags:
         Name: !Sub '${AgentName}-agentcore_runtime'
         Environment: !Ref Environment

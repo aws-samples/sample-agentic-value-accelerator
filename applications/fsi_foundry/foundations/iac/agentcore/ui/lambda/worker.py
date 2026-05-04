@@ -4,11 +4,20 @@ import json
 import os
 import logging
 import boto3
+from botocore.config import Config
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'))
+
+# Multi-agent use cases can take 1-5 minutes. Default boto3 read timeout is 60s
+# with 3 retries, which exhausts the Lambda timeout before a real response arrives.
+_agentcore_config = Config(
+    read_timeout=900,
+    connect_timeout=10,
+    retries={'max_attempts': 1, 'mode': 'standard'},
+)
 
 
 def handler(event, context):
@@ -20,7 +29,7 @@ def handler(event, context):
 
     try:
         region = os.environ.get('AWS_REGION_NAME', os.environ.get('AWS_REGION', 'us-east-1'))
-        client = boto3.client('bedrock-agentcore', region_name=region)
+        client = boto3.client('bedrock-agentcore', region_name=region, config=_agentcore_config)
 
         response = client.invoke_agent_runtime(
             agentRuntimeArn=os.environ['AGENT_RUNTIME_ARN'],

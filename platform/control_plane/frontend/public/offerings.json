@@ -155,6 +155,7 @@
     },
     {
       "id": "B04",
+      "category": "P",
       "use_case_name": "agentic_payments",
       "name": "Agentic Payments",
       "description": "AI-powered payment validation, routing, and reconciliation",
@@ -196,6 +197,7 @@
     },
     {
       "id": "B05",
+      "category": "P",
       "use_case_name": "payment_operations",
       "name": "Payment Operations",
       "description": "Payment exception handling and settlement operations",
@@ -441,6 +443,7 @@
     },
     {
       "id": "R01",
+      "category": "P",
       "use_case_name": "fraud_detection",
       "name": "Fraud Detection",
       "description": "AI-powered fraud detection with transaction monitoring and pattern analysis",
@@ -1311,6 +1314,13 @@
       "test_entities": [
         "PROJ001"
       ],
+      "type_field": "migration_scope",
+      "type_values": [
+        "full",
+        "code_analysis",
+        "planning",
+        "conversion"
+      ],
       "id_field": "project_id"
     },
     {
@@ -1344,6 +1354,13 @@
       "test_entities": [
         "PROJ001"
       ],
+      "type_field": "generation_scope",
+      "type_values": [
+        "full",
+        "requirements_only",
+        "scaffolding_only",
+        "testing_only"
+      ],
       "id_field": "project_id"
     },
     {
@@ -1376,6 +1393,13 @@
       ],
       "test_entities": [
         "PROJECT001"
+      ],
+      "type_field": "migration_scope",
+      "type_values": [
+        "full",
+        "mainframe_analysis",
+        "rule_extraction",
+        "code_generation"
       ],
       "id_field": "project_id"
     }

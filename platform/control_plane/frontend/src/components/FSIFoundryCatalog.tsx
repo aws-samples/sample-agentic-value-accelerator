@@ -7,6 +7,7 @@ import { useUser } from '../contexts/UserContext';
 
 const CATEGORIES: Record<string, { label: string; color: string; bg: string; iconBg: string }> = {
   B: { label: 'Banking', color: 'text-blue-700', bg: 'bg-blue-50', iconBg: 'from-blue-500 to-blue-600' },
+  P: { label: 'Payments', color: 'text-emerald-700', bg: 'bg-emerald-50', iconBg: 'from-emerald-500 to-emerald-600' },
   R: { label: 'Risk & Compliance', color: 'text-red-700', bg: 'bg-red-50', iconBg: 'from-red-500 to-red-600' },
   C: { label: 'Capital Markets', color: 'text-violet-700', bg: 'bg-violet-50', iconBg: 'from-violet-500 to-violet-600' },
   I: { label: 'Insurance', color: 'text-amber-700', bg: 'bg-amber-50', iconBg: 'from-amber-500 to-amber-600' },
@@ -14,12 +15,18 @@ const CATEGORIES: Record<string, { label: string; color: string; bg: string; ico
   M: { label: 'Modernization', color: 'text-slate-700', bg: 'bg-slate-100', iconBg: 'from-slate-500 to-slate-600' },
 };
 
+const categoryOf = (uc: AppUseCase): string => uc.category ?? uc.id[0];
+
 export default function FSIFoundryCatalog() {
   const [useCases, setUseCases] = useState<AppUseCase[]>([]);
   const [deployments, setDeployments] = useState<Record<string, Deployment[]>>({});
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<AppUseCase | null>(null);
+  const [showLangfuseHint, setShowLangfuseHint] = useState(() => {
+    return localStorage.getItem('fsi-foundry-langfuse-hint-dismissed') !== 'true';
+  });
+  const [dontShowAgain, setDontShowAgain] = useState(false);
   const navigate = useNavigate();
   const { user } = useUser();
 
@@ -46,7 +53,7 @@ export default function FSIFoundryCatalog() {
   }, []);
 
   const filtered = useCases.filter(uc => {
-    const matchesFilter = filter === 'all' || uc.id[0] === filter;
+    const matchesFilter = filter === 'all' || categoryOf(uc) === filter;
     const matchesSearch = !search || uc.name.toLowerCase().includes(search.toLowerCase())
       || uc.description.toLowerCase().includes(search.toLowerCase())
       || uc.agents?.some(a => a.name.toLowerCase().includes(search.toLowerCase()));
@@ -54,7 +61,7 @@ export default function FSIFoundryCatalog() {
   });
 
   const grouped = filtered.reduce((acc, uc) => {
-    const prefix = uc.id[0];
+    const prefix = categoryOf(uc);
     const cat = CATEGORIES[prefix] || { label: 'Other', color: 'text-slate-700', bg: 'bg-slate-100', iconBg: 'from-slate-500 to-slate-600' };
     (acc[prefix] = acc[prefix] || { ...cat, items: [] }).items.push(uc);
     return acc;
@@ -69,9 +76,9 @@ export default function FSIFoundryCatalog() {
       }} />
       <div className="relative max-w-7xl mx-auto px-6 py-10">
       <div className="mb-8 animate-fade-in">
-        <Link to="/" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Home</Link>
+        <Link to="/applications" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Applications</Link>
         <h1 className="text-3xl font-semibold text-slate-900 tracking-tight mt-3">FSI Foundry</h1>
-        <p className="text-slate-500 mt-2 max-w-2xl">Full-stack multi-agent POC implementations spanning banking, insurance, capital markets, and operations.</p>
+        <p className="text-slate-500 mt-2 max-w-2xl">Full-stack multi-agent POC implementations spanning banking, payments, risk &amp; compliance, capital markets, insurance, and operations.</p>
       </div>
 
       {/* How it works */}
@@ -104,7 +111,7 @@ export default function FSIFoundryCatalog() {
           All ({filtered.length})
         </button>
         {Object.entries(CATEGORIES).map(([key, { label, color }]) => {
-          const count = useCases.filter(uc => uc.id[0] === key).length;
+          const count = useCases.filter(uc => categoryOf(uc) === key).length;
           if (!count) return null;
           return (
             <button key={key} onClick={() => setFilter(filter === key ? 'all' : key)}
@@ -225,6 +232,53 @@ export default function FSIFoundryCatalog() {
       )}
 
       {selected && <UseCaseDetailModal useCase={selected} onClose={() => setSelected(null)} />}
+
+      {/* Langfuse tracing hint popup */}
+      {showLangfuseHint && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => {
+          if (dontShowAgain) localStorage.setItem('fsi-foundry-langfuse-hint-dismissed', 'true');
+          setShowLangfuseHint(false);
+        }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Tracing &amp; Logs</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  If you want traceability and logs, please deploy Langfuse first.{' '}
+                  <Link to="/observability?tab=langfuse" className="text-violet-600 hover:text-violet-700 font-medium underline">
+                    Go to Langfuse
+                  </Link>
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={dontShowAgain}
+                  onChange={e => setDontShowAgain(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                />
+                <span className="text-sm text-slate-500">Don't show this again</span>
+              </label>
+              <button
+                onClick={() => {
+                  if (dontShowAgain) localStorage.setItem('fsi-foundry-langfuse-hint-dismissed', 'true');
+                  setShowLangfuseHint(false);
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

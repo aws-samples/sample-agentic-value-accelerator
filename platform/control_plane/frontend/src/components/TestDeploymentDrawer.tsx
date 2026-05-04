@@ -77,7 +77,7 @@ function ResultBlock({
 export default function TestDeploymentDrawer({ deployment, useCase, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('cli');
   const [selectedEntity, setSelectedEntity] = useState('');
-  const [selectedAssessment, setSelectedAssessment] = useState('full');
+  const [selectedAssessment, setSelectedAssessment] = useState('');
   const [copied, setCopied] = useState(false);
 
   // --- CLI tab state ---
@@ -96,7 +96,7 @@ export default function TestDeploymentDrawer({ deployment, useCase, onClose }: P
   const [scriptExpanded, setScriptExpanded] = useState(true);
 
   // --- Custom tab state ---
-  const [assessmentType, setAssessmentType] = useState('full');
+  const [assessmentType, setAssessmentType] = useState('');
   const [customJson, setCustomJson] = useState('');
   const [jsonValid, setJsonValid] = useState(true);
   const [jsonErrorMsg, setJsonErrorMsg] = useState('');

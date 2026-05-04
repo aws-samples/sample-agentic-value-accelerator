@@ -183,8 +183,27 @@ resource "aws_ecs_task_definition" "langfuse_worker" {
         {
           name  = "LANGFUSE_INIT_USER_PASSWORD"
           value = var.langfuse_init_user_password
+        },
+        {
+          name  = "AUTH_CUSTOM_CLIENT_ID"
+          value = local.enable_sso ? aws_cognito_user_pool_client.langfuse[0].id : ""
+        },
+        {
+          name  = "AUTH_CUSTOM_CLIENT_SECRET"
+          value = local.enable_sso ? aws_cognito_user_pool_client.langfuse[0].client_secret : ""
+        },
+        {
+          name  = "AUTH_CUSTOM_ISSUER"
+          value = local.enable_sso ? "https://cognito-idp.${var.cognito_region}.amazonaws.com/${var.cognito_user_pool_id}" : ""
+        },
+        {
+          name  = "AUTH_CUSTOM_NAME"
+          value = local.enable_sso ? "AVA Login" : ""
+        },
+        {
+          name  = "AUTH_DISABLE_USERNAME_PASSWORD"
+          value = local.enable_sso ? "true" : "false"
         }
-
       ]
       secrets = [
         {
@@ -212,13 +231,6 @@ resource "aws_ecs_task_definition" "langfuse_worker" {
           valueFrom = "${aws_secretsmanager_secret.langfuse.arn}:encryption_key::"
         }
       ]
-      # healthCheck = {
-      #   command     = ["CMD-SHELL", "curl -f http://localhost:3000/api/public/health || exit 1"]
-      #   interval    = 30
-      #   timeout     = 5
-      #   retries     = 3
-      #   startPeriod = 60
-      # }
     }
   ],
   )

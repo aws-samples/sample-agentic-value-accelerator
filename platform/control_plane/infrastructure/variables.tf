@@ -184,3 +184,46 @@ variable "cost_center" {
   type        = string
   default     = "ai-platform"
 }
+
+# CodeCommit Configuration
+variable "enable_codecommit" {
+  description = "Enable CodeCommit repository for CI/CD source control"
+  type        = bool
+  default     = false
+}
+
+variable "codecommit_repository_name" {
+  description = "CodeCommit repository name (leave empty for auto-generated)"
+  type        = string
+  default     = ""
+}
+
+variable "codecommit_repository_description" {
+  description = "Description for the CodeCommit repository"
+  type        = string
+  default     = "AVA Control Plane CI/CD Source Repository"
+}
+
+variable "codecommit_enable_push_trigger" {
+  description = "Enable automatic deployment on git push to CodeCommit"
+  type        = bool
+  default     = true
+}
+
+variable "codecommit_enable_pr_trigger" {
+  description = "Enable automatic deployment on pull request merge in CodeCommit"
+  type        = bool
+  default     = true
+}
+
+variable "codecommit_trigger_branches" {
+  description = "List of branch names that trigger deployments from CodeCommit"
+  type        = list(string)
+  default     = ["main", "develop"]
+}
+
+variable "codecommit_enable_notifications" {
+  description = "Enable SNS notifications for CodeCommit events"
+  type        = bool
+  default     = false
+}

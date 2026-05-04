@@ -4,7 +4,7 @@ export default function Home() {
   const navigate = useNavigate();
 
   return (
-    <div className="h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4">
+    <div className="min-h-full flex flex-col items-center justify-center px-6 py-8">
       {/* Hero */}
       <div className="text-center animate-fade-in flex-shrink-0 mb-6">
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-1.5" style={{ backgroundImage: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 40%, #818cf8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', color: 'transparent', lineHeight: '1.15' }}>Agentic Value Accelerator</h1>
@@ -12,7 +12,7 @@ export default function Home() {
       </div>
 
       {/* 2x2 Quadrant Grid */}
-      <div className="grid grid-cols-5 gap-5 w-full max-w-6xl animate-fade-in stagger-1" style={{ gridTemplateRows: 'auto auto' }}>
+      <div className="grid grid-cols-5 gap-5 w-full max-w-6xl animate-fade-in stagger-1" style={{ gridTemplateRows: 'minmax(380px, 1fr) minmax(260px, auto)' }}>
 
         {/* ── Q1: PLAN ── */}
         <div className="col-span-2 flex flex-col overflow-hidden">
@@ -48,54 +48,50 @@ export default function Home() {
             <h2 className="text-lg font-bold tracking-tight" style={{ backgroundImage: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 40%, #818cf8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', color: 'transparent' }}>Build</h2>
           </div>
           <div className="grid grid-cols-2 gap-3 flex-1">
-            <div onClick={() => navigate('/applications/fsi-foundry')}
+            <div onClick={() => navigate('/applications')}
               className="group bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer flex flex-col overflow-hidden">
-              <div className="h-16 relative bg-gradient-to-br from-blue-600 to-indigo-700 overflow-hidden flex-shrink-0">
-                <img src="/images/foundry-hero.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-lighten" />
-                <div className="absolute top-2.5 left-3">
-                  <span className="text-[9px] font-bold text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full">34 use cases</span>
+              <div className="flex-1 relative bg-gradient-to-br from-blue-600 to-indigo-700 overflow-hidden min-h-0">
+                <img src="/images/foundry-hero.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-lighten" />
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/40 via-transparent to-indigo-700/50 pointer-events-none" />
+                <div className="absolute top-3 left-3">
+                  <span className="text-[9px] font-bold text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full">4 options</span>
                 </div>
               </div>
-              <div className="p-3.5 flex flex-col flex-1">
-                <h3 className="text-base font-semibold text-slate-900 mb-0.5 group-hover:text-blue-900 transition-colors">FSI Foundry</h3>
-                <p className="text-xs text-slate-500 leading-relaxed flex-1">Production-ready multi-agent systems across banking, risk, capital markets, insurance, and operations.</p>
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {['Banking', 'Risk', 'Markets', 'Insurance', 'Ops'].map(t => (
+              <div className="p-4 flex-shrink-0">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-semibold text-slate-900 group-hover:text-blue-900 transition-colors">Applications</h3>
+                  <svg className="w-4 h-4 text-slate-300 group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">FSI Foundry, Reference Implementations, Templates, and App Factory — build and deploy agentic applications.</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {['FSI Foundry', 'Ref Apps', 'Templates', 'App Factory'].map(t => (
                     <span key={t} className="text-[8px] font-medium text-blue-500/80 bg-blue-50 px-1.5 py-0.5 rounded-full">{t}</span>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div onClick={() => navigate('/applications/templates')}
+            <div onClick={() => navigate('/aaas')}
               className="group bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer flex flex-col overflow-hidden">
-              <div className="h-16 relative bg-gradient-to-br from-violet-600 to-purple-700 overflow-hidden flex-shrink-0">
-                <img src="/images/refimpl-hero.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-lighten" />
-                <div className="absolute top-2.5 left-3">
-                  <span className="text-[9px] font-bold text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full">8 templates</span>
+              <div className="flex-1 relative bg-gradient-to-br from-violet-600 to-pink-500 overflow-hidden min-h-0">
+                <img src="/images/refimpl-hero.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-lighten" />
+                <div className="absolute inset-0 bg-gradient-to-br from-violet-600/40 via-transparent to-pink-500/50 pointer-events-none" />
+                <div className="absolute top-3 left-3">
+                  <span className="text-[9px] font-bold text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full">Autonomous</span>
                 </div>
               </div>
-              <div className="p-3.5 flex flex-col flex-1">
-                <h3 className="text-base font-semibold text-slate-900 mb-0.5 group-hover:text-violet-900 transition-colors">Templates</h3>
-                <p className="text-xs text-slate-500 leading-relaxed flex-1">Scaffold agent projects with Terraform, CDK, or CloudFormation — IaC, agent code, and deployment scripts included.</p>
-                <div className="flex gap-1 mt-1.5">
-                  {['Terraform', 'CDK', 'CFN'].map(t => (
-                    <span key={t} className="text-[8px] font-medium text-violet-500/80 bg-violet-50 px-1.5 py-0.5 rounded-full">{t}</span>
+              <div className="p-4 flex-shrink-0">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-semibold text-slate-900 group-hover:text-orange-900 transition-colors">Agent-as-a-Service</h3>
+                  <svg className="w-4 h-4 text-slate-300 group-hover:text-orange-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">Managed AWS Frontier Agents (DevOps, Security, Kiro) and Custom Agents you build and deploy on Bedrock AgentCore.</p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {['AWS Frontier Agents', 'Custom Agents'].map(t => (
+                    <span key={t} className="text-[8px] font-medium text-orange-500/80 bg-orange-50 px-1.5 py-0.5 rounded-full">{t}</span>
                   ))}
                 </div>
               </div>
-            </div>
-
-            <div onClick={() => navigate('/applications/app-factory')}
-              className="col-span-2 group bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer p-3.5 flex flex-col">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center group-hover:bg-slate-100 transition-colors">
-                  <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 001.591 1.591L19 14.5" /></svg>
-                </div>
-                <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full uppercase">Soon</span>
-              </div>
-              <h3 className="text-base font-semibold text-slate-900 mb-0.5 group-hover:text-slate-700 transition-colors">App Factory</h3>
-              <p className="text-xs text-slate-500 leading-relaxed flex-1">Describe your use case in natural language and generate a complete agent application blueprint.</p>
             </div>
           </div>
         </div>

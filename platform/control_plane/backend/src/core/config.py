@@ -32,11 +32,16 @@ class Settings(BaseSettings):
     S3_DELIVERY_BUCKET: str = Field(default="fsi-control-plane-deployments")
     S3_BUCKET_NAME: str = Field(
         default="",
-        description="S3 bucket for project archives"
+        description="S3 bucket for project archives (falls back to PROJECT_ARCHIVES_BUCKET)"
     )
+    PROJECT_ARCHIVES_BUCKET: str = Field(default="", description="Project archives S3 bucket")
     STATE_MACHINE_ARN: str = Field(
         default="",
         description="Step Functions state machine ARN for deployment pipeline"
+    )
+    FRONTIER_AGENTS_STATE_MACHINE_ARN: str = Field(
+        default="",
+        description="Step Functions state machine ARN for the Frontier Agents (AaaS) pipeline"
     )
 
     # Cognito
@@ -69,6 +74,8 @@ class Settings(BaseSettings):
     FOUNDRY_USE_CASES_PATH: str = Field(default="", description="Path to FSI Foundry use cases")
     FOUNDRY_DOCKER_PATH: str = Field(default="", description="Path to FSI Foundry Docker files")
     FOUNDRY_UI_PATH: str = Field(default="", description="Path to FSI Foundry per-use-case UI directory")
+    FRONTIER_AGENTS_REGISTRY_PATH: str = Field(default="", description="Path to the Frontier Agents catalog JSON")
+    FRONTIER_AGENTS_PATH: str = Field(default="", description="Path to the Frontier Agents source tree (iac/ lives under {id}/iac/{type}/)")
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -95,7 +102,7 @@ class Settings(BaseSettings):
                 self.FOUNDRY_OFFERINGS_PATH = offerings_env
             else:
                 # Try Docker path first, then local dev path
-                docker_path = "/app/data/offerings.json"
+                docker_path = "/app/fsi_foundry/data/registry/offerings.json"
                 if os.path.exists(docker_path):
                     self.FOUNDRY_OFFERINGS_PATH = docker_path
                 else:
@@ -129,6 +136,27 @@ class Settings(BaseSettings):
             self.FOUNDRY_DOCKER_PATH = os.getenv("FOUNDRY_DOCKER_PATH", str(fsi_root / "foundations" / "docker"))
         if not self.FOUNDRY_UI_PATH:
             self.FOUNDRY_UI_PATH = os.getenv("FOUNDRY_UI_PATH", str(fsi_root / "ui"))
+
+        # Frontier Agents — aaas/frontier_agents/ in the repo. Ships with the backend
+        # image at /app/aaas/frontier_agents in Docker.
+        if not self.FRONTIER_AGENTS_PATH:
+            fa_env = os.getenv("FRONTIER_AGENTS_PATH")
+            if fa_env:
+                self.FRONTIER_AGENTS_PATH = fa_env
+            elif os.path.exists("/app/aaas/frontier_agents"):
+                self.FRONTIER_AGENTS_PATH = "/app/aaas/frontier_agents"
+            else:
+                backend_dir = Path(__file__).parent.parent.parent
+                self.FRONTIER_AGENTS_PATH = str(backend_dir.parent / "aaas" / "frontier_agents")
+
+        if not self.FRONTIER_AGENTS_REGISTRY_PATH:
+            fa_reg_env = os.getenv("FRONTIER_AGENTS_REGISTRY_PATH")
+            if fa_reg_env:
+                self.FRONTIER_AGENTS_REGISTRY_PATH = fa_reg_env
+            elif os.path.exists("/app/aaas/frontier_agents.json"):
+                self.FRONTIER_AGENTS_REGISTRY_PATH = "/app/aaas/frontier_agents.json"
+            else:
+                self.FRONTIER_AGENTS_REGISTRY_PATH = str(Path(self.FRONTIER_AGENTS_PATH).parent / "frontier_agents.json")
 
 
 # Global settings instance

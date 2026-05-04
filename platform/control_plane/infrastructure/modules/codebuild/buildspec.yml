@@ -2,7 +2,6 @@ version: 0.2
 phases:
   install:
     commands:
-      - echo "Installing tools..."
       - yum install -y yum-utils unzip jq 2>/dev/null || true
       - |
         if ! command -v terraform &>/dev/null; then
@@ -15,7 +14,6 @@ phases:
   pre_build:
     commands:
       - |
-        # Pre-cache common base images from ECR to avoid Docker Hub rate limits
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
         ECR_BASE="${ACCOUNT_ID}.dkr.ecr.${AWS_TARGET_REGION}.amazonaws.com"
         aws ecr get-login-password --region ${AWS_TARGET_REGION} | docker login --username AWS --password-stdin ${ECR_BASE} 2>/dev/null
@@ -24,13 +22,56 @@ phases:
             docker tag "${ECR_BASE}/cached/${img}" "${img}" 2>/dev/null && \
             echo "Cached ${img} from ECR" || echo "Cache miss for ${img}, will pull from Docker Hub"
         done
-        # Also pre-pull so BuildKit has it in the build cache
         DOCKER_BUILDKIT=0 docker pull python:3.11-slim 2>/dev/null || true
       - echo "Deployment $DEPLOYMENT_ID for template $TEMPLATE_ID (IaC=$IAC_TYPE)"
       - mkdir -p /tmp/workspace
-      - aws s3 cp s3://$ARCHIVE_BUCKET/$ARCHIVE_KEY /tmp/template.zip
-      - unzip -o /tmp/template.zip -d /tmp/workspace
-      - echo "Template extracted" && ls -la /tmp/workspace/
+      - |
+        # Determine source type and fetch code accordingly
+        if [ -n "$CODECOMMIT_REPO" ] && [ -n "$CODECOMMIT_BRANCH" ]; then
+          echo "=== CodeCommit Source Detected ==="
+          echo "Repository: $CODECOMMIT_REPO"
+          echo "Branch: $CODECOMMIT_BRANCH"
+          echo "Commit: ${CODECOMMIT_COMMIT:-HEAD}"
+
+          # Install git if not present
+          if ! command -v git &>/dev/null; then
+            yum install -y git 2>/dev/null || apt-get install -y git 2>/dev/null || true
+          fi
+
+          # Configure git credential helper for CodeCommit
+          git config --global credential.helper '!aws codecommit credential-helper $@'
+          git config --global credential.UseHttpPath true
+
+          # Get CodeCommit repository URL
+          REPO_URL=$(aws codecommit get-repository --repository-name "$CODECOMMIT_REPO" --region ${AWS_TARGET_REGION:-us-east-1} --query 'repositoryMetadata.cloneUrlHttp' --output text)
+
+          # Clone repository
+          echo "Cloning from $REPO_URL..."
+          git clone --depth 1 --branch "$CODECOMMIT_BRANCH" "$REPO_URL" /tmp/workspace
+
+          # Checkout specific commit if provided
+          if [ -n "$CODECOMMIT_COMMIT" ]; then
+            cd /tmp/workspace
+            git fetch --depth 1 origin "$CODECOMMIT_COMMIT"
+            git checkout "$CODECOMMIT_COMMIT"
+            cd /tmp
+          fi
+
+          echo "Source fetched from CodeCommit"
+          ls -la /tmp/workspace/
+        elif [ -n "$ARCHIVE_BUCKET" ] && [ -n "$ARCHIVE_KEY" ]; then
+          echo "=== S3 Archive Source Detected ==="
+          echo "Bucket: $ARCHIVE_BUCKET"
+          echo "Key: $ARCHIVE_KEY"
+
+          aws s3 cp s3://$ARCHIVE_BUCKET/$ARCHIVE_KEY /tmp/template.zip
+          unzip -o /tmp/template.zip -d /tmp/workspace
+          echo "Template extracted from S3"
+          ls -la /tmp/workspace/
+        else
+          echo "ERROR: No valid source specified (neither CodeCommit nor S3 archive)"
+          exit 1
+        fi
       - |
         if [ -n "$TARGET_ROLE_ARN" ]; then
           echo "Assuming cross-account role $TARGET_ROLE_ARN"
@@ -109,11 +150,14 @@ phases:
         data_path     = "/tmp/workspace/data/samples"
         TFVARS
               cat > /tmp/workspace/runtime/deploy.auto.tfvars << TFVARS
-        aws_region         = "$AWS_TARGET_REGION"
-        use_case_id        = "${USE_CASE_ID:-unknown}"
-        use_case_name      = "${USE_CASE_ID:-unknown}"
-        framework          = "${FRAMEWORK:-strands}"
-        image_tag          = "${FRAMEWORK:-strands}-latest"
+        aws_region           = "$AWS_TARGET_REGION"
+        use_case_id          = "${USE_CASE_ID:-unknown}"
+        use_case_name        = "${USE_CASE_ID:-unknown}"
+        framework            = "${FRAMEWORK:-strands}"
+        image_tag            = "${FRAMEWORK:-strands}-latest"
+        enable_tracing       = "${ENABLE_TRACING:-false}"
+        langfuse_host        = "${LANGFUSE_HOST:-}"
+        langfuse_secret_name = "${LANGFUSE_SECRET_NAME:-}"
         TFVARS
               echo "=== Stage 1: Infrastructure ==="
               cd /tmp/workspace/infra
@@ -222,22 +266,17 @@ phases:
                       -backend-config="region=$AWS_TARGET_REGION" \
                       -backend-config="dynamodb_table=$LOCK_TABLE"
                     # Import pre-existing UI resources to avoid AlreadyExists errors
-                    USE_CASE_CFN=$(echo "${USE_CASE_ID:-unknown}" | tr '_' '-')
-                    REGION_SUFFIX=$(echo "$AWS_TARGET_REGION" | tr -d '-')
-                    FW_SHORT="lg"; [ "$FRAMEWORK" = "strands" ] && FW_SHORT="st"
-                    UI_PREFIX="ava-${USE_CASE_CFN}-ui"
-                    UI_BUCKET_NAME="ava-${USE_CASE_CFN}-${FW_SHORT}-ui-${REGION_SUFFIX}-$(aws sts get-caller-identity --query Account --output text)"
-                    aws s3api head-bucket --bucket "$UI_BUCKET_NAME" 2>/dev/null && \
-                      terraform import -input=false aws_s3_bucket.ui "$UI_BUCKET_NAME" 2>/dev/null || true
-                    aws iam get-role --role-name "${UI_PREFIX}-proxy-role-${REGION_SUFFIX}" 2>/dev/null && \
-                      terraform import -input=false aws_iam_role.proxy_role "${UI_PREFIX}-proxy-role-${REGION_SUFFIX}" 2>/dev/null || true
-                    aws iam get-role --role-name "${UI_PREFIX}-worker-role-${REGION_SUFFIX}" 2>/dev/null && \
-                      terraform import -input=false aws_iam_role.worker_role "${UI_PREFIX}-worker-role-${REGION_SUFFIX}" 2>/dev/null || true
-                    aws cloudfront list-functions --query "FunctionList.Items[?Name=='${UI_PREFIX}-spa-rw-${REGION_SUFFIX}'].Name" --output text 2>/dev/null | grep -q . && \
-                      terraform import -input=false aws_cloudfront_function.spa_rewrite "${UI_PREFIX}-spa-rw-${REGION_SUFFIX}" 2>/dev/null || true
-                    aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='${UI_PREFIX}-s3-oac'].Id" --output text 2>/dev/null | grep -v None | while read -r OAC_ID; do
-                      [ -n "$OAC_ID" ] && terraform import -input=false aws_cloudfront_origin_access_control.s3_oac "$OAC_ID" 2>/dev/null || true
-                    done
+                    UCC=$(echo "${USE_CASE_ID:-unknown}" | tr '_' '-'); R=$(echo "$AWS_TARGET_REGION" | tr -d '-'); FS="lg"; [ "$FRAMEWORK" = "strands" ] && FS="st"
+                    P="ava-${UCC}-ui"; B="ava-${UCC}-${FS}-ui-${R}-$(aws sts get-caller-identity --query Account --output text)"
+                    _imp() { terraform import -input=false "$1" "$2" 2>/dev/null || true; }
+                    aws s3api head-bucket --bucket "$B" 2>/dev/null && _imp aws_s3_bucket.ui "$B"
+                    aws iam get-role --role-name "${P}-proxy-role-${R}" 2>/dev/null && _imp aws_iam_role.lambda_role "${P}-proxy-role-${R}"
+                    aws iam get-role --role-name "${P}-worker-role-${R}" 2>/dev/null && _imp aws_iam_role.worker_role "${P}-worker-role-${R}"
+                    aws dynamodb describe-table --table-name "${P}-sessions-${R}" --region "$AWS_TARGET_REGION" >/dev/null 2>&1 && _imp aws_dynamodb_table.sessions "${P}-sessions-${R}"
+                    aws lambda get-function --function-name "${P}-proxy-${R}" --region "$AWS_TARGET_REGION" >/dev/null 2>&1 && { _imp aws_lambda_function.proxy "${P}-proxy-${R}"; _imp aws_lambda_permission.apigw "${P}-proxy-${R}/AllowAPIGatewayInvoke"; }
+                    aws lambda get-function --function-name "${P}-worker-${R}" --region "$AWS_TARGET_REGION" >/dev/null 2>&1 && _imp aws_lambda_function.worker "${P}-worker-${R}"
+                    aws cloudfront list-functions --query "FunctionList.Items[?Name=='${P}-spa-rw-${R}'].Name" --output text 2>/dev/null | grep -q . && _imp aws_cloudfront_function.spa_rewrite "${P}-spa-rw-${R}"
+                    OAC=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='${P}-s3-oac'].Id" --output text 2>/dev/null); [ -n "$OAC" ] && [ "$OAC" != "None" ] && _imp aws_cloudfront_origin_access_control.s3_oac "$OAC"
                     terraform plan -input=false -out=tfplan
                     terraform apply -input=false -auto-approve tfplan || { echo "WARNING: UI terraform apply failed"; }
                     terraform output -json > /tmp/ui_outputs.json 2>/dev/null || echo '{}' > /tmp/ui_outputs.json

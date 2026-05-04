@@ -199,7 +199,7 @@ resource "aws_lambda_function" "worker" {
   role             = aws_iam_role.worker_role.arn
   handler          = "worker.handler"
   runtime          = "python3.11"
-  timeout          = 300
+  timeout          = 900
   memory_size      = 256
 
   environment {
@@ -258,7 +258,10 @@ resource "aws_lambda_permission" "apigw" {
 # =============================================================================
 
 resource "aws_s3_bucket" "ui" {
-  # Include framework_short in bucket name for multi-framework isolation
+  # Include framework_short in bucket name for multi-framework isolation.
+  # use_case_name is capped at 32 chars at the ingestion boundary (frontend
+  # maxLength + backend validator), which keeps every downstream AWS name
+  # (S3 63, IAM 64, Lambda 64) inside its limit without per-resource logic.
   bucket        = "ava-${replace(var.use_case_name, "_", "-")}-${local.framework_short}-ui-${local.region_suffix}-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 }

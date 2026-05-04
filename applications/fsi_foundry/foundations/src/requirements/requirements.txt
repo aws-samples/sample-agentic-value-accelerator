@@ -23,6 +23,16 @@ structlog>=24.4.0
 python-dotenv>=1.0.1
 httpx==0.27.2
 
+# Observability
+langfuse>=3.14.0
+opentelemetry-instrumentation-langchain>=0.30.0
+
+# PDF text extraction for document-review agents. Used by the shared
+# extract_pdf_text tool in foundations/src/tools/s3_retriever*.py so that
+# agents read real extracted text instead of trying to mentally parse
+# base64-encoded PDF bytes (which was unreliable).
+pypdf>=4.0.0
+
 # =============================================================================
 # Optional Dependencies
 # =============================================================================

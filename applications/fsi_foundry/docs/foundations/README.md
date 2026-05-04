@@ -52,7 +52,7 @@ Framework-specific base classes for building agents and orchestrators:
 
 | Pattern | Infrastructure | Best For |
 |---------|---------------|----------|
-| AgentCore | AWS-native serverless | Scalable, production-ready deployments |
+| AgentCore | AWS-native serverless | Scalable, managed deployments |
 
 See [Architecture Patterns](architecture/architecture_patterns.md) for detailed information.
 

@@ -1,6 +1,6 @@
 # AVA Starter Templates
 
-The AVA Control Plane includes 8 deployable starter templates that provide pre-configured infrastructure and application patterns for building AI agent systems on AWS. Templates are deployed directly from the Control Plane UI with one click.
+The AVA Control Plane includes 6 deployable starter templates that provide pre-configured infrastructure and application patterns for building AI agent systems on AWS. Templates are deployed directly from the Control Plane UI with one click.
 
 ## How Templates Work
 
@@ -11,28 +11,24 @@ The AVA Control Plane includes 8 deployable starter templates that provide pre-c
 
 Templates are organized into two categories:
 
-- **Foundation Templates** — Shared infrastructure deployed once per account/region (networking, observability)
-- **Agent Templates** — Application patterns that build on top of foundations
+- **Foundation Template** — Shared infrastructure deployed once per account/region (Langfuse observability)
+- **Agent Templates** — Application patterns that consume the foundation
 
 ---
 
-## Foundation Templates
+## Foundation Template
 
-Foundation templates provide shared infrastructure that agent templates consume. Deploy these first.
+The Foundation Stack is the sole Langfuse deployment path. Deploy it first, once per account/region.
 
 | Template | Description | Deploy Order |
 |----------|-------------|:------------:|
-| [**Observability Stack**](observability-stack.md) | Langfuse v3 + OpenTelemetry for agent tracing, monitoring, and prompt management | 1st |
-| [**Foundation Stack**](foundation-stack.md) | Combined networking + observability in a single deployment | 1st (alternative) |
-| [**Networking Base**](networking-base.md) | VPC, private subnets, and security groups | 1st (minimal) |
-
-> **Tip:** Use **Foundation Stack** for the simplest setup — it combines networking and observability in one deployment. Use individual templates if you need more control.
+| [**Foundation Stack**](foundation-stack.md) | **Langfuse deployment** — provisions the Langfuse v3 observability server (plus required networking) that every other template and use case sends traces to. Accessible afterwards from the Observability tab. | 1st |
 
 ---
 
 ## Agent Templates
 
-Agent templates deploy application patterns on top of foundation infrastructure.
+Agent templates deploy application patterns on top of the Foundation Stack.
 
 | Template | Framework | Description |
 |----------|-----------|-------------|
@@ -48,9 +44,8 @@ Agent templates deploy application patterns on top of foundation infrastructure.
 
 ```mermaid
 flowchart LR
-    subgraph Foundations["Step 1: Foundation"]
-        Net["Networking Base<br/>(VPC, subnets)"]
-        Obs["Observability Stack<br/>(Langfuse, OTEL)"]
+    subgraph Foundation["Step 1: Foundation"]
+        FS["Foundation Stack<br/>(Langfuse + networking)"]
     end
 
     subgraph Agents["Step 2: Agent Template"]
@@ -61,16 +56,11 @@ flowchart LR
         Multi["Multi-Agent<br/>Orchestration"]
     end
 
-    Net --> Strands
-    Net --> LG
-    Net --> Tool
-    Net --> RAG
-    Net --> Multi
-    Obs --> Strands
-    Obs --> LG
-    Obs --> Tool
-    Obs --> RAG
-    Obs --> Multi
+    FS --> Strands
+    FS --> LG
+    FS --> Tool
+    FS --> RAG
+    FS --> Multi
 ```
 
 ---
@@ -84,10 +74,10 @@ All templates share these parameters:
 | `project_name` | Yes | Unique name for the deployment (used in resource naming) |
 | `aws_region` | Yes | Target AWS region |
 
-Agent templates additionally accept:
+Agent templates additionally accept (auto-injected by the control plane when a Foundation Stack is live):
 
 | Parameter | Required | Description |
 |-----------|:--------:|-------------|
-| `langfuse_host` | No | Langfuse server URL (from Observability Stack) |
+| `langfuse_host` | No | Langfuse server URL (from Foundation Stack) |
 | `langfuse_secret_name` | No | AWS Secrets Manager secret with Langfuse API keys |
 | `llm_model` | No | Bedrock model ID (defaults to Claude Sonnet) |

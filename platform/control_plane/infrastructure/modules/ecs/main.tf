@@ -379,6 +379,10 @@ resource "aws_ecs_task_definition" "main" {
           value = var.state_machine_arn
         },
         {
+          name  = "FRONTIER_AGENTS_STATE_MACHINE_ARN"
+          value = var.frontier_agents_state_machine_arn
+        },
+        {
           name  = "AWS_DEFAULT_REGION"
           value = data.aws_region.current.name
         },
@@ -527,6 +531,28 @@ resource "aws_iam_role_policy" "ecs_task_sts" {
   })
 }
 
+# Policy for CodeCommit read access (backend lists seeded use case repos)
+resource "aws_iam_role_policy" "ecs_task_codecommit" {
+  name = "codecommit-read-access"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "codecommit:ListRepositories",
+          "codecommit:GetRepository",
+          "codecommit:ListBranches",
+          "codecommit:GetBranch"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # Policy for Bedrock AgentCore access (test deployment invocations)
 resource "aws_iam_role_policy" "ecs_task_bedrock_agentcore" {
   name = "bedrock-agentcore-access"
@@ -541,6 +567,28 @@ resource "aws_iam_role_policy" "ecs_task_bedrock_agentcore" {
           "bedrock-agentcore:InvokeAgentRuntime",
           "bedrock-agentcore:GetAgentRuntime",
           "bedrock-agentcore:ListAgentRuntimes"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Policy for Secrets Manager access (Langfuse project provisioning)
+resource "aws_iam_role_policy" "ecs_task_secrets_manager" {
+  name = "secrets-manager-access"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:CreateSecret",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:TagResource"
         ]
         Resource = "*"
       }

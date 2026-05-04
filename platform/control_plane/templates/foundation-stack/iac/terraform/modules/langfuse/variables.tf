@@ -128,7 +128,7 @@ variable "clickhouse_memory" {
 variable "clickhouse_desired_count" {
   description = "Desired number of ClickHouse tasks"
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "alb_scheme" {
@@ -190,4 +190,16 @@ variable "langfuse_init_org_name" {
   description = "Name of the initial Langfuse organization"
   type        = string
   default     = "Default Org"
+}
+
+variable "cognito_user_pool_id" {
+  description = "Control plane Cognito User Pool ID for Langfuse SSO (leave empty to skip SSO setup)"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_region" {
+  description = "AWS region of the Cognito User Pool"
+  type        = string
+  default     = "us-east-1"
 }

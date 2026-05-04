@@ -1,5 +1,6 @@
 {
   "id": "networking-base",
+  "hidden": true,
   "name": "Networking Base",
   "description": "Foundation template providing VPC, subnets, and security groups for agent deployments. Deploy once per account/region, consumed by all use case templates.",
   "version": "1.0.0",

@@ -156,16 +156,20 @@ generate_runtime_config() {
     agents_json=$(jq -c --arg name "$use_case_name" \
         '.use_cases[] | select(.use_case_name == $name) | .agents // []' "$REGISTRY_FILE")
     test_entities=$(jq -c --arg name "$use_case_name" \
-        '.use_cases[] | select(.use_case_name == $name) | .test_customers // []' "$REGISTRY_FILE")
+        '.use_cases[] | select(.use_case_name == $name) | .test_entities // []' "$REGISTRY_FILE")
 
-    # Read per-use-case input schema fields from registry
+    # Extract input schema fields from registry (with defaults for backward compatibility)
+    local id_field id_label id_placeholder type_field type_options_json
     id_field=$(jq -r --arg name "$use_case_name" \
-        '.use_cases[] | select(.use_case_name == $name) | .id_field // "customer_id"' "$REGISTRY_FILE")
-    id_label=$(echo "$id_field" | sed 's/_/ /g; s/\b\(.\)/\u\1/g')
+        '.use_cases[] | select(.use_case_name == $name) | .id_field // "entity_id"' "$REGISTRY_FILE")
+    id_label=$(jq -r --arg name "$use_case_name" \
+        '.use_cases[] | select(.use_case_name == $name) | .id_label // "Entity ID"' "$REGISTRY_FILE")
+    id_placeholder=$(jq -r --arg name "$use_case_name" \
+        '.use_cases[] | select(.use_case_name == $name) | .id_placeholder // "e.g. ENTITY001"' "$REGISTRY_FILE")
     type_field=$(jq -r --arg name "$use_case_name" \
         '.use_cases[] | select(.use_case_name == $name) | .type_field // "assessment_type"' "$REGISTRY_FILE")
-    type_options=$(jq -c --arg name "$use_case_name" \
-        '.use_cases[] | select(.use_case_name == $name) | .type_values // ["full"] | [.[] | {value: ., label: (. | gsub("_"; " ") | gsub("\\b."; .[:1] | ascii_upcase + .[1:]))}]' "$REGISTRY_FILE")
+    type_options_json=$(jq -c --arg name "$use_case_name" \
+        '.use_cases[] | select(.use_case_name == $name) | .type_values // ["full"] | [.[] | {value: ., label: (. | split("_") | map(. | explode | . as $chars | [if .[0] >= 97 and .[0] <= 122 then .[0] - 32 else .[0] end] + .[1:] | implode) | join(" "))}]' "$REGISTRY_FILE")
 
     # Build agents array with descriptions
     local agents_with_desc
@@ -179,19 +183,19 @@ generate_runtime_config() {
   "description": "$description",
   "domain": "FSI",
   "agents": $agents_with_desc,
-  "api_endpoint": "$API_ENDPOINT/invoke",
+  "api_endpoint": "$API_ENDPOINT",
   "input_schema": {
     "id_field": "$id_field",
     "id_label": "$id_label",
-    "id_placeholder": "e.g. CUST001",
+    "id_placeholder": "$id_placeholder",
     "type_field": "$type_field",
-    "type_options": $type_options,
+    "type_options": $type_options_json,
     "test_entities": $test_entities
   }
 }
 EOF
 
-    info "Generated runtime-config.json with API endpoint: $API_ENDPOINT/invoke"
+    info "Generated runtime-config.json with API endpoint: $API_ENDPOINT"
 }
 
 build_ui() {

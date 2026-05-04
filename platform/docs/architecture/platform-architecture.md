@@ -27,22 +27,26 @@ graph TB
     subgraph Backend["Backend — FastAPI on ECS Fargate"]
         ECS["ECS Fargate Service"]
         API["FastAPI Application"]
-        Routes["API Routes<br/>• /deployments<br/>• /templates<br/>• /applications<br/>• /tests"]
+        Routes["API Routes<br/>• /deployments<br/>• /templates<br/>• /applications<br/>• /codecommit<br/>• /tests"]
         Services["Services<br/>• Pipeline Orchestration<br/>• Packaging Engine<br/>• Deployment Manager<br/>• Test Runner"]
+    end
+
+    subgraph Sources["Deployment Sources"]
+        S3_Archives["S3<br/>Project Archives<br/>(Quick Deploy path)"]
+        CC["CodeCommit<br/>Pre-seeded use case repos<br/>(Deploy from Git path)"]
     end
 
     subgraph Storage["Data Layer"]
         DDB_Deploy["DynamoDB<br/>Deployments"]
         DDB_Meta["DynamoDB<br/>Metadata"]
-        S3_Archives["S3<br/>Project Archives"]
         S3_State["S3<br/>Terraform State"]
         ECR["ECR<br/>Container Registry"]
     end
 
     subgraph Pipeline["CI/CD Pipeline"]
-        SF["Step Functions<br/>Orchestrator"]
-        EB["EventBridge<br/>Lifecycle Events"]
-        CB["CodeBuild<br/>Build + Deploy"]
+        SF["Step Functions<br/>Orchestrator<br/>(dual-source)"]
+        EB["EventBridge<br/>Lifecycle Events +<br/>Git push triggers"]
+        CB["CodeBuild<br/>Build + Deploy<br/>(clones OR unzips)"]
     end
 
     subgraph Targets["Deployment Targets"]
@@ -67,11 +71,18 @@ graph TB
     Services --> DDB_Deploy
     Services --> DDB_Meta
     Services --> S3_Archives
+    Services --> CC
     Services --> ECR
     Services --> SF
 
     SF --> EB
     SF --> CB
+
+    CC -.->|"git push triggers<br/>auto-deploy"| EB
+    EB -.->|"invoke"| SF
+
+    S3_Archives -->|"unzip"| CB
+    CC -->|"git clone"| CB
 
     CB --> S3_State
     CB --> AgentCore
@@ -83,47 +94,92 @@ graph TB
 
 ## Deployment Pipeline
 
-When a user clicks "Deploy" in the Control Plane UI, the following pipeline executes:
+The pipeline is **dual-source** — the same Step Functions / CodeBuild stages run whether the user picked "Quick Deploy (S3)" or "Deploy from Git (CodeCommit)" in the UI. Only the source-acquisition step differs.
+
+### Path A — Quick Deploy (S3)
 
 ```mermaid
 sequenceDiagram
     participant UI as Control Plane UI
     participant API as Backend API
+    participant S3 as S3 Archives
     participant SF as Step Functions
     participant CB as CodeBuild
     participant TF as Terraform
     participant AWS as AWS Services
+    participant DDB as DynamoDB
 
-    UI->>API: POST /deployments (use case, framework, params)
+    UI->>API: POST /applications/foundry/deploy (use case, framework, params)
     API->>API: Package source code into zip
-    API->>S3: Upload archive to S3
-    API->>SF: Start pipeline execution
-    
+    API->>S3: Upload archive
+    API->>SF: Start pipeline (s3_bucket, s3_key)
+
     SF->>SF: Validate inputs
+    SF->>SF: NormalizeBuildInput (fill empty codecommit_*)
     SF->>CB: Start CodeBuild job
-    
+
+    Note over CB: Source Phase
+    CB->>S3: aws s3 cp + unzip archive -> /tmp/workspace
+
     Note over CB: Build Phase
-    CB->>CB: Extract archive
     CB->>CB: Docker build + push to ECR
-    
+
     Note over CB: Infrastructure Phase
-    CB->>TF: terraform init + plan + apply (infra)
+    CB->>TF: terraform apply (infra)
     TF->>AWS: Create ECR, S3, IAM, networking
-    
-    CB->>TF: terraform init + plan + apply (runtime)
+    CB->>TF: terraform apply (runtime)
     TF->>AWS: Deploy AgentCore Runtime
-    
+
     Note over CB: UI Phase
-    CB->>TF: terraform init + plan + apply (ui)
-    TF->>AWS: Create S3 bucket, CloudFront, Lambda proxy, API Gateway
+    CB->>TF: terraform apply (ui_iac)
+    TF->>AWS: Create S3, CloudFront, Lambda proxy, API GW
     CB->>CB: npm install + vite build
-    CB->>S3: aws s3 sync dist/ to UI bucket
-    CB->>AWS: CloudFront cache invalidation
-    
-    SF->>SF: Capture outputs
-    SF->>DDB: Store deployment outputs
+    CB->>AWS: aws s3 sync dist/ + CloudFront invalidation
+
+    SF->>DDB: Capture outputs
     SF-->>UI: Deployment complete
 ```
+
+### Path B — Deploy from Git (CodeCommit)
+
+```mermaid
+sequenceDiagram
+    participant UI as Control Plane UI
+    participant API as Backend API
+    participant CC as CodeCommit
+    participant SF as Step Functions
+    participant CB as CodeBuild
+    participant TF as Terraform
+    participant AWS as AWS Services
+    participant DDB as DynamoDB
+
+    UI->>API: GET /codecommit/repositories
+    API->>CC: list_repositories + get_repository
+    API-->>UI: [fsi-foundry-*] clone URLs + default branches
+
+    UI->>API: POST /applications/foundry/deploy-from-git<br/>(codecommit_repo, codecommit_branch, ...)
+    API->>CC: get_repository (verify repo exists)
+    API->>SF: Start pipeline (codecommit_repo, codecommit_branch)
+
+    SF->>SF: Validate inputs
+    SF->>SF: NormalizeBuildInput (fill empty s3_*)
+    SF->>CB: Start CodeBuild job
+
+    Note over CB: Source Phase (git clone instead of unzip)
+    CB->>CC: aws codecommit get-repository -> cloneUrlHttp
+    CB->>CC: git clone --depth 1 --branch <br/> -> /tmp/workspace
+
+    Note over CB: Remaining phases identical to Path A
+    CB->>CB: Docker build + push to ECR
+    CB->>TF: terraform apply (infra, runtime, ui_iac)
+    CB->>CB: npm install + vite build
+    CB->>AWS: aws s3 sync dist/ + CloudFront invalidation
+
+    SF->>DDB: Capture outputs
+    SF-->>UI: Deployment complete
+```
+
+**Auto-deploy on git push** — EventBridge rules on each seeded CodeCommit repo can also trigger Step Functions automatically when a push lands on `main` or a PR is merged, so developers who clone and modify a repo can just `git push` to redeploy.
 
 ## Component Details
 
@@ -139,6 +195,7 @@ sequenceDiagram
 | Axios | API client |
 | Amazon Cognito | Authentication + RBAC |
 
+**Key pages:** Template Catalog, FSI Foundry Use Cases, Reference Implementations, Deployment Detail (with logs, test drawer, pipeline visualization), Documentation
 
 ### Backend
 
@@ -151,8 +208,9 @@ sequenceDiagram
 | Boto3 | AWS SDK for Python |
 
 **Key services:**
-- **Pipeline Service** — Orchestrates Step Functions execution for deployments
-- **Packaging Service** — Zips use case source, IaC, UI, Docker, and sample data into deployment archives
+- **Pipeline Service** — Orchestrates Step Functions execution for deployments (both S3 and CodeCommit sources)
+- **Packaging Service** — Zips use case source, IaC, UI, Docker, and sample data into deployment archives (S3 path)
+- **CodeCommit Service** — Lists pre-seeded `fsi-foundry-*` repositories and validates selections for the Git deploy path
 - **Deployment Manager** — CRUD for deployment lifecycle, status tracking, output capture
 - **Test Runner** — Invokes AgentCore runtimes and polls for async results
 
@@ -170,7 +228,8 @@ graph LR
         COG["cognito<br/>Auth"]
         ECR["ecr<br/>Container Registry"]
         CB["codebuild<br/>CI/CD Pipeline"]
-        EB["eventbridge<br/>Lifecycle Events"]
+        CC["codecommit<br/>Pre-seeded Repos"]
+        EB["eventbridge<br/>Lifecycle +<br/>Git Triggers"]
         OBS["observability<br/>CloudWatch"]
         SF["step_functions<br/>Orchestration"]
         STATE["state_backend<br/>TF Remote State"]
@@ -183,8 +242,10 @@ graph LR
     CB --> ECR
     CB --> S3
     CB --> STATE
+    CB --> CC
     SF --> CB
     SF --> EB
+    CC --> EB
     OBS --> ECS
     OBS --> CB
 ```
@@ -216,9 +277,10 @@ graph LR
 | **S3** | Static hosting, artifacts, Terraform state |
 | **DynamoDB** | Deployment state, metadata, session tracking |
 | **Cognito** | User authentication with RBAC (admin/viewer) |
-| **CodeBuild** | CI/CD build execution in isolated containers |
-| **Step Functions** | Deployment pipeline orchestration |
-| **EventBridge** | Deployment lifecycle events with DLQ |
+| **CodeBuild** | CI/CD build execution in isolated containers (dual-source: S3 archive or Git clone) |
+| **CodeCommit** | Pre-seeded `fsi-foundry-*` repositories for the "Deploy from Git" path |
+| **Step Functions** | Deployment pipeline orchestration (source-agnostic after input normalization) |
+| **EventBridge** | Deployment lifecycle events with DLQ + Git push / PR-merge triggers per repo |
 | **ECR** | Docker image registry |
 | **Lambda** | Per-use-case UI proxy and async worker |
 | **Bedrock AgentCore** | Managed agent runtime hosting |

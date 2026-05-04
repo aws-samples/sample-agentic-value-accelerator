@@ -25,6 +25,15 @@ configure_logging(
 
 logger = get_logger(__name__)
 
+# Initialize Langfuse tracing early (before agent imports) so OTEL env vars
+# are set before opentelemetry-instrument auto-instruments LLM calls.
+from utils.telemetry import setup_tracing
+if settings.enable_tracing:
+    if setup_tracing():
+        logger.info("langfuse_tracing_initialized")
+    else:
+        logger.warning("langfuse_tracing_failed_to_initialize")
+
 # Dynamically import use case module to trigger registration
 # Each use case module registers itself with the registry on import
 # The use case is determined by the AGENT_NAME setting (e.g., "kyc")

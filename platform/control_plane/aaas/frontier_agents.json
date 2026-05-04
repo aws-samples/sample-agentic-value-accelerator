@@ -1,0 +1,60 @@
+{
+  "$comment": "Catalog of managed AWS Frontier Agents deployable from the control plane. Each entry drives the deploy form on the UI and the packaging step on the backend. Keep ids stable — they are used as the template_id suffix in deployment records.",
+  "agents": [
+    {
+      "id": "aws-devops",
+      "name": "AWS DevOps Agent",
+      "description": "Amazon's managed DevOps Agent — monitors infrastructure and deployments, investigates incidents, and recommends remediations across single or multiple AWS accounts.",
+      "status": "Available",
+      "iac_path": "frontier_agents/devops/iac",
+      "supported_iac_types": ["terraform", "cdk", "cloudformation"],
+      "coming_soon_iac_types": [],
+      "parameters": [
+        {
+          "name": "agent_space_name",
+          "label": "Agent Space Name",
+          "type": "string",
+          "required": true,
+          "default": "FSIAgentKitAgentSpace",
+          "description": "Name assigned to the DevOps Agent Space."
+        },
+        {
+          "name": "agent_space_description",
+          "label": "Agent Space Description",
+          "type": "string",
+          "required": false,
+          "default": "DevOps Agent Space provisioned by AVA",
+          "description": "Free-text description shown on the Agent Space."
+        },
+        {
+          "name": "name_postfix",
+          "label": "Resource Name Postfix",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Fixed suffix appended to IAM role names. Leave empty to use a random 4-byte hex on first apply. Useful for re-deploys that need stable role names."
+        }
+      ],
+      "advanced_parameters": [],
+      "$comment_advanced_parameters": "Cross-account monitoring (Part 2 of the Terraform module) is not wired through the CI/CD pipeline yet — the shared CodeBuild role has no path to assume the secondary account. The advanced parameters below are preserved here for when the pipeline gains a cross-account provider alias. Restore them into advanced_parameters[] to re-expose the collapsible section in the deploy form.",
+      "$disabled_advanced_parameters": [
+        {
+          "name": "service_account_id",
+          "label": "Secondary Account ID (optional)",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Account ID of a secondary (service) account to monitor. Requires a follow-up apply after Part 1 outputs the Agent Space ARN, with the aws.service provider alias configured. Leave empty to skip cross-account setup."
+        },
+        {
+          "name": "agent_space_arn",
+          "label": "Agent Space ARN (optional)",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "ARN emitted by an earlier Part 1 apply. Only set this when enabling cross-account monitoring in Part 2."
+        }
+      ]
+    }
+  ]
+}

@@ -9,7 +9,7 @@ interface Props {
   config: RuntimeConfig;
 }
 
-const taskTypeIcons: Record<string, JSX.Element> = {
+const taskTypeIcons: Record<string, React.ReactNode> = {
   full: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 12l2 2 4-4" />
@@ -113,6 +113,22 @@ export default function AgentConsole({ config }: Props) {
               onKeyDown={(e) => e.key === 'Enter' && handleExecute()}
             />
           </div>
+          {config.input_schema.test_entities && config.input_schema.test_entities.length > 0 && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: 'var(--gray-400)' }}>Quick Fill:</span>
+              {config.input_schema.test_entities.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setEmployeeId(id)}
+                  className="px-3 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer"
+                  style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)', color: 'var(--purple-600)' }}
+                >
+                  {id}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Task Type Cards */}

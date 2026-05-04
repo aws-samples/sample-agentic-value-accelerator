@@ -4,4 +4,4 @@
 # For Strands-based agent deployment: pip install -r requirements.txt -r requirements_strands.txt
 
 # Strands Agents SDK
-strands-agents>=0.1.0
+strands-agents[otel]>=0.1.0

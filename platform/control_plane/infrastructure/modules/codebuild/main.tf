@@ -70,6 +70,7 @@ resource "aws_iam_role_policy" "codebuild_s3" {
         Effect = "Allow"
         Action = [
           "s3:GetObject",
+          "s3:PutObject",
           "s3:GetBucketLocation"
         ]
         Resource = [
@@ -132,8 +133,8 @@ resource "aws_iam_role_policy" "codebuild_sts" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = "sts:AssumeRole"
+        Effect = "Allow"
+        Action = "sts:AssumeRole"
         Resource = [
           "arn:aws:iam::*:role/fsi-deployment-*",
           "arn:aws:iam::*:role/cdk-*"
@@ -245,6 +246,12 @@ resource "aws_iam_role_policy" "codebuild_iac_provisioning" {
           "ssm:AddTagsToResource",
           "ssm:RemoveTagsFromResource",
           "ssm:ListTagsForResource",
+          # Port-forwarding to RDS via bastion (market-surveillance seed step).
+          # StartSession on AWS-StartPortForwardingSessionToRemoteHost requires
+          # these three actions; without them, deploy.sh silently skips seeding.
+          "ssm:StartSession",
+          "ssm:TerminateSession",
+          "ssm:DescribeSessions",
           "sts:GetCallerIdentity",
           "cognito-idp:*",
           "cognito-identity:*",
@@ -265,6 +272,33 @@ resource "aws_iam_role_policy" "codebuild_iac_provisioning" {
           "servicediscovery:*",
           "xray:*",
           "autoscaling:*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Policy for CodeCommit access (read-only for pulling source code)
+resource "aws_iam_role_policy" "codebuild_codecommit" {
+  name = "codecommit-access"
+  role = aws_iam_role.codebuild.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "codecommit:GetBranch",
+          "codecommit:GetCommit",
+          "codecommit:GetRepository",
+          "codecommit:ListBranches",
+          "codecommit:ListRepositories",
+          "codecommit:GitPull",
+          "codecommit:GetUploadArchiveStatus",
+          "codecommit:UploadArchive",
+          "codecommit:CancelUploadArchive"
         ]
         Resource = "*"
       }
@@ -302,6 +336,11 @@ resource "aws_codebuild_project" "deployment" {
     environment_variable {
       name  = "LOCK_TABLE"
       value = "${var.name_prefix}-tf-lock"
+    }
+
+    environment_variable {
+      name  = "AGENT_REGISTRY_ARN"
+      value = var.agent_registry_arn
     }
   }
 

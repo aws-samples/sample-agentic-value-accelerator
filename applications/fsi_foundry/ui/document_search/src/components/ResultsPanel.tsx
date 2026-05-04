@@ -80,6 +80,8 @@ function DocumentCard({ result, index }: { result: SearchResult; index: number }
 
 function ResultsPanelInternal({ data }: Props) {
   const [showRaw, setShowRaw] = useState(false);
+  const results = data.results || [];
+  const relevanceScores = data.relevance_scores || [];
 
   return (
     <div className="space-y-5 animate-fade-slide-up">
@@ -116,7 +118,7 @@ function ResultsPanelInternal({ data }: Props) {
             <strong style={{ color: 'var(--text-secondary)' }}>Query:</strong> {data.query}
           </span>
           <span>
-            <strong style={{ color: 'var(--text-secondary)' }}>Results:</strong> {data.results.length}
+            <strong style={{ color: 'var(--text-secondary)' }}>Results:</strong> {results.length}
           </span>
           <span>
             <strong style={{ color: 'var(--text-secondary)' }}>Time:</strong>{' '}
@@ -131,23 +133,23 @@ function ResultsPanelInternal({ data }: Props) {
           className="text-sm font-semibold uppercase tracking-wider mb-3"
           style={{ color: 'var(--text-secondary)' }}
         >
-          Documents Found ({data.results.length})
+          Documents Found ({results.length})
         </h3>
         <div className="space-y-3">
-          {data.results.map((result, i) => (
-            <DocumentCard key={result.document_id} result={result} index={i} />
+          {results.map((result, i) => (
+            <DocumentCard key={result.document_id || i} result={result} index={i} />
           ))}
         </div>
       </div>
 
       {/* Relevance Scores */}
-      {data.relevance_scores.length > 0 && (
+      {relevanceScores.length > 0 && (
         <div className="card">
           <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--brown-deep)' }}>
             Relevance Scores
           </h4>
           <div className="flex items-end gap-2 h-16">
-            {data.relevance_scores.map((score, i) => (
+            {relevanceScores.map((score, i) => (
               <div key={i} className="flex flex-col items-center gap-1 flex-1">
                 <div
                   className="w-full rounded-t-md animate-fade-slide-up"

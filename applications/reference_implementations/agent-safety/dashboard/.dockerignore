@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.DS_Store
+template.yaml
+deploy.py
+deploy.sh
+.image_uri
+.dockerignore

@@ -13,8 +13,10 @@ import boto3
 from models.deployment import DeploymentCreate, DeploymentResponse, DeploymentStatus
 from services.deployment_service import DeploymentService
 from services.pipeline_service import PipelineService
+from services.pipeline_inputs import FoundryPipelineInput
 from services.foundry_catalog import FoundryCatalog
 from services.s3_delivery_service import S3DeliveryService
+from services.langfuse_provisioning import LangfuseProvisioningService
 from core.config import settings
 from fastapi import Depends as RBACDepends
 from core.rbac import Role, require_role
@@ -70,6 +72,17 @@ class FoundryDeployRequest(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
 
+class FoundryDeployFromGitRequest(BaseModel):
+    deployment_name: str = Field(..., min_length=1, max_length=100)
+    codecommit_repo: str = Field(..., min_length=1)
+    codecommit_branch: str = "main"
+    use_case_name: str
+    framework: str = "langchain_langgraph"
+    deployment_pattern: str = "agentcore"
+    aws_region: str = "us-east-1"
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+
+
 class FoundryUseCaseResponse(BaseModel):
     id: str
     use_case_name: str
@@ -106,6 +119,44 @@ async def deploy_foundry_use_case(req: FoundryDeployRequest, _=RBACDepends(requi
     if req.deployment_pattern not in use_case.supported_patterns:
         raise HTTPException(status_code=400, detail=f"Pattern '{req.deployment_pattern}' not supported. Valid: {use_case.supported_patterns}")
 
+    # Resolve foundation-stack outputs (langfuse_host, langfuse_secret_name, vpc_id, etc.)
+    svc = get_deploy_svc()
+    try:
+        foundation_outputs = svc.resolve_dependencies(["foundation-stack"])
+    except ValueError:
+        foundation_outputs = {}
+        logger.warning("No active foundation-stack deployment found — Langfuse tracing will not be linked")
+
+    # Merge foundation outputs with request parameters (request params take precedence)
+    merged_params = {
+        **foundation_outputs,
+        **req.parameters,
+        "USE_CASE_ID": req.use_case_name,
+        "FRAMEWORK": req.framework,
+        "DEPLOYMENT_PATTERN": req.deployment_pattern,
+    }
+
+    # Provision per-use-case Langfuse project if foundation stack provides it
+    langfuse_host = foundation_outputs.get("langfuse_host")
+    langfuse_secret_name = foundation_outputs.get("langfuse_secret_name")
+    if langfuse_host and langfuse_secret_name:
+        try:
+            provisioner = LangfuseProvisioningService(
+                langfuse_host=langfuse_host,
+                langfuse_secret_name=langfuse_secret_name,
+                region=req.aws_region,
+            )
+            project_info = provisioner.provision_project(req.use_case_name)
+            merged_params["ENABLE_TRACING"] = "true"
+            merged_params["LANGFUSE_HOST"] = langfuse_host
+            merged_params["LANGFUSE_SECRET_NAME"] = project_info["secret_name"]
+            logger.info(f"Provisioned Langfuse project for {req.use_case_name}: {project_info['project_name']}")
+        except Exception as e:
+            logger.warning(f"Langfuse project provisioning failed: {e}. Using shared project.")
+            merged_params["ENABLE_TRACING"] = "true"
+            merged_params["LANGFUSE_HOST"] = langfuse_host
+            merged_params["LANGFUSE_SECRET_NAME"] = langfuse_secret_name
+
     # Create deployment using the existing deployment service
     deploy_req = DeploymentCreate(
         deployment_name=req.deployment_name,
@@ -113,12 +164,7 @@ async def deploy_foundry_use_case(req: FoundryDeployRequest, _=RBACDepends(requi
         iac_type="terraform",
         framework_id=req.framework,
         aws_region=req.aws_region,
-        parameters={
-            **req.parameters,
-            "USE_CASE_ID": req.use_case_name,
-            "FRAMEWORK": req.framework,
-            "DEPLOYMENT_PATTERN": req.deployment_pattern,
-        },
+        parameters=merged_params,
     )
 
     svc = get_deploy_svc()
@@ -201,7 +247,7 @@ async def deploy_foundry_use_case(req: FoundryDeployRequest, _=RBACDepends(requi
             "aws_region": req.aws_region,
             "s3_bucket": deployment.s3_bucket,
             "s3_key": deployment.s3_key,
-            "parameters": deploy_req.parameters,
+            "parameters": FoundryPipelineInput.from_dict(deploy_req.parameters).to_sfn_parameters(),
             "target_account_id": None,
             "target_role_arn": None,
             "action": "deploy",
@@ -210,7 +256,87 @@ async def deploy_foundry_use_case(req: FoundryDeployRequest, _=RBACDepends(requi
                 "incoming_event": f"{req.use_case_name}_onboarding_request",
                 "outgoing_event": f"{req.use_case_name}_onboarding_success",
             },
+        }
+        execution_name = f"deploy-{deployment.deployment_id}"
+        response = pipeline_svc.sfn_client.start_execution(
+            stateMachineArn=pipeline_svc.state_machine_arn,
+            name=execution_name,
+            input=json.dumps(sf_input),
+        )
+        deployment.execution_arn = response["executionArn"]
+        svc.table.put_item(Item=svc._to_item(deployment))
+    except Exception as e:
+        logger.error(f"Pipeline start failed: {e}")
+        svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
+        raise HTTPException(status_code=500, detail=f"Pipeline start failed: {e}")
+
+    return DeploymentResponse(**deployment.dict())
+
+
+@router.post("/foundry/deploy-from-git", status_code=201, response_model=DeploymentResponse)
+async def deploy_foundry_from_git(req: FoundryDeployFromGitRequest, _=RBACDepends(require_role(Role.OPERATOR))):
+    """Deploy an FSI Foundry use case from a pre-seeded CodeCommit repository.
+
+    Skips S3 packaging entirely. CodeBuild clones from CodeCommit directly.
+    """
+    catalog = get_foundry_catalog()
+    use_case = catalog.get_use_case(req.use_case_name)
+    if not use_case:
+        raise HTTPException(status_code=404, detail=f"Use case not found: {req.use_case_name}")
+
+    if req.framework not in use_case.supported_frameworks:
+        raise HTTPException(status_code=400, detail=f"Framework '{req.framework}' not supported. Valid: {use_case.supported_frameworks}")
+
+    if req.deployment_pattern not in use_case.supported_patterns:
+        raise HTTPException(status_code=400, detail=f"Pattern '{req.deployment_pattern}' not supported. Valid: {use_case.supported_patterns}")
+
+    # Verify the CodeCommit repo actually exists before creating a deployment record
+    try:
+        cc_client = boto3.client("codecommit", region_name=settings.AWS_REGION)
+        cc_client.get_repository(repositoryName=req.codecommit_repo)
+    except cc_client.exceptions.RepositoryDoesNotExistException:
+        raise HTTPException(status_code=404, detail=f"CodeCommit repo not found: {req.codecommit_repo}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CodeCommit verification failed: {e}")
+
+    deploy_req = DeploymentCreate(
+        deployment_name=req.deployment_name,
+        template_id=f"foundry-{req.use_case_name}",
+        iac_type="terraform",
+        framework_id=req.framework,
+        aws_region=req.aws_region,
+        parameters={
+            **req.parameters,
+            "USE_CASE_ID": req.use_case_name,
+            "FRAMEWORK": req.framework,
+            "DEPLOYMENT_PATTERN": req.deployment_pattern,
+        },
+    )
+
+    svc = get_deploy_svc()
+    deployment = svc.create_deployment(deploy_req)
+
+    try:
+        pipeline_svc = get_pipeline_svc()
+        import json
+        sf_input = {
+            "deployment_id": deployment.deployment_id,
+            "template_id": f"foundry-{req.use_case_name}",
+            "deployment_name": req.deployment_name,
+            "iac_type": "terraform",
+            "framework_id": req.framework,
+            "aws_region": req.aws_region,
+            "codecommit_repo": req.codecommit_repo,
+            "codecommit_branch": req.codecommit_branch,
+            "parameters": FoundryPipelineInput.from_dict(deploy_req.parameters).to_sfn_parameters(),
+            "target_account_id": None,
+            "target_role_arn": None,
             "action": "deploy",
+            "job": {
+                "name": "onboarding",
+                "incoming_event": f"{req.use_case_name}_onboarding_request",
+                "outgoing_event": f"{req.use_case_name}_onboarding_success",
+            },
         }
         execution_name = f"deploy-{deployment.deployment_id}"
         response = pipeline_svc.sfn_client.start_execution(

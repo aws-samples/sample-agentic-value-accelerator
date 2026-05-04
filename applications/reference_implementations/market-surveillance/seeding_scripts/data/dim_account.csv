@@ -1,0 +1,22 @@
+account_organization,account_name,account_type,account_sub_type,account_number,account_id,account_reg_code,account_entity_number,account_country
+Acme Capital Partners,Acme Capital Partners,Client,Hedge Fund,KVP7283,C3R5D8,RegCode1,EntityNum1,US
+Acme Capital Partners,Acme Capital Partners,Client,Hedge Fund,NVP7283,C3R5D8,RegCode1,EntityNum1,US
+Globex Asset Management,Globex Asset Management,Client,Hedge Fund,TTK92WR3,S2V6X1,RegCode2,EntityNum2,US
+Pinnacle Investment Group,Pinnacle Investment Group,Client,Hedge Fund,HRNX5047,V4P7N2,RegCode3,EntityNum3,US
+Atlas Wealth Advisors,Atlas Wealth Advisors,Client,Pension fund,F3JP82KN,K8M3W6,RegCode1,EntityNum2,US
+Atlas Wealth Advisors,Atlas Wealth Advisors,Client,Pension fund,P3JP82KN,K8M3W6,RegCode1,EntityNum2,US
+Sentinel Demo Capital,Sentinel Demo Capital,Client,Insurance firm,GWSZ6712,N5K8H4,RegCode2,EntityNum2,US
+Apex Fund Strategies,Apex Fund Strategies,Client,Hedge Fund,J5L2Y9R7,B9X3E5,RegCode3,EntityNum3,US
+Apex Fund Strategies,Apex Fund Strategies,Client,Hedge Fund,Q5L2Y9R7,B9X3E5,RegCode3,EntityNum3,US
+Meridian Global Holdings,Meridian Global Holdings,Client,Insurance firm,KWRN4425,T4R8U2,RegCode3,EntityNum1,US
+Summit Demo Partners,Summit Demo Partners,Client,Pension fund,LTKX29Z8,H7G3J5,RegCode2,EntityNum2,US
+Zenith Investment Group,Zenith Investment Group,Client,Hedge Fund,NXM470LP,F1E4D8,RegCode3,EntityNum2,US
+Nexus Asset Management,Nexus Asset Management,Client,Hedge Fund,PRWS14V5,R9Q4P2,RegCode1,EntityNum1,US
+Agency A,Agency A,Client,GSE,GSE999999,GSEA,RegCode1,EntityNum1,US
+Agency B,Agency B,Client,GSE,GSE999998,GSEB,RegCode1,EntityNum2,US
+ABC Bank,Corporates Desk,Internal,Internal Trading Desk,BANK9999,BU11,RegCode3,EntityNum2,US
+ABC Bank,Corporates Desk,Internal,Internal Trading Desk,BANK9999,MU11,RegCode3,EntityNum2,US
+ABC Bank,Corporates Desk 2,Internal,Internal Trading Desk,BANK9999,BUG1,RegCode3,EntityNum2,US
+ABC Bank,Corporates Desk 2,Internal,Internal Trading Desk,BANK9999,MUG1,RegCode3,EntityNum2,US
+ABC Bank,Governments Desk,Internal,Internal Trading Desk,BANK0000,BU12,RegCode3,EntityNum3,US
+ABC Bank,Governments Desk,Internal,Internal Trading Desk,BANK0000,MU12,RegCode3,EntityNum3,US

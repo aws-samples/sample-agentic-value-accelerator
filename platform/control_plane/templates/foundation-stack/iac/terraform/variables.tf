@@ -39,6 +39,18 @@ variable "existing_vpc_id" {
   default     = ""
 }
 
+variable "cognito_user_pool_id" {
+  description = "Control plane Cognito User Pool ID for Langfuse SSO (leave empty to skip SSO setup)"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_region" {
+  description = "AWS region of the Cognito User Pool"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Common tags"
   type        = map(string)

@@ -143,3 +143,27 @@ resource "aws_iam_role_policy_attachment" "agentcore_ecr" {
   role       = aws_iam_role.agentcore_runtime.name
   policy_arn = aws_iam_policy.agentcore_ecr.arn
 }
+
+# Policy for Secrets Manager access (Langfuse API keys for tracing)
+resource "aws_iam_policy" "agentcore_secrets" {
+  name        = "${local.resource_prefix}-agentcore-secrets-${local.region_suffix}"
+  description = "Allow AgentCore to read Langfuse API keys from Secrets Manager"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:*langfuse*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "agentcore_secrets" {
+  role       = aws_iam_role.agentcore_runtime.name
+  policy_arn = aws_iam_policy.agentcore_secrets.arn
+}

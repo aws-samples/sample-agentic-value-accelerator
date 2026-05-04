@@ -249,7 +249,7 @@ export default function Home({ config }: { config: RuntimeConfig }) {
               Code Generation Flow
             </h2>
             <p className="text-sm animate-fade-in stagger-2" style={{ color: 'var(--text-muted)' }}>
-              From project input to production-ready code with full test coverage
+              From project input to working code with test coverage
             </p>
           </div>
 

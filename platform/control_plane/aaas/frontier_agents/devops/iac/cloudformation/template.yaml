@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  AWS DevOps Agent — Agent Space with IAM roles, operator app, and primary-account
+  association. Deployed by the AVA CICD pipeline.
+
+Parameters:
+  AgentSpaceName:
+    Type: String
+    Default: FSIAgentKitAgentSpace-CFN
+    Description: Name for the DevOps Agent Space.
+  AgentSpaceDescription:
+    Type: String
+    Default: DevOps Agent Space provisioned by AVA - CloudFormation
+    Description: Description for the DevOps Agent Space.
+  NamePostfix:
+    Type: String
+    Default: ''
+    Description: >-
+      Fixed suffix appended to IAM role names. Leave empty to use the stack's
+      unique suffix. Useful for re-deploys that need stable role names.
+
+Conditions:
+  HasPostfix: !Not [!Equals [!Ref NamePostfix, '']]
+
+Resources:
+  # IAM role assumed by the DevOps Agent service to monitor the account
+  DevOpsAgentSpaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub
+        - 'DevOpsAgentRole-AgentSpace-cfn${Suffix}'
+        - Suffix: !If [HasPostfix, !Ref NamePostfix, !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: aidevops.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:aws:aidevops:${AWS::Region}:${AWS::AccountId}:agentspace/*
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AIDevOpsAgentAccessPolicy
+      Policies:
+        - PolicyName: AllowCreateServiceLinkedRoles
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowCreateResourceExplorerServiceLinkedRole
+                Effect: Allow
+                Action:
+                  - iam:CreateServiceLinkedRole
+                Resource:
+                  - !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/resource-explorer-2.amazonaws.com/AWSServiceRoleForResourceExplorer
+      Tags:
+        - Key: Project
+          Value: ava
+        - Key: Component
+          Value: frontier-agents/devops
+
+  # IAM role for the operator app interface
+  DevOpsOperatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub
+        - 'DevOpsAgentRole-WebappAdmin-cfn${Suffix}'
+        - Suffix: !If [HasPostfix, !Ref NamePostfix, !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: aidevops.amazonaws.com
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:aws:aidevops:${AWS::Region}:${AWS::AccountId}:agentspace/*
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AIDevOpsOperatorAppAccessPolicy
+      Tags:
+        - Key: Project
+          Value: ava
+        - Key: Component
+          Value: frontier-agents/devops
+
+  # The Agent Space resource
+  AgentSpace:
+    Type: AWS::DevOpsAgent::AgentSpace
+    DependsOn:
+      - DevOpsAgentSpaceRole
+      - DevOpsOperatorRole
+    Properties:
+      Name: !Ref AgentSpaceName
+      Description: !Ref AgentSpaceDescription
+      OperatorApp:
+        Iam:
+          OperatorAppRoleArn: !GetAtt DevOpsOperatorRole.Arn
+
+  # Association linking the monitoring account to the agent space
+  PrimaryAccountAssociation:
+    Type: AWS::DevOpsAgent::Association
+    Properties:
+      AgentSpaceId: !GetAtt AgentSpace.AgentSpaceId
+      ServiceId: aws
+      Configuration:
+        Aws:
+          AssumableRoleArn: !GetAtt DevOpsAgentSpaceRole.Arn
+          AccountId: !Ref AWS::AccountId
+          AccountType: monitor
+
+Outputs:
+  agentspaceid:
+    Description: ID of the created Agent Space.
+    Value: !GetAtt AgentSpace.AgentSpaceId
+  agentspacearn:
+    Description: ARN of the created Agent Space.
+    Value: !GetAtt AgentSpace.Arn
+  agentspacename:
+    Description: Name of the created Agent Space.
+    Value: !Ref AgentSpaceName
+  operatorappurl:
+    Description: URL of the DevOps Agent operator webapp.
+    Value: !Sub 'https://${AgentSpace.AgentSpaceId}.aidevops.global.app.aws/home'
+  devopsagentspacerolearn:
+    Description: ARN of the IAM role assumed by the Agent Space.
+    Value: !GetAtt DevOpsAgentSpaceRole.Arn
+  devopsoperatorrolearn:
+    Description: ARN of the operator-app IAM role.
+    Value: !GetAtt DevOpsOperatorRole.Arn
+  primaryaccountid:
+    Description: Account ID of the primary (monitoring) account.
+    Value: !Ref AWS::AccountId
+  awsregion:
+    Description: AWS region the stack deployed into.
+    Value: !Ref AWS::Region

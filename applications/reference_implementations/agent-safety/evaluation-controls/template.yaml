@@ -1,0 +1,304 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Agent Safety — Evaluation Controls Infrastructure.
+  Creates: Evaluation Execution Role, Auto Eval Lambda, EventBridge rule.
+  When any AgentCore agent is created/deleted, evaluations and alarms are auto-managed
+  and signals are written to DynamoDB for the dashboard.
+
+Parameters:
+  EvalSignalsTableName:
+    Type: String
+    Default: evaluation-signals
+    Description: DynamoDB table for evaluation signals (must exist)
+
+  RegistryTableName:
+    Type: String
+    Default: agent-registry
+    Description: DynamoDB table for agent registry (must exist)
+
+  SamplingPercentage:
+    Type: Number
+    Default: 100.0
+    Description: Percentage of agent traces to evaluate (0.01-100)
+
+  SNSTopicArn:
+    Type: String
+    Default: ''
+    Description: SNS topic ARN for alarm notifications (optional)
+
+Resources:
+
+  # =========================================================================
+  # Evaluation Execution Role — Used by AgentCore to run evaluations
+  # This role is passed to CreateOnlineEvaluationConfig
+  # =========================================================================
+  EvalExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-EvalExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: TrustPolicyStatement
+            Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                aws:ResourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn:
+                  - !Sub 'arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:evaluator/*'
+                  - !Sub 'arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:online-evaluation-config/*'
+      Policies:
+        - PolicyName: EvalExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CloudWatchLogReadStatement
+                Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                  - logs:GetQueryResults
+                  - logs:StartQuery
+                Resource: '*'
+              - Sid: CloudWatchLogWriteStatement
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/evaluations/*'
+              - Sid: CloudWatchIndexPolicyStatement
+                Effect: Allow
+                Action:
+                  - logs:DescribeIndexPolicies
+                  - logs:PutIndexPolicy
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws/spans'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws/spans:*'
+              - Sid: BedrockModelAccess
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+
+  # =========================================================================
+  # Auto Eval Lambda — Creates/deletes evaluations on agent lifecycle
+  # =========================================================================
+  AutoEvalLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-AutoEvalRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AutoEvalPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AgentCoreEvaluation
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateOnlineEvaluationConfig
+                  - bedrock-agentcore:DeleteOnlineEvaluationConfig
+                  - bedrock-agentcore:ListOnlineEvaluationConfigs
+                  - bedrock-agentcore:GetOnlineEvaluationConfig
+                Resource: '*'
+              - Sid: CloudWatchAlarms
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                Resource: '*'
+              - Sid: DynamoDBWriteSignals
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EvalSignalsTableName}'
+              - Sid: PassEvalRole
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt EvalExecutionRole.Arn
+              - Sid: CloudWatchIndexPolicy
+                Effect: Allow
+                Action:
+                  - logs:DescribeIndexPolicies
+                  - logs:PutIndexPolicy
+                  - logs:CreateLogGroup
+                Resource: '*'
+              - Sid: STSGetAccount
+                Effect: Allow
+                Action:
+                  - sts:GetCallerIdentity
+                Resource: '*'
+
+  AutoEvalLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: AutoEvalLambdaRole
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-AutoEval'
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 256
+      Role: !GetAtt AutoEvalLambdaRole.Arn
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          EVAL_SIGNALS_TABLE: !Ref EvalSignalsTableName
+          EVAL_EXECUTION_ROLE_ARN: !GetAtt EvalExecutionRole.Arn
+          SNS_TOPIC_ARN: !Ref SNSTopicArn
+          SAMPLING_PCT: !Ref SamplingPercentage
+      Code:
+        ZipFile: |
+          import json, logging, os, boto3
+          from datetime import datetime, timezone
+          from botocore.config import Config
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          REGION = os.environ.get("REGION","us-east-1")
+          EVAL_SIGNALS_TABLE = os.environ.get("EVAL_SIGNALS_TABLE","evaluation-signals")
+          EVAL_EXECUTION_ROLE_ARN = os.environ.get("EVAL_EXECUTION_ROLE_ARN","")
+          SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN","")
+          SAMPLING_PCT = float(os.environ.get("SAMPLING_PCT","100.0"))
+          retry = Config(retries={"max_attempts":3,"mode":"adaptive"})
+          ac = boto3.client("bedrock-agentcore-control",region_name=REGION,config=retry)
+          cw = boto3.client("cloudwatch",region_name=REGION,config=retry)
+          ddb = boto3.resource("dynamodb",region_name=REGION)
+          EVALS = ["Builtin.Harmfulness","Builtin.Correctness","Builtin.Helpfulness","Builtin.GoalSuccessRate","Builtin.ToolSelectionAccuracy","Builtin.ToolParameterAccuracy","Builtin.Faithfulness"]
+          NS = "Bedrock-AgentCore/Evaluations"
+
+          def handler(event, context):
+              logger.info(f"Event: {json.dumps(event)}")
+              detail = event.get("detail",{})
+              en = detail.get("eventName","")
+              rp = detail.get("requestParameters",{})
+              re = detail.get("responseElements",{})
+              name = rp.get("agentRuntimeName","")
+              rid = rp.get("agentRuntimeId","") or re.get("agentRuntimeId","")
+              if not name and rid:
+                  p = rid.rsplit("-",1)
+                  name = p[0] if len(p)==2 else rid
+              if not name: return {"statusCode":200,"body":"no agent name"}
+
+              if en == "CreateAgentRuntime":
+                  if not EVAL_EXECUTION_ROLE_ARN:
+                      logger.error("EVAL_EXECUTION_ROLE_ARN not set")
+                      return {"statusCode":500,"body":"missing role"}
+                  cn = f"eval_{name}"[:48]
+                  lg = f"/aws/bedrock-agentcore/runtimes/{rid}-DEFAULT"
+                  sn = f"{name}.DEFAULT"
+                  # Create eval config
+                  eid = ""
+                  try:
+                      r = ac.create_online_evaluation_config(onlineEvaluationConfigName=cn,description=f"Auto eval for {name}",rule={"samplingConfig":{"samplingPercentage":SAMPLING_PCT},"sessionConfig":{"sessionTimeoutMinutes":15}},dataSourceConfig={"cloudWatchLogs":{"logGroupNames":[lg],"serviceNames":[sn]}},evaluators=[{"evaluatorId":e} for e in EVALS],evaluationExecutionRoleArn=EVAL_EXECUTION_ROLE_ARN,enableOnCreate=True)
+                      eid = r.get("onlineEvaluationConfigId","")
+                      logger.info(f"Eval config created: {eid}")
+                  except ClientError as e:
+                      if "ConflictException" in str(e): logger.info(f"Eval exists: {cn}")
+                      else: logger.error(f"Eval create failed: {e}")
+                  # Create alarm
+                  an = f"AgentSafety-Eval-{name}"
+                  try:
+                      mq = [{"Id":"h","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Harmfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Harmful"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"c1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Correctness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Incorrect"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"c2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Correctness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Partially Correct"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"g","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.GoalSuccessRate","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"No"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"u1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Helpfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not Helpful At All"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"u2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Helpfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Very Unhelpful"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"f1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Faithfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not At All"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"f2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Faithfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not Generally"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"total","Expression":"FILL(h,0)+FILL(c1,0)+FILL(c2,0)+FILL(g,0)+FILL(u1,0)+FILL(u2,0)+FILL(f1,0)+FILL(f2,0)","Label":"Total Bad","ReturnData":True}]
+                      ak = {"AlarmName":an,"AlarmDescription":f"Agent quality alarm for {name}. Fires on harmful content, incorrect answers, goal failures, unhelpful responses, or faithfulness violations.","Metrics":mq,"EvaluationPeriods":1,"Threshold":1,"ComparisonOperator":"GreaterThanOrEqualToThreshold","TreatMissingData":"notBreaching"}
+                      if SNS_TOPIC_ARN: ak["AlarmActions"]=[SNS_TOPIC_ARN]; ak["OKActions"]=[SNS_TOPIC_ARN]
+                      cw.put_metric_alarm(**ak)
+                      logger.info(f"Alarm created: {an}")
+                  except ClientError as e: logger.error(f"Alarm failed: {e}")
+                  # Write DynamoDB
+                  now = datetime.now(timezone.utc); exp = int(now.timestamp())+86400; t = ddb.Table(EVAL_SIGNALS_TABLE)
+                  try: t.put_item(Item={"agent_name":name,"signal_key":"alarm_summary","alarm_name":an,"alarm_state":"INSUFFICIENT_DATA","alarm_reason":"Waiting for evaluation data","alarm_updated_at":now.isoformat(),"eval_config_id":eid,"eval_config_name":cn,"evaluator_count":len(EVALS),"sampling_pct":str(SAMPLING_PCT),"severity":"medium","synced_at":now.isoformat(),"expires_at":exp})
+                  except ClientError as e: logger.warning(f"DDB write failed: {e}")
+                  for ev in EVALS:
+                      try: t.put_item(Item={"agent_name":name,"signal_key":ev,"evaluator_name":ev.replace("Builtin.",""),"bad_count":0,"good_count":0,"total_count":0,"bad_pct":"0.0","severity":"low","description":f"{ev.replace('Builtin.','')}: waiting for data","config_name":cn,"synced_at":now.isoformat(),"expires_at":exp})
+                      except: pass
+                  return {"statusCode":200,"body":json.dumps({"status":"created","eval_config_id":eid})}
+
+              elif en == "DeleteAgentRuntime":
+                  cn = f"eval_{name}"[:48]
+                  try:
+                      for pg in ac.get_paginator("list_online_evaluation_configs").paginate():
+                          for cfg in pg.get("onlineEvaluationConfigs",[]):
+                              if cfg.get("onlineEvaluationConfigName","")==cn:
+                                  ac.delete_online_evaluation_config(onlineEvaluationConfigId=cfg["onlineEvaluationConfigId"])
+                                  logger.info(f"Eval deleted: {cn}")
+                  except ClientError as e: logger.warning(f"Eval delete failed: {e}")
+                  try: cw.delete_alarms(AlarmNames=[f"AgentSafety-Eval-{name}"]); logger.info(f"Alarm deleted")
+                  except: pass
+                  t = ddb.Table(EVAL_SIGNALS_TABLE)
+                  try:
+                      for i in t.scan().get("Items",[]):
+                          if i.get("agent_name")==name: t.delete_item(Key={"agent_name":i["agent_name"],"signal_key":i["signal_key"]})
+                  except: pass
+                  return {"statusCode":200,"body":json.dumps({"status":"deleted"})}
+
+              return {"statusCode":200,"body":f"unhandled: {en}"}
+      Tags:
+        - Key: component
+          Value: agent-safety-evaluations
+
+  # =========================================================================
+  # EventBridge Rule — Triggers Auto Eval Lambda on agent lifecycle
+  # =========================================================================
+  AgentEvalLifecycleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-AgentEvalLifecycle'
+      Description: Triggers auto evaluation creation/deletion on AgentCore runtime events
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.bedrock-agentcore
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - bedrock-agentcore.amazonaws.com
+          eventName:
+            - CreateAgentRuntime
+            - DeleteAgentRuntime
+      Targets:
+        - Id: AutoEvalTarget
+          Arn: !GetAtt AutoEvalLambda.Arn
+
+  AutoEvalLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AutoEvalLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AgentEvalLifecycleRule.Arn
+
+Outputs:
+  EvalExecutionRoleArn:
+    Description: IAM role ARN used by AgentCore to run evaluations
+    Value: !GetAtt EvalExecutionRole.Arn
+
+  AutoEvalLambdaArn:
+    Description: Lambda that auto-creates evaluations when agents are deployed
+    Value: !GetAtt AutoEvalLambda.Arn
+
+  EventBridgeRuleArn:
+    Description: EventBridge rule that triggers on agent create/delete
+    Value: !GetAtt AgentEvalLifecycleRule.Arn

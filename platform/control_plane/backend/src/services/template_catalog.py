@@ -58,7 +58,7 @@ class TemplateCatalog:
                     template = self._load_template(template_dir)
                     if template:
                         self._templates[template.metadata.id] = template
-                        logger.info(f"Loaded template: {template.metadata.id}")
+                        logger.info(f"Loaded template: {template.metadata.id}{' (hidden)' if template.metadata.hidden else ''}")
                 except Exception as e:
                     logger.error(f"Failed to load template from {template_dir}: {e}")
 
@@ -107,7 +107,7 @@ class TemplateCatalog:
         Returns:
             List of matching templates
         """
-        templates = list(self._templates.values())
+        templates = [t for t in self._templates.values() if not t.metadata.hidden]
 
         # Filter by pattern type
         if pattern_type:
@@ -169,6 +169,8 @@ class TemplateCatalog:
         results = []
 
         for template in self._templates.values():
+            if template.metadata.hidden:
+                continue
             # Search in name, description, tags, use cases
             searchable = [
                 template.metadata.name.lower(),

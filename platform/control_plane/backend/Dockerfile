@@ -42,8 +42,11 @@ COPY platform/control_plane/backend/src/ ./src/
 # Copy templates directory
 COPY platform/control_plane/templates/ ./templates/
 
-# Copy FSI Foundry registry (copied to build context before docker build)
-COPY platform/control_plane/backend/data/ ./data/
+# Copy Agent-as-a-Service sources (Frontier Agents + registry)
+COPY platform/control_plane/aaas/ ./aaas/
+
+# Copy reference implementations
+COPY applications/reference_implementations/ ./reference_implementations/
 
 # Copy FSI Foundry foundations from the actual repo
 COPY applications/fsi_foundry/foundations/ ./fsi_foundry/foundations/
@@ -60,8 +63,12 @@ COPY applications/fsi_foundry/scripts/ ./fsi_foundry/scripts/
 # Copy Docker patterns for CodeBuild image builds (includes pipeline-adapted Dockerfile)
 COPY applications/fsi_foundry/foundations/docker/ ./fsi_foundry/docker/
 
-# Create symlink so scripts that reference $PROJECT_ROOT/applications/fsi_foundry/ work
-RUN mkdir -p /app/applications && ln -s /app/fsi_foundry /app/applications/fsi_foundry
+# Copy App Factory builder and UI template
+COPY applications/app_factory/ ./app_factory/
+
+# Create symlinks so scripts that reference $PROJECT_ROOT/applications/ work
+RUN mkdir -p /app/applications && ln -s /app/fsi_foundry /app/applications/fsi_foundry \
+    && ln -s /app/app_factory /app/applications/app_factory
 # Copy FSI Foundry per-use-case UI source (for packaging into deployment zips)
 COPY applications/fsi_foundry/ui/ ./fsi_foundry/ui/
 
@@ -70,6 +77,7 @@ ENV PYTHONPATH=/app/src
 
 # Set templates path environment variable
 ENV TEMPLATES_PATH=/app/templates
+ENV REFERENCE_IMPLEMENTATIONS_DIR=/app/reference_implementations
 
 # Expose port
 EXPOSE 8000

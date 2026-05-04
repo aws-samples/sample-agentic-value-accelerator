@@ -44,7 +44,15 @@ export async function invokeAgent(
     const data = (await statusRes.json()) as StatusResponse;
 
     if (data.status === 'COMPLETE' && data.result) {
-      return data.result;
+      let parsed = data.result;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed) as ClaimResponse; } catch { /* use as-is */ }
+      }
+      const raw = parsed as unknown as Record<string, unknown>;
+      if (!raw.claims_detail && typeof raw.summary === 'string' && raw.summary.startsWith('{')) {
+        try { parsed = JSON.parse(raw.summary as string) as ClaimResponse; } catch { /* fall through */ }
+      }
+      return parsed;
     }
 
     if (data.status === 'ERROR') {

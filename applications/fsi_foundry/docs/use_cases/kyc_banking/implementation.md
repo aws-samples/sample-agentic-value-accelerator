@@ -188,7 +188,7 @@ The KYC application deploys to AgentCore Runtime for scalable, serverless execut
 
 ### Deployment
 
-Deploy to AgentCore Runtime for production-ready, scalable deployments:
+Deploy to AgentCore Runtime for managed, scalable deployments:
 
 ```bash
 ./applications/fsi_foundry/scripts/deploy/full/deploy_agentcore.sh

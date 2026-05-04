@@ -275,7 +275,7 @@ export default function AgentConsole({ config }: Props) {
 
       {/* ── Results ── */}
       {status === 'complete' && result && (
-        <ResultsPanel result={result} />
+        <ResultsPanel response={result} config={config} />
       )}
     </div>
   );

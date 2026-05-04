@@ -1,6 +1,6 @@
 # FSI Foundry
 
-A collection of multi-agent POC implementations for financial services — 34 use cases across 6 domains, all built on one shared foundation of infrastructure and backend code.
+A collection of multi-agent POC implementations for financial services — 34 use cases across 7 domains, all built on one shared foundation of infrastructure and backend code.
 
 ---
 
@@ -20,8 +20,9 @@ graph TB
     end
 
     subgraph UseCases["Use Cases (34)"]
-        Banking["Banking (10)"]
-        Risk["Risk and Compliance (6)"]
+        Banking["Banking (8)"]
+        Payments["Payments (3)"]
+        Risk["Risk and Compliance (5)"]
         Capital["Capital Markets (9)"]
         Insurance["Insurance (3)"]
         Ops["Operations (3)"]
@@ -44,32 +45,40 @@ graph TB
 
 ## Use Cases
 
-34 use cases across 6 FSI domains. Each use case includes LangGraph/LangChain and Strands implementations with sample data.
+34 use cases across 7 FSI domains. Each use case includes LangGraph/LangChain and Strands implementations with sample data.
 
 <details>
-<summary>Banking (10)</summary>
+<summary>Banking (8)</summary>
 
 | Use Case | Agents |
 |----------|--------|
 | [KYC Risk Assessment](use_cases/kyc_banking/) | Credit Analyst, Compliance Officer |
-| [Agentic Payments](use_cases/agentic_payments/) | Payment Validator, Routing Agent, Reconciliation Agent |
 | [Customer Service](use_cases/customer_service/) | Inquiry Handler, Transaction Specialist, Product Advisor |
 | [Customer Chatbot](use_cases/customer_chatbot/) | Conversation Manager, Account Agent, Transaction Agent |
 | [Customer Support](use_cases/customer_support/) | Ticket Classifier, Resolution Agent, Escalation Agent |
 | [Document Search](use_cases/document_search/) | Document Indexer, Search Agent |
 | [AI Assistant](use_cases/ai_assistant/) | Task Router, Data Lookup Agent, Report Generator |
 | [Corporate Sales](use_cases/corporate_sales/) | Lead Scorer, Opportunity Analyst, Pitch Preparer |
-| [Payment Operations](use_cases/payment_operations/) | Exception Handler, Settlement Agent |
 | [Agentic Commerce](use_cases/agentic_commerce/) | Offer Engine, Fulfillment Agent, Product Matcher |
 
 </details>
 
 <details>
-<summary>Risk and Compliance (6)</summary>
+<summary>Payments (3)</summary>
 
 | Use Case | Agents |
 |----------|--------|
+| [Agentic Payments](use_cases/agentic_payments/) | Payment Validator, Routing Agent, Reconciliation Agent |
+| [Payment Operations](use_cases/payment_operations/) | Exception Handler, Settlement Agent |
 | [Fraud Detection](use_cases/fraud_detection/) | Transaction Monitor, Pattern Analyst, Alert Generator |
+
+</details>
+
+<details>
+<summary>Risk and Compliance (5)</summary>
+
+| Use Case | Agents |
+|----------|--------|
 | [Document Processing](use_cases/document_processing/) | Document Classifier, Data Extractor, Validation Agent |
 | [Credit Risk Assessment](use_cases/credit_risk/) | Financial Analyst, Risk Scorer, Portfolio Analyst |
 | [Compliance Investigation](use_cases/compliance_investigation/) | Evidence Gatherer, Pattern Matcher, Regulatory Mapper |

@@ -15,6 +15,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import boto3
+from botocore.config import Config
 
 from datetime import datetime
 from models.deployment import DeploymentCreate, DeploymentResponse, DeploymentStatus, StatusHistoryEntry
@@ -23,6 +24,7 @@ from services.s3_delivery_service import S3DeliveryService
 from services.template_catalog import TemplateCatalog
 from services.pipeline_service import PipelineService
 from services.template_job_service import has_pipeline_jobs
+from services.langfuse_provisioning import LangfuseProvisioningService
 from core.config import settings
 from fastapi import Depends as RBACDepends
 from core.rbac import Role, require_role
@@ -106,6 +108,28 @@ async def create_deployment(req: DeploymentCreate, _=RBACDepends(require_role(Ro
             req.parameters.update(dep_outputs)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+        # Provision per-use-case Langfuse project if foundation stack provides it
+        langfuse_host = dep_outputs.get("langfuse_host")
+        langfuse_secret = dep_outputs.get("langfuse_secret_name")
+        if langfuse_host and langfuse_secret:
+            use_case_name = req.template_id.replace("foundry-", "") if req.template_id.startswith("foundry-") else req.deployment_name
+            try:
+                provisioner = LangfuseProvisioningService(
+                    langfuse_host=langfuse_host,
+                    langfuse_secret_name=langfuse_secret,
+                    region=req.aws_region or settings.AWS_REGION,
+                )
+                project_info = provisioner.provision_project(use_case_name)
+                req.parameters["ENABLE_TRACING"] = "true"
+                req.parameters["LANGFUSE_HOST"] = langfuse_host
+                req.parameters["LANGFUSE_SECRET_NAME"] = project_info["secret_name"]
+                logger.info(f"Provisioned Langfuse project for {use_case_name}: {project_info['project_name']}")
+            except Exception as e:
+                logger.warning(f"Langfuse project provisioning failed: {e}. Using shared project.")
+                req.parameters["ENABLE_TRACING"] = "true"
+                req.parameters["LANGFUSE_HOST"] = langfuse_host
+                req.parameters["LANGFUSE_SECRET_NAME"] = langfuse_secret
 
     svc = get_deploy_svc()
     deployment = svc.create_deployment(req)
@@ -396,7 +420,12 @@ def _run_agentcore_test(test_id: str, runtime_arn: str, region: str, payload: di
     """Background worker that invokes AgentCore and stores the result."""
     start_time = time.time()
     try:
-        agentcore_client = boto3.client("bedrock-agentcore", region_name=region)
+        # Configure extended timeout for long-running orchestrator operations (e.g., legacy_migration with "full" scope)
+        agentcore_config = Config(
+            read_timeout=600,  # 10 minutes - allows multi-agent parallel orchestrators to complete
+            connect_timeout=10
+        )
+        agentcore_client = boto3.client("bedrock-agentcore", region_name=region, config=agentcore_config)
         payload_bytes = json.dumps(payload).encode("utf-8")
 
         response = agentcore_client.invoke_agent_runtime(
@@ -661,3 +690,46 @@ async def get_deployment(deployment_id: str, _=RBACDepends(require_role(Role.VIE
     if not deployment:
         raise HTTPException(status_code=404, detail="Deployment not found")
     return DeploymentResponse(**deployment.dict())
+
+
+@router.get("/{deployment_id}/source-zip")
+async def get_deployment_source_zip(
+    deployment_id: str,
+    _=RBACDepends(require_role(Role.VIEWER)),
+):
+    """Return a presigned URL to download the generated source zip.
+
+    Only available for app-factory deployments that completed successfully.
+    """
+    svc = get_deploy_svc()
+    deployment = svc.get_deployment(deployment_id)
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+
+    if not (deployment.template_id or "").startswith("app-factory-"):
+        raise HTTPException(
+            status_code=404,
+            detail="Source download is only available for App Factory deployments",
+        )
+
+    outputs = deployment.outputs or {}
+    bucket = outputs.get("source_zip_bucket") or deployment.s3_bucket
+    key = outputs.get("source_zip_key")
+    if not key:
+        raise HTTPException(
+            status_code=404,
+            detail="Generated source zip not found for this deployment",
+        )
+
+    try:
+        s3 = boto3.client("s3", region_name=settings.AWS_REGION)
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=900,
+        )
+    except Exception as e:
+        logger.error(f"Failed to presign source zip for {deployment_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate download URL")
+
+    return {"download_url": url, "s3_bucket": bucket, "s3_key": key}

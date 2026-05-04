@@ -156,7 +156,7 @@ async def global_exception_handler(request: Request, exc):
 
 
 # Import and include routers
-from api.routes import projects_router, langfuse_router, health_router, templates_router, bootstrap_router, deployments_router, applications_router, app_factory_router, users_router
+from api.routes import projects_router, langfuse_router, health_router, templates_router, bootstrap_router, deployments_router, applications_router, app_factory_router, users_router, codecommit_router, frontier_agents_router
 
 # Include routers
 app.include_router(projects_router, prefix=settings.API_PREFIX)
@@ -168,6 +168,8 @@ app.include_router(deployments_router, prefix=settings.API_PREFIX)
 app.include_router(applications_router, prefix=settings.API_PREFIX)
 app.include_router(app_factory_router, prefix=settings.API_PREFIX)
 app.include_router(users_router, prefix=settings.API_PREFIX)
+app.include_router(codecommit_router, prefix=settings.API_PREFIX)
+app.include_router(frontier_agents_router, prefix=settings.API_PREFIX)
 
 # Include routers with stage prefix for API Gateway (e.g., /dev, /prod)
 if settings.ROOT_PATH:
@@ -180,6 +182,8 @@ if settings.ROOT_PATH:
     app.include_router(applications_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
     app.include_router(app_factory_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
     app.include_router(users_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(codecommit_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(frontier_agents_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
 
 
 if __name__ == "__main__":

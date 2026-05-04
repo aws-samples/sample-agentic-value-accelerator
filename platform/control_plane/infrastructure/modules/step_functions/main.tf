@@ -279,7 +279,7 @@ resource "aws_sfn_state_machine" "deployment" {
       }
 
       RecordFailureValidateInput = {
-        Type       = "Pass"
+        Type = "Pass"
         Parameters = {
           "failed_stage" = "ValidateInput"
           "error"        = { "Cause" = "Template validation failed" }
@@ -319,7 +319,7 @@ resource "aws_sfn_state_machine" "deployment" {
       }
 
       RecordFailurePackageTemplate = {
-        Type       = "Pass"
+        Type = "Pass"
         Parameters = {
           "failed_stage" = "PackageTemplate"
           "error"        = { "Cause" = "Template packaging failed" }
@@ -348,7 +348,7 @@ resource "aws_sfn_state_machine" "deployment" {
           }
         }
         ResultPath = null
-        Next       = "InvokeCodeBuild"
+        Next       = "NormalizeBuildInput"
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
@@ -356,6 +356,19 @@ resource "aws_sfn_state_machine" "deployment" {
             Next        = "RecordFailureStartBuild"
           }
         ]
+      }
+
+      # Normalize input: ensure codecommit_repo/branch and s3_bucket/key keys
+      # always exist (empty if not provided) so InvokeCodeBuild JSONPath
+      # lookups don't fail for S3-only or CodeCommit-only deployments.
+      # JsonMerge with false: input values (right side) override defaults (left side).
+      NormalizeBuildInput = {
+        Type = "Pass"
+        Parameters = {
+          "result.$" = "States.JsonMerge(States.StringToJson('{\"s3_bucket\":\"\",\"s3_key\":\"\",\"codecommit_repo\":\"\",\"codecommit_branch\":\"\"}'), $, false)"
+        }
+        OutputPath = "$.result"
+        Next       = "InvokeCodeBuild"
       }
 
       InvokeCodeBuild = {
@@ -372,10 +385,17 @@ resource "aws_sfn_state_machine" "deployment" {
             { Name = "STATE_BUCKET", Value = var.state_backend_bucket_name, Type = "PLAINTEXT" },
             { Name = "ARCHIVE_BUCKET", "Value.$" = "$.s3_bucket", Type = "PLAINTEXT" },
             { Name = "ARCHIVE_KEY", "Value.$" = "$.s3_key", Type = "PLAINTEXT" },
+            { Name = "CODECOMMIT_REPO", "Value.$" = "$.codecommit_repo", Type = "PLAINTEXT" },
+            { Name = "CODECOMMIT_BRANCH", "Value.$" = "$.codecommit_branch", Type = "PLAINTEXT" },
             { Name = "DEPLOYMENTS_TABLE", Value = var.deployments_table_name, Type = "PLAINTEXT" },
             { Name = "USE_CASE_ID", "Value.$" = "$.parameters.USE_CASE_ID", Type = "PLAINTEXT" },
             { Name = "FRAMEWORK", "Value.$" = "$.parameters.FRAMEWORK", Type = "PLAINTEXT" },
             { Name = "DEPLOYMENT_PATTERN", "Value.$" = "$.parameters.DEPLOYMENT_PATTERN", Type = "PLAINTEXT" },
+            { Name = "ENABLE_TRACING", "Value.$" = "$.parameters.ENABLE_TRACING", Type = "PLAINTEXT" },
+            { Name = "LANGFUSE_HOST", "Value.$" = "$.parameters.LANGFUSE_HOST", Type = "PLAINTEXT" },
+            { Name = "LANGFUSE_SECRET_NAME", "Value.$" = "$.parameters.LANGFUSE_SECRET_NAME", Type = "PLAINTEXT" },
+            { Name = "SUBMISSION_ID", "Value.$" = "$.parameters.SUBMISSION_ID", Type = "PLAINTEXT" },
+            { Name = "APP_FACTORY_TABLE_NAME", "Value.$" = "$.parameters.APP_FACTORY_TABLE_NAME", Type = "PLAINTEXT" },
             { Name = "ACTION", "Value.$" = "$.action", Type = "PLAINTEXT" }
           ]
         }
@@ -400,7 +420,7 @@ resource "aws_sfn_state_machine" "deployment" {
             pk = { "S.$" = "States.Format('DEPLOY#{}', $.deployment_id)" }
             sk = { S = "META" }
           }
-          UpdateExpression         = "SET build_id = :bid, updated_at = :ts"
+          UpdateExpression = "SET build_id = :bid, updated_at = :ts"
           ExpressionAttributeValues = {
             ":bid" = { "S.$" = "$.buildResult.Build.Id" }
             ":ts"  = { "S.$" = "$$.State.EnteredTime" }
@@ -418,7 +438,7 @@ resource "aws_sfn_state_machine" "deployment" {
       }
 
       RecordFailureStartBuild = {
-        Type       = "Pass"
+        Type = "Pass"
         Parameters = {
           "failed_stage" = "StartBuild"
           "error"        = { "Cause" = "CodeBuild start failed" }
@@ -492,7 +512,7 @@ resource "aws_sfn_state_machine" "deployment" {
       }
 
       RecordFailureMonitorBuild = {
-        Type       = "Pass"
+        Type = "Pass"
         Parameters = {
           "failed_stage" = "MonitorBuild"
           "error"        = { "Cause" = "CodeBuild execution failed" }
@@ -558,7 +578,7 @@ resource "aws_sfn_state_machine" "deployment" {
       }
 
       RecordFailureCaptureOutputs = {
-        Type       = "Pass"
+        Type = "Pass"
         Parameters = {
           "failed_stage" = "CaptureOutputs"
           "error"        = { "Cause" = "Failed to capture deployment outputs" }
@@ -569,7 +589,7 @@ resource "aws_sfn_state_machine" "deployment" {
 
       # Stage 6: RecordSuccess — branch on action type
       RecordSuccess = {
-        Type    = "Choice"
+        Type = "Choice"
         Choices = [
           {
             Variable     = "$.action"

@@ -74,6 +74,7 @@ resource "aws_elasticache_subnet_group" "redis_subnet_group" {
 
 # The ElastiCache Replication Group (the Valkey cluster)
 resource "aws_elasticache_replication_group" "redis" {
+  depends_on                    = [null_resource.service_linked_roles]
   replication_group_id          = "${var.name}-langfuse-cache"
   description                   = "Langfuse Cache/Queue Replication Group"
   node_type                     = var.cache_node_type

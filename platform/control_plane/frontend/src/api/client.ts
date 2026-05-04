@@ -193,6 +193,11 @@ export const deploymentsApi = {
     return response.data;
   },
 
+  getSourceZipUrl: async (id: string): Promise<{ download_url: string; s3_bucket: string; s3_key: string }> => {
+    const response = await client.get<{ download_url: string; s3_bucket: string; s3_key: string }>(`/api/v1/deployments/${id}/source-zip`);
+    return response.data;
+  },
+
   testDeployment: async (deploymentId: string, payload: Record<string, any>): Promise<TestStartResponse> => {
     const response = await client.post<TestStartResponse>(`/api/v1/deployments/${deploymentId}/test`, { payload });
     return response.data;
@@ -245,6 +250,16 @@ export const appFactoryApi = {
     return response.data;
   },
 
+  deploy: async (submissionId: string): Promise<Deployment> => {
+    const response = await client.post<Deployment>(`/api/v1/app-factory/submissions/${submissionId}/deploy`);
+    return response.data;
+  },
+
+  get: async (submissionId: string): Promise<Record<string, any>> => {
+    const response = await client.get<Record<string, any>>(`/api/v1/app-factory/submissions/${submissionId}`);
+    return response.data;
+  },
+
   list: async (): Promise<Record<string, any>[]> => {
     const response = await client.get<Record<string, any>[]>('/api/v1/app-factory/submissions');
     return response.data;
@@ -267,6 +282,81 @@ export const applicationsApi = {
     parameters?: Record<string, any>;
   }): Promise<Deployment> => {
     const response = await client.post<Deployment>('/api/v1/applications/foundry/deploy', data);
+    return response.data;
+  },
+
+  deployFoundryFromGit: async (data: {
+    deployment_name: string;
+    codecommit_repo: string;
+    codecommit_branch: string;
+    use_case_name: string;
+    framework: string;
+    deployment_pattern: string;
+    aws_region: string;
+    parameters?: Record<string, any>;
+  }): Promise<Deployment> => {
+    const response = await client.post<Deployment>('/api/v1/applications/foundry/deploy-from-git', data);
+    return response.data;
+  },
+};
+
+// Frontier Agents API (Agent-as-a-Service)
+export interface FrontierAgentParameter {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  default: string;
+  description: string;
+}
+
+export interface FrontierAgentCatalogEntry {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  supported_iac_types: string[];
+  coming_soon_iac_types: string[];
+  parameters: FrontierAgentParameter[];
+  advanced_parameters: FrontierAgentParameter[];
+}
+
+export const frontierAgentsApi = {
+  listCatalog: async (): Promise<FrontierAgentCatalogEntry[]> => {
+    const response = await client.get<FrontierAgentCatalogEntry[]>('/api/v1/frontier-agents/catalog');
+    return response.data;
+  },
+
+  getAgent: async (agentId: string): Promise<FrontierAgentCatalogEntry> => {
+    const response = await client.get<FrontierAgentCatalogEntry>(`/api/v1/frontier-agents/catalog/${agentId}`);
+    return response.data;
+  },
+
+  deploy: async (data: {
+    deployment_name: string;
+    agent_id: string;
+    iac_type: string;
+    aws_region: string;
+    parameters?: Record<string, any>;
+  }): Promise<Deployment> => {
+    const response = await client.post<Deployment>('/api/v1/frontier-agents/deploy', data);
+    return response.data;
+  },
+};
+
+// CodeCommit API
+export interface CodeCommitRepo {
+  repository_name: string;
+  template_id: string;
+  source: string;
+  clone_url_http: string;
+  default_branch: string;
+  description: string;
+}
+
+export const codecommitApi = {
+  listRepositories: async (): Promise<CodeCommitRepo[]> => {
+    const response = await client.get<CodeCommitRepo[]>('/api/v1/codecommit/repositories');
     return response.data;
   },
 };

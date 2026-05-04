@@ -1,10 +1,30 @@
 """Deployment data models"""
 
-from pydantic import BaseModel, Field
+import json
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
 from datetime import datetime
 import uuid
+
+
+def _coerce_str_dict(v: Any) -> Dict[str, str]:
+    """Tolerate DDB records whose `outputs` field was persisted as a JSON string
+    by older pipeline versions. Coerce to Dict[str, str] or fall back to empty.
+    """
+    if v is None:
+        return {}
+    if isinstance(v, dict):
+        return {k: str(val) for k, val in v.items()}
+    if isinstance(v, str):
+        try:
+            parsed = json.loads(v)
+            if isinstance(parsed, dict):
+                return {k: str(val) for k, val in parsed.items()}
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return {}
+    return {}
 
 
 class DeploymentStatus(str, Enum):
@@ -82,6 +102,11 @@ class Deployment(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+    @field_validator("outputs", mode="before")
+    @classmethod
+    def _coerce_outputs(cls, v: Any) -> Dict[str, str]:
+        return _coerce_str_dict(v)
+
     def transition_to(self, new_status: DeploymentStatus, message: Optional[str] = None):
         current = DeploymentStatus(self.status)
         if new_status not in VALID_TRANSITIONS.get(current, set()):
@@ -115,3 +140,8 @@ class DeploymentResponse(BaseModel):
     created_by: str
     created_at: str
     updated_at: str
+
+    @field_validator("outputs", mode="before")
+    @classmethod
+    def _coerce_outputs(cls, v: Any) -> Dict[str, str]:
+        return _coerce_str_dict(v)

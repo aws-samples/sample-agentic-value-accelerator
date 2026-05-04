@@ -1,23 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { deploymentsApi } from '../api/client';
 import type { Deployment } from '../types';
 
-type TabId = 'agent-safety' | 'langfuse';
+type TabId = 'langfuse';
 
 export default function Observability() {
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<TabId>(
-    tabParam === 'langfuse' ? 'langfuse' : 'agent-safety'
-  );
+  const [activeTab, setActiveTab] = useState<TabId>('langfuse');
   const [foundationDeployment, setFoundationDeployment] = useState<Deployment | null>(null);
   const [loadingFoundation, setLoadingFoundation] = useState(true);
   const [iframeError, setIframeError] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (tabParam === 'langfuse') setActiveTab('langfuse');
-    else if (tabParam === 'agent-safety') setActiveTab('agent-safety');
   }, [tabParam]);
 
   useEffect(() => {
@@ -38,7 +36,6 @@ export default function Observability() {
   }, []);
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: 'agent-safety', label: 'Agent Safety' },
     { id: 'langfuse', label: 'Langfuse' },
   ];
 
@@ -72,81 +69,6 @@ export default function Observability() {
             </button>
           ))}
         </div>
-
-        {/* Agent Safety Tab */}
-        {activeTab === 'agent-safety' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="card">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900 mb-2">Agent Safety</h2>
-                  <p className="text-sm text-slate-500 leading-relaxed mb-4">
-                    Monitor and enforce safety guardrails for your deployed AI agents. Agent Safety provides real-time detection of harmful outputs, policy violations, and anomalous agent behavior.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="card">
-                <h3 className="text-base font-semibold text-slate-900 mb-3">Guardrail Monitoring</h3>
-                <p className="text-sm text-slate-500 mb-4">Track guardrail triggers, blocked responses, and policy enforcement across all deployed agents.</p>
-                <ul className="space-y-2 text-sm text-slate-600">
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-                    Content filtering and toxicity detection
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-                    PII detection and redaction
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-                    Topic restrictions and denied topics
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
-                    Custom word filters and regex patterns
-                  </li>
-                </ul>
-              </div>
-
-              <div className="card">
-                <h3 className="text-base font-semibold text-slate-900 mb-3">Anomaly Detection</h3>
-                <p className="text-sm text-slate-500 mb-4">Identify unusual patterns in agent behavior, response quality, and operational metrics.</p>
-                <ul className="space-y-2 text-sm text-slate-600">
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
-                    Response latency spikes and timeouts
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
-                    Error rate monitoring and alerting
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
-                    Cost and token usage tracking
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
-                    Agent hallucination detection
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="card bg-slate-50/50 border-slate-200/60">
-              <p className="text-sm text-slate-500">
-                Agent Safety integration is coming soon. It will connect with Amazon Bedrock Guardrails to provide centralized safety monitoring across all deployed FSI Foundry use cases.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Langfuse Tab */}
         {activeTab === 'langfuse' && (
@@ -263,17 +185,17 @@ export default function Observability() {
                   <div>
                     <h3 className="text-base font-semibold text-slate-900 mb-1">No Langfuse Server Detected</h3>
                     <p className="text-sm text-slate-500">
-                      Deploy the <strong>Foundation Stack</strong> template to automatically provision a Langfuse instance. Once deployed, your Langfuse dashboard will appear here.
+                      Deploy Langfuse to get tracing, evaluation, and analytics for all your AI agents. Once deployed, the dashboard will appear here.
                     </p>
-                    <Link
-                      to="/deployments"
-                      className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-violet-600 hover:text-violet-700 transition-colors"
+                    <button
+                      onClick={() => navigate('/deployments/create', { state: { templateId: 'foundation-stack' } })}
+                      className="inline-flex items-center gap-2 mt-3 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors"
                     >
-                      Go to Deployments
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      Deploy Langfuse
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.841m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
                       </svg>
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </div>
