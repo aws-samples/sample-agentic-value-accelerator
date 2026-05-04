@@ -140,3 +140,9 @@ variable "state_machine_arn" {
   type        = string
   default     = ""
 }
+
+variable "frontier_agents_state_machine_arn" {
+  description = "Step Functions state machine ARN for the Frontier Agents (AaaS) pipeline."
+  type        = string
+  default     = ""
+}

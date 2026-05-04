@@ -35,6 +35,15 @@ project_archive_retention_days = 7
 cognito_user_pool_name = "control-plane-users"
 cognito_enable_mfa     = false
 
+# CodeCommit Configuration (Optional - for Git-based CI/CD)
+enable_codecommit                  = false # Set to true to enable CodeCommit repository
+codecommit_repository_name         = ""    # Leave empty for auto-generated name
+codecommit_repository_description  = "AVA Control Plane CI/CD Source Repository"
+codecommit_enable_push_trigger     = true  # Trigger deployments on git push
+codecommit_enable_pr_trigger       = true  # Trigger deployments on PR merge
+codecommit_trigger_branches        = ["main", "develop"]
+codecommit_enable_notifications    = false # Enable SNS notifications for CodeCommit events
+
 # Tags
 tags = {
   Project   = "ava"

@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Optional
 
 from models.deployment import Deployment
 from models.template import Template
+from services.pipeline_inputs import PipelineInput
 
 logger = logging.getLogger(__name__)
 
@@ -169,12 +170,21 @@ class PipelineService:
         return None
 
     def _build_execution_input(self, deployment: Deployment, job: dict, action: str = "deploy") -> dict:
-        """Build the Step Functions execution input from deployment and job."""
-        # Ensure required Step Functions parameters exist with defaults
-        params = dict(deployment.parameters)
-        params.setdefault("USE_CASE_ID", deployment.template_id)
-        params.setdefault("FRAMEWORK", deployment.framework_id or "default")
-        params.setdefault("DEPLOYMENT_PATTERN", deployment.iac_type or "default")
+        """Build the Step Functions execution input from deployment and job.
+
+        Uses PipelineInput to guarantee every SFN-mapped parameter key is
+        present — callers cannot accidentally omit a key that the state
+        machine's EnvironmentVariablesOverride references.
+        """
+        # deployment.parameters may lack USE_CASE_ID (generic template path);
+        # fall back to template_id/framework_id/iac_type the same way the
+        # legacy setdefault logic did, so behavior is preserved.
+        params = PipelineInput.from_dict(
+            deployment.parameters,
+            use_case_id=(deployment.parameters or {}).get("USE_CASE_ID") or deployment.template_id,
+            framework=(deployment.parameters or {}).get("FRAMEWORK") or deployment.framework_id or "default",
+            deployment_pattern=(deployment.parameters or {}).get("DEPLOYMENT_PATTERN") or deployment.iac_type or "default",
+        ).to_sfn_parameters()
 
         return {
             "deployment_id": deployment.deployment_id,

@@ -137,8 +137,9 @@ module "ecs" {
   deployments_table_name = module.dynamodb.deployments_table_name
   deployments_table_arn  = module.dynamodb.deployments_table_arn
   deployments_bucket_arn = module.s3.deployments_bucket_arn
-  state_machine_arn      = module.step_functions.state_machine_arn
-  app_factory_table_name = module.dynamodb.app_factory_table_name
+  state_machine_arn                 = module.step_functions.state_machine_arn
+  frontier_agents_state_machine_arn = module.frontier_agents_pipeline.state_machine_arn
+  app_factory_table_name            = module.dynamodb.app_factory_table_name
   app_factory_table_arn  = module.dynamodb.app_factory_table_arn
   cors_origins           = concat(["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"], ["https://${module.cloudfront.distribution_domain_name}"], var.domain_name != "" ? ["https://${var.domain_name}"] : [])
 
@@ -235,6 +236,47 @@ module "codebuild" {
   deployment_metadata_table_arn = module.dynamodb.deployment_metadata_table_arn
   deployments_table_arn         = module.dynamodb.deployments_table_arn
   lock_table_arn                = module.state_backend.lock_table_arn
+
+  # Agent registry (publish targets for generated agents)
+  agent_registry_arn = module.agent_registry.registry_arn
+
+  tags = var.tags
+}
+
+# ============================================================================
+# Agent Registry Module (AWS Agent Registry — preview)
+# Shared catalog for every app-factory-generated agent.
+# ============================================================================
+
+module "agent_registry" {
+  source = "./modules/agent_registry"
+
+  name_prefix = local.name_prefix
+  tags        = var.tags
+}
+
+# ============================================================================
+# Frontier Agents Pipeline (AaaS)
+# ============================================================================
+# Dedicated state machine + CodeBuild project for deploying managed Frontier
+# Agents (AWS DevOps Agent today, more later). Separate from the shared
+# `step_functions` + `codebuild` pipeline because Frontier Agents don't need
+# Docker builds, Langfuse wiring, or Foundry-specific env vars — keeping them
+# on a slim pipeline avoids coupling the two schemas.
+
+module "frontier_agents_pipeline" {
+  source = "./modules/frontier_agents_pipeline"
+
+  name_prefix  = local.name_prefix
+  environment  = var.environment
+  compute_type = var.codebuild_compute_type
+
+  project_archives_bucket_arn = module.s3.project_archives_bucket_arn
+  state_backend_bucket_arn    = module.state_backend.bucket_arn
+  state_backend_bucket_name   = module.state_backend.bucket_name
+  deployments_table_arn       = module.dynamodb.deployments_table_arn
+  deployments_table_name      = module.dynamodb.deployments_table_name
+  lock_table_arn              = module.state_backend.lock_table_arn
 
   tags = var.tags
 }
@@ -338,6 +380,34 @@ module "observability" {
   # Step Functions monitoring
   state_machine_arn  = module.step_functions.state_machine_arn
   state_machine_name = module.step_functions.state_machine_name
+
+  tags = var.tags
+}
+
+# ============================================================================
+# CodeCommit Module (Optional - CI/CD Source Repository)
+# ============================================================================
+
+module "codecommit" {
+  source = "./modules/codecommit"
+  count  = var.enable_codecommit ? 1 : 0
+
+  name_prefix            = local.name_prefix
+  repository_name        = var.codecommit_repository_name != "" ? var.codecommit_repository_name : "${local.name_prefix}-source"
+  repository_description = var.codecommit_repository_description
+
+  # EventBridge integration
+  event_bus_name       = module.eventbridge.event_bus_name
+  step_functions_arn   = module.step_functions.state_machine_arn
+  eventbridge_role_arn = module.eventbridge.eventbridge_role_arn
+
+  # Trigger configuration
+  enable_push_trigger = var.codecommit_enable_push_trigger
+  enable_pr_trigger   = var.codecommit_enable_pr_trigger
+  trigger_branches    = var.codecommit_trigger_branches
+
+  # Notifications
+  enable_notifications = var.codecommit_enable_notifications
 
   tags = var.tags
 }

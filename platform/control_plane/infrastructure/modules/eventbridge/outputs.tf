@@ -12,3 +12,8 @@ output "dlq_arn" {
   description = "SQS dead-letter queue ARN for failed event deliveries"
   value       = aws_sqs_queue.dlq.arn
 }
+
+output "eventbridge_role_arn" {
+  description = "IAM role ARN for EventBridge to invoke Step Functions"
+  value       = aws_iam_role.eventbridge.arn
+}

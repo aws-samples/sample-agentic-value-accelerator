@@ -1,0 +1,232 @@
+version: 0.2
+
+# Frontier Agents CodeBuild pipeline — supports Terraform, CDK, and CloudFormation.
+#
+# Inputs (set via EnvironmentVariablesOverride from Step Functions):
+#   DEPLOYMENT_ID        — unique id for this deploy; used as the state key
+#   DEPLOYMENT_NAME      — human-readable name
+#   AGENT_ID             — frontier agent id (e.g. aws-devops)
+#   IAC_TYPE             — terraform | cdk | cloudformation
+#   AWS_TARGET_REGION    — region to deploy into
+#   ARCHIVE_BUCKET       — S3 bucket containing the zipped IaC
+#   ARCHIVE_KEY          — S3 key for the zip
+#   STATE_BUCKET         — Terraform state backend bucket (also used for CDK/CFN state tracking)
+#   LOCK_TABLE           — DynamoDB lock table
+#   DEPLOYMENTS_TABLE    — DynamoDB deployments table (status updates)
+#   ACTION               — deploy | destroy
+#   PARAMETERS_JSON      — JSON string of extra parameters (agent_space_name etc.)
+
+phases:
+  install:
+    commands:
+      - yum install -y unzip jq 2>/dev/null || true
+      - |
+        # Install tools based on IAC_TYPE
+        case "$IAC_TYPE" in
+          terraform)
+            if ! command -v terraform &>/dev/null; then
+              curl -fsSL https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_arm64.zip -o /tmp/tf.zip
+              unzip -o /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip
+            fi
+            terraform --version
+            ;;
+          cdk)
+            # Node.js is pre-installed in the AL2 CodeBuild image
+            node --version
+            npm install -g aws-cdk
+            cdk --version
+            ;;
+          cloudformation)
+            # AWS CLI is pre-installed
+            aws --version
+            ;;
+          *)
+            echo "ERROR: Unsupported IAC_TYPE '$IAC_TYPE'. Supported: terraform, cdk, cloudformation."
+            exit 2
+            ;;
+        esac
+
+  pre_build:
+    commands:
+      - echo "=== Frontier Agents deploy ==="
+      - echo "deployment_id=$DEPLOYMENT_ID agent_id=$AGENT_ID iac_type=$IAC_TYPE region=$AWS_TARGET_REGION action=$ACTION"
+      - mkdir -p /tmp/workspace
+      - echo "Downloading archive from s3://$ARCHIVE_BUCKET/$ARCHIVE_KEY"
+      - aws s3 cp "s3://$ARCHIVE_BUCKET/$ARCHIVE_KEY" /tmp/archive.zip
+      - unzip -q /tmp/archive.zip -d /tmp/workspace
+      - ls -la /tmp/workspace
+
+  build:
+    commands:
+      - cd /tmp/workspace
+      - |
+        case "$IAC_TYPE" in
+
+        # =====================================================================
+        # TERRAFORM
+        # =====================================================================
+        terraform)
+          # Write parameters as tfvars
+          if [ -n "$PARAMETERS_JSON" ]; then
+            echo "$PARAMETERS_JSON" > /tmp/workspace/terraform.auto.tfvars.json
+            echo "--- terraform.auto.tfvars.json ---"
+            cat /tmp/workspace/terraform.auto.tfvars.json
+          fi
+          jq -n --arg r "$AWS_TARGET_REGION" '{aws_region: $r}' > /tmp/workspace/region.auto.tfvars.json
+
+          echo "=== terraform init ==="
+          terraform init -input=false \
+            -backend-config="bucket=$STATE_BUCKET" \
+            -backend-config="key=frontier-agents/$AGENT_ID/$DEPLOYMENT_ID/terraform.tfstate" \
+            -backend-config="region=$AWS_TARGET_REGION" \
+            -backend-config="dynamodb_table=$LOCK_TABLE" \
+            -backend-config="encrypt=true"
+
+          if [ "$ACTION" = "destroy" ]; then
+            echo "=== terraform destroy ==="
+            terraform destroy -auto-approve -input=false
+          else
+            echo "=== terraform apply ==="
+            terraform apply -auto-approve -input=false
+          fi
+          ;;
+
+        # =====================================================================
+        # CDK
+        # =====================================================================
+        cdk)
+          echo "=== npm install ==="
+          npm ci --prefer-offline 2>/dev/null || npm install
+
+          # Parse parameters from PARAMETERS_JSON into CDK context flags
+          CDK_CONTEXT=""
+          if [ -n "$PARAMETERS_JSON" ]; then
+            AGENT_SPACE_NAME=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_name // empty')
+            AGENT_SPACE_DESC=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_description // empty')
+            NAME_POSTFIX=$(echo "$PARAMETERS_JSON" | jq -r '.name_postfix // empty')
+            [ -n "$AGENT_SPACE_NAME" ] && CDK_CONTEXT="$CDK_CONTEXT -c agentSpaceName=\"$AGENT_SPACE_NAME\""
+            [ -n "$AGENT_SPACE_DESC" ] && CDK_CONTEXT="$CDK_CONTEXT -c agentSpaceDescription=\"$AGENT_SPACE_DESC\""
+            [ -n "$NAME_POSTFIX" ] && CDK_CONTEXT="$CDK_CONTEXT -c namePostfix=\"$NAME_POSTFIX\""
+          fi
+          CDK_CONTEXT="$CDK_CONTEXT -c awsRegion=$AWS_TARGET_REGION"
+
+          # CDK stack ID in app.ts is "DevOpsAgentStack" — that's what cdk deploy matches on.
+          # We don't rename it per-deployment since CDK identifies stacks by construct ID.
+          STACK_NAME="DevOpsAgentStack"
+
+          echo "=== cdk bootstrap ==="
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          cdk bootstrap aws://$ACCOUNT_ID/$AWS_TARGET_REGION --require-approval never 2>&1 || echo "Bootstrap already done or not needed"
+
+          if [ "$ACTION" = "destroy" ]; then
+            echo "=== cdk destroy ==="
+            eval cdk destroy $STACK_NAME --force $CDK_CONTEXT --require-approval never
+          else
+            echo "=== cdk deploy ==="
+            eval cdk deploy $STACK_NAME --require-approval never --outputs-file /tmp/cdk-outputs.json $CDK_CONTEXT
+          fi
+          ;;
+
+        # =====================================================================
+        # CLOUDFORMATION
+        # =====================================================================
+        cloudformation)
+          # Determine the template file (expect template.yaml in the zip root)
+          TEMPLATE_FILE="/tmp/workspace/template.yaml"
+          if [ ! -f "$TEMPLATE_FILE" ]; then
+            TEMPLATE_FILE="/tmp/workspace/template.json"
+          fi
+          if [ ! -f "$TEMPLATE_FILE" ]; then
+            echo "ERROR: No template.yaml or template.json found in archive."
+            ls -la /tmp/workspace
+            exit 1
+          fi
+
+          # Build --parameter-overrides from PARAMETERS_JSON
+          CFN_STACK_NAME="frontier-agents-${AGENT_ID}-${DEPLOYMENT_ID}"
+          # CloudFormation stack names max 128 chars, alphanumeric + hyphens
+          CFN_STACK_NAME=$(echo "$CFN_STACK_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | cut -c1-128)
+
+          PARAM_OVERRIDES=""
+          if [ -n "$PARAMETERS_JSON" ]; then
+            AGENT_SPACE_NAME=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_name // empty')
+            AGENT_SPACE_DESC=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_description // empty')
+            NAME_POSTFIX=$(echo "$PARAMETERS_JSON" | jq -r '.name_postfix // empty')
+            [ -n "$AGENT_SPACE_NAME" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"AgentSpaceName=$AGENT_SPACE_NAME\""
+            [ -n "$AGENT_SPACE_DESC" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"AgentSpaceDescription=$AGENT_SPACE_DESC\""
+            [ -n "$NAME_POSTFIX" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"NamePostfix=$NAME_POSTFIX\""
+          fi
+
+          if [ "$ACTION" = "destroy" ]; then
+            echo "=== cloudformation delete-stack ==="
+            aws cloudformation delete-stack \
+              --stack-name "$CFN_STACK_NAME" \
+              --region "$AWS_TARGET_REGION"
+            echo "Waiting for stack deletion..."
+            aws cloudformation wait stack-delete-complete \
+              --stack-name "$CFN_STACK_NAME" \
+              --region "$AWS_TARGET_REGION"
+          else
+            echo "=== cloudformation deploy ==="
+            DEPLOY_CMD="aws cloudformation deploy \
+              --template-file $TEMPLATE_FILE \
+              --stack-name $CFN_STACK_NAME \
+              --capabilities CAPABILITY_NAMED_IAM \
+              --region $AWS_TARGET_REGION \
+              --no-fail-on-empty-changeset"
+            if [ -n "$PARAM_OVERRIDES" ]; then
+              DEPLOY_CMD="$DEPLOY_CMD --parameter-overrides $PARAM_OVERRIDES"
+            fi
+            eval $DEPLOY_CMD
+          fi
+          ;;
+
+        esac
+
+  post_build:
+    commands:
+      - |
+        # Capture outputs into DynamoDB for all IaC types
+        if [ "$ACTION" != "destroy" ]; then
+          cd /tmp/workspace
+          OUTPUTS_JSON="{}"
+
+          case "$IAC_TYPE" in
+            terraform)
+              OUTPUTS_JSON=$(terraform output -json 2>/dev/null || echo '{}')
+              # Flatten terraform output shape {key: {value: X}} → {key: X}
+              OUTPUTS_JSON=$(echo "$OUTPUTS_JSON" | jq '[to_entries[] | {(.key): (.value.value | tostring)}] | add // {}')
+              ;;
+            cdk)
+              if [ -f /tmp/cdk-outputs.json ]; then
+                # CDK outputs file shape: {"StackName": {"OutputKey": "value"}}
+                OUTPUTS_JSON=$(cat /tmp/cdk-outputs.json | jq '[to_entries[].value | to_entries[] | {(.key): (.value | tostring)}] | add // {}')
+              fi
+              ;;
+            cloudformation)
+              CFN_STACK_NAME="frontier-agents-${AGENT_ID}-${DEPLOYMENT_ID}"
+              CFN_STACK_NAME=$(echo "$CFN_STACK_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | cut -c1-128)
+              STACK_OUTPUTS=$(aws cloudformation describe-stacks \
+                --stack-name "$CFN_STACK_NAME" \
+                --query 'Stacks[0].Outputs' \
+                --region "$AWS_TARGET_REGION" 2>/dev/null || echo '[]')
+              OUTPUTS_JSON=$(echo "$STACK_OUTPUTS" | jq '[.[] | {(.OutputKey): .OutputValue}] | add // {}')
+              ;;
+          esac
+
+          echo "--- deployment outputs ---"
+          echo "$OUTPUTS_JSON" | jq .
+
+          # Write to DynamoDB
+          DDB_MAP=$(echo "$OUTPUTS_JSON" | jq '[to_entries[] | {(.key): {S: .value}}] | add // {}')
+          TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EAV_FILE=$(mktemp)
+          jq -n --argjson m "$DDB_MAP" --arg t "$TS" '{":o":{"M":$m},":t":{"S":$t}}' > "$EAV_FILE"
+          aws dynamodb update-item \
+            --table-name "$DEPLOYMENTS_TABLE" \
+            --key "{\"pk\":{\"S\":\"DEPLOY#$DEPLOYMENT_ID\"},\"sk\":{\"S\":\"META\"}}" \
+            --update-expression "SET outputs = :o, updated_at = :t" \
+            --expression-attribute-values "file://$EAV_FILE" \
+            --region "$AWS_TARGET_REGION" 2>&1 || echo "Output write failed (non-fatal)"
+          rm -f "$EAV_FILE"
+        fi

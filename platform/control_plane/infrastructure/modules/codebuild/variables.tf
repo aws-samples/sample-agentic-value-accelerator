@@ -44,6 +44,12 @@ variable "lock_table_arn" {
   type        = string
 }
 
+variable "agent_registry_arn" {
+  description = "ARN of the shared AWS Agent Registry. Passed to the app-factory build so it can publish records per generated agent."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Common tags"
   type        = map(string)

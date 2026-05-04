@@ -19,7 +19,7 @@ class S3Service:
     def __init__(self):
         """Initialize S3 service"""
         self.s3_client = boto3.client("s3", region_name=settings.AWS_REGION)
-        self.bucket_name = settings.S3_BUCKET_NAME
+        self.bucket_name = settings.S3_BUCKET_NAME or settings.PROJECT_ARCHIVES_BUCKET
 
     def upload_project(self, zip_data: bytes, project_name: str) -> tuple[str, str]:
         """

@@ -101,6 +101,17 @@ output "state_machine_name" {
   value       = module.step_functions.state_machine_name
 }
 
+# Frontier Agents (AaaS) pipeline
+output "frontier_agents_state_machine_arn" {
+  description = "Step Functions state machine ARN for the Frontier Agents pipeline"
+  value       = module.frontier_agents_pipeline.state_machine_arn
+}
+
+output "frontier_agents_codebuild_project_name" {
+  description = "CodeBuild project name for the Frontier Agents pipeline"
+  value       = module.frontier_agents_pipeline.codebuild_project_name
+}
+
 # ============================================================================
 # Cognito Outputs
 # ============================================================================
@@ -168,6 +179,20 @@ output "codebuild_role_arn" {
 }
 
 # ============================================================================
+# Agent Registry Outputs (AWS Agent Registry - preview)
+# ============================================================================
+
+output "agent_registry_arn" {
+  description = "Shared AWS Agent Registry ARN. All app-factory agents publish records here."
+  value       = module.agent_registry.registry_arn
+}
+
+output "agent_registry_name" {
+  description = "Shared AWS Agent Registry name."
+  value       = module.agent_registry.registry_name
+}
+
+# ============================================================================
 # EventBridge Outputs
 # ============================================================================
 
@@ -211,6 +236,40 @@ output "state_backend_lock_table_arn" {
 }
 
 # ============================================================================
+# CodeCommit Outputs
+# ============================================================================
+
+output "codecommit_repository_name" {
+  description = "CodeCommit repository name"
+  value       = var.enable_codecommit ? module.codecommit[0].repository_name : ""
+}
+
+output "codecommit_repository_arn" {
+  description = "CodeCommit repository ARN"
+  value       = var.enable_codecommit ? module.codecommit[0].repository_arn : ""
+}
+
+output "codecommit_clone_url_http" {
+  description = "CodeCommit repository clone URL (HTTPS)"
+  value       = var.enable_codecommit ? module.codecommit[0].clone_url_http : ""
+}
+
+output "codecommit_clone_url_ssh" {
+  description = "CodeCommit repository clone URL (SSH)"
+  value       = var.enable_codecommit ? module.codecommit[0].clone_url_ssh : ""
+}
+
+output "codecommit_read_policy_arn" {
+  description = "IAM policy ARN for read-only CodeCommit access"
+  value       = var.enable_codecommit ? module.codecommit[0].read_policy_arn : ""
+}
+
+output "codecommit_write_policy_arn" {
+  description = "IAM policy ARN for read-write CodeCommit access"
+  value       = var.enable_codecommit ? module.codecommit[0].write_policy_arn : ""
+}
+
+# ============================================================================
 # Summary Output
 # ============================================================================
 
@@ -226,5 +285,6 @@ output "deployment_summary" {
     codebuild_project    = module.codebuild.project_name
     eventbridge_bus      = module.eventbridge.event_bus_name
     state_backend_bucket = module.state_backend.bucket_name
+    codecommit_repo      = var.enable_codecommit ? module.codecommit[0].repository_name : "disabled"
   }
 }

@@ -9,10 +9,11 @@ The infrastructure includes:
 - **API Gateway**: HTTP API with VPC Link for private integration
 - **ECS Fargate**: Containerized backend service with auto-scaling
 - **DynamoDB**: Application Catalog and Deployment Metadata tables
-- **S3**: Project archives and frontend static hosting
-- **Step Functions**: CI/CD deployment pipeline orchestration (Validate → Package → Build → Monitor → Capture → Record)
-- **CodeBuild**: IaC execution in isolated Docker containers (Terraform, CDK, CloudFormation)
-- **EventBridge**: Deployment lifecycle events with dead-letter queue
+- **S3**: Project archives (Quick Deploy source) and frontend static hosting
+- **Step Functions**: CI/CD deployment pipeline orchestration (Validate → Normalize → Build → Monitor → Capture → Record); source-agnostic — drives both S3 archive and CodeCommit-backed deployments
+- **CodeBuild**: Dual-source IaC execution in isolated Docker containers (Terraform, CDK, CloudFormation). Clones from CodeCommit *or* unzips an S3 archive based on Step Functions input
+- **CodeCommit**: Pre-seeded `fsi-foundry-*` repositories — one per FSI Foundry use case + one per reference implementation — that back the frontend's "Deploy from Git" option. Seeded via `scripts/seed-codecommit.sh init`
+- **EventBridge**: Deployment lifecycle events with dead-letter queue, plus per-repo git push / PR-merge rules that auto-trigger Step Functions
 - **State Backend**: Terraform remote state (S3 + DynamoDB locking) per deployment
 - **CloudFront**: CDN for frontend distribution
 - **Cognito**: User authentication and authorization
@@ -104,6 +105,64 @@ public_subnet_ids  = []
 private_subnet_ids = []
 ```
 
+## Enabling the "Deploy from Git" path (CodeCommit)
+
+The Control Plane supports two deployment source modes, and both share the same CodeBuild pipeline:
+
+| Source | UI tab | What gets cloned / unzipped |
+|--------|--------|-----------------------------|
+| **S3 archive** | Quick Deploy | Backend packages the use case source on demand, uploads to `s3://<project-archives>/deployments/<id>/<name>.zip`, CodeBuild unzips it |
+| **CodeCommit** | Deploy from Git | CodeBuild `git clone`s one of the pre-seeded `fsi-foundry-*` repos |
+
+Both paths call the same Step Functions state machine. A `NormalizeBuildInput` pass state fills in empty defaults for whichever fields the chosen source doesn't set, so `InvokeCodeBuild` never fails on a missing JSONPath.
+
+### Seeding CodeCommit (one-time per environment)
+
+Run the seeding script after `deploy-full.sh`:
+
+```bash
+cd scripts
+./seed-codecommit.sh init
+```
+
+This discovers every FSI Foundry use case listed in `applications/fsi_foundry/data/registry/offerings.json` plus every reference implementation under `applications/reference_implementations/`, and creates a CodeCommit repo per item:
+
+- `fsi-foundry-<use_case>` for each of the 34 use cases — e.g. `fsi-foundry-kyc_banking`
+- `fsi-foundry-use-case-<ref-impl>` for each reference implementation — e.g. `fsi-foundry-use-case-shopping-concierge-agent`
+
+Each seeded repo is a self-contained deployment bundle (`infra/`, `runtime/`, `ui_iac/`, `ui/<use_case>/`, `shared/`, `docker/`, `app_src/`, `use_cases/<use_case>/src/`, `data/samples/`), mirroring the layout that the S3 path packages on demand.
+
+Re-run `./seed-codecommit.sh sync` whenever the underlying source changes (e.g. after updating the Bedrock model) to force-push fresh content into each repo.
+
+### Using the UI after seeding
+
+1. Sign in to the Control Plane
+2. Pick a use case from FSI Foundry
+3. On **Deploy Application**, switch to the **Deploy from Git** tab
+4. The repo dropdown auto-loads (`GET /api/v1/codecommit/repositories`) and selects the one matching the use case
+5. Optionally change the branch (defaults to `main`)
+6. Click **Deploy from Git** — CodeBuild clones the repo and runs the same infra/runtime/UI stages as the S3 path
+
+### Auto-deploy on git push
+
+Each seeded repo gets EventBridge rules (`codecommit-push`, `codecommit-pr-merged`) from the `codecommit` Terraform module. When a developer clones a repo, modifies it, and pushes to `main` (or merges a PR), the rule fires Step Functions with that repo+branch and the deployment runs automatically. Trigger branches are configurable in `terraform.tfvars` via `codecommit_trigger_branches`.
+
+### Local customization workflow
+
+```bash
+# One-time per developer
+git config --global credential.helper '!aws codecommit credential-helper $@'
+git config --global credential.UseHttpPath true
+
+# Clone, modify, push
+git clone https://git-codecommit.<region>.amazonaws.com/v1/repos/fsi-foundry-<use_case>
+cd fsi-foundry-<use_case>
+# edit files...
+git add .
+git commit -m "customize: tweak agent prompt"
+git push origin main   # triggers deployment via EventBridge
+```
+
 ## Building and Deploying Backend Container
 
 After infrastructure is deployed:
@@ -172,21 +231,31 @@ infrastructure/
 ├── providers.tf              # Provider configuration
 ├── .env.example              # Environment variables template
 ├── terraform.tfvars.example  # Terraform variables template
+├── scripts/                  # Deployment and seeding shell scripts
+│   ├── deploy-full.sh        # One-command full deployment (infra + backend image + frontend + Cognito user)
+│   ├── deploy.sh             # Infrastructure-only Terraform deploy
+│   ├── destroy.sh            # Tear down all resources
+│   ├── import-existing.sh    # Import pre-existing AWS resources into Terraform state
+│   ├── seed-codecommit.sh    # Shell wrapper around the Python seeder
+│   └── seed-codecommit-templates.py  # Creates one CodeCommit repo per FSI Foundry use case + ref impl
 └── modules/
     ├── networking/           # VPC, subnets, security groups
     ├── dynamodb/             # DynamoDB tables
-    ├── s3/                   # S3 buckets
-    ├── ecr/                  # ECR repository
-    ├── ecs/                  # ECS cluster, service, tasks
+    ├── s3/                   # S3 buckets (project archives + frontend)
+    ├── ecr/                  # ECR repository (backend image)
+    ├── ecs/                  # ECS cluster, service, tasks (backend API)
     ├── api_gateway/          # API Gateway with VPC Link
-    ├── step_functions/       # Step Functions CI/CD pipeline
-    ├── codebuild/            # CodeBuild for IaC execution
-    ├── eventbridge/          # EventBridge deployment events
+    ├── step_functions/       # Source-agnostic deployment orchestrator
+    ├── codebuild/            # Dual-source buildspec (Git clone OR S3 unzip)
+    ├── codecommit/           # Pre-seeded use case repos + EventBridge trigger rules
+    ├── eventbridge/          # Deployment lifecycle events with DLQ
     ├── state_backend/        # Terraform remote state (S3 + DynamoDB)
     ├── cognito/              # Cognito user pool and identity pool
-    ├── cloudfront/           # CloudFront distribution
+    ├── cloudfront/           # CloudFront distribution (control plane frontend)
     └── observability/        # CloudWatch dashboards and alarms
 ```
+
+For detailed usage of each script in `scripts/` — modes, environment variables, when to run which — see [scripts/README.md](scripts/README.md).
 
 ## Important Outputs
 
@@ -299,4 +368,3 @@ terraform init -migrate-state
 For issues or questions:
 - Check CloudWatch dashboards for metrics
 - Review CloudWatch logs for errors
-- Check GitHub issues: https://github.com/anthropics/ava

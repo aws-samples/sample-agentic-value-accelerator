@@ -112,6 +112,7 @@ class TemplateMetadata(BaseModel):
     outputs: Dict[str, str] = Field(default_factory=dict, description="Output keys produced after deployment")
     jobs: List[Job] = Field(default_factory=list, description="Lifecycle jobs (onboarding, offboarding)")
     dependencies: List[str] = Field(default_factory=list, description="Foundation template IDs required before this template")
+    hidden: bool = Field(default=False, description="Hide template from the UI catalog")
 
     @validator("id")
     def validate_id(cls, v):

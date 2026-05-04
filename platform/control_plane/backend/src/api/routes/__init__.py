@@ -11,6 +11,8 @@ from api.routes.deployments import router as deployments_router
 from api.routes.applications import router as applications_router
 from api.routes.app_factory import router as app_factory_router
 from api.routes.users import router as users_router
+from api.routes.codecommit import router as codecommit_router
+from api.routes.frontier_agents import router as frontier_agents_router
 
 __all__ = [
     "projects_router",
@@ -22,4 +24,6 @@ __all__ = [
     "applications_router",
     "app_factory_router",
     "users_router",
+    "codecommit_router",
+    "frontier_agents_router",
 ]
