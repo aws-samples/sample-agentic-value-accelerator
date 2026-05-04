@@ -170,6 +170,7 @@ export interface AppAgent {
 
 export interface AppUseCase {
   id: string;
+  category?: string;
   use_case_name: string;
   name: string;
   description: string;

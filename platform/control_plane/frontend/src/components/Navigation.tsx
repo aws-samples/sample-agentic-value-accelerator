@@ -6,6 +6,7 @@ export default function Navigation() {
   const location = useLocation();
   const { signOut, changePassword, user } = useAuth();
   const [appsOpen, setAppsOpen] = useState(false);
+  const [aaasOpen, setAaasOpen] = useState(false);
   const [obsOpen, setObsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [changePwdOpen, setChangePwdOpen] = useState(false);
@@ -16,6 +17,7 @@ export default function Navigation() {
   const [pwdSuccess, setPwdSuccess] = useState('');
   const [pwdLoading, setPwdLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const aaasRef = useRef<HTMLDivElement>(null);
   const obsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -25,6 +27,9 @@ export default function Navigation() {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setAppsOpen(false);
+      }
+      if (aaasRef.current && !aaasRef.current.contains(e.target as Node)) {
+        setAaasOpen(false);
       }
       if (obsRef.current && !obsRef.current.contains(e.target as Node)) {
         setObsOpen(false);
@@ -79,19 +84,36 @@ export default function Navigation() {
             </Link>
 
             <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setAppsOpen(!appsOpen)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 inline-flex items-center gap-1.5 ${
-                  isActive('/applications') ? 'bg-blue-500 text-white shadow-md' : 'text-slate-600 hover:text-white hover:bg-blue-500 hover:shadow-md'
-                }`}
-              >
-                Applications
-                <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${appsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+              <div className={`rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center overflow-hidden ${
+                isActive('/applications') ? 'bg-blue-500 text-white shadow-md' : 'text-slate-600 hover:text-white hover:bg-blue-500 hover:shadow-md'
+              }`}>
+                <Link to="/applications" className="pl-4 pr-1.5 py-2 hover:scale-105 transition-transform">
+                  Applications
+                </Link>
+                <button
+                  onClick={() => setAppsOpen(!appsOpen)}
+                  className="pl-1 pr-2.5 py-2 border-l border-current/10 hover:scale-110 transition-transform"
+                  aria-label="Toggle Applications menu"
+                >
+                  <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${appsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
               {appsOpen && (
                 <div className="absolute top-full left-0 mt-1.5 w-72 bg-white rounded-xl border border-slate-200 py-2 z-50 animate-fade-in-scale" style={{ animationDuration: '0.12s', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
+                  <Link to="/applications/reference-implementations" onClick={() => setAppsOpen(false)}
+                    className="flex items-center px-3 py-3 hover:bg-blue-500 hover:text-white hover:scale-105 transition-all duration-200 rounded-lg mx-1.5 hover:shadow-md">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-50 mr-3 group-hover:bg-white transition-colors">
+                      <svg className="w-4.5 h-4.5 text-emerald-600 group-hover:text-emerald-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Reference Implementations</div>
+                      <div className="text-xs text-slate-400 group-hover:text-blue-100 transition-colors">End-to-end full-stack solutions</div>
+                    </div>
+                  </Link>
                   <Link to="/applications/fsi-foundry" onClick={() => setAppsOpen(false)}
                     className="flex items-center px-3 py-3 hover:bg-blue-500 hover:text-white hover:scale-105 transition-all duration-200 rounded-lg mx-1.5 hover:shadow-md group">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 mr-3 group-hover:bg-white transition-colors">
@@ -126,6 +148,53 @@ export default function Navigation() {
                     <div>
                       <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Templates</div>
                       <div className="text-xs text-slate-400 group-hover:text-blue-100 transition-colors">Scaffolding for custom agents</div>
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            <div className="relative" ref={aaasRef}>
+              <div className={`rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center overflow-hidden ${
+                isActive('/aaas') ? 'bg-blue-500 text-white shadow-md' : 'text-slate-600 hover:text-white hover:bg-blue-500 hover:shadow-md'
+              }`}>
+                <Link to="/aaas" className="pl-4 pr-1.5 py-2 hover:scale-105 transition-transform whitespace-nowrap">
+                  Agent-as-a-Service
+                </Link>
+                <button
+                  onClick={() => setAaasOpen(!aaasOpen)}
+                  className="pl-1 pr-2.5 py-2 border-l border-current/10 hover:scale-110 transition-transform"
+                  aria-label="Toggle Agent-as-a-Service menu"
+                >
+                  <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${aaasOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              {aaasOpen && (
+                <div className="absolute top-full left-0 mt-1.5 w-72 bg-white rounded-xl border border-slate-200 py-2 z-50 animate-fade-in-scale" style={{ animationDuration: '0.12s', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
+                  <Link to="/aaas/aws-agents" onClick={() => setAaasOpen(false)}
+                    className="flex items-center px-3 py-3 hover:bg-blue-500 hover:text-white hover:scale-105 transition-all duration-200 rounded-lg mx-1.5 hover:shadow-md group">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-orange-50 mr-3 group-hover:bg-white transition-colors">
+                      <svg className="w-4.5 h-4.5 text-orange-600 group-hover:text-orange-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 13.5V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m12-3V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m-6-9V3.75m0 3.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 9.75V10.5" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">AWS Frontier Agents</div>
+                      <div className="text-xs text-slate-400 group-hover:text-blue-100 transition-colors">DevOps, Security, Kiro</div>
+                    </div>
+                  </Link>
+                  <Link to="/aaas/custom" onClick={() => setAaasOpen(false)}
+                    className="flex items-center px-3 py-3 hover:bg-blue-500 hover:text-white hover:scale-105 transition-all duration-200 rounded-lg mx-1.5 hover:shadow-md group">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 mr-3 group-hover:bg-white transition-colors">
+                      <svg className="w-4.5 h-4.5 text-blue-600 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Custom Agents</div>
+                      <div className="text-xs text-slate-400 group-hover:text-blue-100 transition-colors">Create and manage your own</div>
                     </div>
                   </Link>
                 </div>
@@ -270,6 +339,13 @@ export default function Navigation() {
             <div className="py-2">
               <div className="px-4 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wide">Applications</div>
               <Link
+                to="/applications/reference-implementations"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                Reference Implementations
+              </Link>
+              <Link
                 to="/applications/fsi-foundry"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
@@ -289,6 +365,24 @@ export default function Navigation() {
                 className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
               >
                 Templates
+              </Link>
+            </div>
+
+            <div className="py-2">
+              <div className="px-4 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wide">Agent-as-a-Service</div>
+              <Link
+                to="/aaas/aws-agents"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                AWS Frontier Agents
+              </Link>
+              <Link
+                to="/aaas/custom"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                Custom Agents
               </Link>
             </div>
 

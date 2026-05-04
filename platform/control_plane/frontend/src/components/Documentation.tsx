@@ -49,6 +49,9 @@ import complianceInvestigationDeploymentPipeline from '../assets/diagrams/compli
 import adverseMediaAssessmentFlow from '../assets/diagrams/adverse-media-assessment-flow.svg?raw';
 import adverseMediaStateMachine from '../assets/diagrams/adverse-media-state-machine.svg?raw';
 import adverseMediaDeploymentPipeline from '../assets/diagrams/adverse-media-deployment-pipeline.svg?raw';
+import marketSurveillanceAssessmentFlow from '../assets/diagrams/market-surveillance-assessment-flow.svg?raw';
+import marketSurveillanceStateMachine from '../assets/diagrams/market-surveillance-state-machine.svg?raw';
+import marketSurveillanceDeploymentPipeline from '../assets/diagrams/market-surveillance-deployment-pipeline.svg?raw';
 
 // Capital Markets SVG imports
 import investmentAdvisoryAssessmentFlow from '../assets/diagrams/investment-advisory-assessment-flow.svg?raw';
@@ -169,6 +172,9 @@ const diagrams: Record<string, string> = {
   'adverse-media-assessment-flow': adverseMediaAssessmentFlow,
   'adverse-media-state-machine': adverseMediaStateMachine,
   'adverse-media-deployment-pipeline': adverseMediaDeploymentPipeline,
+  'market-surveillance-assessment-flow': marketSurveillanceAssessmentFlow,
+  'market-surveillance-state-machine': marketSurveillanceStateMachine,
+  'market-surveillance-deployment-pipeline': marketSurveillanceDeploymentPipeline,
   // Capital Markets
   'investment-advisory-assessment-flow': investmentAdvisoryAssessmentFlow,
   'investment-advisory-state-machine': investmentAdvisoryStateMachine,
@@ -239,11 +245,11 @@ const docs: DocSection[] = [
         title: 'Overview',
         content: `# Agentic Value Accelerator
 
-The Agentic Value Accelerator (AVA) is a production-grade control plane for deploying and managing AI agent applications for financial services on AWS.
+The Agentic Value Accelerator (AVA) is a control plane for deploying and managing AI agent applications for financial services on AWS.
 
 ## What You Get
 
-- **34 Production-Ready Use Cases** — Multi-agent FSI applications across Banking, Risk, Capital Markets, Insurance, Operations, and Modernization
+- **34 Multi-Agent Use Cases** — FSI applications across Banking, Payments, Risk & Compliance, Capital Markets, Insurance, Operations, and Modernization
 - **Dual Framework Support** — Every use case implemented in both Strands Agent SDK and LangChain/LangGraph (68 total implementations)
 - **Automated CI/CD** — Step Functions + CodeBuild pipeline provisions all infrastructure and deploys applications
 - **Template Scaffolding** — 6 templates for building custom agent applications with Terraform, CDK, or CloudFormation
@@ -319,6 +325,666 @@ Navigate to the CloudFront URL and sign in. You can now:
     ],
   },
   {
+    id: 'ref-impl',
+    title: 'Reference Implementations',
+    children: [
+      {
+        id: 'ref-impl-overview',
+        title: 'Overview',
+        content: `# Reference Implementations
+
+Reference implementations are **deep, feature-rich full-stack solutions** for a specific niche FSI use case. Each includes a complete frontend, backend API, infrastructure-as-code, and deployment automation — designed to be deployed as a standalone application.
+
+## How They Differ from FSI Foundry
+
+| Dimension | Reference Implementations | FSI Foundry |
+|---|---|---|
+| **Scope** | Deep, end-to-end solution for one use case | Broad POC coverage across 34 use cases |
+| **Stack** | Full-stack: frontend + backend + infra + CI/CD | Agent backend only (orchestrator + agents + tools) |
+| **Deployment** | Standalone app with its own infrastructure | Deployed via shared FSI Foundry pipeline |
+| **Complexity** | Full-stack architecture | POC-level implementations |
+
+## Available Implementations
+
+| Implementation | Domain | Stack | Status |
+|---|---|---|---|
+| Market Surveillance | Capital Markets | Next.js + AgentCore + Terraform + RDS | Available |
+| Shopping Concierge Agent | Agentic Payments | React + Strands + CDK + Amplify | Available |
+| Case Management | Fraud & Compliance | React + Bedrock + Lambda + DynamoDB + CloudFront | Available |
+| Agent Safety Controls | Platform & Governance | ECS + CloudFront + Cognito + DynamoDB + Lambda | Available |`,
+      },
+      {
+        id: 'market-surveillance-ref',
+        title: 'Market Surveillance',
+        children: [
+          {
+            id: 'market-surveillance-ref-overview',
+            title: 'Overview',
+            content: `# Market Surveillance — Reference Implementation
+
+AI-powered market surveillance system for detecting and investigating suspicious trading patterns in Fixed Income markets using AWS Bedrock AgentCore.
+
+## Key Capabilities
+
+- **Multi-Agent Architecture** — Coordinator orchestrates specialized agents for data discovery, enrichment, and rule evaluation
+- **Trade Pattern Detection** — 29 decision tree rules for identifying suspicious trading patterns
+- **Configuration-Driven** — All workflows, rules, and schemas loaded from S3 for easy updates without code changes
+- **Audit Trail** — Complete logging of agent decisions, state transitions, and tool calls
+- **Enterprise Security** — Cognito authentication, VPC isolation, encrypted data at rest and in transit, read-only database access
+- **Conversation Memory** — DynamoDB-backed persistent conversation history across sessions
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Frontend | Next.js on EC2 with ALB | Served via CloudFront CDN with WAF protection |
+| Agent System | AWS Bedrock AgentCore Runtime | Strands SDK with MCP Gateway for tool access |
+| Data Layer | PostgreSQL (RDS Aurora) | Read-only access for trade and account data |
+| Config Storage | S3 | Workflow definitions, decision tree rules, agent schemas |
+| Conversation Store | DynamoDB | Persistent chat history and investigation state |
+| Auth | AWS Cognito | User pools with JWT-based authentication |
+| Networking | VPC | Private subnets, NAT gateway, security groups |
+| CDN | CloudFront | Edge caching with custom domain support |
+| Firewall | AWS WAF | Rate limiting and IP-based access control |
+
+## Agent System
+
+| Agent | Role | Tools |
+|---|---|---|
+| Coordinator | Main orchestrator — routes investigation workflow, manages state transitions | Workflow config loader, state manager |
+| Data Discovery | Retrieves trade data, account info, and counterparty details from RDS | SQL query tool via MCP Gateway (read-only) |
+| Data Enrichment | Augments raw trade data with market context, reference data, and historical patterns | S3 config reader, enrichment rules engine |
+| Trade Analyst | Evaluates 29 decision tree rules against enriched data, produces disposition | Rule engine, decision tree evaluator, report generator |
+
+## Investigation Workflow
+
+1. User submits a trade alert for investigation
+2. Coordinator loads workflow configuration from S3
+3. Data Discovery agent queries RDS for trade details, account history, and counterparty info
+4. Data Enrichment agent augments with market context and reference data
+5. Trade Analyst evaluates 29 decision tree rules against enriched data
+6. System produces an audit-ready disposition report with rule-by-rule findings
+7. Full investigation trail stored in DynamoDB for compliance review
+
+## Decision Tree Rules
+
+The system evaluates 29 configurable rules across categories:
+- **Price manipulation** — Unusual price movements relative to market
+- **Volume anomalies** — Abnormal trading volumes or patterns
+- **Timing patterns** — Suspicious timing relative to market events
+- **Counterparty risk** — Unusual counterparty relationships or concentrations
+- **Cross-market signals** — Correlated activity across instruments or venues
+
+All rules are loaded from S3 JSON configuration — no code changes needed to add, modify, or disable rules.
+
+## Project Structure
+
+\`\`\`
+market-surveillance/
+├── infrastructure/
+│   ├── modules/                 # 12+ shared Terraform modules
+│   │   ├── agentcore-runtime/   # AgentCore deployment
+│   │   ├── agentcore-memory/    # Persistent memory
+│   │   ├── agentcore-gateway/   # MCP Gateway for tools
+│   │   ├── ec2-webapp/          # Web app hosting
+│   │   ├── alb/                 # Load balancer
+│   │   ├── cloudfront/          # CDN distribution
+│   │   ├── rds/                 # PostgreSQL database
+│   │   ├── lambda/              # API functions
+│   │   ├── cognito/             # Authentication
+│   │   └── ...                  # kms, acm, firewall, etc.
+│   ├── foundations/             # Root module 1 — VPC, RDS, Cognito, ALB
+│   └── app-infra/              # Root module 2 — ECR, AgentCore, API GW, webapp
+├── agent-backend/               # Python agent system
+│   ├── agents/                  # Coordinator, discovery, enrichment, analyst
+│   ├── configs/                 # Workflow and rule configurations
+│   └── Dockerfile
+├── trade-alerts-app/            # Next.js frontend
+├── seeding_scripts/             # Database seeding pipeline
+└── scripts/                     # Deployment utilities
+\`\`\``,
+          },
+          {
+            id: 'market-surveillance-ref-deploy',
+            title: 'Deployment',
+            content: `# Market Surveillance — Deployment
+
+## Infrastructure
+
+Two Terraform root modules with a one-way dependency:
+
+| Stack | Contains | Order |
+|---|---|---|
+| **foundations** | VPC, KMS, RDS, Cognito, ALB, CloudFront, WAF, DynamoDB, Bastion | First |
+| **app-infra** | ECR, Lambda, AgentCore, API Gateway, S3 configs, EC2 webapp | Second (reads foundations outputs via remote state) |
+
+## Prerequisites
+
+- AWS CLI configured with credentials
+- Terraform >= 1.0
+- Docker with buildx support (for multi-arch container builds)
+- Node.js >= 18 (for frontend build)
+- Make (recommended for simplified commands)
+
+## Deploy with Make (Recommended)
+
+\`\`\`bash
+cd applications/reference_implementations/market-surveillance
+
+# Deploy full stack (infrastructure + webapp + database seeding)
+make deploy ENV=dev
+
+# Deploy infrastructure only
+make deploy-infra ENV=dev
+
+# Deploy foundations only
+make deploy-foundations ENV=dev
+
+# Deploy app-infra only (requires foundations)
+make deploy-app-infra ENV=dev
+\`\`\`
+
+## Deploy with Scripts
+
+\`\`\`bash
+# Deploy full stack with auto-approve
+scripts/deploy-backend.sh --environment dev --auto-approve
+
+# Deploy only foundations
+scripts/deploy-backend.sh --environment dev --foundation-only
+
+# Deploy only app-infra
+scripts/deploy-backend.sh --environment dev --app-infra-only
+\`\`\`
+
+## Infrastructure Provisioned
+
+| Resource | Purpose |
+|---|---|
+| VPC + Subnets | Network isolation with public/private subnets |
+| RDS Aurora PostgreSQL | Trade and account data storage |
+| Cognito User Pool | Authentication for frontend and API |
+| ALB + Target Groups | Load balancing for webapp and API |
+| CloudFront Distribution | CDN for frontend with WAF |
+| ECR Repository | Container images for agent and webapp |
+| AgentCore Runtime | Bedrock agent execution environment |
+| AgentCore Memory | Persistent conversation storage |
+| AgentCore MCP Gateway | Tool access gateway for database queries |
+| Lambda Functions | API endpoints for conversation management |
+| API Gateway | HTTP API for frontend-to-backend communication |
+| S3 Buckets | Agent configs, workflow rules, Terraform state |
+| DynamoDB Tables | Conversation history, Terraform locks |
+| KMS Keys | Encryption for RDS, S3, and DynamoDB |
+| WAF Web ACL | Rate limiting and IP filtering |
+
+## Database Seeding
+
+After infrastructure deployment, seed the database with sample trade data:
+
+\`\`\`bash
+# Generate and load sample data
+make seed-db ENV=dev
+
+# Or use the seeding scripts directly
+cd seeding_scripts
+python generate_data.py
+python load_data.py
+\`\`\`
+
+## Cleanup
+
+\`\`\`bash
+# Destroy all resources
+make destroy ENV=dev
+
+# Or destroy in reverse order
+scripts/deploy-backend.sh --environment dev --destroy
+\`\`\``,
+          },
+        ],
+      },
+      {
+        id: 'shopping-concierge-ref',
+        title: 'Shopping Concierge Agent',
+        children: [
+          {
+            id: 'shopping-concierge-ref-overview',
+            title: 'Overview',
+            content: `# Shopping Concierge Agent — Reference Implementation
+
+AI-powered concierge with shopping assistance, product search, cart management, and mock payment support. Built with Strands SDK, MCP tools, and AWS Bedrock AgentCore.
+
+## Features
+
+- **Shopping Assistant** — Product search and personalized recommendations via SERP API integration
+- **Cart & Payment** — Full cart management with mock payment processing flow
+- **Conversation Memory** — Persistent chat history across sessions via DynamoDB
+- **Real-time Streaming** — Live agent responses with tool usage indicators in the UI
+- **Secure Authentication** — AWS Cognito with JWT-based auth and session management
+- **MCP Tool Integration** — Agent tools exposed via Model Context Protocol servers
+- **Product Comparison** — Side-by-side feature and price comparison across products
+- **User Preferences** — Personalized recommendations based on user profile and constraints
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Frontend | React web application | Real-time streaming UI with tool usage indicators |
+| Agent Runtime | AWS Bedrock AgentCore | Strands SDK with MCP tool integration |
+| Tools | MCP Servers | Product search (SERP API), cart management, payment mock |
+| Auth | AWS Cognito via Amplify | User pools, JWT tokens, session management |
+| Memory | DynamoDB via Amplify | Conversation history, user preferences, cart state |
+| Infrastructure | AWS CDK | Multi-stack deployment (Amplify + MCP + Agent + Frontend) |
+| Observability | CloudWatch | Logs, metrics, and agent execution traces |
+
+## Agent System
+
+| Agent | Role | Tools |
+|---|---|---|
+| Shopping Assistant | Product search, recommendations, feature comparison, reviews research | SERP API search, product database, review aggregator |
+| Payment Agent | Cart management, checkout flow, mock payment processing | Cart state manager, payment mock, order tracker |
+
+## User Interaction Flow
+
+1. User authenticates via Cognito
+2. User describes what they are looking for (natural language)
+3. Shopping Assistant searches products via SERP API, filters by user preferences
+4. Agent presents options with prices, reviews, and feature comparisons
+5. User adds items to cart, agent manages cart state
+6. Payment Agent handles checkout with mock payment flow
+7. Full conversation history persisted for future sessions
+
+## Project Structure
+
+\`\`\`
+shopping-concierge-agent/
+├── amplify/                    # AWS Amplify backend
+│   ├── auth/                   # Cognito configuration
+│   ├── data/                   # DynamoDB tables and GraphQL schema
+│   └── storage/                # S3 storage configuration
+├── concierge_agent/           # Agent code and Docker container
+│   ├── Dockerfile
+│   └── code/                  # Python agent implementation
+│       ├── agent.py           # Main agent logic
+│       ├── tools/             # MCP tool definitions
+│       └── prompts/           # System prompts and templates
+├── infrastructure/            # CDK infrastructure
+│   ├── lib/                   # CDK stack definitions
+│   └── bin/                   # CDK app entry point
+├── documents/                 # Knowledge base documents
+├── web-ui/                    # React frontend
+│   ├── src/
+│   │   ├── components/        # UI components
+│   │   ├── hooks/             # Custom React hooks
+│   │   └── services/          # API client and auth
+│   └── public/
+└── scripts/                   # Deployment and setup scripts
+\`\`\``,
+          },
+          {
+            id: 'shopping-concierge-ref-deploy',
+            title: 'Deployment',
+            content: `# Shopping Concierge Agent — Deployment
+
+## Prerequisites
+
+- AWS Account with Bedrock access (Claude models enabled)
+- AWS CDK CLI installed and bootstrapped
+- Docker (for container builds)
+- Node.js >= 18
+- Python >= 3.11
+- SERP API key (optional — enables live product search; without it, agent uses mock data)
+
+## Deployment Steps
+
+The Shopping Concierge uses AWS CDK with multiple stacks:
+
+\`\`\`bash
+cd applications/reference_implementations/shopping-concierge-agent
+
+# 1. Install dependencies
+npm install
+pip install -r concierge_agent/code/requirements.txt
+
+# 2. Bootstrap CDK (if not already done)
+cdk bootstrap
+
+# 3. Deploy all stacks
+cdk deploy --all
+
+# Or deploy individual stacks:
+cdk deploy AmplifyStack        # Cognito, DynamoDB, GraphQL
+cdk deploy McpServerStack      # MCP tool servers
+cdk deploy AgentStack          # AgentCore runtime
+cdk deploy FrontendStack       # React web UI
+\`\`\`
+
+## Infrastructure Provisioned
+
+| Resource | Purpose |
+|---|---|
+| Amplify Backend | Cognito user pools, DynamoDB tables, GraphQL API |
+| AgentCore Runtime | Bedrock agent execution with Strands SDK |
+| MCP Servers | Tool servers for product search, cart, and payment |
+| ECR Repository | Container images for agent and MCP servers |
+| S3 Bucket | Frontend hosting and knowledge base documents |
+| CloudWatch | Logs, metrics, and agent execution traces |
+| IAM Roles | Least-privilege access for each component |
+
+## Configuration
+
+### SERP API Key (Optional)
+
+For live product search, set the SERP API key:
+
+\`\`\`bash
+# Via environment variable
+export SERP_API_KEY=your_key_here
+
+# Or via CDK context
+cdk deploy --context serpApiKey=your_key_here
+\`\`\`
+
+Without a SERP API key, the agent falls back to mock product data for demonstration.
+
+### Mock Payment Mode
+
+The payment system uses a mock implementation by default. See the [Frontend Mock Mode documentation](docs/FRONTEND_MOCK_MODE.md) for details on the mock payment flow.
+
+## Cleanup
+
+\`\`\`bash
+# Destroy all stacks
+cdk destroy --all
+\`\`\``,
+          },
+        ],
+      },
+      {
+        id: 'case-management-ref',
+        title: 'Case Management',
+        children: [
+          {
+            id: 'case-management-ref-overview',
+            title: 'Overview',
+            content: `# Case Management — Reference Implementation
+
+AI-powered fraud detection and case management platform built with AWS serverless architecture, React, and Claude AI on Bedrock.
+
+## Key Capabilities
+
+- **Real-time Fraud Detection** — Analyze transactions with ML-based scoring and pattern detection
+- **AI-Powered Investigation** — Natural language chat interface powered by Claude Sonnet 4 on Bedrock
+- **Pattern Recognition** — Automatically detects smurfing, high-velocity patterns, mule accounts, and large transaction anomalies
+- **Decision Engine** — Three-tier fraud response: APPROVE, STEP_UP_REVIEW, HOLD_AND_CASE
+- **Secure Architecture** — CloudFront CDN with Origin Access Control for enterprise security
+- **DynamoDB Storage** — 5 tables for transaction data, features, patterns, and actor state
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Frontend | React UI | Hosted on S3, served via CloudFront with OAC |
+| API | API Gateway + 4 Lambdas | Python backend with fraud scoring and Bedrock chat |
+| Storage | 5 DynamoDB Tables | Transaction logs, features, pair statistics, destination tracking, actor state |
+| AI | Amazon Bedrock | Claude Sonnet 4 for conversational investigation |
+| CDN | CloudFront | Secure HTTPS delivery with Origin Access Control |
+| Optional | AgentCore SAR Stack | Advanced SAR report generation |
+
+## Agents
+
+- **Fraud Scoring Agent** — Lambda function for ML-based transaction scoring and pattern detection
+- **Transaction Reader Agent** — Lambda for DynamoDB queries and transaction history retrieval
+- **Bedrock Chat Agent** — Conversational investigation interface with Claude Sonnet 4
+- **Optional SAR Agent** — AgentCore integration for advanced Suspicious Activity Report generation
+
+## Investigation Workflow
+
+1. Real-time transaction analysis with ML scoring
+2. Automated pattern detection for fraud risk indicators
+3. Interactive natural language investigation with Claude AI
+4. Three-tier decision framework for response actions
+5. Complete audit trail for compliance review`,
+          },
+          {
+            id: 'case-management-ref-deploy',
+            title: 'Deployment',
+            content: `# Case Management — Deployment
+
+## Prerequisites
+
+**AWS Account Requirements:**
+- Bedrock access with Claude Sonnet 4 model enabled
+- IAM permissions for Lambda, DynamoDB, API Gateway, S3, CloudFront
+- Sufficient service quotas for 4 Lambda functions and 5 DynamoDB tables
+
+**Local Tools:**
+\`\`\`bash
+# AWS CLI configured with credentials
+aws --version
+
+# Node.js 18+ for React build
+node --version
+
+# jq for JSON processing (cleanup script)
+brew install jq  # macOS
+\`\`\`
+
+**AWS Credentials:**
+Create \`.env\` file in project root:
+\`\`\`bash
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
+\`\`\`
+
+## Deployment
+
+Deploy everything with a single command:
+
+\`\`\`bash
+cd applications/reference_implementations/case-management
+bash deploy.sh
+\`\`\`
+
+This command provisions:
+- 5 DynamoDB tables (txn_logs, txn_features, pair_stats, dst_src_window, actor_state)
+- 4 Lambda functions with IAM roles (fraud scoring, transaction reader, SAR API, bedrock chat)
+- API Gateway with CORS enabled
+- React UI build and S3 upload
+- CloudFront distribution with HTTPS and Origin Access Control
+- Optional AgentCore stack (skipped if CLI not installed)
+
+**Output:**
+\`\`\`
+Frontend:   https://xxxxx.cloudfront.net
+API:        https://xxxxx.execute-api.us-east-1.amazonaws.com/prod
+\`\`\`
+
+CloudFront deployment takes 5–10 minutes to propagate globally.
+
+## What Gets Provisioned
+
+| Resource | Purpose |
+|---|---|
+| DynamoDB Tables | Transaction logs, feature store, pattern tracking, actor state |
+| Lambda Functions | Fraud scoring engine, query interface, SAR reports, Bedrock chat |
+| API Gateway | REST endpoints for frontend communication |
+| S3 Bucket | Frontend assets and CloudFront origin |
+| CloudFront Distribution | CDN with OAC for secure S3 access |
+| IAM Roles & Policies | Least-privilege access for each component |
+| KMS Keys | Optional encryption for sensitive data |
+
+## Cleanup
+
+**WARNING: This permanently deletes all resources and data.**
+
+\`\`\`bash
+bash cleanup.sh
+\`\`\`
+
+Removes:
+- All DynamoDB tables (data is lost)
+- All Lambda functions and IAM roles
+- API Gateway
+- S3 bucket and CloudFront distribution
+- AgentCore resources (if deployed)
+
+The script will prompt for confirmation before deletion.`,
+          },
+        ],
+      },
+      {
+        id: 'agent-safety-ref',
+        title: 'Agent Safety Controls',
+        children: [
+          {
+            id: 'agent-safety-ref-overview',
+            title: 'Overview',
+            content: `# Agent Safety Controls — Reference Implementation
+
+Modular toolkit for monitoring and managing AI agents running on Amazon Bedrock AgentCore. Provides human-in-the-loop safety controls with centralized dashboard, automated cost management, evaluation monitoring, observability, and session-level intervention.
+
+## Key Capabilities
+
+- **Web Dashboard** — ECS Express Mode + CloudFront + Cognito authentication with agent monitoring UI
+- **Automated Budget Controls** — AWS Budgets created per agent with SNS email alerts at 80% and 100% thresholds
+- **Automated Evaluation Setup** — 7 built-in evaluators with CloudWatch alarms for quality issues
+- **Observability Alarms** — Anomaly detection for latency, errors, token usage, and invocation count
+- **Kill Switch** — Revoke Bedrock access for single agent or all agents instantly via IAM deny policy
+- **Session Management** — Stop individual sessions or all sessions from dashboard
+- **Audit Trail** — Complete logging of interventions with identity and reason
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Dashboard | ECS Express Mode | FastAPI backend with HTML/CSS/JS single-file frontend |
+| Authentication | AWS Cognito | User pools with JWT validation on every API request |
+| Data Store | 6 DynamoDB Tables | Single source of truth for registry, sessions, interventions, signals |
+| CDN | CloudFront | Distribution with origin verification header for security |
+| Cost Controls | AWS Budgets + SNS | Event-driven budget automation per agent |
+| Evaluation | CloudWatch Alarms | AgentCore Online Evaluation configs with alarm thresholds |
+| Observability | CloudWatch | Anomaly detection alarms for performance metrics |
+| Kill Switch | Lambda + IAM | On-demand policy attachment for access revocation |
+
+## Agents & Automation
+
+- **Auto Budget Lambda** — EventBridge-triggered, creates AWS Budgets on agent deployment
+- **Auto Eval Lambda** — Sets up AgentCore evaluation configs with CloudWatch alarms
+- **Auto Obs Lambda** — Creates anomaly detection alarms for latency, errors, tokens, invocations
+- **Session Reporter Lambda** — Heartbeat-based session tracking to DynamoDB
+- **Kill Switch Lambda** — IAM deny policy management for emergency shutdown (reversible)
+- **Stop Sessions Lambda** — Tier 1 intervention for stopping active sessions
+
+## Intervention Model
+
+| Tier | Action | Scope | Reversible |
+|---|---|---|---|
+| Tier 1 | Stop Sessions | All active sessions for one agent | No (sessions terminated) |
+| Tier 2 | Revoke IAM | Single agent or all agents Bedrock access | Yes (restore from dashboard) |`,
+          },
+          {
+            id: 'agent-safety-ref-deploy',
+            title: 'Deployment',
+            content: `# Agent Safety Controls — Deployment
+
+## Prerequisites
+
+- AWS CLI v2 configured with admin-level IAM permissions (assumed role recommended)
+- Python 3.11+ with boto3
+- Docker (for dashboard container)
+- Amazon Bedrock model access enabled (Claude Sonnet 4)
+- AgentCore access enabled in your AWS account
+
+## Quick Start — Deploy Everything
+
+Deploy the full stack with one command:
+
+\`\`\`bash
+cd applications/reference_implementations/agent-safety
+
+./deploy-all.sh \\
+  --profile <your-aws-profile> \\
+  --region us-east-1 \\
+  --admin-email you@company.com \\
+  --admin-password 'YourPassword123!'
+\`\`\`
+
+This takes 15–20 minutes and deploys all components in phases.
+
+## What Gets Provisioned
+
+| Phase | Resources | Time |
+|---|---|---|
+| 1. Dashboard | ECR, Docker image, 6 DynamoDB tables, Cognito, ECS Express Mode, CloudFront, Stop Sessions Lambda | ~10 min |
+| 2. Cost Controls | SNS topic, email subscription, EventBridge rule, Auto Budget Lambda | ~3 min |
+| 2b. Evaluation Controls | Auto Eval Lambda, CloudWatch alarms, EventBridge rule | ~2 min |
+| 2c. Kill Switch | Kill Switch Lambda with IAM deny policy management | ~2 min |
+| 2d. Observability Controls | Auto Obs Lambda, CloudWatch anomaly detection alarms | ~2 min |
+| 3. Sample Agent | Inference Profile, S3 package, IAM role, AgentCore Runtime | ~5 min |
+
+**Output:**
+CloudFront dashboard URL for immediate sign-in with Cognito credentials.
+
+## DynamoDB Tables (6 total)
+
+| Table | Purpose |
+|---|---|
+| safety-dashboard-registry | Agent metadata, runtime info, settings |
+| safety-dashboard-sessions | Live session tracking with heartbeats |
+| safety-dashboard-interventions | Audit trail of all interventions |
+| safety-dashboard-cost-signals | Per-agent budget data from AWS Budgets |
+| safety-dashboard-obs-signals | Per-agent observability metrics |
+| safety-dashboard-eval-signals | Per-agent evaluation scores |
+
+## Deploy Components Individually
+
+Each component is independent. Deploy in this order:
+
+\`\`\`bash
+# 1. Dashboard (includes DynamoDB tables)
+cd dashboard && ./deploy.sh --profile <profile> --region us-east-1 \\
+  --admin-email you@company.com --admin-password 'YourPassword123!'
+
+# 2. Cost Controls
+cd cost-controls && ./deploy.sh --profile <profile> --region us-east-1 \\
+  --notification-email you@company.com
+
+# 3. Sample Agent (stateless)
+cd sample-agent && python deploy.py --name my_agent --region us-east-1 --profile <profile>
+
+# 3b. Sample Agent (with memory)
+cd sample-agent && python deploy.py --name my_agent --region us-east-1 --profile <profile> --create-memory
+
+# Invoke the agent
+python sample-agent/invoke_agent.py --arn <AGENT_ARN> --prompt "Hello!" --region us-east-1
+\`\`\`
+
+## Cleanup
+
+**WARNING: This permanently deletes all resources and data.**
+
+\`\`\`bash
+./destroy-all.sh --profile <profile> --region us-east-1 --agent-name my_agent
+\`\`\`
+
+Removes:
+- All DynamoDB tables (data is lost)
+- ECR repositories and container images
+- Cognito user pools
+- ECS task definitions and CloudWatch log groups
+- CloudFront distribution
+- Lambda functions, EventBridge rules, SNS topics
+- IAM roles and policies
+- All CloudWatch alarms`,
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 'fsi-foundry',
     title: 'FSI Foundry',
     children: [
@@ -327,20 +993,20 @@ Navigate to the CloudFront URL and sign in. You can now:
         title: 'Overview',
         content: `# FSI Foundry
 
-FSI Foundry provides **34 production-ready multi-agent applications** across 6 financial services domains. Each use case has implementations in both Strands and LangGraph frameworks.
+FSI Foundry provides **34 multi-agent applications** across 6 financial services domains. Each use case has implementations in both Strands and LangGraph frameworks.
 
 ## What You Get
 
 - **68 Total Implementations**: 34 use cases × 2 frameworks (Strands + LangGraph)
 - **Multi-Agent Orchestration**: Coordinated specialist agents for complex workflows
-- **Production-Ready**: Tested architectures with sample data and deployment scripts
+- **Tested Architectures**: Sample data and deployment scripts for every use case
 - **Flexible Deployment**: Deploy to Amazon Bedrock AgentCore via automated CI/CD pipeline
 
 ## Domains
 
 - **Banking** (6 use cases) — Customer onboarding, engagement, and payment automation
 - **Risk & Compliance** (4 use cases) — Fraud detection, compliance investigation, adverse media screening
-- **Capital Markets** (7 use cases) — Trading, investment advisory, research
+- **Capital Markets** (7 use cases) — Trading, market surveillance, investment advisory, research
 - **Insurance** (2 use cases) — Claims processing and life insurance agent assistance
 - **Operations** (11 use cases) — Document processing, analytics, communication automation
 - **Modernization** (4 use cases) — Legacy migration and economic research
@@ -4966,6 +5632,317 @@ cat output.json | jq '.'
 # Run automated tests
 ./applications/fsi_foundry/scripts/use_cases/adverse_media/test/test_agentcore.sh
 ./applications/fsi_foundry/scripts/use_cases/adverse_media/test/test_ec2.sh
+\`\`\`
+
+## Monitoring & Observability
+
+- **CloudWatch Logs**: Full agent execution traces, tool calls, model invocations
+- **CloudWatch Metrics**: Invocation count, latency (p50/p95/p99), error rate
+- **Deployment Status**: Real-time status tracking in the control plane UI
+- **Build Logs**: CodeBuild execution logs accessible from deployment detail page
+
+## Cleanup
+
+\`\`\`bash
+# Destroy all provisioned resources
+./applications/fsi_foundry/scripts/cleanup/cleanup_agentcore.sh
+./applications/fsi_foundry/scripts/cleanup/cleanup_ec2.sh
+\`\`\``,
+              },
+            ],
+          },
+          {
+            id: 'market-surveillance',
+            title: 'Market Surveillance',
+            children: [
+              {
+                id: 'market-surveillance-business',
+                title: 'Business & Agent Design',
+                content: `# Market Surveillance -- Business & Agent Design
+
+## Business Overview
+
+The Market Surveillance application automates trade pattern analysis, communication monitoring, and surveillance alert generation for detecting market manipulation, insider trading, and suspicious trading patterns. It coordinates specialist agents to analyze trading activity, monitor communications, and generate regulatory-grade surveillance alerts.
+
+## Surveillance Types
+
+| Type | Description | Agents Used |
+|------|-------------|-------------|
+| **Full Surveillance** | Complete trade + communication + alert analysis | All agents in parallel |
+| **Trade Analysis** | Trading pattern and anomaly detection | Trade Pattern Analyst |
+| **Communication Monitoring** | Communication review for insider signals | Communication Monitor |
+| **Alert Generation** | Surveillance alert creation and evidence | Surveillance Alert Generator |
+
+## Agent Design
+
+### Orchestrator -- Market Surveillance Supervisor
+
+Coordinates specialist agents to detect and document potential market abuse. Synthesizes findings into regulatory-grade surveillance reports with enforcement recommendations.
+
+Considers:
+- Cross-reference between trading patterns and communications
+- Severity of detected manipulation indicators
+- Regulatory reporting obligations and deadlines
+- Evidence quality for potential enforcement actions
+
+### Trade Pattern Analyst Agent
+
+Specializes in trading pattern analysis and manipulation detection.
+
+**Responsibilities**:
+- Layering and spoofing pattern detection
+- Wash trading identification
+- Momentum ignition analysis
+- Front-running detection
+- Unusual volume and timing analysis
+
+**Data Retrieved via S3**:
+- Trading profile data
+- Trade history
+
+**Output**: Pattern Matches, Manipulation Indicators, Anomaly Scores, Trading Timeline
+
+### Communication Monitor Agent
+
+Specializes in communication surveillance for insider trading signals.
+
+**Responsibilities**:
+- Email and chat communication analysis
+- Keyword and phrase pattern matching
+- Temporal correlation with trading activity
+- Relationship mapping between communicators and traders
+- Sentiment and intent analysis
+
+**Data Retrieved via S3**:
+- Trading profile data
+- Communication logs
+
+**Output**: Flagged Communications, Correlation Findings, Relationship Maps, Intent Assessment
+
+### Surveillance Alert Generator Agent
+
+Specializes in creating comprehensive surveillance alerts with evidence.
+
+**Responsibilities**:
+- Alert severity classification
+- Evidence package compilation
+- Regulatory report formatting (STR, suspicious activity)
+- Investigation recommendation generation
+- Alert deduplication and prioritization
+
+**Data Retrieved via S3**:
+- Trading profile data
+- Alert configuration
+
+**Output**: Surveillance Alerts, Evidence Packages, Regulatory Reports, Investigation Recommendations
+
+## Configuration
+
+| Setting | Value |
+|---------|-------|
+| **data_prefix** | \`samples/market_surveillance\` |
+| **Alert Retention** | \`7 years\` |
+| **Pattern Confidence Threshold** | \`0.8\` |`,
+              },
+              {
+                id: 'market-surveillance-architecture',
+                title: 'Technical Architecture',
+                content: `# Market Surveillance -- Technical Architecture
+
+## Assessment Flow
+
+\`\`\`diagram:market-surveillance-assessment-flow
+\`\`\`
+
+## State Machine
+
+\`\`\`diagram:market-surveillance-state-machine
+\`\`\`
+
+## Directory Structure
+
+\`\`\`
+use_cases/market_surveillance/
+├── README.md
+└── src/
+    ├── strands/
+    │   ├── config.py              # MarketSurveillanceSettings
+    │   ├── models.py              # Pydantic schemas (shared)
+    │   ├── orchestrator.py        # MarketSurveillanceOrchestrator
+    │   └── agents/
+    │       ├── trade_pattern_analyst.py
+    │       ├── communication_monitor.py
+    │       └── surveillance_alert_generator.py
+    └── langchain_langgraph/
+        ├── config.py
+        ├── models.py
+        ├── orchestrator.py
+        └── agents/
+            ├── trade_pattern_analyst.py
+            ├── communication_monitor.py
+            └── surveillance_alert_generator.py
+\`\`\`
+
+## Data Models
+
+### Request Schema
+
+\`\`\`json
+{
+  "trader_id": "TRADER001",
+  "surveillance_type": "full",
+  "additional_context": "Unusual options activity before earnings"
+}
+\`\`\`
+
+**surveillance_type options**: \`full\`, \`trade_analysis\`, \`communication_monitoring\`, \`alert_generation\`
+
+### Response Schema
+
+\`\`\`json
+{
+  "trader_id": "TRADER001",
+  "surveillance_id": "a1b2c3d4-...",
+  "timestamp": "2025-03-15T10:30:00Z",
+  "trade_analysis": {
+    "patterns_detected": ["unusual_options_volume"],
+    "anomaly_score": 0.85,
+    "timeline": "Heavy call buying 2 days before earnings"
+  },
+  "communications": {
+    "flagged_messages": 3,
+    "correlation_score": 0.72,
+    "key_contacts": ["External analyst"]
+  },
+  "alerts": [
+    {
+      "type": "potential_insider_trading",
+      "severity": "high",
+      "evidence_strength": "moderate"
+    }
+  ],
+  "summary": "Potential insider trading detected. Options activity correlated with external communications.",
+  "raw_analysis": {
+    "trade_result": { "..." : "..." },
+    "communication_result": { "..." : "..." },
+    "alert_result": { "..." : "..." }
+  }
+}
+\`\`\`
+
+## Framework Comparison
+
+| Aspect | Strands | LangGraph |
+|--------|---------|-----------|
+| Base Class | StrandsOrchestrator | LangGraphOrchestrator |
+| State Management | Method parameters | TypedDict with message reducer |
+| Parallelism | \`run_parallel()\` built-in | \`asyncio.gather()\` explicit |
+| Graph Definition | Sequential method calls | StateGraph with nodes and edges |
+| Routing | Direct conditional logic | \`set_conditional_entry_point\` |
+| Synthesis | Custom synthesis prompt | \`with_structured_output()\` schema |
+| Agent Max Tokens | 8,192 | 4,096 |
+| Tool Integration | \`s3_retriever_strands\` | \`s3_retriever\` (LangChain) |
+
+## Model Configuration
+
+| Setting | Value |
+|---------|-------|
+| **Model** | Claude Sonnet 4 (\`anthropic.claude-sonnet-4-20250514-v1:0\`) |
+| **Regional Routing** | \`get_regional_model_id()\` for us-east-1, us-west-2, eu-west-1 |
+| **Temperature** | 0.1 (deterministic for consistent surveillance) |
+
+## Tool Integration
+
+Both frameworks use the **s3_retriever_tool** to fetch data from S3:
+
+| Data Type | S3 Key Pattern | Used By |
+|-----------|---------------|---------|
+| \`profile\` | \`samples/market_surveillance/{trader_id}/profile.json\` | All agents |
+| \`trades\` | \`samples/market_surveillance/{trader_id}/trades.json\` | Trade Pattern Analyst |
+| \`communications\` | \`samples/market_surveillance/{trader_id}/communications.json\` | Communication Monitor |
+| \`alerts\` | \`samples/market_surveillance/{trader_id}/alerts.json\` | Surveillance Alert Generator |`,
+              },
+              {
+                id: 'market-surveillance-deployment',
+                title: 'Deployment & Testing',
+                content: `# Market Surveillance -- Deployment & Testing
+
+## Deployment Pipeline
+
+\`\`\`diagram:market-surveillance-deployment-pipeline
+\`\`\`
+
+## Deploy via Control Plane UI
+
+1. Navigate to **FSI Foundry** -> **Risk & Compliance** -> **Market Surveillance**
+2. Choose framework: **Strands** or **LangGraph**
+3. Configure deployment:
+   - **Deployment Name**: \`market-surveillance-prod\`
+   - **AWS Region**: \`us-east-1\`
+   - **Model**: Claude Sonnet 4
+4. Click **Deploy**
+
+## Deploy via CLI
+
+\`\`\`bash
+# Deploy to AgentCore (recommended)
+USE_CASE_ID=market_surveillance \\
+FRAMEWORK=strands \\
+AWS_REGION=us-east-1 \\
+./applications/fsi_foundry/scripts/deploy/full/deploy_agentcore.sh
+
+# Alternative: Deploy to EC2
+USE_CASE_ID=market_surveillance \\
+FRAMEWORK=langchain_langgraph \\
+AWS_REGION=us-east-1 \\
+./applications/fsi_foundry/scripts/deploy/full/deploy_ec2.sh
+\`\`\`
+
+## Infrastructure Provisioned
+
+| Resource | Purpose |
+|----------|---------|
+| ECR Repository | Container image for Market Surveillance agent runtime |
+| IAM Role + 6 Policies | Permissions for Bedrock, S3, ECR, CloudWatch, X-Ray |
+| S3 Data Bucket | Sample trading and communication data |
+| S3 Code Bucket | AgentCore deployment package |
+| CloudFormation Stack | Bedrock AgentCore Runtime |
+| CloudWatch Log Group | Agent execution logs |
+
+Deployment completes in approximately 8-12 minutes.
+
+## Sample Test Data
+
+| Trader ID | Description | Expected Output |
+|-----------|-------------|----------------|
+| TRADER001 | Unusual options activity before earnings, external communications | High-severity insider trading alert |
+| TRADER002 | Normal trading patterns, no suspicious communications | Clean surveillance report |
+
+## Testing the Deployed Runtime
+
+### Full Surveillance
+\`\`\`bash
+RUNTIME_ARN="<from deployment outputs>"
+
+PAYLOAD=$(echo -n '{
+  "trader_id": "TRADER001",
+  "surveillance_type": "full"
+}' | base64)
+
+aws bedrock-agentcore invoke-agent-runtime \\
+  --agent-runtime-arn $RUNTIME_ARN \\
+  --payload $PAYLOAD \\
+  --region us-east-1 \\
+  output.json
+
+cat output.json | jq '.'
+\`\`\`
+
+### Using Test Scripts
+\`\`\`bash
+# Run automated tests
+./applications/fsi_foundry/scripts/use_cases/market_surveillance/test/test_agentcore.sh
+./applications/fsi_foundry/scripts/use_cases/market_surveillance/test/test_ec2.sh
 \`\`\`
 
 ## Monitoring & Observability
@@ -9834,7 +10811,7 @@ The Code Generation application automates requirement analysis, code scaffolding
 
 ### Orchestrator -- Code Generation Supervisor
 
-Coordinates specialist agents to produce production-ready code from requirements. Ensures code quality, test coverage, and architectural consistency.
+Coordinates specialist agents to produce working code from requirements. Ensures code quality, test coverage, and architectural consistency.
 
 Considers:
 - Requirement completeness and clarity

@@ -8,6 +8,7 @@ import PipelineProgress from './PipelineProgress';
 import PipelineVisualization from './PipelineVisualization';
 import LogsViewer from './LogsViewer';
 import TestDeploymentDrawer from './TestDeploymentDrawer';
+import MarkdownRenderer from './MarkdownRenderer';
 
 const TERMINAL_STATUSES: DeploymentStatus[] = ['deployed', 'destroyed', 'failed', 'rolled_back', 'delivered'];
 
@@ -23,6 +24,9 @@ export default function DeploymentDetail() {
   const [redeployError, setRedeployError] = useState<string | null>(null);
   const [testDrawerOpen, setTestDrawerOpen] = useState(false);
   const [useCase, setUseCase] = useState<AppUseCase | undefined>(undefined);
+  const [downloadingSource, setDownloadingSource] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [showAllOutputs, setShowAllOutputs] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -79,6 +83,24 @@ export default function DeploymentDetail() {
     }
   };
 
+  const handleDownloadSource = async () => {
+    if (!id) return;
+    setDownloadingSource(true);
+    setDownloadError(null);
+    try {
+      const { download_url } = await deploymentsApi.getSourceZipUrl(id);
+      window.location.href = download_url;
+    } catch (e: any) {
+      setDownloadError(e?.response?.data?.detail || e.message || 'Failed to get download link');
+    } finally {
+      setDownloadingSource(false);
+    }
+  };
+
+  const isAppFactory = deployment?.template_id?.startsWith('app-factory-') ?? false;
+  const hasSourceZip = isAppFactory && Boolean(deployment?.outputs?.source_zip_key);
+  const aboutMarkdown = isAppFactory ? (deployment?.outputs?.about_markdown ?? '').trim() : '';
+
   const handleRedeploy = async () => {
     if (!id) return;
     setRedeploying(true);
@@ -123,14 +145,19 @@ export default function DeploymentDetail() {
           <div className="flex items-center gap-4">
             <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">{deployment.deployment_name}</h1>
             <StatusBadge status={deployment.status} />
-            {deployment.status === 'deployed' && (
+            {deployment.status === 'deployed' && (() => {
+              const operatorUrl = deployment.outputs?.operator_app_url || deployment.outputs?.operatorappurl || deployment.outputs?.OperatorAppUrl;
+              const appUrl = deployment.outputs?.ui_url || deployment.outputs?.app_url || deployment.outputs?.AmplifyUrl;
+              const launchUrl = operatorUrl || appUrl;
+              const launchLabel = operatorUrl ? 'Open Operator App' : 'Open App';
+              return (
               <div className="flex items-center gap-2 ml-auto">
-                {(deployment.outputs?.ui_url || deployment.outputs?.app_url || deployment.outputs?.AmplifyUrl) && (
+                {launchUrl && (
                   <button
-                    onClick={() => window.open(deployment.outputs?.ui_url || deployment.outputs?.app_url || deployment.outputs?.AmplifyUrl, '_blank')}
+                    onClick={() => window.open(launchUrl, '_blank')}
                     className="inline-flex items-center gap-1.5 text-sm py-2 px-4 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors"
                   >
-                    Open App
+                    {launchLabel}
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                     </svg>
@@ -148,11 +175,46 @@ export default function DeploymentDetail() {
                   Test Deployment
                 </button>
                 )}
+                {hasSourceZip && (
+                <button
+                  onClick={handleDownloadSource}
+                  disabled={downloadingSource}
+                  className="inline-flex items-center gap-1.5 text-sm py-2 px-4 rounded-lg font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 hover:border-violet-300 transition-colors disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  {downloadingSource ? 'Preparing...' : 'Download Source'}
+                </button>
+                )}
               </div>
-            )}
+              );
+            })()}
           </div>
           <p className="text-slate-500 mt-2">Deployed from <span className="font-semibold text-slate-700">{deployment.template_id}</span></p>
         </div>
+
+        {/* Frontier Agent operator-app session notice */}
+        {deployment.status === 'deployed' && (deployment.outputs?.operator_app_url || deployment.outputs?.operatorappurl || deployment.outputs?.OperatorAppUrl) && (
+          <div className="mb-6 rounded-xl border border-amber-200/70 bg-amber-50/60 px-4 py-3 flex gap-3 animate-fade-in">
+            <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+            <div className="text-sm text-amber-900">
+              <span className="font-semibold">Operator App access requires a live AWS console session.</span>{' '}
+              The Open Operator App session is authenticated via your AWS account login and expires after 30 minutes of inactivity.
+              If clicking <span className="font-medium">Open Operator App</span> shows a sign-in page, first sign into the target AWS account console in another tab, then retry from here.
+            </div>
+          </div>
+        )}
+
+        {/* About this deployment (app-factory only) */}
+        {isAppFactory && aboutMarkdown && (
+          <div className="card mb-6 animate-fade-in">
+            <h3 className="text-base font-semibold text-slate-900 mb-4">About this deployment</h3>
+            <MarkdownRenderer markdown={aboutMarkdown} />
+          </div>
+        )}
 
         {/* Pipeline Progress */}
         {showPipelineProgress && (
@@ -182,8 +244,54 @@ export default function DeploymentDetail() {
           </div>
         )}
 
+
+        {/* Amplify URL note */}
+        {deployment.status === 'deployed' && deployment.outputs?.AmplifyUrl && (
+          <div className="card bg-blue-50/50 border-blue-200/60 mb-6 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-blue-900 mb-1">Your app is ready</h3>
+                <p className="text-sm text-blue-700/80 mb-3">
+                  The deployment is complete. Open the Amplify URL below to access the UI.
+                </p>
+                <a
+                  href={deployment.outputs.AmplifyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Open App
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
+                </a>
+                <p className="text-xs text-blue-600/70 mt-2 font-mono break-all">{deployment.outputs.AmplifyUrl}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Deployment Outputs Panel */}
-        {deployment.status === 'deployed' && deployment.outputs && Object.keys(deployment.outputs).length > 0 && (
+        {deployment.status === 'deployed' && deployment.outputs && Object.keys(deployment.outputs).length > 0 && (() => {
+          const hiddenKeys = new Set(['deployment_instructions', 'demo_user', 'demo_password', 'status', 'deployment_id']);
+          const keyPatterns = [
+            /url$/i, /endpoint$/i, /^frontend/i, /^app_url/i, /^ui_url/i, /^AmplifyUrl$/,
+            /^MainRuntime/i, /^RuntimeArn$/i, /^RuntimeId$/i, /^MemoryId$/i,
+            /^Gateway(Url|Id|Arn)$/i, /^GatewayTargetCount$/i,
+            /^cognito_user_pool_id$/, /^UserPoolId/i, /^region$/i,
+            /^langfuse/i, /^enable_tracing/i,
+            /^agentcore/i, /^runtime_arn$/i, /^runtime_id$/i,
+          ];
+          const allEntries = Object.entries(deployment.outputs).filter(([key]) => !hiddenKeys.has(key));
+          const keyOutputs = allEntries.filter(([key]) => keyPatterns.some(p => p.test(key)));
+          const otherOutputs = allEntries.filter(([key]) => !keyPatterns.some(p => p.test(key)));
+
+          return (
           <div className="card bg-emerald-50/50 border-emerald-200/60 mb-6 animate-fade-in">
             <h3 className="text-base font-semibold text-emerald-900 mb-4 flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
@@ -198,7 +306,7 @@ export default function DeploymentDetail() {
               <div className="mb-4 p-4 bg-white border border-emerald-200/60 rounded-xl">
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Deployment Instructions</div>
                 <div className="font-mono text-sm text-slate-900 space-y-1">
-                  {deployment.outputs.deployment_instructions.split('\n').map((line, i) => {
+                  {deployment.outputs.deployment_instructions.split('\n').map((line: string, i: number) => {
                     const trimmed = line.trim();
                     if (!trimmed) return <div key={i} className="h-2" />;
                     if (trimmed.startsWith('==='))
@@ -220,22 +328,53 @@ export default function DeploymentDetail() {
               </div>
             )}
 
-            <div className="space-y-2">
-              {Object.entries(deployment.outputs)
-                .filter(([key]) => key !== 'deployment_instructions')
-                .map(([key, value]) => (
-                <div key={key} className="p-3 bg-white border border-emerald-200/60 rounded-xl">
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{key}</div>
-                  <div className="text-sm font-mono text-slate-900 break-all">{value}</div>
-                </div>
-              ))}
-            </div>
+            {keyOutputs.length > 0 && (
+              <div className="space-y-2 mb-4">
+                {keyOutputs.map(([key, value]) => (
+                  <div key={key} className="p-3 bg-white border border-emerald-200/60 rounded-xl">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{key}</div>
+                    <div className="text-sm font-mono text-slate-900 break-all">{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {otherOutputs.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowAllOutputs(!showAllOutputs)}
+                  className="text-sm text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 mb-2 transition-colors"
+                >
+                  <svg className={`w-4 h-4 transition-transform ${showAllOutputs ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                  {showAllOutputs ? 'Hide' : 'Show'} {otherOutputs.length} additional outputs
+                </button>
+                {showAllOutputs && (
+                  <div className="space-y-2">
+                    {otherOutputs.map(([key, value]) => (
+                      <div key={key} className="p-3 bg-white border border-slate-200/60 rounded-xl">
+                        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{key}</div>
+                        <div className="text-sm font-mono text-slate-700 break-all">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {destroyError && (
           <div className="card bg-red-50 border-red-200 mb-6 animate-fade-in">
             <p className="text-red-700">{destroyError}</p>
+          </div>
+        )}
+
+        {downloadError && (
+          <div className="card bg-red-50 border-red-200 mb-6 animate-fade-in">
+            <p className="text-red-700">{downloadError}</p>
           </div>
         )}
 
@@ -247,7 +386,13 @@ export default function DeploymentDetail() {
               <h3 className="text-base font-semibold text-slate-900 mb-4">Configuration</h3>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  ['Template', deployment.template_id],
+                  [
+                    deployment.template_id?.startsWith('frontier-agents-') ? 'Frontier Agent' :
+                    deployment.template_id?.startsWith('custom-agents-') ? 'Custom Agent' :
+                    deployment.template_id?.startsWith('foundry-') ? 'FSI Foundry Use Case' :
+                    'Template',
+                    deployment.template_id,
+                  ],
                   ['IaC Type', deployment.iac_type],
                   ['Framework', deployment.framework_id || '—'],
                   ['AWS Account', deployment.aws_account],

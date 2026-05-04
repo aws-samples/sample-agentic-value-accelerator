@@ -93,7 +93,7 @@ export default function TemplateCatalog() {
         <div className="space-y-8">
           {/* Header */}
           <div className="animate-fade-in">
-            <a href="/" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Home</a>
+            <a href="/applications" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Applications</a>
             <h1 className="text-3xl font-semibold text-slate-900 tracking-tight mt-3">
               Templates
             </h1>

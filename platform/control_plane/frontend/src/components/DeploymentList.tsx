@@ -34,17 +34,24 @@ export default function DeploymentList() {
     </svg>
   );
 
-  const REFIMPL_IDS = ['trade-surveillance', 'intelligent-document-processing'];
-  const getDeploymentType = (templateId: string): 'template' | 'foundry' | 'refimpl' => {
+  const REFIMPL_IDS = ['shopping-concierge-agent', 'market-surveillance', 'trade-surveillance', 'intelligent-document-processing', 'case-management', 'agent-safety'];
+  type DeploymentType = 'template' | 'foundry' | 'refimpl' | 'frontier_agent' | 'custom_agent' | 'app_factory';
+  const getDeploymentType = (templateId: string): DeploymentType => {
     if (templateId.startsWith('foundry-')) return 'foundry';
+    if (templateId.startsWith('frontier-agents-')) return 'frontier_agent';
+    if (templateId.startsWith('custom-agents-')) return 'custom_agent';
+    if (templateId.startsWith('app-factory-')) return 'app_factory';
     if (templateId.startsWith('refimpl-') || REFIMPL_IDS.includes(templateId)) return 'refimpl';
     return 'template';
   };
 
-  const typeConfig = {
-    template: { label: 'Template', color: 'bg-blue-500', textColor: 'text-blue-700', bgColor: 'bg-blue-50' },
-    foundry:  { label: 'Foundry', color: 'bg-violet-500', textColor: 'text-violet-700', bgColor: 'bg-violet-50' },
-    refimpl:  { label: 'Ref. Impl.', color: 'bg-amber-500', textColor: 'text-amber-700', bgColor: 'bg-amber-50' },
+  const typeConfig: Record<DeploymentType, { label: string; color: string; textColor: string; bgColor: string }> = {
+    template:       { label: 'Template', color: 'bg-blue-500', textColor: 'text-blue-700', bgColor: 'bg-blue-50' },
+    foundry:        { label: 'Foundry', color: 'bg-violet-500', textColor: 'text-violet-700', bgColor: 'bg-violet-50' },
+    refimpl:        { label: 'Ref. Impl.', color: 'bg-amber-500', textColor: 'text-amber-700', bgColor: 'bg-amber-50' },
+    frontier_agent: { label: 'Frontier Agent', color: 'bg-orange-500', textColor: 'text-orange-700', bgColor: 'bg-orange-50' },
+    custom_agent:   { label: 'Custom Agent', color: 'bg-indigo-500', textColor: 'text-indigo-700', bgColor: 'bg-indigo-50' },
+    app_factory:    { label: 'App Factory', color: 'bg-emerald-500', textColor: 'text-emerald-700', bgColor: 'bg-emerald-50' },
   };
 
   const fetchDeployments = async () => {
@@ -140,11 +147,13 @@ export default function DeploymentList() {
             </div>
             <div>
               <p className="text-sm text-blue-900 font-semibold">How deployments work</p>
-              <p className="text-sm text-blue-700/80 mt-1">Deployments are triggered from three sources, each with a different pipeline:</p>
+              <p className="text-sm text-blue-700/80 mt-1">Deployments are triggered from five product families, each with its own pipeline:</p>
               <div className="mt-2 space-y-1.5 text-sm text-blue-700/80">
-                <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-sm bg-purple-500 mt-1.5 flex-shrink-0"></span><span><strong>Foundrys</strong> — Full CI/CD: provisions infra (ECR, IAM, S3) → builds Docker image → creates AgentCore Runtime. ~3 min.</span></div>
                 <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-sm bg-blue-500 mt-1.5 flex-shrink-0"></span><span><strong>Templates</strong> — Packages scaffold to S3. You run the included IaC (Terraform/CDK/CFN) to provision resources.</span></div>
-                <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-sm bg-amber-500 mt-1.5 flex-shrink-0"></span><span><strong>Ref. Implementations</strong> — Full-stack apps with their own deploy pipelines. Coming soon.</span></div>
+                <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-sm bg-violet-500 mt-1.5 flex-shrink-0"></span><span><strong>FSI Foundry</strong> — Full CI/CD: provisions infra (ECR, IAM, S3) → builds Docker image → creates AgentCore Runtime. ~3 min.</span></div>
+                <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-sm bg-amber-500 mt-1.5 flex-shrink-0"></span><span><strong>Reference Implementations</strong> — Full-stack apps with their own deploy pipelines.</span></div>
+                <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-sm bg-orange-500 mt-1.5 flex-shrink-0"></span><span><strong>Frontier Agents</strong> — Managed AWS Frontier Agents (DevOps, Security, Kiro). Terraform-only pipeline today; CDK and CloudFormation coming.</span></div>
+                <div className="flex items-start gap-2"><span className="w-2 h-2 rounded-sm bg-indigo-500 mt-1.5 flex-shrink-0"></span><span><strong>Custom Agents</strong> — Build-your-own agents on Bedrock AgentCore with model, tools, memory, and guardrails of your choice.</span></div>
               </div>
               <a href="/docs/deployments" className="text-xs text-blue-600 font-medium underline mt-2 inline-block">Learn more in Docs →</a>
             </div>
@@ -190,6 +199,8 @@ export default function DeploymentList() {
               <option value="template">Template</option>
               <option value="foundry">Foundry</option>
               <option value="refimpl">Ref. Impl.</option>
+              <option value="frontier_agent">Frontier Agent</option>
+              <option value="custom_agent">Custom Agent</option>
             </select>
             <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="input-field w-40 text-sm">
               <option value="">All Regions</option>

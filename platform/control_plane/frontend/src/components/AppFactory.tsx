@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { appFactoryApi } from '../api/client';
 
 const STEPS = [
@@ -22,6 +22,24 @@ const DOMAIN_OPTIONS = [
   'Fraud & Security',
   'Other',
 ];
+
+// Convert a free-form display name into a deterministic use-case ID that
+// fits every downstream AWS name limit. The cap is 32 chars because that's
+// the tightest constraint (S3 bucket at 63 minus the fixed prefix/suffix
+// the Terraform wraps around it). Lowercase, hyphen-separated, alphanumeric.
+//
+// Examples:
+//   "Mortgage Hardship Review Console"     -> "mortgage-hardship-review-console"
+//   "KYC: Corporate Onboarding (v2)"       -> "kyc-corporate-onboarding-v2"
+//   "Client Transaction Summary Assistant" -> "client-transaction-summary-ass"
+export function toUseCaseId(displayName: string): string {
+  const slug = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')  // anything-not-alphanum -> hyphen
+    .replace(/^-+|-+$/g, '')       // trim leading/trailing hyphens
+    .replace(/-{2,}/g, '-');       // collapse runs of hyphens
+  return slug.slice(0, 32).replace(/-+$/, '');  // final cap + trim trailing hyphen
+}
 
 interface FormData {
   [key: string]: string;
@@ -60,9 +78,12 @@ export default function AppFactory() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [submissionId, setSubmissionId] = useState('');
+  const [catalogId, setCatalogId] = useState('');
+  const navigate = useNavigate();
 
   const set = (field: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }));
@@ -79,13 +100,38 @@ export default function AppFactory() {
     setSubmitting(true);
     setError('');
     try {
-      const result = await appFactoryApi.submit(form);
+      // Send the user's free-form name as `display_name`. The backend
+      // assigns a short catalog ID (e.g. I04) based on the domain prefix
+      // and guarantees uniqueness across all submissions. We also send the
+      // local slug as `use_case_name` for backwards compatibility with the
+      // downstream Terraform (which keys resource names off it), but the
+      // catalog ID is the authoritative identifier shown in the UI.
+      const payload = {
+        ...form,
+        display_name: form.use_case_name,
+        use_case_name: toUseCaseId(form.use_case_name),
+      };
+      const result: any = await appFactoryApi.submit(payload);
       setSubmissionId(result.submission_id);
+      if (result.catalog_id) setCatalogId(result.catalog_id);
       setSubmitted(true);
     } catch (err: any) {
       setError(err.message || 'Failed to submit. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeploy = async () => {
+    setDeploying(true);
+    setError('');
+    try {
+      const deployment = await appFactoryApi.deploy(submissionId);
+      // Navigate to the deployment detail page (same UI as all other deployments)
+      navigate(`/deployments/${deployment.deployment_id}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to start deployment. Please try again.');
+      setDeploying(false);
     }
   };
 
@@ -97,20 +143,53 @@ export default function AppFactory() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
         </div>
-        <h2 className="text-2xl font-semibold text-slate-900 mb-2">Submission saved</h2>
-        <p className="text-slate-500 text-sm mb-1">Your use case has been captured and stored.</p>
+        <h2 className="text-2xl font-semibold text-slate-900 mb-2">Use case captured</h2>
+        <p className="text-slate-500 text-sm mb-1">Your requirements have been saved. Ready to generate and deploy?</p>
+        {catalogId && (
+          <p className="text-sm text-slate-600 mb-1">
+            Catalog ID: <span className="font-mono font-semibold text-slate-900">{catalogId}</span>
+          </p>
+        )}
         <p className="text-xs text-slate-400 font-mono mb-8">{submissionId}</p>
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-6">{error}</div>
+        )}
+
         <div className="flex gap-3 justify-center">
           <button
-            onClick={() => { setForm(EMPTY); setStep(0); setSubmitted(false); setSubmissionId(''); }}
-            className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+            onClick={() => { setForm(EMPTY); setStep(0); setSubmitted(false); setSubmissionId(''); setCatalogId(''); setError(''); }}
+            className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
           >
             Submit another
           </button>
-          <Link to="/" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-            Back to home
-          </Link>
+          <button
+            onClick={handleDeploy}
+            disabled={deploying}
+            className="px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {deploying ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Starting...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.841m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                </svg>
+                Generate &amp; Deploy
+              </>
+            )}
+          </button>
         </div>
+        <p className="text-xs text-slate-400 mt-4">
+          This will generate the application code using AI and deploy it to AWS.
+          You can track progress on the deployment detail page.
+        </p>
       </div>
     );
   }
@@ -123,12 +202,11 @@ export default function AppFactory() {
       }} />
     <div className="relative max-w-3xl mx-auto px-6 py-10">
       <div className="mb-8 animate-fade-in">
-        <Link to="/" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">&larr; Back to Home</Link>
+        <Link to="/applications" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">&larr; Back to Applications</Link>
         <div className="flex items-center gap-3 mt-3">
           <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">App Factory</h1>
-          <span className="px-2.5 py-1 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-full">Coming Soon</span>
         </div>
-        <p className="text-slate-500 mt-2 max-w-2xl">Describe the application you want to build. We'll capture your requirements and use them to generate a complete blueprint. <span className="text-slate-400 italic">Blueprint generation is currently in development — submissions are saved for future processing.</span></p>
+        <p className="text-slate-500 mt-2 max-w-2xl">Describe the application you want to build. We'll generate the code and deploy it to AWS automatically.</p>
       </div>
 
       {/* Progress */}
@@ -171,6 +249,11 @@ export default function AppFactory() {
                 placeholder="e.g. Mortgage Pre-Approval Assistant"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-blue-400 transition-colors"
               />
+              {form.use_case_name.trim() && (
+                <p className="text-xs text-slate-500 mt-1.5">
+                  Deployed as: <span className="font-mono text-slate-700">{toUseCaseId(form.use_case_name) || '(type a name)'}</span>
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Which part of the business does this affect? <span className="text-red-500">*</span></label>
@@ -358,7 +441,7 @@ export default function AppFactory() {
               disabled={submitting}
               className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : 'Save use case'}
+              {submitting ? 'Saving...' : 'Submit & Review'}
             </button>
           )}
         </div>

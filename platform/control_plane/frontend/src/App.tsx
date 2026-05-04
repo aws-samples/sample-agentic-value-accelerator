@@ -11,11 +11,22 @@ import DeploymentCreate from './components/DeploymentCreate';
 import DeploymentDetail from './components/DeploymentDetail';
 import Documentation from './components/Documentation';
 import FSIFoundryCatalog from './components/FSIFoundryCatalog';
+import ReferenceImplementations from './components/ReferenceImplementations';
 import AppDeployCreate from './components/AppDeployCreate';
+import RefImplDeployCreate from './components/RefImplDeployCreate';
 import Observability from './components/Observability';
 import Guardrails from './components/Guardrails';
 import Policy from './components/Policy';
 import AppFactory from './components/AppFactory';
+import ApplicationsLanding from './components/ApplicationsLanding';
+import AaaSLanding from './components/AaaSLanding';
+import AwsAgentsCatalog from './components/AwsAgentsCatalog';
+import CustomAgentsCatalog from './components/CustomAgentsCatalog';
+import AwsDevOpsAgent from './components/AwsDevOpsAgent';
+import CustomAgentCreate from './components/CustomAgentCreate';
+import ToolsFactory from './components/ToolsFactory';
+import MyAgents from './components/MyAgents';
+import MyApps from './components/MyApps';
 
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,10 +56,23 @@ function AuthGate() {
         <Route path="/" element={<Home />} />
         <Route path="/accelerator-guide" element={<Strategy />} />
         <Route path="/strategy" element={<Strategy />} />
+        <Route path="/applications" element={<ApplicationsLanding />} />
         <Route path="/applications/fsi-foundry" element={<FSIFoundryCatalog />} />
+        <Route path="/applications/reference-implementations" element={<ReferenceImplementations />} />
         <Route path="/applications/deploy/:useCaseId" element={<AppDeployCreate />} />
+        <Route path="/applications/reference-implementations/deploy/:implId" element={<RefImplDeployCreate />} />
         <Route path="/applications/templates" element={<TemplateCatalog />} />
         <Route path="/applications/app-factory" element={<AppFactory />} />
+        <Route path="/aaas" element={<AaaSLanding />} />
+        <Route path="/aaas/aws-agents" element={<AwsAgentsCatalog />} />
+        <Route path="/aaas/aws-agents/aws-devops" element={<AwsDevOpsAgent />} />
+        <Route path="/aaas/aws-agents/aws-security" element={<AwsAgentsCatalog />} />
+        <Route path="/aaas/aws-agents/kiro" element={<AwsAgentsCatalog />} />
+        <Route path="/aaas/custom" element={<CustomAgentsCatalog />} />
+        <Route path="/aaas/custom/create" element={<CustomAgentCreate />} />
+        <Route path="/aaas/custom/my-agents" element={<MyAgents />} />
+        <Route path="/aaas/tools" element={<ToolsFactory />} />
+        <Route path="/applications/my-apps" element={<MyApps />} />
         <Route path="/templates" element={<TemplateCatalog />} />
         <Route path="/observability" element={<Observability />} />
         <Route path="/secure/guardrails" element={<Guardrails />} />

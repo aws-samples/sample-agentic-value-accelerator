@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getTemplates, deploymentsApi } from '../api/client';
+import { getTemplates, getTemplate, deploymentsApi } from '../api/client';
 import type { Template, DeploymentCreate as DeploymentCreateType } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -32,8 +32,15 @@ export default function DeploymentCreate() {
   useEffect(() => {
     if (pendingTemplateId && templates.length > 0) {
       const t = templates.find(t => t.id === pendingTemplateId);
-      if (t) selectTemplate(t);
-      setPendingTemplateId(null);
+      if (t) {
+        selectTemplate(t);
+        setPendingTemplateId(null);
+      } else {
+        // Template not in list (e.g. hidden), fetch directly by ID
+        getTemplate(pendingTemplateId).then(fetched => {
+          selectTemplate(fetched);
+        }).catch(() => {}).finally(() => setPendingTemplateId(null));
+      }
     }
   }, [pendingTemplateId, templates]);
 
@@ -134,9 +141,10 @@ export default function DeploymentCreate() {
 
         {/* Step 0: Choose deployment type */}
         {step === 0 && (
-          <div className="max-w-3xl mx-auto animate-fade-in">
+          <div className="max-w-5xl mx-auto animate-fade-in">
             <h2 className="text-xl font-bold text-slate-900 mb-6 text-center">What would you like to deploy?</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* FSI Foundry */}
               <button onClick={() => navigate('/applications/fsi-foundry')}
                 className="text-left p-6 border-2 border-slate-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50/50 transition-all group">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
@@ -149,6 +157,20 @@ export default function DeploymentCreate() {
                 <div className="mt-3 text-xs font-medium text-blue-600">Browse use cases →</div>
               </button>
 
+              {/* Reference Implementation */}
+              <button onClick={() => navigate('/applications/reference-implementations')}
+                className="text-left p-6 border-2 border-slate-200 rounded-2xl hover:border-violet-400 hover:bg-violet-50/50 transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center mb-4">
+                  <svg className="w-5 h-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-slate-900 mb-1 group-hover:text-violet-700 transition-colors">Reference Implementation</h3>
+                <p className="text-sm text-slate-500">Deploy a complete end-to-end application with frontend, backend, and infrastructure.</p>
+                <div className="mt-3 text-xs font-medium text-violet-600">Browse implementations →</div>
+              </button>
+
+              {/* Starter Template */}
               <button onClick={() => setStep(1)}
                 className="text-left p-6 border-2 border-slate-200 rounded-2xl hover:border-teal-400 hover:bg-teal-50/50 transition-all group">
                 <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center mb-4">
@@ -160,6 +182,48 @@ export default function DeploymentCreate() {
                 <p className="text-sm text-slate-500">Scaffold a new project from a template with agent code, IaC, and deployment scripts.</p>
                 <div className="mt-3 text-xs font-medium text-teal-600">Select template →</div>
               </button>
+
+              {/* App Factory */}
+              <button onClick={() => navigate('/applications/app-factory')}
+                className="text-left p-6 border-2 border-slate-200 rounded-2xl hover:border-rose-400 hover:bg-rose-50/50 transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center mb-4">
+                  <svg className="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 001.591 1.591L19 14.5m-9.25 0v5.25m4.5-5.25v5.25M3 21h18" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-slate-900 mb-1 group-hover:text-rose-700 transition-colors">App Factory</h3>
+                <p className="text-sm text-slate-500">Describe your problem, users, workflow, and data — we turn it into a markdown blueprint any AI coding assistant can ship.</p>
+                <div className="mt-3 text-xs font-medium text-rose-600">Launch wizard →</div>
+              </button>
+
+              {/* Frontier Agents */}
+              <button onClick={() => navigate('/aaas/aws-agents')}
+                className="text-left p-6 border-2 border-slate-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50/50 transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center mb-4">
+                  <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 13.5V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m12-3V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m-6-9V3.75m0 3.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 9.75V10.5" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-slate-900 mb-1 group-hover:text-orange-700 transition-colors">Frontier Agent</h3>
+                <p className="text-sm text-slate-500">Deploy Amazon's managed Frontier Agents (DevOps, Security, Kiro) into your account with Terraform today; CDK and CloudFormation coming.</p>
+                <div className="mt-3 text-xs font-medium text-orange-600">Browse agents →</div>
+              </button>
+
+              {/* Custom Agents — Coming Soon */}
+              <div className="relative text-left p-6 border-2 border-slate-200 rounded-2xl bg-slate-50/40 opacity-75 cursor-not-allowed">
+                <div className="absolute top-4 right-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                    Coming Soon
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center mb-4">
+                  <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-semibold text-slate-900 mb-1">Custom Agent</h3>
+                <p className="text-sm text-slate-500">Build your own autonomous agent on Bedrock AgentCore — pick a model, attach tools, configure memory and guardrails, then deploy.</p>
+              </div>
             </div>
           </div>
         )}
@@ -203,7 +267,7 @@ export default function DeploymentCreate() {
                     <button onClick={() => setStep(0)} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">← Back</button>
                   </div>
                   <div className="space-y-3">
-                    {templates.filter(t => t.type === 'usecase' || t.type === 'reference' || t.id === 'foundation-stack').map((t) => (
+                    {templates.filter(t => t.type === 'usecase' || t.id === 'foundation-stack').map((t) => (
                       <button key={t.id} onClick={() => selectTemplate(t)}
                         className="w-full text-left p-5 border-2 rounded-2xl transition-all duration-200 group border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer">
                         <div className="flex items-start justify-between">
@@ -268,8 +332,10 @@ export default function DeploymentCreate() {
                         How delivery works
                       </h4>
                       <p className="text-sm text-blue-800/80">
-                        A new S3 bucket will be created automatically in this account with the packaged template.
-                        You can then download the zip and run the IaC to provision resources.
+                        The packaged template is uploaded to a new S3 bucket in this account, then the CI/CD
+                        pipeline (CodeBuild + Step Functions) provisions the infrastructure end-to-end
+                        using the bundled IaC (Terraform/CDK). You'll receive live status updates and an
+                        "Open App" link once the deployment finishes.
                       </p>
                     </div>
 
