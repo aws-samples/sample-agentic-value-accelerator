@@ -10,11 +10,11 @@ interface Props {
 }
 
 const typeIcons: Record<string, string> = {
-  FULL: 'M4 6h16M4 12h16M4 18h16',
-  PORTFOLIO_REVIEW: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  MARKET_ANALYSIS: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-  CLIENT_PROFILING: 'M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M8.5 3a4 4 0 100 8 4 4 0 000-8z',
-  REBALANCING: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+  full: 'M4 6h16M4 12h16M4 18h16',
+  portfolio_review: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  market_analysis: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  client_profiling: 'M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M8.5 3a4 4 0 100 8 4 4 0 000-8z',
+  rebalancing: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
 };
 
 const flowLabels = ['Profiling Client', 'Analyzing Portfolio', 'Generating Recommendations'];
@@ -128,7 +128,7 @@ export default function AgentConsole({ config }: Props) {
                     style={{ background: selected ? 'linear-gradient(135deg, #064E3B, #059669)' : '#F3F4F6' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                       stroke={selected ? 'white' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={typeIcons[opt.value] || typeIcons.FULL} />
+                      <path d={typeIcons[opt.value] || typeIcons.full} />
                     </svg>
                   </div>
                   <span className="text-xs font-bold" style={{ color: selected ? 'var(--forest-800)' : 'var(--text-secondary)' }}>

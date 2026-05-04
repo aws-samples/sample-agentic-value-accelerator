@@ -14,26 +14,30 @@ from langchain.agents import create_tool_calling_agent, AgentExecutor
 
 from base.types import AgentConfig, ExecutionResult
 from config.settings import settings
+from utils.telemetry import setup_tracing, get_langfuse_callback_handler
 
 
 class LangGraphAgent(ABC):
     """
     Base class for LangGraph-compatible agents.
-    
+
     Subclasses define configuration via class attributes; base class handles
     LLM initialization, prompt construction, and execution.
-    
+
+    When tracing is enabled (via settings.enable_tracing), a Langfuse callback
+    handler is automatically injected into invoke/ainvoke calls.
+
     Usage:
         class CreditAnalyst(LangGraphAgent):
             name = "credit_analyst"
             system_prompt = "You are a credit analyst..."
             tools = [s3_retriever_tool]
             model_kwargs = {"temperature": 0.1}
-        
+
         analyst = CreditAnalyst()
         result = await analyst.ainvoke("Analyze customer CUST001")
     """
-    
+
     # Override these in subclasses
     name: str = "base_agent"
     system_prompt: str = "You are a helpful assistant."
@@ -41,14 +45,15 @@ class LangGraphAgent(ABC):
     model_id: Optional[str] = None
     model_kwargs: Dict[str, Any] = {"temperature": 0.1, "max_tokens": 4096}
     verbose: bool = True
-    max_iterations: int = 5
-    
+    max_iterations: int = 2  # Reduced from 5 to prevent iteration bloat in parallel execution
+
     def __init__(self, **overrides):
         """
         Initialize agent with optional config overrides.
-        
+
         Args:
             **overrides: Override any class attribute (name, system_prompt, tools, etc.)
+                enable_tracing: Override settings.enable_tracing for this agent
         """
         self.config = AgentConfig(
             name=overrides.get("name", self.name),
@@ -60,6 +65,12 @@ class LangGraphAgent(ABC):
             max_iterations=overrides.get("max_iterations", self.max_iterations),
         )
         self._executor: Optional[AgentExecutor] = None
+        self._enable_tracing = overrides.get("enable_tracing", settings.enable_tracing)
+
+        # Initialize tracing (no-op if already initialized or disabled)
+        if self._enable_tracing:
+            setup_tracing()
+        self._langfuse_handler = get_langfuse_callback_handler() if self._enable_tracing else None
     
     def _create_llm(self) -> ChatBedrockConverse:
         """Create the Bedrock LLM instance using the Converse API for native tool calling."""
@@ -100,17 +111,28 @@ class LangGraphAgent(ABC):
             self._executor = self._create_executor()
         return self._executor
     
+    def _inject_callbacks(self, kwargs: dict) -> dict:
+        """Inject Langfuse callback handler into executor kwargs if tracing is enabled."""
+        if self._langfuse_handler:
+            config = kwargs.pop("config", {})
+            callbacks = config.get("callbacks", [])
+            callbacks.append(self._langfuse_handler)
+            config["callbacks"] = callbacks
+            kwargs["config"] = config
+        return kwargs
+
     def invoke(self, input_text: str, **kwargs) -> ExecutionResult:
         """
         Synchronous execution.
-        
+
         Args:
             input_text: Input prompt for the agent
             **kwargs: Additional arguments passed to executor
-            
+
         Returns:
             ExecutionResult with agent output
         """
+        kwargs = self._inject_callbacks(kwargs)
         result = self.executor.invoke({"input": input_text, **kwargs})
         output = result.get("output", "")
         # ChatBedrockConverse may return list of content blocks instead of string
@@ -128,14 +150,15 @@ class LangGraphAgent(ABC):
     async def ainvoke(self, input_text: str, **kwargs) -> ExecutionResult:
         """
         Asynchronous execution.
-        
+
         Args:
             input_text: Input prompt for the agent
             **kwargs: Additional arguments passed to executor
-            
+
         Returns:
             ExecutionResult with agent output
         """
+        kwargs = self._inject_callbacks(kwargs)
         result = await self.executor.ainvoke({"input": input_text, **kwargs})
         output = result.get("output", "")
         # ChatBedrockConverse may return list of content blocks instead of string

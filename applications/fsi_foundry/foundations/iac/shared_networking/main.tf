@@ -110,7 +110,7 @@ resource "aws_subnet" "private_app" {
   availability_zone = local.availability_zones[count.index]
 
   tags = {
-    Name = "${local.vpc_name}-app-${count.index + 1}"
+    Name = "${local.vpc_name}-private-app-${count.index + 1}"
     Tier = "app"
   }
 }
@@ -127,7 +127,7 @@ resource "aws_subnet" "private_data" {
   availability_zone = local.availability_zones[count.index]
 
   tags = {
-    Name = "${local.vpc_name}-data-${count.index + 1}"
+    Name = "${local.vpc_name}-private-data-${count.index + 1}"
     Tier = "data"
   }
 }

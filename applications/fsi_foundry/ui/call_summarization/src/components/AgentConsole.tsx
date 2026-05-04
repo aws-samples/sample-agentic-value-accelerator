@@ -6,15 +6,15 @@ import { invokeAgent } from '../api/client';
 import ResultsPanel from './ResultsPanel';
 
 const typeIcons: Record<string, string> = {
-  FULL: '\u{1F4CB}',
-  KEY_POINTS_ONLY: '\u{1F4CC}',
-  SUMMARY_ONLY: '\u{1F4DD}',
+  full: '\u{1F4CB}',
+  key_points_only: '\u{1F4CC}',
+  summary_only: '\u{1F4DD}',
 };
 
 const typeDescriptions: Record<string, string> = {
-  FULL: 'Key points extraction + executive summary generation',
-  KEY_POINTS_ONLY: 'Extract key points, call outcome, and topics only',
-  SUMMARY_ONLY: 'Generate executive summary, action items, and sentiment only',
+  full: 'Key points extraction + executive summary generation',
+  key_points_only: 'Extract key points, call outcome, and topics only',
+  summary_only: 'Generate executive summary, action items, and sentiment only',
 };
 
 /* ---- Typing Dots ---- */

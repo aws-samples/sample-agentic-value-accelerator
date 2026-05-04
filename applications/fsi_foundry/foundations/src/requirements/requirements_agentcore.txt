@@ -6,8 +6,8 @@
 # Amazon Bedrock AgentCore Runtime SDK
 bedrock-agentcore>=0.1.0
 
-# Strands Agents SDK (for Strands-based agents)
-strands-agents>=0.1.0
+# Strands Agents SDK (for Strands-based agents, with OTEL support)
+strands-agents[otel]>=0.1.0
 
 # Observability (recommended for AgentCore)
 aws-opentelemetry-distro>=0.2.0

@@ -6,17 +6,17 @@ import { invokeAgent } from '../api/client';
 import ResultsPanel from './ResultsPanel';
 
 const analysisIcons: Record<string, string> = {
-  FULL: '\u{1F4CA}',
-  CALL_MONITORING_ONLY: '\u{1F4DE}',
-  PERFORMANCE_ONLY: '\u{1F3AF}',
-  OPERATIONS_ONLY: '\u{2699}\u{FE0F}',
+  full: '\u{1F4CA}',
+  call_monitoring_only: '\u{1F4DE}',
+  performance_only: '\u{1F3AF}',
+  operations_only: '\u{2699}\u{FE0F}',
 };
 
 const analysisDescriptions: Record<string, string> = {
-  FULL: 'Complete analytics across all dimensions',
-  CALL_MONITORING_ONLY: 'Call quality, sentiment, and compliance',
-  PERFORMANCE_ONLY: 'Agent KPIs, resolution rates, coaching',
-  OPERATIONS_ONLY: 'Volume trends, bottlenecks, staffing',
+  full: 'Complete analytics across all dimensions',
+  call_monitoring_only: 'Call quality, sentiment, and compliance',
+  performance_only: 'Agent KPIs, resolution rates, coaching',
+  operations_only: 'Volume trends, bottlenecks, staffing',
 };
 
 /* ---- Typing Dots ---- */

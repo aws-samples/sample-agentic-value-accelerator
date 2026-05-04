@@ -128,7 +128,9 @@ function ResultsPanelInternal({
             <h3 className="text-sm font-mono uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>Key Points</h3>
           </div>
           <div className="space-y-3">
-            {key_points.key_points?.map((point, i) => (
+            {key_points.key_points?.map((point, i) => {
+              const text = typeof point === 'string' ? point : (point as Record<string, unknown>).detail || (point as Record<string, unknown>).topic || JSON.stringify(point);
+              return (
               <div
                 key={i}
                 className="flex items-start gap-3 p-3.5 rounded-xl animate-slide-left"
@@ -144,9 +146,10 @@ function ResultsPanelInternal({
                 >
                   <span className="text-xs font-mono font-bold" style={{ color: 'var(--violet)' }}>{i + 1}</span>
                 </div>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{point}</p>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{String(text)}</p>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Call Outcome + Topics */}
@@ -164,7 +167,7 @@ function ResultsPanelInternal({
                     className="px-2.5 py-1 rounded-full text-xs font-medium"
                     style={{ background: 'rgba(124,58,237,0.06)', color: 'var(--violet)' }}
                   >
-                    {topic}
+                    {typeof topic === 'string' ? topic : String((topic as Record<string, unknown>).topic || JSON.stringify(topic))}
                   </span>
                 ))}
               </div>
@@ -219,7 +222,7 @@ function ResultsPanelInternal({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
                   </div>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{item}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{typeof item === 'string' ? item : String((item as Record<string, unknown>).action || (item as Record<string, unknown>).description || JSON.stringify(item))}</p>
                 </div>
               ))}
             </div>

@@ -68,7 +68,13 @@ locals {
     "ai_assistant"             = "aiasst"
   }
 
-  use_case_id_lower     = lower(replace(lookup(local.use_case_short_map, var.use_case_id, var.use_case_id), "_", "-"))
+  _use_case_raw = lower(replace(lookup(local.use_case_short_map, var.use_case_id, var.use_case_id), "_", "-"))
+  # Deterministic truncation: if raw name <= 15 chars, keep as-is. Otherwise take
+  # the first 8 chars of the name + "-" + 6 chars of md5(full_name) for uniqueness.
+  # Prevents collisions between long names that share the same 15-char prefix
+  # (e.g., "commercial-loan-application-review" vs "commercial-loan-underwriting").
+  _use_case_truncated = length(local._use_case_raw) <= 15 ? local._use_case_raw : "${substr(local._use_case_raw, 0, 8)}-${substr(md5(local._use_case_raw), 0, 6)}"
+  use_case_id_lower     = trimprefix(trimsuffix(local._use_case_truncated, "-"), "-")
   framework_short_lower = lower(replace(local.framework_short, "_", "-"))
 
   # Resource prefix includes framework for isolation
@@ -77,7 +83,7 @@ locals {
   # Include region in resource names to support multi-region deployments
   region_suffix = replace(var.aws_region, "-", "")
 
-  # S3 and ECR use lowercase identifiers
+  # S3 and ECR use lowercase identifiers — truncate to keep bucket names under 63 chars
   use_case_id_s3     = local.use_case_id_lower
   framework_short_s3 = local.framework_short_lower
 }

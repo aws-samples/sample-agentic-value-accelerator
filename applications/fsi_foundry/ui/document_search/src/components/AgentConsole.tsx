@@ -141,6 +141,28 @@ export default function AgentConsole({ config }: Props) {
           </button>
         </div>
 
+        {/* Sample Queries */}
+        {config.input_schema.test_entities && config.input_schema.test_entities.length > 0 && (
+          <div className="mb-5">
+            <div className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+              Sample Queries
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {config.input_schema.test_entities.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => setQuery(q)}
+                  className="px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer"
+                  style={{ background: 'rgba(217,119,6,0.06)', border: '1px solid rgba(217,119,6,0.12)', color: 'var(--brown-warm)' }}
+                  disabled={isRunning}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Document Type Filters */}
         <div>
           <div className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>

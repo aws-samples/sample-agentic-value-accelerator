@@ -45,6 +45,9 @@ export interface MigrationResponse {
   migration_plan: MigrationPlan;
   conversion_output: ConversionOutput;
   raw_analysis: Record<string, RawAgentAnalysis | undefined>;
+  summary?: string;
+  overall_summary?: string;
+  [key: string]: unknown;
 }
 
 export type ExecutionStatus = 'idle' | 'running' | 'complete' | 'error';

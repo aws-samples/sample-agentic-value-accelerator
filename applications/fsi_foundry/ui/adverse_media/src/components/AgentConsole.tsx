@@ -10,10 +10,10 @@ interface Props {
 }
 
 const typeIcons: Record<string, string> = {
-  FULL: 'M4 6h16M4 12h16M4 18h16',
-  MEDIA_SCREENING: 'M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z',
-  SENTIMENT_ANALYSIS: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  RISK_EXTRACTION: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+  full: 'M4 6h16M4 12h16M4 18h16',
+  media_screening: 'M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z',
+  sentiment_analysis: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  risk_extraction: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
 };
 
 const flowLabels = ['Screening Media', 'Analyzing Sentiment', 'Extracting Risk Signals'];
@@ -127,7 +127,7 @@ export default function AgentConsole({ config }: Props) {
                     style={{ background: selected ? 'linear-gradient(135deg, #312E81, #6366F1)' : '#F3F4F6' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                       stroke={selected ? 'white' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={typeIcons[opt.value] || typeIcons.FULL} />
+                      <path d={typeIcons[opt.value] || typeIcons.full} />
                     </svg>
                   </div>
                   <span className="text-xs font-bold" style={{ color: selected ? 'var(--indigo-700)' : 'var(--text-secondary)' }}>

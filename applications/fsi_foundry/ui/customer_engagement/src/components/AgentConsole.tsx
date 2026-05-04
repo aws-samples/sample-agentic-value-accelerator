@@ -6,17 +6,17 @@ import { invokeAgent } from '../api/client';
 import ResultsPanel from './ResultsPanel';
 
 const assessmentIcons: Record<string, string> = {
-  FULL: '\u{1F50D}',
-  CHURN_PREDICTION_ONLY: '\u{1F4CA}',
-  OUTREACH_ONLY: '\u{1F4E3}',
-  POLICY_OPTIMIZATION_ONLY: '\u{2728}',
+  full: '\u{1F50D}',
+  churn_prediction_only: '\u{1F4CA}',
+  outreach_only: '\u{1F4E3}',
+  policy_optimization_only: '\u{2728}',
 };
 
 const assessmentDescriptions: Record<string, string> = {
-  FULL: 'Complete engagement analysis with all three agents',
-  CHURN_PREDICTION_ONLY: 'Analyze churn risk, behavioral signals, and retention window',
-  OUTREACH_ONLY: 'Plan optimal outreach channels, messaging, and timing',
-  POLICY_OPTIMIZATION_ONLY: 'Identify coverage adjustments, bundling, and savings',
+  full: 'Complete engagement analysis with all three agents',
+  churn_prediction_only: 'Analyze churn risk, behavioral signals, and retention window',
+  outreach_only: 'Plan optimal outreach channels, messaging, and timing',
+  policy_optimization_only: 'Identify coverage adjustments, bundling, and savings',
 };
 
 /* ---- 3D Rotating Cube ---- */

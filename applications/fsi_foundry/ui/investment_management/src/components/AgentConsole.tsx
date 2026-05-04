@@ -10,10 +10,10 @@ interface Props {
 }
 
 const typeIcons: Record<string, string> = {
-  FULL: 'M4 6h16M4 12h16M4 18h16',
-  ALLOCATION_OPTIMIZATION: 'M3 3v18h18M7 14l4-4 4 4 4-8',
-  REBALANCING: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-  PERFORMANCE_ATTRIBUTION: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  full: 'M4 6h16M4 12h16M4 18h16',
+  allocation_optimization: 'M3 3v18h18M7 14l4-4 4 4 4-8',
+  rebalancing: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+  performance_attribution: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
 };
 
 const flowLabels = ['Optimizing Allocation', 'Analyzing Drift', 'Attributing Performance'];
@@ -127,7 +127,7 @@ export default function AgentConsole({ config }: Props) {
                     style={{ background: selected ? 'linear-gradient(135deg, #0D9488, #14B8A6)' : '#F1F5F9' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                       stroke={selected ? 'white' : '#64748B'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={typeIcons[opt.value] || typeIcons.FULL} />
+                      <path d={typeIcons[opt.value] || typeIcons.full} />
                     </svg>
                   </div>
                   <span className="text-xs font-bold" style={{ color: selected ? 'var(--teal-700)' : 'var(--text-secondary)' }}>

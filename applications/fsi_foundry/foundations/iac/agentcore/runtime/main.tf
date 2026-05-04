@@ -76,9 +76,10 @@ locals {
 
   # Derive agent_name from use_case_id and framework if not explicitly provided
   # AgentCore requires: [a-zA-Z][a-zA-Z0-9_]{0,47} (max 48 characters)
-  # Convert hyphens to underscores and ensure valid format
-  # Include framework_short for framework isolation (Requirement 2.8)
-  # Stable name — buildspec imports existing CloudFormation stacks so no AlreadyExists conflicts
+  # Convert hyphens to underscores and ensure valid format.
+  # use_case_name is capped at 32 chars at the ingestion boundary (frontend
+  # maxLength + backend validator), which keeps the derived agent_name
+  # inside the 48-char limit without per-resource truncation logic.
   use_case_short_safe  = replace(local.use_case_short, "-", "_")
   framework_short_safe = replace(local.framework_short, "-", "_")
   derived_agent_name   = "ava_${local.use_case_short_safe}_${local.framework_short_safe}"
@@ -124,9 +125,12 @@ resource "aws_cloudformation_stack" "agentcore_runtime" {
     Description    = "AVA - ${var.use_case_name} (${var.framework})"
     Environment    = data.terraform_remote_state.infra.outputs.environment
     AwsRegion      = data.terraform_remote_state.infra.outputs.aws_region
-    UseCaseId      = var.use_case_id
-    UseCaseName    = var.use_case_name
-    Framework      = var.framework
+    UseCaseId        = var.use_case_id
+    UseCaseName      = var.use_case_name
+    Framework        = var.framework
+    EnableTracing    = var.enable_tracing
+    LangfuseHost     = var.langfuse_host
+    LangfuseSecretName = var.langfuse_secret_name
   }
 
   capabilities = ["CAPABILITY_IAM"]

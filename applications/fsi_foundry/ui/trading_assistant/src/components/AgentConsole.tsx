@@ -10,10 +10,10 @@ interface Props {
 }
 
 const typeIcons: Record<string, string> = {
-  FULL: 'M4 6h16M4 12h16M4 18h16',
-  MARKET_ANALYSIS: 'M3 3v18h18M7 16l4-8 4 4 4-12',
-  TRADE_IDEA: 'M13 10V3L4 14h7v7l9-11h-7z',
-  EXECUTION_PLAN: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+  full: 'M4 6h16M4 12h16M4 18h16',
+  market_analysis: 'M3 3v18h18M7 16l4-8 4 4 4-12',
+  trade_idea: 'M13 10V3L4 14h7v7l9-11h-7z',
+  execution_plan: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
 };
 
 const flowLabels = ['Analyzing Market', 'Generating Ideas', 'Planning Execution'];
@@ -128,7 +128,7 @@ export default function AgentConsole({ config }: Props) {
                     style={{ background: selected ? 'linear-gradient(135deg, #22C55E, #16A34A)' : 'rgba(100,116,139,0.15)' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                       stroke={selected ? 'white' : '#64748B'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={typeIcons[opt.value] || typeIcons.FULL} />
+                      <path d={typeIcons[opt.value] || typeIcons.full} />
                     </svg>
                   </div>
                   <span className="text-xs font-bold" style={{ color: selected ? '#4ADE80' : 'var(--text-muted)' }}>

@@ -48,3 +48,21 @@ variable "framework" {
     error_message = "The framework variable must be provided for framework-isolated deployments."
   }
 }
+
+variable "enable_tracing" {
+  description = "Enable Langfuse OTEL tracing"
+  type        = string
+  default     = "false"
+}
+
+variable "langfuse_host" {
+  description = "Langfuse server URL"
+  type        = string
+  default     = ""
+}
+
+variable "langfuse_secret_name" {
+  description = "Secrets Manager secret name for Langfuse API keys"
+  type        = string
+  default     = ""
+}

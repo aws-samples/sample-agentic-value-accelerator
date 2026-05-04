@@ -24,6 +24,7 @@ function RadialProgress({ value, size = 72, stroke = 6, color = '#0D9488' }: { v
 }
 
 /* ── Helper: Allocation bar with current vs target ── */
+// @ts-expect-error - component available for future use
 function AllocationBar({ current, target, label, color }: { current: number; target: number; label: string; color: string }) {
   const currentPct = Math.round(current * 100);
   const targetPct = Math.round(target * 100);

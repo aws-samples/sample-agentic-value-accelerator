@@ -6,17 +6,17 @@ import { invokeAgent } from '../api/client';
 import ResultsPanel from './ResultsPanel';
 
 const scopeIcons: Record<string, string> = {
-  FULL: '{ }',
-  REQUIREMENTS_ONLY: '[ ]',
-  SCAFFOLDING_ONLY: '< >',
-  TESTING_ONLY: '( )',
+  full: '{ }',
+  requirements_only: '[ ]',
+  scaffolding_only: '< >',
+  testing_only: '( )',
 };
 
 const scopeDescriptions: Record<string, string> = {
-  FULL: 'Complete end-to-end generation with all agents',
-  REQUIREMENTS_ONLY: 'Extract and analyze project requirements only',
-  SCAFFOLDING_ONLY: 'Generate project structure and boilerplate code',
-  TESTING_ONLY: 'Create test suites and test fixtures only',
+  full: 'Complete end-to-end generation with all agents',
+  requirements_only: 'Extract and analyze project requirements only',
+  scaffolding_only: 'Generate project structure and boilerplate code',
+  testing_only: 'Create test suites and test fixtures only',
 };
 
 /* ---- 3D Rotating Cube ---- */

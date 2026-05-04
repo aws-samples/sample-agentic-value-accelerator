@@ -44,7 +44,20 @@ export async function invokeAgent(
     const data = (await statusRes.json()) as StatusResponse;
 
     if (data.status === 'COMPLETE' && data.result) {
-      return data.result;
+      let parsed = data.result;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed) as InvestigationResponse; } catch { /* use as-is */ }
+      }
+      // The agent may stuff the real response as a JSON string inside summary
+      // when findings is null and summary looks like JSON
+      const r = parsed as Record<string, unknown>;
+      if (!r.findings && typeof r.summary === 'string' && r.summary.startsWith('{')) {
+        try {
+          const inner = JSON.parse(r.summary as string) as InvestigationResponse;
+          return inner;
+        } catch { /* fall through */ }
+      }
+      return parsed;
     }
 
     if (data.status === 'ERROR') {

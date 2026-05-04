@@ -6,17 +6,17 @@ import { invokeAgent } from '../api/client';
 import ResultsPanel from './ResultsPanel';
 
 const scopeIcons: Record<string, string> = {
-  FULL: '\u{1F680}',
-  CODE_ANALYSIS: '\u{1F50D}',
-  PLANNING: '\u{1F4CB}',
-  CONVERSION: '\u{1F504}',
+  full: '\u{1F680}',
+  code_analysis: '\u{1F50D}',
+  planning: '\u{1F4CB}',
+  conversion: '\u{1F504}',
 };
 
 const scopeDescriptions: Record<string, string> = {
-  FULL: 'Complete analysis, planning, and code conversion pipeline',
-  CODE_ANALYSIS: 'Scan codebase for languages, dependencies, and risks',
-  PLANNING: 'Generate migration plan with phases and effort estimates',
-  CONVERSION: 'Convert legacy code to modern target framework',
+  full: 'Complete analysis, planning, and code conversion pipeline',
+  code_analysis: 'Scan codebase for languages, dependencies, and risks',
+  planning: 'Generate migration plan with phases and effort estimates',
+  conversion: 'Convert legacy code to modern target framework',
 };
 
 /* ---- Typing Dots ---- */

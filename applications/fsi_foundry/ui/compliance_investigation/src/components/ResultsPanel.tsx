@@ -7,6 +7,7 @@ interface Props {
 }
 
 /* ── Helper: Radial progress circle ── */
+// @ts-expect-error - component available for future use
 function RadialProgress({ value, size = 72, stroke = 6, color = '#D97706' }: { value: number; size?: number; stroke?: number; color?: string }) {
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;

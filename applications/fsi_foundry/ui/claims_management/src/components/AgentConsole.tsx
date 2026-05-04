@@ -10,10 +10,10 @@ interface Props {
 }
 
 const typeIcons: Record<string, string> = {
-  FULL: 'M4 6h16M4 12h16M4 18h16',
-  CLAIMS_INTAKE_ONLY: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  DAMAGE_ASSESSMENT_ONLY: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  SETTLEMENT_ONLY: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  full: 'M4 6h16M4 12h16M4 18h16',
+  claims_intake_only: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+  damage_assessment_only: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+  settlement_only: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
 };
 
 const flowLabels = ['Processing Intake', 'Assessing Damage', 'Recommending Settlement'];
@@ -127,7 +127,7 @@ export default function AgentConsole({ config }: Props) {
                     style={{ background: selected ? 'linear-gradient(135deg, #0284C7, #38BDF8)' : '#F5F5F4' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                       stroke={selected ? 'white' : '#78716C'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={typeIcons[opt.value] || typeIcons.FULL} />
+                      <path d={typeIcons[opt.value] || typeIcons.full} />
                     </svg>
                   </div>
                   <span className="text-xs font-bold" style={{ color: selected ? 'var(--sky-700)' : 'var(--text-secondary)' }}>

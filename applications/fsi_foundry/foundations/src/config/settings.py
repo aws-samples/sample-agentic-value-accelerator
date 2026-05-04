@@ -81,6 +81,14 @@ class Settings(BaseSettings):
     # Options: langchain_langgraph | strands
     agent_framework: str = "langchain_langgraph"
 
+    # Langfuse / Tracing Configuration
+    # Langfuse host and secret name are injected from Terraform outputs via the control plane.
+    # Set enable_tracing=True to activate OTEL tracing to Langfuse.
+    enable_tracing: bool = False
+    langfuse_host: Optional[str] = None
+    langfuse_secret_name: Optional[str] = None  # AWS Secrets Manager secret with API keys
+    langfuse_prompt_name: Optional[str] = None
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -44,13 +44,28 @@ export async function invokeAgent(
     const data = (await statusRes.json()) as StatusResponse;
 
     if (data.status === 'COMPLETE' && data.result) {
-      return data.result;
+      let parsed = data.result;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed) as SearchResponse; } catch { /* use as-is */ }
+      }
+      const raw = parsed as unknown as Record<string, unknown>;
+      if (!raw.documents && typeof raw.summary === 'string' && raw.summary.startsWith('{')) {
+        try { parsed = JSON.parse(raw.summary as string) as SearchResponse; } catch { /* fall through */ }
+      }
+      return normalizeResponse(parsed);
     }
 
     if (data.status === 'ERROR') {
       throw new Error(data.error || 'Agent invocation failed');
     }
   }
+}
+
+function normalizeResponse(raw: SearchResponse): SearchResponse {
+  return {
+    ...raw,
+    relevance_scores: (raw.relevance_scores ?? []).map(Number),
+  };
 }
 
 function sleep(ms: number): Promise<void> {

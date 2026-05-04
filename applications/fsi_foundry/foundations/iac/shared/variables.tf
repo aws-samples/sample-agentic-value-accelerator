@@ -64,6 +64,11 @@ locals {
 
   # S3 bucket names can only contain lowercase alphanumeric characters and hyphens
   # Convert to lowercase and replace underscores with hyphens for bucket naming
-  use_case_id_s3     = lower(replace(var.use_case_id, "_", "-"))
+  _uc_s3_raw = lower(replace(var.use_case_id, "_", "-"))
+  # Deterministic truncation: names <=15 chars pass through; longer names
+  # collapse to "<first 8 chars>-<6 hex of md5(full)>" to guarantee uniqueness
+  # across long names that share a prefix.
+  _uc_s3_truncated   = length(local._uc_s3_raw) <= 15 ? local._uc_s3_raw : "${substr(local._uc_s3_raw, 0, 8)}-${substr(md5(local._uc_s3_raw), 0, 6)}"
+  use_case_id_s3     = trimsuffix(local._uc_s3_truncated, "-")
   framework_short_s3 = lower(replace(local.framework_short, "_", "-"))
 }

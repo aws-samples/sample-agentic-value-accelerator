@@ -1,33 +1,22 @@
-export interface RegulatoryMapping {
-  regulation: string;
-  requirement: string;
-  violation_type: string;
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  evidence_references: string[];
-}
-
-export interface InvestigationFindings {
-  status: 'OPEN' | 'IN_PROGRESS' | 'ESCALATED' | 'RESOLVED' | 'CLOSED';
-  violations_found: number;
-  evidence_items: string[];
-  patterns_identified: string[];
-  risk_indicators: string[];
-  recommendations: string[];
+export interface InvestigationResponse {
+  investigation_status: string;
+  findings_count: number;
+  key_findings: string[];
+  regulatory_violations: string[];
+  recommended_actions: string[];
+  summary: string;
+  raw_agent_analysis?: Record<string, RawAgentAnalysis>;
+  // Also support nested format if backend changes
+  entity_id?: string;
+  investigation_id?: string;
+  timestamp?: string;
+  [key: string]: unknown;
 }
 
 export interface RawAgentAnalysis {
   agent: string;
+  analysis?: string;
   [key: string]: unknown;
-}
-
-export interface InvestigationResponse {
-  entity_id: string;
-  investigation_id: string;
-  timestamp: string;
-  findings: InvestigationFindings | null;
-  regulatory_mappings: RegulatoryMapping[];
-  summary: string;
-  raw_analysis: Record<string, RawAgentAnalysis | undefined>;
 }
 
 export type ExecutionStatus = 'idle' | 'running' | 'complete' | 'error';

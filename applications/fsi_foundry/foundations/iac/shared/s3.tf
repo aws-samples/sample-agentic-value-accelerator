@@ -45,34 +45,81 @@ resource "aws_s3_bucket_public_access_block" "data" {
 }
 
 # Dynamic sample data upload
-# Scans data/samples/ directory and uploads all JSON files
+# Scans data/samples/ directory and uploads all sample files (JSON + binary
+# documents like PDFs, images, text that the data-builder generates to match
+# document_keys declared in profile.json files).
 locals {
   # Use explicit data_path if provided, otherwise derive from module path
   # In CI/CD (CodeBuild), path.module resolves through symlinks and ../../ may not reach the workspace root
   data_base_path = var.data_path != "" ? var.data_path : "${path.module}/../../data/samples"
 
-  # Find all JSON files in the sample data directory
-  sample_data_files = fileset(local.data_base_path, "**/*.json")
+  # File extensions we actually want to upload as sample data. Keeps out
+  # stray dotfiles, caches, and editor cruft that might land in the
+  # workspace during code generation.
+  sample_data_patterns = [
+    "**/*.json",
+    "**/*.pdf",
+    "**/*.jpg",
+    "**/*.jpeg",
+    "**/*.png",
+    "**/*.tiff",
+    "**/*.txt",
+    "**/*.csv",
+    "**/*.docx",
+  ]
+
+  sample_data_files = toset(flatten([
+    for pattern in local.sample_data_patterns :
+    tolist(fileset(local.data_base_path, pattern))
+  ]))
 
   # Create a map of S3 key -> local file path
   sample_data_map = {
     for file in local.sample_data_files :
     file => "${local.data_base_path}/${file}"
   }
+
+  # MIME type by extension (S3 serves these back to the agent on GetObject).
+  content_type_by_ext = {
+    "json" = "application/json"
+    "pdf"  = "application/pdf"
+    "jpg"  = "image/jpeg"
+    "jpeg" = "image/jpeg"
+    "png"  = "image/png"
+    "tiff" = "image/tiff"
+    "txt"  = "text/plain"
+    "csv"  = "text/csv"
+    "docx" = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  }
 }
 
 resource "aws_s3_object" "sample_data" {
   for_each = local.sample_data_map
 
-  bucket       = aws_s3_bucket.data.id
-  key          = "samples/${each.key}"
-  source       = each.value
-  content_type = "application/json"
-  etag         = filemd5(each.value)
+  bucket = aws_s3_bucket.data.id
+  key    = "samples/${each.key}"
+  source = each.value
+  content_type = lookup(
+    local.content_type_by_ext,
+    lower(reverse(split(".", each.key))[0]),
+    "application/octet-stream",
+  )
+  etag = filemd5(each.value)
 
   tags = {
     DataType = "sample"
   }
+
+  # Serialize bucket configuration before uploading objects.
+  # aws provider 5.x can race its own post-PUT Head refresh against a
+  # just-applied bucket policy / PAB, surfacing as
+  # "reading S3 Object (...): couldn't find resource" on a brand-new bucket.
+  depends_on = [
+    aws_s3_bucket_public_access_block.data,
+    aws_s3_bucket_versioning.data,
+    aws_s3_bucket_server_side_encryption_configuration.data,
+    aws_s3_bucket_policy.data_tls_enforcement,
+  ]
 }
 
 
@@ -214,4 +261,9 @@ resource "aws_s3_bucket_logging" "data" {
 
   target_bucket = aws_s3_bucket.access_logs.id
   target_prefix = "data-bucket-logs/"
+
+  depends_on = [
+    aws_s3_bucket_versioning.access_logs,
+    aws_s3_bucket_policy.access_logs_tls_enforcement,
+  ]
 }
