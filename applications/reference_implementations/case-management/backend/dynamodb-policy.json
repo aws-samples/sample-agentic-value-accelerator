@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:<<REGION>>:<<ACCOUNT_ID>>:log-group:/aws/lambda/txn-reader:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:Scan",
+        "dynamodb:Query",
+        "dynamodb:GetItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/txn_logs",
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/txn_logs/index/*"
+      ]
+    }
+  ]
+}

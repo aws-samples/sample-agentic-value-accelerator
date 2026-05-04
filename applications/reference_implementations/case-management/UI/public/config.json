@@ -1,0 +1,7 @@
+{
+  "API_BASE_URL": "https://sgz38j9b2i.execute-api.us-east-1.amazonaws.com/prod/api/transactions",
+  "SAR_API_URL": "https://sgz38j9b2i.execute-api.us-east-1.amazonaws.com/prod",
+  "ENABLE_API_CALLS": true,
+  "DEV_SETTINGS": { "LOG_API_CALLS": true, "TIMEOUT": 30000, "USE_CORS_PROXY": false },
+  "UI_SETTINGS": { "THEME": "amazon", "SIDEBAR_WIDTH": 200, "HEADER_HEIGHT": 80, "ENABLE_REFRESH": true }
+}

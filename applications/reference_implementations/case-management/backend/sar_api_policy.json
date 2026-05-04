@@ -1,0 +1,31 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:<<REGION>>:<<ACCOUNT_ID>>:log-group:/aws/lambda/sar-api*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/txn_logs",
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/txn_logs/index/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "bedrock-agentcore:InvokeAgentRuntime",
+      "Resource": "arn:aws:bedrock-agentcore:<<REGION>>:<<ACCOUNT_ID>>:runtime/*"
+    }
+  ]
+}

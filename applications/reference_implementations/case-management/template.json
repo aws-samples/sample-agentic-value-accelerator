@@ -1,0 +1,36 @@
+{
+  "id": "case-management",
+  "name": "Case Management",
+  "description": "AI-powered fraud detection and case management platform. Real-time transaction scoring, pattern recognition (smurfing, velocity, mule accounts), and natural-language investigation powered by Claude Sonnet 4 on Bedrock AgentCore.",
+  "version": "1.0.0",
+  "pattern_type": "orchestration",
+  "type": "reference",
+  "frameworks": [
+    {"id": "strands", "name": "Strands Agents SDK", "path": "agentcore_sars", "description": "Strands framework with Bedrock + optional AgentCore SAR agent"}
+  ],
+  "deployment_patterns": [
+    {"id": "bash", "name": "Bash + CDK", "description": "Bash orchestration across DynamoDB, Lambda, API Gateway, CloudFront, and an optional CDK-based AgentCore SAR stack", "path": "."}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "case-management"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1", "enum": ["us-east-1", "us-east-2", "us-west-2"]}
+  ],
+  "example_use_cases": [
+    "Real-time fraud transaction scoring",
+    "Suspicious pattern detection (smurfing, velocity, mule accounts)",
+    "Natural-language case investigation",
+    "SAR report drafting"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": ["fraud", "case-management", "dynamodb", "bedrock", "cloudfront", "agentcore", "strands"],
+  "outputs": {
+    "cloudfront_url": "CloudFront distribution URL",
+    "api_endpoint": "API Gateway endpoint"
+  },
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "case_management_onboarding_request", "outgoing_event": "case_management_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "case_management_offboarding_request", "outgoing_event": "case_management_offboarding_success"}
+  ],
+  "dependencies": []
+}

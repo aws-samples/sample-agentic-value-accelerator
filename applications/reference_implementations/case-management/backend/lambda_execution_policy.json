@@ -1,0 +1,57 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    // CloudWatch Logs (basic Lambda logging)
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:<<REGION>>:<<ACCOUNT_ID>>:log-group:/aws/lambda/*",
+        "arn:aws:logs:<<REGION>>:<<ACCOUNT_ID>>:log-group:/aws/lambda/*:log-stream:*"
+      ]
+    },
+
+    // DynamoDB: features/pairs/fan-in/actor state (read/write)
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:UpdateItem",
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "dynamodb:PutItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/txn_features",
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/pair_stats",
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/dst_src_window",
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/actor_state"
+      ]
+    },
+
+    // DynamoDB: logs table (+ any GSIs)
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:GetItem",
+        "dynamodb:Query"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/txn_logs",
+        "arn:aws:dynamodb:<<REGION>>:<<ACCOUNT_ID>>:table/txn_logs/index/*"
+      ]
+    },
+
+    // SageMaker inference
+    {
+      "Effect": "Allow",
+      "Action": "sagemaker:InvokeEndpoint",
+      "Resource": "arn:aws:sagemaker:<<REGION>>:<<ACCOUNT_ID>>:endpoint/<<ENDPOINT_NAME>>"
+    }
+  ]
+}
