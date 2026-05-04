@@ -59,9 +59,6 @@ platform/ui/testing-dashboard/src/App.dynamo.js
 .terraform.lock.hcl
 terraform.tfstate.d/
 
-# Internal (not for public release)
-internal/
-
 # Claude and development tool directories
 .claude/
 **/.claude/
@@ -90,6 +87,12 @@ Icon-package_*/
 # macOS
 .DS_Store
 **/.DS_Store
+
+# TypeScript build info
+**/*.tsbuildinfo
+
+# Backup files
+*.bak
 
 # Temporary documentation and deployment status files
 COMPLETION_STATUS.md
