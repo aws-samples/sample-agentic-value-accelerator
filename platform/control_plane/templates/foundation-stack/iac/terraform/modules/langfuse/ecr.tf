@@ -7,7 +7,7 @@ variable "langfuse_version" {
 variable "clickhouse_version" {
   description = "ClickHouse image version to pull and push"
   type        = string
-  default     = "24.12"
+  default     = "24.12.3"
 }
 
 locals {
@@ -49,19 +49,40 @@ resource "null_resource" "push_images" {
       set -e
       aws ecr get-login-password --region ${data.aws_region.current.id} | \
         docker login --username AWS --password-stdin ${local.ecr_base}
-      # Try ECR cache first, fall back to Docker Hub
-      # Cache uses the image name after the org prefix (e.g., langfuse/langfuse -> cached/langfuse)
-      IMG_NAME=$(echo "${each.value.source}" | rev | cut -d/ -f1 | rev)
-      CACHE_REPO="${local.ecr_base}/cached/$IMG_NAME:${each.value.tag}"
-      if docker pull --platform linux/amd64 "$CACHE_REPO" 2>/dev/null; then
-        echo "Using cached image from ECR"
-        docker tag "$CACHE_REPO" ${each.value.source}:${each.value.tag}
-      else
-        echo "Cache miss, pulling from Docker Hub"
-        docker pull --platform linux/amd64 ${each.value.source}:${each.value.tag}
+
+      TARGET_REPO="${aws_ecr_repository.images[each.key].repository_url}"
+      if aws ecr describe-images --repository-name "${var.name}-${each.key}" --image-ids imageTag="${each.value.tag}" --region ${data.aws_region.current.id} >/dev/null 2>&1; then
+        echo "Image already exists in ECR: $TARGET_REPO:${each.value.tag} — skipping pull"
+        exit 0
       fi
-      docker tag ${each.value.source}:${each.value.tag} ${aws_ecr_repository.images[each.key].repository_url}:${each.value.tag}
-      docker push ${aws_ecr_repository.images[each.key].repository_url}:${each.value.tag}
+
+      # Optional Docker Hub auth (doubles rate limit from 100 to 200 pulls/6hrs)
+      # Reads from Secrets Manager secret "dockerhub-credentials" if it exists
+      # Secret format: {"username":"...","token":"..."}
+      DOCKERHUB_SECRET=$(aws secretsmanager get-secret-value --secret-id dockerhub-credentials --region ${data.aws_region.current.id} --query SecretString --output text 2>/dev/null || true)
+      if [ -n "$DOCKERHUB_SECRET" ]; then
+        DH_USER=$(echo "$DOCKERHUB_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin).get('username',''))" 2>/dev/null)
+        DH_TOKEN=$(echo "$DOCKERHUB_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
+        if [ -n "$DH_USER" ] && [ -n "$DH_TOKEN" ]; then
+          echo "$DH_TOKEN" | docker login --username "$DH_USER" --password-stdin 2>/dev/null && echo "Docker Hub: authenticated" || echo "Docker Hub: auth failed, continuing unauthenticated"
+        fi
+      fi
+
+      PULLED=false
+      for i in 1 2 3 4 5; do
+        if docker pull --platform linux/amd64 ${each.value.source}:${each.value.tag}; then
+          PULLED=true
+          break
+        fi
+        echo "Pull attempt $i failed, waiting 60s before retry..."
+        sleep 60
+      done
+      if [ "$PULLED" = "false" ]; then
+        echo "ERROR: Failed to pull image after 5 attempts"
+        exit 1
+      fi
+      docker tag ${each.value.source}:${each.value.tag} $TARGET_REPO:${each.value.tag}
+      docker push $TARGET_REPO:${each.value.tag}
     EOT
   }
 

@@ -50,6 +50,18 @@ resource "aws_cloudfront_distribution" "langfuse" {
     default_ttl            = 0
     max_ttl                = 0
     compress               = true
+
+    lambda_function_association {
+      event_type   = "viewer-request"
+      lambda_arn   = aws_lambda_function.auto_login.qualified_arn
+      include_body = false
+    }
+
+    lambda_function_association {
+      event_type   = "origin-response"
+      lambda_arn   = aws_lambda_function.strip_frame_headers.qualified_arn
+      include_body = false
+    }
   }
 
   restrictions {
@@ -65,5 +77,36 @@ resource "aws_cloudfront_distribution" "langfuse" {
 
   tags = {
     Name = "${local.tag_name} CloudFront"
+  }
+}
+
+# Lambda@Edge origin-response to strip X-Frame-Options and override CSP frame-ancestors
+# so Langfuse can be embedded in the control plane iframe
+resource "aws_lambda_function" "strip_frame_headers" {
+  function_name = "${var.name}-strip-frame-headers"
+  role          = aws_iam_role.lambda_edge.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  timeout       = 15
+  publish       = true
+
+  filename         = data.archive_file.strip_frame_headers.output_path
+  source_code_hash = data.archive_file.strip_frame_headers.output_base64sha256
+
+  tags = {
+    Name = "${local.tag_name} Strip Frame Headers"
+  }
+}
+
+data "archive_file" "strip_frame_headers" {
+  type        = "zip"
+  output_path = "${path.module}/.lambda/strip_frame_headers.zip"
+
+  source {
+    content = templatefile("${path.module}/lambda_origin_response.js", {
+      langfuse_email    = var.langfuse_init_user_email
+      langfuse_password = var.langfuse_init_user_password
+    })
+    filename = "index.js"
   }
 }

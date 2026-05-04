@@ -33,6 +33,7 @@ resource "aws_db_subnet_group" "postgres" {
 }
 
 resource "aws_rds_cluster" "postgres" {
+  depends_on                   = [null_resource.service_linked_roles]
   cluster_identifier           = "${var.name}-postgres"
   engine                       = "aurora-postgresql"
   engine_mode                  = "provisioned"

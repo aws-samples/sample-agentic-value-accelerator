@@ -1,5 +1,6 @@
 {
   "id": "observability-stack",
+  "hidden": true,
   "name": "Observability Stack",
   "description": "Foundation template providing Langfuse observability server and OpenTelemetry collector for agent tracing and monitoring. Deploy once, connect all agent use cases.",
   "version": "1.0.0",

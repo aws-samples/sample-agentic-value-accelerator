@@ -3,7 +3,8 @@ terraform {
   required_providers {
     aws    = { source = "hashicorp/aws", version = ">= 5.0" }
     random = { source = "hashicorp/random", version = ">= 3.1" }
-    null   = { source = "hashicorp/null", version = ">= 3.0" }
+    null    = { source = "hashicorp/null", version = ">= 3.0" }
+    archive = { source = "hashicorp/archive", version = ">= 2.0" }
   }
 }
 
@@ -200,4 +201,7 @@ module "langfuse" {
 
   langfuse_init_user_email    = var.langfuse_admin_email
   langfuse_init_user_password = var.langfuse_admin_password
+
+  cognito_user_pool_id = var.cognito_user_pool_id
+  cognito_region       = var.cognito_region != "" ? var.cognito_region : var.aws_region
 }

@@ -1,5 +1,6 @@
 {
   "id": "foundation-stack",
+  "hidden": true,
   "name": "Foundation Stack",
   "description": "Combined foundation template providing networking (VPC, subnets, security groups) and observability (Langfuse, OpenTelemetry). Deploy once per account/region, consumed by all use case templates.",
   "version": "1.0.0",

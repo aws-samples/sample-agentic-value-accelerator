@@ -9,7 +9,7 @@
       "id": "strands",
       "name": "Strands Agent SDK",
       "path": "src/strands",
-      "description": "Strands framework for building production-ready AI agents"
+      "description": "Strands framework for building AI agents with tools and memory"
     }
   ],
   "deployment_patterns": [
