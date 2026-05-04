@@ -1,0 +1,12 @@
+book_code,book_type,book_description
+A7X9B,Customer trading,Customer business with hedge funds
+Q4W8Z,Customer trading,Customer business with asset managers
+T6R1P,Customer trading,Customer business with insurance companies
+M2N7X,Customer trading,Customer business with corporate businesses
+L9K2J,Customer trading,Outright holdings
+Z3X7C,Customer trading,Outright holdings
+R8T4Y,Hedging,Hedging futures with treasuries
+F1G7H,Hedging,Hedging IG corporates with treasuries
+D5E8F,Hedging,Hedging HY corporates with treasuries
+P3Q8R,Treasury,Bank treasury trading
+BOOK1X,Repo,All Instruments
