@@ -8,11 +8,14 @@ This document describes how the AVA platform aligns with the [AWS Well-Architect
 
 AVA is an open-source platform for building, deploying, and managing AI agents for financial services on AWS. The platform consists of:
 
-- **Control Plane** — React frontend, FastAPI backend on ECS Fargate, Terraform infrastructure
-- **FSI Foundry** — 34 multi-agent use cases deployed to Amazon Bedrock AgentCore
-- **CI/CD Pipeline** — CodeBuild-based automated deployment with Step Functions orchestration
-- **Per-Use-Case Frontend UIs** — 34 React applications served via CloudFront + S3
-- **Observability** — Langfuse integration for agent tracing and monitoring
+- **Control Plane** — React frontend, FastAPI backend on ECS Fargate, Terraform infrastructure, Cognito-backed RBAC (admin / operator / viewer)
+- **FSI Foundry** — 34 multi-agent use cases deployed to Amazon Bedrock AgentCore (Strands + LangGraph per use case)
+- **Reference Implementations** — Agent Safety, Market Surveillance, Shopping Concierge, Case Management
+- **App Factory** — Declarative blueprint-driven app generation via Claude Code subagents
+- **Agent-as-a-Service (AaaS)** — Managed Frontier Agents (AWS DevOps Agent in Terraform / CDK / CloudFormation)
+- **CI/CD Pipeline** — Dual-source deployment: Quick Deploy (S3 archive) and Deploy from Git (pre-seeded CodeCommit repos), both driven by Step Functions + CodeBuild
+- **Per-Use-Case Frontend UIs** — 34 React applications served via CloudFront + S3 + Lambda proxy to AgentCore
+- **Observability** — Langfuse v3 foundation deployed once per account; per-use-case projects auto-provisioned with API keys injected into the AgentCore runtime; Langfuse UI embedded in the control plane via iframe
 
 ### Architecture Diagram
 
@@ -39,6 +42,9 @@ graph TB
     subgraph Pipeline["CI/CD Pipeline"]
         SF["Step Functions — Orchestrator"]
         CB["CodeBuild — Build & Deploy"]
+        S3_ARC["S3 — Template Archives<br/>(Quick Deploy source)"]
+        CC["CodeCommit — Pre-seeded Repos<br/>(Deploy from Git source)"]
+        EVB["EventBridge — Push / PR Triggers"]
     end
 
     subgraph AgentCore["Amazon Bedrock AgentCore"]
@@ -53,7 +59,12 @@ graph TB
     ECS --> Cognito
     ECS --> DDB
     ECS --> SF
+    ECS --> S3_ARC
+    CC --> EVB
+    EVB --> SF
     SF --> CB
+    S3_ARC --> CB
+    CC --> CB
     CB --> ECR
     CB --> Runtime
     CB --> S3_UC
@@ -78,12 +89,18 @@ All AVA infrastructure is defined and managed through Terraform:
 
 ### CI/CD Pipeline
 
-AVA implements a fully automated deployment pipeline:
+AVA implements a fully automated deployment pipeline with two source paths sharing the same Step Functions + CodeBuild backend:
 
-- **Step Functions Orchestration** — Deployment lifecycle managed by AWS Step Functions with states for validation, packaging, building, monitoring, output capture, and recording
-- **CodeBuild Execution** — Multi-stage buildspec handles infrastructure provisioning, Docker image building, AgentCore runtime deployment, and frontend UI deployment in a single pipeline run
-- **Build Error Handling** — Pipeline includes validation gates: `npm run build || { echo "ERROR"; exit 1; }` and `if [ ! -f dist/index.html ]; then exit 1; fi` to prevent deploying broken artifacts
-- **EventBridge Integration** — Deployment lifecycle events published to EventBridge with dead-letter queue for failure handling
+- **Dual-Source Deployment**
+  - **Quick Deploy (S3 archive)** — The control plane packages the template source into a ZIP, uploads it to a per-deployment S3 bucket, and triggers the state machine. Suited to business users — no Git knowledge required.
+  - **Deploy from Git (CodeCommit)** — Operators select a pre-seeded CodeCommit repository from the UI. CodeBuild clones the repo at the requested branch and deploys. An EventBridge rule on `referenceUpdated` / `pullRequestMergeStatusUpdated` can auto-trigger redeploys on push or PR merge. Suited to developers who want to customize source before deploying.
+  - The `scripts/seed-codecommit.sh init` one-time script seeds the 38 FSI Foundry repos from the registry so operators don't create them manually.
+- **Step Functions Orchestration** — Deployment lifecycle managed by AWS Step Functions with states for input normalization, validation, CodeBuild invocation, monitoring, output capture, status recording, and failure handling with per-stage tracking (`failed_stage` attribute).
+- **CodeBuild Execution** — Multi-stage buildspec (source-agnostic: handles S3 unzip or CodeCommit clone) covers terraform infra + runtime + UI stages, Docker image build/push, AgentCore runtime deployment, per-use-case S3 UI build + sync, CloudFront invalidation, and outputs capture back to DynamoDB.
+- **Import-existing shims** — The UI Terraform module imports pre-existing resources (DynamoDB sessions table, IAM roles, Lambda functions, Lambda permission, S3 bucket, CloudFront OAC, CloudFront Function) before `terraform apply` so redeploys against accounts with prior history reconcile cleanly.
+- **Build Error Handling** — Pipeline includes validation gates: `npm run build || { echo "ERROR"; exit 1; }` and `if [ ! -f dist/index.html ]; then exit 1; fi` to prevent deploying broken artifacts.
+- **EventBridge Integration** — Deployment lifecycle events (and CodeCommit push / PR-merge events) published to EventBridge with dead-letter queue for failure handling.
+- **Cross-Account Deployments** — Optional `target_account_id` + `target_role_arn` per deployment; CodeBuild assumes the cross-account role before provisioning.
 
 ### Monitoring and Observability
 
