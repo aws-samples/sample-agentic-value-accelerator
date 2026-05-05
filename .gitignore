@@ -59,21 +59,6 @@ platform/ui/testing-dashboard/src/App.dynamo.js
 .terraform.lock.hcl
 terraform.tfstate.d/
 
-# Claude and development tool directories
-.claude/
-**/.claude/
-.omc/
-**/.omc/
-.context/
-**/.context/
-.patent/
-**/.patent/
-.scan_reports/
-**/.scan_reports/
-.hypothesis/
-.kiro/
-.tests/
-.worktrees/
 
 # Node.js
 node_modules/
