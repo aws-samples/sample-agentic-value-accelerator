@@ -41,8 +41,19 @@ An open-source platform that unifies use cases, reference apps, apps generation 
 - **Built-in Observability** — Langfuse v3 + OpenTelemetry stack for agent tracing, metrics, prompt management, and evaluation — deploy once, connect every use case
 - **Built for AWS** — Bedrock AgentCore, ECS, Lambda, DynamoDB, CloudFront, Cognito, S3, Step Functions, CodeBuild, and more
 
+<table align="center">
+  <tr>
+    <td width="50%"><img src="platform/docs/imgs/home/foundry-landing.png" alt="FSI Foundry" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/aaas-landing.png" alt="Agent-as-a-Service" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="platform/docs/imgs/home/capabilities-landing.png" alt="Capabilities" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/govern-command-center.png" alt="Governance Command Center" /></td>
+  </tr>
+</table>
+
 <div align="center">
-<video src="https://github.com/user-attachments/assets/4d55eba1-dd90-4a92-930d-ad4b220141aa" width="90%" controls></video>
+<video src="https://github.com/user-attachments/assets/68db1789-6e0f-4a1a-9c16-8245c0d4cfa7" width="90%" controls></video>
 </div>
 
 ---
@@ -232,7 +243,7 @@ Managed autonomous agents you deploy into your own AWS account — either Amazon
 | [AWS Security Agent](https://docs.aws.amazon.com/securityagent/latest/userguide/what-is.html) | Application Security | Terraform, CDK, CloudFormation | Coming Soon |
 | [Kiro](https://kiro.dev) | Developer Productivity | Local IDE (not IaC-deployed) | Coming Soon |
 
-One-click deployment from the Control Plane UI that provisions the agent space in your account. Monitor your build process and access Operator View post-deployment. 
+One-click deployment from the Control Plane UI that provisions the agent space in your account. Monitor your build process and access Operator View post-deployment.
 
 [**Browse Frontier Agents &#8594;**](platform/control_plane/aaas/frontier_agents.json)
 

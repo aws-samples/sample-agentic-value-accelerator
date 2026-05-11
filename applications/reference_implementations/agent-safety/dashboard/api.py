@@ -766,18 +766,21 @@ async def list_agent_registry_records():
             region_name=AGENT_REGISTRY_REGION,
             config=Config(retries={"max_attempts": 3, "mode": "adaptive"}),
         )
-    except Exception as e:
-        return {"records": [], "registries": [], "error": f"Cannot create client for {AGENT_REGISTRY_REGION}: {e}"}
+    except Exception:
+        logger.exception("Cannot create agentcore-control client for region %s", AGENT_REGISTRY_REGION)
+        return {"records": [], "registries": [], "error": f"Cannot create client for {AGENT_REGISTRY_REGION}"}
 
     # 1. List registries
     registries = []
     try:
         resp = ctrl.list_registries(status="READY")
         registries = resp.get("registries", [])
-    except ClientError as e:
-        return {"records": [], "registries": [], "error": f"list_registries failed: {e}"}
-    except Exception as e:
-        return {"records": [], "registries": [], "error": f"Agent Registry API unavailable: {e}"}
+    except ClientError:
+        logger.exception("list_registries failed")
+        return {"records": [], "registries": [], "error": "list_registries failed"}
+    except Exception:
+        logger.exception("Agent Registry API unavailable")
+        return {"records": [], "registries": [], "error": "Agent Registry API unavailable"}
 
     if not registries:
         return {"records": [], "registries": [], "detail": "No registries found"}
