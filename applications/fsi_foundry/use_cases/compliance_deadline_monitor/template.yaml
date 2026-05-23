@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Compliance Deadline Monitor — EventBridge Scheduler -> Bus -> API Destination (Cognito OAuth) -> AgentCore Runtime.
+  Runs daily to check regulatory filing deadlines and escalate at-risk items.
+
+Parameters:
+  AgentCoreEndpoint:
+    Type: String
+    Description: AgentCore Runtime invocation URL
+  AgentName:
+    Type: String
+    Default: compliance_deadline_monitor_agent
+  ScheduleExpression:
+    Type: String
+    Default: 'cron(0 11 * * ? *)'
+    Description: 'Schedule expression (default: daily at 6 AM ET / 11 UTC)'
+  SchedulePayload:
+    Type: String
+    Default: '{"prompt":"Run the daily compliance deadline check. Identify all at-risk filings and provide escalation recommendations."}'
+    Description: JSON payload sent to the agent on each scheduled invocation
+
+Resources:
+  # ── Cognito ──────────────────────────────────────────────────
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-pool'
+
+  CognitoDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub '${AWS::StackName}-${AWS::AccountId}'
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      Identifier: !Ref AgentName
+      Name: !Sub '${AgentName}-api'
+      UserPoolId: !Ref CognitoUserPool
+      Scopes:
+        - ScopeName: invoke
+          ScopeDescription: Invoke the AgentCore agent
+
+  CognitoAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoResourceServer
+    Properties:
+      ClientName: !Sub '${AWS::StackName}-client'
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - !Sub '${AgentName}/invoke'
+      SupportedIdentityProviders:
+        - COGNITO
+
+  # ── EventBridge Bus ──────────────────────────────────────────
+  AgentEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub '${AWS::StackName}-bus'
+
+  # ── DLQ ──────────────────────────────────────────────────────
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-dlq'
+      MessageRetentionPeriod: 1209600
+
+Outputs:
+  EventBusName:
+    Value: !Ref AgentEventBus
+  EventBusArn:
+    Value: !GetAtt AgentEventBus.Arn
+  CognitoUserPoolId:
+    Value: !Ref CognitoUserPool
+  CognitoAppClientId:
+    Value: !Ref CognitoAppClient
+  CognitoTokenEndpoint:
+    Value: !Sub
+      - 'https://${Domain}.auth.${AWS::Region}.amazoncognito.com/oauth2/token'
+      - Domain: !Sub '${AWS::StackName}-${AWS::AccountId}'
+  CognitoOIDCDiscovery:
+    Value: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}/.well-known/openid-configuration'
+  AgentCoreEndpoint:
+    Value: !Ref AgentCoreEndpoint
+  AgentName:
+    Value: !Ref AgentName
+  ScheduleExpression:
+    Value: !Ref ScheduleExpression
+  DLQUrl:
+    Value: !Ref DeadLetterQueue
