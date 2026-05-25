@@ -38,6 +38,8 @@ Tracks regulatory filing deadlines and classifies urgency:
 
 Supports: SAR, CTR, SEC 10-K/10-Q, Call Reports, FR Y-9C
 
+> **Note:** The deadline monitor uses hardcoded sample filings for demonstration. In production, replace `SAMPLE_FILINGS` in `deadline_monitor_agent.py` with a call to your compliance database or filing management system.
+
 ### Regulatory Report Reviewer
 Multi-dimensional review of uploaded regulatory filings:
 - **Completeness** — required sections and fields present

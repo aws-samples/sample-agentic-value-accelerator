@@ -35,8 +35,11 @@ export async function POST() {
     const data = await res.json();
 
     // Extract structured JSON from agent response
-    const text = data?.message?.content?.[0]?.text || data?.message || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const rawMessage = data?.message?.content?.[0]?.text || data?.message || '';
+    const text = typeof rawMessage === 'string' ? rawMessage : JSON.stringify(rawMessage);
+    // Remove <thinking> blocks and find the JSON object
+    const cleaned = text.replace(/<thinking>[\s\S]*?<\/thinking>/g, '');
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return NextResponse.json({ error: 'Could not parse agent response' }, { status: 500 });
 
     return NextResponse.json(JSON.parse(jsonMatch[0]));

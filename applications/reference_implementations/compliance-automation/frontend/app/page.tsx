@@ -9,6 +9,9 @@ interface Deadline {
   days_remaining: number;
   urgency: string;
   status: string;
+  system_status: string;
+  actual_status: string;
+  reasoning: string;
   recommended_action: string;
 }
 
@@ -59,14 +62,14 @@ export default function DeadlineDashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">Compliance Deadline Monitor</h2>
-          <p className="text-gray-500 text-sm mt-1">Track regulatory filing deadlines and escalation status</p>
+          <p className="text-gray-500 text-sm mt-1">Runs automatically every day at 6:00 AM ET via EventBridge Scheduler</p>
         </div>
         <button
           onClick={runCheck}
           disabled={loading}
           className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
         >
-          {loading ? 'Checking...' : 'Run Deadline Check'}
+          {loading ? 'Checking...' : 'Run Now (Manual Trigger)'}
         </button>
       </div>
 
@@ -102,6 +105,35 @@ export default function DeadlineDashboard() {
             </div>
           )}
 
+          {/* Agent Reasoning — shows cross-referencing of analyst notes */}
+          {result.deadlines?.some(d => d.reasoning) && (
+            <div className="bg-white border rounded-lg mb-6">
+              <div className="px-4 py-3 border-b bg-purple-50">
+                <h3 className="font-semibold text-purple-900">🤖 Agent Analysis — Cross-referencing Analyst Notes</h3>
+                <p className="text-xs text-purple-700 mt-0.5">The agent read unstructured analyst notes from S3 and compared them against the filing calendar to determine actual risk</p>
+              </div>
+              <div className="divide-y">
+                {result.deadlines.filter(d => d.reasoning && d.reasoning !== 'No additional context found.').map((d, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${urgencyBadge[d.urgency] || ''}`}>
+                        {d.urgency.toUpperCase()}
+                      </span>
+                      <span className="font-medium text-sm">{d.entity}</span>
+                      {d.system_status && d.actual_status && d.system_status !== d.actual_status && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                          System: {d.system_status} → Actual: {d.actual_status}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-700 mt-1">{d.reasoning}</p>
+                    <p className="text-sm text-blue-700 mt-1"><strong>→ Action:</strong> {d.recommended_action}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Escalations */}
           {result.escalations?.length > 0 && (
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
@@ -122,8 +154,7 @@ export default function DeadlineDashboard() {
                   <th className="text-left px-4 py-3 font-medium">Due Date</th>
                   <th className="text-left px-4 py-3 font-medium">Days</th>
                   <th className="text-left px-4 py-3 font-medium">Urgency</th>
-                  <th className="text-left px-4 py-3 font-medium">Status</th>
-                  <th className="text-left px-4 py-3 font-medium">Action</th>
+                  <th className="text-left px-4 py-3 font-medium">Actual Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -138,12 +169,22 @@ export default function DeadlineDashboard() {
                         {d.urgency.toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-4 py-3 capitalize">{d.status.replace('_', ' ')}</td>
-                    <td className="px-4 py-3 text-xs">{d.recommended_action}</td>
+                    <td className="px-4 py-3 text-xs">{d.actual_status || d.status}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            {/* Reasoning details */}
+            <div className="border-t divide-y">
+              {result.deadlines.filter(d => d.reasoning).map((d, i) => (
+                <div key={i} className="px-4 py-3 bg-gray-50">
+                  <span className="font-medium text-xs uppercase">{d.entity}</span>
+                  <p className="text-sm text-gray-700 mt-1"><strong>Reasoning:</strong> {d.reasoning}</p>
+                  <p className="text-sm text-gray-600 mt-1"><strong>Action:</strong> {d.recommended_action}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -153,6 +194,10 @@ export default function DeadlineDashboard() {
           <p className="text-lg">Click &quot;Run Deadline Check&quot; to invoke the compliance monitoring agent</p>
         </div>
       )}
+
+      <div className="mt-8 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+        <strong>Demo Mode:</strong> This prototype uses a hardcoded filing calendar for demonstration. In production, the agent would connect to your compliance database or filing management system.
+      </div>
     </div>
   );
 }

@@ -100,3 +100,6 @@ DEPLOYMENT_COMPLETE.md
 DEPLOYMENT_STATUS.md
 DEPLOYMENT_STEPS.md
 DEPLOYMENT_SUCCESS.md
+applications/reference_implementations/compliance-automation/frontend/.next/
+applications/reference_implementations/compliance-automation/frontend/node_modules/
+applications/reference_implementations/compliance-automation/agent-backend/.aws-sam/

@@ -4,6 +4,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY agent.py .
+COPY deadline_monitor_agent.py agent.py
 
 ENTRYPOINT ["python", "agent.py"]
