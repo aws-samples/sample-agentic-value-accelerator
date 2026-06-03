@@ -18,7 +18,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-is": "^19.2.6",
-    "react-router-dom": "^7.13.1",
+    "react-router-dom": "^7.16.0",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
