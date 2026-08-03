@@ -110,26 +110,19 @@ locals {
   framework_short_cfn = replace(local.framework_short, "_", "-")
 }
 
-# Resolve the current digest of the requested image tag. Bedrock AgentCore
-# caches container images by tag at runtime-update time and does NOT auto-pull
-# when only the tag's digest changes. Without this, every redeploy that pushes
-# a new image under the same `langchain_langgraph-latest` tag produces a
-# CFN stack update that completes successfully — but the running runtime
-# stays on the OLD image until the runtime resource itself sees a new value.
+# Image reference: a PLAIN tag (e.g. "strands-20260629-201145"), never
+# "<tag>@sha256:<digest>".
 #
-# Pulling the digest into a CFN parameter makes ImageTag = "<tag>@sha256:..."
-# so every push produces a new ImageTag input, triggering AgentCore to pull.
-data "aws_ecr_image" "runtime_image" {
-  repository_name = data.terraform_remote_state.infra.outputs.agentcore_ecr_repository_name
-  image_tag       = var.image_tag
-}
-
-locals {
-  # Compose tag@digest. CloudFormation passes this through to AgentCore,
-  # which accepts the tag@sha256:digest form and resolves to the immutable
-  # image even if the tag is later moved.
-  pinned_image_ref = "${var.image_tag}@${data.aws_ecr_image.runtime_image.image_digest}"
-}
+# Bedrock AgentCore's container pull cannot resolve the `<tag>@sha256:<digest>`
+# reference form — given that form the pull fails before the container starts,
+# and every invocation returns HTTP 502 after a ~65s health-check timeout with
+# no application logs. (A plain `<repo>:<tag>` pulls fine.)
+#
+# We previously composed `tag@digest` to force AgentCore to re-pull when the
+# same mutable tag (e.g. `strands-latest`) was re-pushed. That is solved
+# instead by the build pushing a UNIQUE immutable tag per build and passing it
+# in via var.image_tag — so every deploy already has a distinct tag and no
+# digest pinning is needed. See modules/codebuild/buildspec.yml.
 
 # AgentCore Runtime via CloudFormation
 # Include use_case_id, framework, and region in stack name to support multi-deployment isolation
@@ -144,9 +137,10 @@ resource "aws_cloudformation_stack" "agentcore_runtime" {
     AgentName      = local.agent_name
     RoleArn        = data.terraform_remote_state.infra.outputs.agentcore_role_arn
     ECRRepository  = data.terraform_remote_state.infra.outputs.agentcore_ecr_repository
-    # Use tag@digest so AgentCore pulls the new image on every push, not just
-    # on tag changes. See data.aws_ecr_image.runtime_image above.
-    ImageTag       = local.pinned_image_ref
+    # Plain tag only. AgentCore cannot pull "<tag>@sha256:<digest>" (results in
+    # a 502 with no logs). Cache-busting on redeploy is handled by the build
+    # pushing a unique tag per build (see buildspec.yml), not by digest pinning.
+    ImageTag       = var.image_tag
     DataBucket     = data.terraform_remote_state.infra.outputs.s3_data_bucket
     BedrockModelId = var.bedrock_model_id
     Description    = "AVA - ${var.use_case_name} (${var.framework})"
@@ -160,6 +154,8 @@ resource "aws_cloudformation_stack" "agentcore_runtime" {
     LangfuseSecretName = var.langfuse_secret_name
     GuardrailId      = var.guardrail_id
     GuardrailVersion = var.guardrail_version
+    LlmGatewayBaseUrl         = var.llm_gateway_base_url
+    LlmGatewayApiKeySecretArn = var.llm_gateway_api_key_secret_arn
   }
 
   capabilities = ["CAPABILITY_IAM"]

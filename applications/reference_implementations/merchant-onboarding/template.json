@@ -1,0 +1,69 @@
+{
+  "id": "merchant-onboarding",
+  "name": "Merchant Onboarding",
+  "description": "AI-powered merchant onboarding platform with document processing, OFAC sanctions screening, fraud detection, and human-in-the-loop approvals. Reduces onboarding time from 5-7 days to 1-2 days via multi-agent orchestration on Amazon Bedrock.",
+  "version": "1.0.0",
+  "pattern_type": "human-in-the-loop",
+  "type": "reference",
+  "frameworks": [
+    {
+      "id": "strands",
+      "name": "Strands Agents SDK",
+      "path": "agents",
+      "description": "Strands-based multi-agent workflow: DocumentProcessor, ComplianceChecker, AccountProvisioner"
+    }
+  ],
+  "deployment_patterns": [
+    {
+      "id": "cdk",
+      "name": "AWS CDK",
+      "description": "Multi-stack CDK deployment (Onboarding API + Bedrock Agent + React Frontend)",
+      "path": "infrastructure"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "Project name prefix for all AWS resources",
+      "required": true,
+      "default": "merchant-onboarding"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "description": "AWS region for deployment",
+      "required": false,
+      "default": "us-east-2",
+      "enum": ["us-east-1", "us-east-2", "us-west-2"]
+    }
+  ],
+  "example_use_cases": [
+    "Automated merchant KYC/KYB document processing",
+    "OFAC sanctions screening with AI risk assessment",
+    "Human-in-the-loop approval workflows for onboarding",
+    "Fraud detection and compliance validation",
+    "Self-service merchant portal with real-time status tracking"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": ["merchant-onboarding", "payments", "kyc", "kyb", "compliance", "ofac", "human-in-the-loop", "bedrock", "textract", "cdk"],
+  "outputs": {
+    "api_endpoint": "API Gateway endpoint for the onboarding REST API",
+    "frontend_url": "CloudFront URL for the merchant onboarding dashboard",
+    "user_pool_id": "Cognito User Pool ID for admin authentication"
+  },
+  "jobs": [
+    {
+      "name": "onboarding",
+      "incoming_event": "merchant_onboarding_request",
+      "outgoing_event": "merchant_onboarding_complete"
+    },
+    {
+      "name": "offboarding",
+      "incoming_event": "merchant_offboarding_request",
+      "outgoing_event": "merchant_offboarding_complete"
+    }
+  ],
+  "dependencies": []
+}

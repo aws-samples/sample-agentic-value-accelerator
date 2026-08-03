@@ -1,0 +1,9 @@
+
+# AgentCore module runtime ID files (account-specific, written by local-exec)
+modules/agentcore_policy/.gateway_arn
+modules/agentcore_policy/.gateway_id
+modules/agentcore_policy/.policy_engine_arn
+modules/agentcore_policy/.policy_engine_id
+
+# Throwaway terraform plan output files
+tfplan*

@@ -11,8 +11,10 @@ alembic==1.14.0
 # psycopg2-binary==2.9.9  # Optional for PostgreSQL; SQLite works without it
 
 # AWS Services
-boto3>=1.35.0
-botocore>=1.35.0
+# >=1.43.0 required for bedrock-agentcore-control policy-engine APIs
+# (list_policy_engines / create_policy_engine / create_gateway_target)
+boto3>=1.43.0
+botocore>=1.43.0
 
 # Authentication
 python-jose[cryptography]==3.3.0

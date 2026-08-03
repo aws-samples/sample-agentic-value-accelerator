@@ -4,22 +4,33 @@
 
 import { useState } from 'react';
 import { ISSUES, RISKS, CONTROLS, type Issue } from './riskData';
+import { Icon, type IconName } from '../icons';
+import { usePersistedState } from '../usePersistedState';
+import { rowButtonProps } from '../a11y';
 
 export default function RiskIssues() {
   const [selectedIssue, setSelectedIssue] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
+  const [issues, setIssues] = usePersistedState<Issue[]>('risk_issues', ISSUES);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const updateIssueStatus = (id: string, status: Issue['status'], message: string) => {
+    setIssues(prev => prev.map(i => (i.id === id ? { ...i, status } : i)));
+    setToast(message);
+    setTimeout(() => setToast(null), 2800);
+  };
 
   const statuses = ['all', 'open', 'in-progress', 'remediated', 'closed'];
   const severities = ['all', 'critical', 'high', 'medium', 'low'];
 
-  const filteredIssues = ISSUES.filter(issue => {
+  const filteredIssues = issues.filter(issue => {
     const matchesStatus = filterStatus === 'all' || issue.status === filterStatus;
     const matchesSeverity = filterSeverity === 'all' || issue.severity === filterSeverity;
     return matchesStatus && matchesSeverity;
   });
 
-  const selectedData = selectedIssue ? ISSUES.find(i => i.id === selectedIssue) : null;
+  const selectedData = selectedIssue ? issues.find(i => i.id === selectedIssue) : null;
 
   const getSeverityColor = (severity: Issue['severity']) => {
     switch (severity) {
@@ -39,9 +50,9 @@ export default function RiskIssues() {
     }
   };
 
-  const openIssues = ISSUES.filter(i => i.status === 'open').length;
-  const inProgressIssues = ISSUES.filter(i => i.status === 'in-progress').length;
-  const overdueIssues = ISSUES.filter(i => {
+  const openIssues = issues.filter(i => i.status === 'open').length;
+  const inProgressIssues = issues.filter(i => i.status === 'in-progress').length;
+  const overdueIssues = issues.filter(i => {
     if (i.status === 'remediated' || i.status === 'closed') return false;
     return new Date(i.dueDate) < new Date();
   }).length;
@@ -54,7 +65,13 @@ export default function RiskIssues() {
           <h3 className="text-sm font-semibold text-slate-900">Risk Issues & Findings</h3>
           <p className="text-xs text-slate-500 mt-1">Track findings, remediation plans, and risk acceptances</p>
         </div>
-        <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+        <button
+          onClick={() => {
+            setToast('Opening issue form — enter finding details to log');
+            setTimeout(() => setToast(null), 2800);
+          }}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+        >
           + Log Issue
         </button>
       </div>
@@ -82,6 +99,7 @@ export default function RiskIssues() {
       {/* Filters */}
       <div className="flex items-center gap-4">
         <select
+          aria-label="Filter by status"
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
           className="px-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -93,6 +111,7 @@ export default function RiskIssues() {
           ))}
         </select>
         <select
+          aria-label="Filter by severity"
           value={filterSeverity}
           onChange={(e) => setFilterSeverity(e.target.value)}
           className="px-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -110,12 +129,12 @@ export default function RiskIssues() {
         <table className="w-full">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Issue</th>
-              <th className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Severity</th>
-              <th className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Status</th>
-              <th className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Related Risk</th>
-              <th className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Owner</th>
-              <th className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Due Date</th>
+              <th scope="col" className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Issue</th>
+              <th scope="col" className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Severity</th>
+              <th scope="col" className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Status</th>
+              <th scope="col" className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Related Risk</th>
+              <th scope="col" className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Owner</th>
+              <th scope="col" className="text-left text-[10px] font-semibold text-slate-500 uppercase px-4 py-3">Due Date</th>
             </tr>
           </thead>
           <tbody>
@@ -125,8 +144,11 @@ export default function RiskIssues() {
               return (
                 <tr
                   key={issue.id}
-                  onClick={() => setSelectedIssue(selectedIssue === issue.id ? null : issue.id)}
-                  className={`border-b border-slate-100 cursor-pointer transition-colors ${
+                  {...rowButtonProps(
+                    () => setSelectedIssue(selectedIssue === issue.id ? null : issue.id),
+                    `View issue ${issue.id}: ${issue.title}`
+                  )}
+                  className={`border-b border-slate-100 cursor-pointer transition-colors focus:outline-none focus:bg-blue-50/50 ${
                     selectedIssue === issue.id ? 'bg-blue-50' : 'hover:bg-slate-50'
                   }`}
                 >
@@ -289,23 +311,37 @@ export default function RiskIssues() {
           {/* Action Buttons */}
           <div className="flex items-center gap-3 mt-6 pt-4 border-t border-slate-200">
             {selectedData.status === 'open' && (
-              <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+              <button
+                onClick={() => updateIssueStatus(selectedData.id, 'in-progress', `Remediation started on ${selectedData.id}`)}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              >
                 Start Remediation
               </button>
             )}
             {selectedData.status === 'in-progress' && (
-              <button className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">
+              <button
+                onClick={() => updateIssueStatus(selectedData.id, 'remediated', `${selectedData.id} marked remediated`)}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+              >
                 Mark Remediated
               </button>
             )}
             {(selectedData.status === 'open' || selectedData.status === 'in-progress') && (
-              <button className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+              <button
+                onClick={() => updateIssueStatus(selectedData.id, 'closed', `Risk acceptance recorded for ${selectedData.id}`)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
                 Request Risk Acceptance
               </button>
             )}
-            <button className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
-              Edit Issue
-            </button>
+            {selectedData.status === 'remediated' && (
+              <button
+                onClick={() => updateIssueStatus(selectedData.id, 'open', `${selectedData.id} reopened`)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Reopen Issue
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -315,19 +351,25 @@ export default function RiskIssues() {
         <h3 className="text-sm font-semibold text-slate-900 mb-4">Issue Sources</h3>
         <div className="grid grid-cols-4 gap-4">
           {[
-            { source: 'Risk Assessment', desc: 'Findings from formal risk assessments', icon: '📋' },
-            { source: 'Audit', desc: 'Internal or external audit findings', icon: '🔍' },
-            { source: 'Incident', desc: 'Post-incident findings', icon: '⚠️' },
-            { source: 'Self-Identified', desc: 'Proactively discovered issues', icon: '💡' },
+            { source: 'Risk Assessment', desc: 'Findings from formal risk assessments', icon: 'clipboard-list' as IconName },
+            { source: 'Audit', desc: 'Internal or external audit findings', icon: 'viewfinder-circle' as IconName },
+            { source: 'Incident', desc: 'Post-incident findings', icon: 'exclamation-triangle' as IconName },
+            { source: 'Self-Identified', desc: 'Proactively discovered issues', icon: 'light-bulb' as IconName },
           ].map(item => (
             <div key={item.source} className="p-4 border border-slate-200 rounded-lg">
-              <div className="text-lg mb-2">{item.icon}</div>
+              <Icon name={item.icon} className="w-5 h-5 mb-2 text-slate-500" />
               <div className="text-sm font-semibold text-slate-900 mb-1">{item.source}</div>
               <div className="text-xs text-slate-600">{item.desc}</div>
             </div>
           ))}
         </div>
       </div>
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium z-50 bg-slate-800 text-white">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

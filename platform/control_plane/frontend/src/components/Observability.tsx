@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { deploymentsApi } from '../api/client';
+import { openFsiApp, withAvaToken } from '../lib/fsiAppLink';
 import type { Deployment } from '../types';
 
 type TabId = 'langfuse';
@@ -14,6 +15,9 @@ export default function Observability() {
   const [loadingFoundation, setLoadingFoundation] = useState(true);
   const [serverReachable, setServerReachable] = useState<boolean | null>(null);
   const [iframeError, setIframeError] = useState(false);
+  // Langfuse iframe src with AVA SSO handoff token appended. Null until minted
+  // (or when auth is disabled → falls back to the raw langfuse_host URL).
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [showDeployForm, setShowDeployForm] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState('');
@@ -39,6 +43,21 @@ export default function Observability() {
     };
     fetchFoundation();
   }, []);
+
+  // Mint an AVA SSO handoff token and append it to the Langfuse URL, so the
+  // Lambda@Edge on Langfuse's CloudFront accepts the iframe/page load. Falls
+  // back to the raw URL when auth isn't configured (dev) or minting fails.
+  useEffect(() => {
+    const host = foundationDeployment?.outputs?.langfuse_host;
+    if (!host) { setIframeUrl(null); return; }
+    let cancelled = false;
+    withAvaToken(host).then((url) => {
+      if (!cancelled) setIframeUrl(url ?? host);
+    }).catch(() => {
+      if (!cancelled) setIframeUrl(host);
+    });
+    return () => { cancelled = true; };
+  }, [foundationDeployment?.outputs?.langfuse_host]);
 
   // Probe Langfuse URL: if unreachable, treat server as not deployed even if
   // the deployment record still exists (handles the case where ECS was torn
@@ -158,6 +177,7 @@ export default function Observability() {
                     </div>
                     <a
                       href={foundationDeployment.outputs.langfuse_host}
+                      onClick={(e) => { e.preventDefault(); openFsiApp(foundationDeployment.outputs.langfuse_host); }}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
@@ -174,7 +194,7 @@ export default function Observability() {
                 {!iframeError ? (
                   <div className="rounded-xl border border-violet-200 overflow-hidden bg-white" style={{ height: 'calc(100vh - 20rem)' }}>
                     <iframe
-                      src={foundationDeployment.outputs.langfuse_host}
+                      src={iframeUrl ?? foundationDeployment.outputs.langfuse_host}
                       className="w-full h-full border-0"
                       title="Langfuse Dashboard"
                       onError={() => setIframeError(true)}

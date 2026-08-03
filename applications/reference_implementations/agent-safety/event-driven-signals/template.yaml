@@ -1,0 +1,583 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Event-Driven Signal Processing for Agent Safety Dashboard.
+  Deploys 6 Lambda functions that push signal data to DynamoDB:
+  - 3 event-driven (SNS/EventBridge triggers for real-time alerts)
+  - 3 scheduled (periodic polling for detailed numeric values)
+  Dashboard becomes a pure DynamoDB reader after this stack is deployed.
+
+# ==========================================================================
+# Parameters
+# ==========================================================================
+Parameters:
+  SNSTopicArn:
+    Type: String
+    Description: ARN of the existing agent-cost-alerts SNS topic
+    AllowedPattern: 'arn:aws:sns:.*'
+
+  CostSignalsTable:
+    Type: String
+    Default: safety-dashboard-cost-signals
+    Description: DynamoDB table for cost signals
+
+  ObsSignalsTable:
+    Type: String
+    Default: safety-dashboard-obs-signals
+    Description: DynamoDB table for observability signals
+
+  EvalSignalsTable:
+    Type: String
+    Default: safety-dashboard-eval-signals
+    Description: DynamoDB table for evaluation signals
+
+  RegistryTable:
+    Type: String
+    Default: safety-dashboard-registry
+    Description: DynamoDB table for agent registry
+
+  BudgetPrefix:
+    Type: String
+    Default: agent-
+    Description: Prefix for budget names
+
+  CostPollSchedule:
+    Type: String
+    Default: rate(5 minutes)
+    Description: Schedule for cost signal polling
+
+  ObsPollSchedule:
+    Type: String
+    Default: rate(5 minutes)
+    Description: Schedule for observability signal polling
+
+  EvalPollSchedule:
+    Type: String
+    Default: rate(15 minutes)
+    Description: Schedule for evaluation signal polling
+
+  LambdaCodeBucket:
+    Type: String
+    Description: S3 bucket containing Lambda code zip files
+
+  LambdaCodePrefix:
+    Type: String
+    Default: event-driven-signals
+    Description: S3 prefix for Lambda code zip files
+
+# ==========================================================================
+# Resources
+# ==========================================================================
+Resources:
+
+  # ========================================================================
+  # SECTION 1: Dead Letter Queues (one per Lambda)
+  # ========================================================================
+  CostSignalEventDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-cost-event-dlq'
+      MessageRetentionPeriod: 1209600
+
+  CostSignalPollDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-cost-poll-dlq'
+      MessageRetentionPeriod: 1209600
+
+  ObsSignalEventDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-obs-event-dlq'
+      MessageRetentionPeriod: 1209600
+
+  ObsSignalPollDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-obs-poll-dlq'
+      MessageRetentionPeriod: 1209600
+
+  EvalSignalEventDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-eval-event-dlq'
+      MessageRetentionPeriod: 1209600
+
+  EvalSignalPollDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-eval-poll-dlq'
+      MessageRetentionPeriod: 1209600
+
+  # ========================================================================
+  # SECTION 2: IAM Roles (least-privilege per Lambda)
+  # ========================================================================
+
+  # --- Cost Signal Event Role (minimal: DynamoDB write only) ---
+  CostSignalEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CostEventRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: CostEventPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:UpdateItem, dynamodb:PutItem]
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CostSignalsTable}'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt CostSignalEventDLQ.Arn
+
+  # --- Cost Signal Poll Role (Budgets read + DynamoDB read/write) ---
+  CostSignalPollRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CostPollRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: CostPollPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [budgets:ViewBudget, budgets:DescribeBudgets]
+                Resource: '*'
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:Scan, dynamodb:DeleteItem]
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CostSignalsTable}'
+              - Effect: Allow
+                Action: dynamodb:Scan
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTable}'
+              - Effect: Allow
+                Action: sts:GetCallerIdentity
+                Resource: '*'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt CostSignalPollDLQ.Arn
+
+  # --- Obs Signal Event Role (DynamoDB write only) ---
+  ObsSignalEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-ObsEventRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: ObsEventPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:UpdateItem]
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ObsSignalsTable}'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ObsSignalEventDLQ.Arn
+
+  # --- Obs Signal Poll Role (CloudWatch read + DynamoDB read/write) ---
+  ObsSignalPollRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-ObsPollRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: ObsPollPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [cloudwatch:DescribeAlarms]
+                Resource: '*'
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:Scan, dynamodb:DeleteItem]
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ObsSignalsTable}'
+              - Effect: Allow
+                Action: dynamodb:Scan
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTable}'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ObsSignalPollDLQ.Arn
+
+  # --- Eval Signal Event Role (DynamoDB write only) ---
+  EvalSignalEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-EvalEventRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: EvalEventPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:UpdateItem, dynamodb:PutItem]
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EvalSignalsTable}'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt EvalSignalEventDLQ.Arn
+
+  # --- Eval Signal Poll Role (AgentCore + CloudWatch read + DynamoDB read/write) ---
+  EvalSignalPollRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-EvalPollRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: EvalPollPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [bedrock-agentcore:ListOnlineEvaluationConfigs, bedrock-agentcore:GetOnlineEvaluationConfig]
+                Resource: '*'
+              - Effect: Allow
+                Action: [cloudwatch:GetMetricStatistics, cloudwatch:DescribeAlarms]
+                Resource: '*'
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:Scan, dynamodb:DeleteItem]
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EvalSignalsTable}'
+              - Effect: Allow
+                Action: dynamodb:Scan
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTable}'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt EvalSignalPollDLQ.Arn
+
+  # ========================================================================
+  # SECTION 3: Lambda Functions (6)
+  # ========================================================================
+
+  CostSignalEventFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-CostSignalEvent'
+      Runtime: python3.12
+      Handler: cost_signal_event.handler
+      Timeout: 30
+      MemorySize: 128
+      Role: !GetAtt CostSignalEventRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt CostSignalEventDLQ.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub '${LambdaCodePrefix}/cost_signal_event.zip'
+      Environment:
+        Variables:
+          COST_SIGNALS_TABLE: !Ref CostSignalsTable
+          BUDGET_PREFIX: !Ref BudgetPrefix
+          REGION: !Ref AWS::Region
+
+  CostSignalPollFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-CostSignalPoll'
+      Runtime: python3.12
+      Handler: cost_signal_poll.handler
+      Timeout: 120
+      MemorySize: 256
+      Role: !GetAtt CostSignalPollRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt CostSignalPollDLQ.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub '${LambdaCodePrefix}/cost_signal_poll.zip'
+      Environment:
+        Variables:
+          COST_SIGNALS_TABLE: !Ref CostSignalsTable
+          REGISTRY_TABLE: !Ref RegistryTable
+          BUDGET_PREFIX: !Ref BudgetPrefix
+          REGION: !Ref AWS::Region
+
+  ObsSignalEventFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ObsSignalEvent'
+      Runtime: python3.12
+      Handler: obs_signal_event.handler
+      Timeout: 30
+      MemorySize: 128
+      Role: !GetAtt ObsSignalEventRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt ObsSignalEventDLQ.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub '${LambdaCodePrefix}/obs_signal_event.zip'
+      Environment:
+        Variables:
+          OBS_SIGNALS_TABLE: !Ref ObsSignalsTable
+          REGION: !Ref AWS::Region
+
+  ObsSignalPollFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ObsSignalPoll'
+      Runtime: python3.12
+      Handler: obs_signal_poll.handler
+      Timeout: 120
+      MemorySize: 256
+      Role: !GetAtt ObsSignalPollRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt ObsSignalPollDLQ.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub '${LambdaCodePrefix}/obs_signal_poll.zip'
+      Environment:
+        Variables:
+          OBS_SIGNALS_TABLE: !Ref ObsSignalsTable
+          REGISTRY_TABLE: !Ref RegistryTable
+          REGION: !Ref AWS::Region
+
+  EvalSignalEventFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-EvalSignalEvent'
+      Runtime: python3.12
+      Handler: eval_signal_event.handler
+      Timeout: 30
+      MemorySize: 128
+      Role: !GetAtt EvalSignalEventRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt EvalSignalEventDLQ.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub '${LambdaCodePrefix}/eval_signal_event.zip'
+      Environment:
+        Variables:
+          EVAL_SIGNALS_TABLE: !Ref EvalSignalsTable
+          REGION: !Ref AWS::Region
+
+  EvalSignalPollFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-EvalSignalPoll'
+      Runtime: python3.12
+      Handler: eval_signal_poll.handler
+      Timeout: 300
+      MemorySize: 512
+      Role: !GetAtt EvalSignalPollRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt EvalSignalPollDLQ.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub '${LambdaCodePrefix}/eval_signal_poll.zip'
+      Environment:
+        Variables:
+          EVAL_SIGNALS_TABLE: !Ref EvalSignalsTable
+          REGISTRY_TABLE: !Ref RegistryTable
+          REGION: !Ref AWS::Region
+
+  # ========================================================================
+  # SECTION 4: Event Triggers
+  # ========================================================================
+
+  # --- SNS Subscription: Cost threshold breach → CostSignalEvent ---
+  CostSignalEventSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SNSTopicArn
+      Protocol: lambda
+      Endpoint: !GetAtt CostSignalEventFunction.Arn
+
+  CostSignalEventSNSPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CostSignalEventFunction
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref SNSTopicArn
+
+  # --- EventBridge Rule: Obs alarm state change → ObsSignalEvent ---
+  ObsAlarmStateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-ObsAlarmStateChange'
+      Description: Triggers on CloudWatch alarm state changes (observability alarms)
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.cloudwatch
+        detail-type:
+          - CloudWatch Alarm State Change
+        detail:
+          alarmName:
+            - suffix: '-high-latency'
+            - suffix: '-error-rate'
+            - suffix: '-token-usage'
+            - suffix: '-invocation-count'
+            - suffix: '-composite'
+      Targets:
+        - Id: ObsSignalEventTarget
+          Arn: !GetAtt ObsSignalEventFunction.Arn
+
+  ObsSignalEventEBPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ObsSignalEventFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ObsAlarmStateChangeRule.Arn
+
+  # --- EventBridge Rule: Eval alarm state change → EvalSignalEvent ---
+  EvalAlarmStateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-EvalAlarmStateChange'
+      Description: Triggers on eval alarm state changes (AgentSafety-Eval-* prefix)
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.cloudwatch
+        detail-type:
+          - CloudWatch Alarm State Change
+        detail:
+          alarmName:
+            - prefix: 'AgentSafety-Eval-'
+      Targets:
+        - Id: EvalSignalEventTarget
+          Arn: !GetAtt EvalSignalEventFunction.Arn
+
+  EvalSignalEventEBPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EvalSignalEventFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EvalAlarmStateChangeRule.Arn
+
+  # ========================================================================
+  # SECTION 5: Scheduled Triggers (EventBridge Scheduler)
+  # ========================================================================
+
+  CostPollScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-CostPollSchedule'
+      Description: Polls budget spend values on schedule
+      State: ENABLED
+      ScheduleExpression: !Ref CostPollSchedule
+      Targets:
+        - Id: CostSignalPollTarget
+          Arn: !GetAtt CostSignalPollFunction.Arn
+
+  CostPollSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CostSignalPollFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CostPollScheduleRule.Arn
+
+  ObsPollScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-ObsPollSchedule'
+      Description: Polls alarm states on schedule
+      State: ENABLED
+      ScheduleExpression: !Ref ObsPollSchedule
+      Targets:
+        - Id: ObsSignalPollTarget
+          Arn: !GetAtt ObsSignalPollFunction.Arn
+
+  ObsPollSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ObsSignalPollFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ObsPollScheduleRule.Arn
+
+  EvalPollScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-EvalPollSchedule'
+      Description: Polls per-evaluator metric scores on schedule
+      State: ENABLED
+      ScheduleExpression: !Ref EvalPollSchedule
+      Targets:
+        - Id: EvalSignalPollTarget
+          Arn: !GetAtt EvalSignalPollFunction.Arn
+
+  EvalPollSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EvalSignalPollFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EvalPollScheduleRule.Arn
+
+# ==========================================================================
+# Outputs
+# ==========================================================================
+Outputs:
+  CostSignalEventFunctionArn:
+    Description: Cost Signal Event Lambda ARN
+    Value: !GetAtt CostSignalEventFunction.Arn
+
+  CostSignalPollFunctionArn:
+    Description: Cost Signal Poll Lambda ARN
+    Value: !GetAtt CostSignalPollFunction.Arn
+
+  ObsSignalEventFunctionArn:
+    Description: Obs Signal Event Lambda ARN
+    Value: !GetAtt ObsSignalEventFunction.Arn
+
+  ObsSignalPollFunctionArn:
+    Description: Obs Signal Poll Lambda ARN
+    Value: !GetAtt ObsSignalPollFunction.Arn
+
+  EvalSignalEventFunctionArn:
+    Description: Eval Signal Event Lambda ARN
+    Value: !GetAtt EvalSignalEventFunction.Arn
+
+  EvalSignalPollFunctionArn:
+    Description: Eval Signal Poll Lambda ARN
+    Value: !GetAtt EvalSignalPollFunction.Arn

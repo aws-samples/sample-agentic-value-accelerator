@@ -1,0 +1,96 @@
+{
+  "account_id": "A705",
+  "customer_name": "Marcus Webb",
+  "account_type": "personal_checking",
+  "risk_profile": "medium",
+  "opened_date": "2024-03-12",
+  "home_country": "US",
+  "home_city": "New York",
+  "baseline": {
+    "typical_transaction_amount": 220.0,
+    "typical_weekly_count": 6,
+    "typical_networks": ["ach", "card"]
+  },
+  "scenario": "smurfing",
+  "scenario_note": "Five cash-equivalent deposits engineered just below the $10,000 CTR reporting threshold, all to the same destination (A901) within 48 hours.",
+  "expected_assessment": {
+    "fraud_score": 0.88,
+    "risk_level": "high",
+    "decision": "step_up_review",
+    "reason_tags": ["SMURFING"]
+  },
+  "flagged_patterns": [
+    {
+      "pattern": "SMURFING",
+      "confidence": 0.85,
+      "description": "Multiple deposits just below the $10,000 reporting threshold to a single destination"
+    }
+  ],
+  "transactions": [
+    {
+      "transaction_id": "TXN_SMURF_1",
+      "account_id": "A705",
+      "timestamp": "2026-06-14T09:12:00Z",
+      "amount": 9800.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {"counterparty_id": "A901", "name": "Coastal Holdings LLC", "account_number_masked": "****0901", "country": "US"},
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {"country": "US", "city": "New York", "lat": 40.71, "lon": -74.01}
+    },
+    {
+      "transaction_id": "TXN_SMURF_2",
+      "account_id": "A705",
+      "timestamp": "2026-06-14T14:47:00Z",
+      "amount": 9650.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {"counterparty_id": "A901", "name": "Coastal Holdings LLC", "account_number_masked": "****0901", "country": "US"},
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {"country": "US", "city": "New York", "lat": 40.71, "lon": -74.01}
+    },
+    {
+      "transaction_id": "TXN_SMURF_3",
+      "account_id": "A705",
+      "timestamp": "2026-06-15T08:30:00Z",
+      "amount": 9900.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {"counterparty_id": "A901", "name": "Coastal Holdings LLC", "account_number_masked": "****0901", "country": "US"},
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {"country": "US", "city": "New York", "lat": 40.71, "lon": -74.01}
+    },
+    {
+      "transaction_id": "TXN_SMURF_4",
+      "account_id": "A705",
+      "timestamp": "2026-06-15T13:05:00Z",
+      "amount": 9750.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {"counterparty_id": "A901", "name": "Coastal Holdings LLC", "account_number_masked": "****0901", "country": "US"},
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {"country": "US", "city": "New York", "lat": 40.71, "lon": -74.01}
+    },
+    {
+      "transaction_id": "TXN_SMURF_5",
+      "account_id": "A705",
+      "timestamp": "2026-06-15T17:58:00Z",
+      "amount": 9500.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {"counterparty_id": "A901", "name": "Coastal Holdings LLC", "account_number_masked": "****0901", "country": "US"},
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {"country": "US", "city": "New York", "lat": 40.71, "lon": -74.01}
+    }
+  ]
+}

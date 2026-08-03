@@ -1,0 +1,3 @@
+# Lambda's built-in boto3 lags and lacks the bedrock-agentcore-control policy
+# operations (get_policy/update_policy). PINNED EXACT for a reproducible bundle.
+boto3==1.43.42

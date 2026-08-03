@@ -28,7 +28,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   prefix             = "${var.project_name}-${var.environment}"
-  embedding_model_arn = "arn:aws:bedrock:${data.aws_region.current.id}::foundation-model/${var.embedding_model_id}"
+  embedding_model_arn = "arn:aws:bedrock:${data.aws_region.current.region}::foundation-model/${var.embedding_model_id}"
   vector_index_name  = "${local.prefix}-index"
 
   default_tags = merge(var.tags, {

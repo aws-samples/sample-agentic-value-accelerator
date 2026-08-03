@@ -257,6 +257,7 @@ export default function AppDeployCreate() {
           <GuardrailSelector
             value={guardrailId}
             onChange={(id, version) => { setGuardrailId(id); setGuardrailVersion(version); }}
+            useCaseId={useCaseId}
           />
         </div>
 

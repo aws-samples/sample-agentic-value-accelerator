@@ -107,14 +107,20 @@ resource "aws_iam_role_policy" "ecs_task_dynamodb" {
           "${var.app_factory_table_arn}/index/*",
           var.guardrails_table_arn,
           "${var.guardrails_table_arn}/index/*",
+          var.policies_table_arn,
+          "${var.policies_table_arn}/index/*",
           var.prioritization_table_arn,
           "${var.prioritization_table_arn}/index/*",
           var.maturity_table_arn,
           "${var.maturity_table_arn}/index/*",
           var.business_cases_table_arn,
           "${var.business_cases_table_arn}/index/*",
+          var.knowledge_table_arn,
+          "${var.knowledge_table_arn}/index/*",
           var.operating_model_table_arn,
           "${var.operating_model_table_arn}/index/*",
+          var.organization_design_table_arn,
+          "${var.organization_design_table_arn}/index/*",
           var.service_approval_table_arn,
           "${var.service_approval_table_arn}/index/*"
         ]
@@ -246,6 +252,51 @@ resource "aws_iam_role_policy" "ecs_task_logs" {
   })
 }
 
+# Policy for Advanced Prompt Optimization (Bedrock AdvPO jobs + model discovery).
+# S3 access to the AdvPO bucket is already covered by the ava-* wildcard in
+# the s3-access policy above. These actions are not resource-scopable, so "*".
+resource "aws_iam_role_policy" "ecs_task_advpo" {
+  name = "advpo-access"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:CreateAdvancedPromptOptimizationJob",
+          "bedrock:GetAdvancedPromptOptimizationJob",
+          "bedrock:ListAdvancedPromptOptimizationJobs",
+          "bedrock:StopAdvancedPromptOptimizationJob",
+          "bedrock:DeleteAdvancedPromptOptimizationJob",
+          "bedrock:BatchDeleteAdvancedPromptOptimizationJob",
+          "bedrock:ListFoundationModels",
+          "bedrock:ListInferenceProfiles",
+          "bedrock:GetInferenceProfile"
+        ]
+        Resource = "*"
+      },
+      {
+        # The AdvPO job runs under this task role (no separate execution role is
+        # passed), so it must be able to invoke the target models — including
+        # cross-region inference profiles (e.g. us.anthropic.claude-*), which
+        # require invoke on both the profile and the underlying foundation models.
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:application-inference-profile/*"
+        ]
+      }
+    ]
+  })
+}
+
 # Policy for Bedrock Guardrails and CloudWatch Metrics
 resource "aws_iam_role_policy" "ecs_task_bedrock_guardrails" {
   name = "bedrock-guardrails-access"
@@ -269,7 +320,9 @@ resource "aws_iam_role_policy" "ecs_task_bedrock_guardrails" {
       {
         Effect = "Allow"
         Action = [
-          "cloudwatch:GetMetricData"
+          "cloudwatch:GetMetricData",
+          "cloudwatch:ListMetrics",
+          "cloudwatch:GetMetricStatistics"
         ]
         Resource = "*"
       }
@@ -459,6 +512,10 @@ resource "aws_ecs_task_definition" "main" {
           value = var.project_archives_bucket_name
         },
         {
+          name  = "ADVPO_BUCKET"
+          value = var.advpo_bucket_name
+        },
+        {
           name  = "FRONTEND_BUCKET"
           value = var.frontend_bucket_name
         },
@@ -469,6 +526,18 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "GUARDRAILS_TABLE_NAME"
           value = var.guardrails_table_name
+        },
+        {
+          name  = "POLICIES_TABLE_NAME"
+          value = var.policies_table_name
+        },
+        {
+          name  = "POLICY_ENGINE_ID"
+          value = var.policy_engine_id
+        },
+        {
+          name  = "GATEWAY_ARN"
+          value = var.policy_gateway_arn
         },
         {
           name  = "PRIORITIZATION_TABLE_NAME"
@@ -483,8 +552,24 @@ resource "aws_ecs_task_definition" "main" {
           value = var.business_cases_table_name
         },
         {
+          name  = "KNOWLEDGE_TABLE_NAME"
+          value = var.knowledge_table_name
+        },
+        {
+          name  = "DATALAKE_MCP_IMAGE_URI"
+          value = var.datalake_mcp_image_uri
+        },
+        {
+          name  = "KB_MCP_IMAGE_URI"
+          value = var.kb_mcp_image_uri
+        },
+        {
           name  = "OPERATING_MODEL_TABLE_NAME"
           value = var.operating_model_table_name
+        },
+        {
+          name  = "ORGANIZATION_DESIGN_TABLE_NAME"
+          value = var.organization_design_table_name
         },
         {
           name  = "STATE_MACHINE_ARN"
@@ -500,6 +585,14 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "AWS_DEFAULT_REGION"
+          value = data.aws_region.current.name
+        },
+        {
+          # Backend settings.AWS_REGION (Pydantic) reads this env var and uses it
+          # as the default deployment region. Without it the setting falls back to
+          # its hardcoded "us-east-1", so use-case CodeBuild deploys init the S3
+          # tf-state backend in the wrong region and fail with a 301 redirect.
+          name  = "AWS_REGION"
           value = data.aws_region.current.name
         },
         {
@@ -548,6 +641,13 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "COGNITO_REGION"
           value = data.aws_region.current.name
+        },
+        # FSI Foundry SSO — HMAC secret shared with each FSI app's CloudFront
+        # Function. Backend uses it to sign handoff tokens AFTER real Cognito
+        # RS256 verification of the caller's id_token succeeds.
+        {
+          name  = "FSI_APP_SIGNING_SECRET"
+          value = var.fsi_app_signing_secret
         }
       ]
 
@@ -682,6 +782,45 @@ resource "aws_iam_role_policy" "ecs_task_sts" {
   })
 }
 
+# Step Functions — the backend (running as this task role) calls
+# states:StartExecution directly to kick off the deployment pipeline
+# (App Factory deploy, FSI Foundry / reference-impl deploy) and the
+# frontier-agents pipeline, then polls execution status. Without this,
+# any deploy fails with AccessDeniedException on StartExecution.
+resource "aws_iam_role_policy" "ecs_task_step_functions" {
+  name = "step-functions-start"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "states:StartExecution",
+        ]
+        Resource = compact([
+          var.state_machine_arn,
+          var.frontier_agents_state_machine_arn,
+        ])
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "states:DescribeExecution",
+          "states:StopExecution",
+        ]
+        # Execution ARNs are :execution:<stateMachineName>:<executionName>,
+        # so map the state-machine ARN to its execution ARN prefix + wildcard.
+        Resource = compact([
+          var.state_machine_arn != "" ? "${replace(var.state_machine_arn, ":stateMachine:", ":execution:")}:*" : "",
+          var.frontier_agents_state_machine_arn != "" ? "${replace(var.frontier_agents_state_machine_arn, ":stateMachine:", ":execution:")}:*" : "",
+        ])
+      },
+    ]
+  })
+}
+
 # Policy for CodeCommit read access (backend lists seeded use case repos)
 resource "aws_iam_role_policy" "ecs_task_codecommit" {
   name = "codecommit-read-access"
@@ -717,7 +856,10 @@ resource "aws_iam_role_policy" "ecs_task_bedrock_agentcore" {
         Action = [
           "bedrock-agentcore:InvokeAgentRuntime",
           "bedrock-agentcore:GetAgentRuntime",
-          "bedrock-agentcore:ListAgentRuntimes"
+          "bedrock-agentcore:ListAgentRuntimes",
+          # _provision_gateway repoints the runtime's GATEWAY_URL env var to the
+          # dedicated per-use-case gateway after creating it.
+          "bedrock-agentcore:UpdateAgentRuntime"
         ]
         Resource = "*"
       }
@@ -725,7 +867,67 @@ resource "aws_iam_role_policy" "ecs_task_bedrock_agentcore" {
   })
 }
 
-# Policy for Secrets Manager access (Langfuse project provisioning)
+# Policy for AgentCore Policy Engine + Gateway control-plane CRUD.
+# Backend's /policies route invokes bedrock-agentcore-control to manage
+# Cedar policies on the platform policy engine.
+resource "aws_iam_role_policy" "ecs_task_agentcore_policy" {
+  name = "bedrock-agentcore-policy-crud"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock-agentcore:CreatePolicy",
+          "bedrock-agentcore:GetPolicy",
+          "bedrock-agentcore:ListPolicies",
+          "bedrock-agentcore:UpdatePolicy",
+          "bedrock-agentcore:DeletePolicy",
+          "bedrock-agentcore:CreatePolicyEngine",
+          "bedrock-agentcore:GetPolicyEngine",
+          "bedrock-agentcore:ListPolicyEngines",
+          "bedrock-agentcore:DeletePolicyEngine",
+          "bedrock-agentcore:GetGateway",
+          "bedrock-agentcore:ListGateways",
+          # Required to attach/detach a policy engine to a gateway and to
+          # switch ENFORCE/LOG_ONLY mode (backend calls UpdateGateway).
+          "bedrock-agentcore:UpdateGateway",
+          # Required by the "Add Gateway" flow (deployment_service._provision_gateway)
+          # which creates a dedicated per-use-case gateway on demand.
+          "bedrock-agentcore:CreateGateway",
+          "bedrock-agentcore:DeleteGateway",
+          "bedrock-agentcore:ListGatewayTargets",
+          "bedrock-agentcore:GetGatewayTarget",
+        ]
+        Resource = "*"
+      },
+      {
+        # AgentCore's UpdateGateway validates the gateway's execution role by
+        # Passing it — the task role must be allowed to PassRole the gateway
+        # role, or attach-gateway fails with iam:PassRole AccessDenied.
+        Sid    = "PassGatewayRole"
+        Effect = "Allow"
+        Action = "iam:PassRole"
+        Resource = "arn:aws:iam::*:role/${var.name_prefix}-agentcore-gateway-role"
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = "bedrock-agentcore.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Policy for Secrets Manager access (Langfuse project provisioning +
+# LLM Gateway virtual-key lifecycle). DeleteSecret is required by the
+# offboarding path in services/llm_gateway_provisioning.py -- when a
+# use case is destroyed, the CP revokes the LiteLLM virtual key AND
+# deletes the corresponding Secrets Manager secret so a redeploy mints
+# fresh credentials instead of reusing a key that has been purged from
+# LiteLLM's DB.
 resource "aws_iam_role_policy" "ecs_task_secrets_manager" {
   name = "secrets-manager-access"
   role = aws_iam_role.ecs_task.id
@@ -739,10 +941,151 @@ resource "aws_iam_role_policy" "ecs_task_secrets_manager" {
           "secretsmanager:GetSecretValue",
           "secretsmanager:CreateSecret",
           "secretsmanager:PutSecretValue",
+          "secretsmanager:DeleteSecret",
           "secretsmanager:TagResource"
         ]
         Resource = "*"
       }
+    ]
+  })
+}
+
+# Policy for the LLM Gateway routes — read/write the SSM-rendered
+# litellm config.yaml, query the gateway's CloudWatch Logs for the Audit
+# tab, and trigger an ECS rolling restart after a config edit.
+resource "aws_iam_role_policy" "ecs_task_llm_gateway" {
+  name = "llm-gateway-access"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "LlmGatewayConfigRW"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:PutParameter",
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/llm-gateway/*"
+      },
+      {
+        Sid    = "LlmGatewayLogInsights"
+        Effect = "Allow"
+        Action = [
+          "logs:StartQuery",
+          "logs:GetQueryResults",
+          "logs:StopQuery",
+          "logs:DescribeLogGroups",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "LlmGatewayServiceRollout"
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeServices",
+          "ecs:UpdateService",
+        ]
+        Resource = "arn:aws:ecs:*:*:service/llm-gateway-*/*"
+      },
+    ]
+  })
+}
+
+# Knowledge discovery + provisioning
+resource "aws_iam_role_policy" "ecs_task_knowledge_discovery" {
+  name = "knowledge-discovery"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "GlueReadAccess"
+        Effect = "Allow"
+        Action = [
+          "glue:GetDatabases",
+          "glue:GetDatabase",
+          "glue:GetTables",
+          "glue:GetTable",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Sid      = "AthenaListWorkgroups"
+        Effect   = "Allow"
+        Action   = ["athena:ListWorkGroups"]
+        Resource = ["*"]
+      },
+      {
+        Sid    = "BedrockKnowledgeBases"
+        Effect = "Allow"
+        Action = [
+          "bedrock:ListKnowledgeBases",
+          "bedrock:GetKnowledgeBase",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Sid    = "IAMForProvisioning"
+        Effect = "Allow"
+        Action = [
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:GetRole",
+          "iam:PutRolePolicy",
+          "iam:DeleteRolePolicy",
+          "iam:PassRole",
+        ]
+        Resource = ["arn:aws:iam::*:role/ava-knowledge-*"]
+      },
+      {
+        Sid    = "LakeFormationGrants"
+        Effect = "Allow"
+        Action = [
+          "lakeformation:GrantPermissions",
+          "lakeformation:RevokePermissions",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Sid    = "AgentCoreProvisioning"
+        Effect = "Allow"
+        Action = [
+          "bedrock-agentcore:*",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Sid      = "STSIdentity"
+        Effect   = "Allow"
+        Action   = ["sts:GetCallerIdentity"]
+        Resource = ["*"]
+      },
+      {
+        # Required when the Glue Data Catalog has SSE-KMS enabled with a CMK.
+        # LakeFormation grant calls fail with "Insufficient encryption key
+        # permissions for Glue API" without these. Scoped to glue + lakeformation
+        # via kms:ViaService.
+        Sid    = "GlueCatalogKMS"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey",
+        ]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "glue.${data.aws_region.current.name}.amazonaws.com",
+              "lakeformation.${data.aws_region.current.name}.amazonaws.com",
+            ]
+          }
+        }
+      },
     ]
   })
 }

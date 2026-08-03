@@ -82,6 +82,16 @@ Parameters:
     Default: ''
     Description: Bedrock Guardrail version (DRAFT or published version number)
 
+  LlmGatewayBaseUrl:
+    Type: String
+    Default: ''
+    Description: LLM Gateway (LiteLLM) base URL. When set, foundation model calls route through the gateway instead of direct Bedrock.
+
+  LlmGatewayApiKeySecretArn:
+    Type: String
+    Default: ''
+    Description: Secrets Manager ARN holding the LLM Gateway virtual key for this deployment.
+
 
 Resources:
   AgentCoreRuntime:
@@ -110,6 +120,12 @@ Resources:
         LANGFUSE_SECRET_NAME: !Ref LangfuseSecretName
         GUARDRAIL_ID: !Ref GuardrailId
         GUARDRAIL_VERSION: !Ref GuardrailVersion
+        # LLM Gateway routing — when LLM_GATEWAY_BASE_URL is non-empty, the
+        # foundations layer (foundations/src/base/{langgraph,strands}/*) routes
+        # all model invocations through the gateway. The virtual key is fetched
+        # from Secrets Manager at runtime by foundations/src/utils/llm_gateway.py.
+        LLM_GATEWAY_BASE_URL: !Ref LlmGatewayBaseUrl
+        LLM_GATEWAY_API_KEY_SECRET_ARN: !Ref LlmGatewayApiKeySecretArn
         # OTel resource attributes — applied to every span this runtime
         # emits, picked up by both Langfuse (as trace metadata) and
         # CloudWatch GenAI Observability (as span resource attrs).

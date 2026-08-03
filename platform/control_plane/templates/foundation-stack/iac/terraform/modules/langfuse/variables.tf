@@ -203,3 +203,24 @@ variable "cognito_region" {
   type        = string
   default     = "us-east-1"
 }
+
+# =============================================================================
+# AVA FSI SSO edge auth (opt-in — leave empty to keep current auto-login only)
+# =============================================================================
+# When fsi_app_signing_secret is non-empty, the Lambda@Edge on viewer-request
+# gates all browser paths behind an AVA-Cognito-derived HMAC handoff token
+# BEFORE performing shared-credential auto-login. Agent OTEL traffic to
+# /api/public/* is bypassed unchanged. See lambda_auto_login.js for the flow.
+
+variable "fsi_app_signing_secret" {
+  description = "Shared HMAC secret with AVA backend. Empty disables AVA SSO gating (auto-login-anyone behavior preserved)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ava_ui_login_url" {
+  description = "AVA UI login URL. Browsers hitting Langfuse without a valid AVA session are 302'd here."
+  type        = string
+  default     = ""
+}

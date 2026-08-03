@@ -24,7 +24,7 @@ echo "{\"deploymentId\": \"$AMPLIFY_ID\"}" > deployment-config.json
 if [ -n "${SERP_KEY:-}" ] && [ "$SERP_KEY" != "" ]; then
   echo "Setting SERP API key in SSM Parameter Store..."
   aws ssm put-parameter \
-    --name "/concierge-agent/${DEPLOY_NAME}/serp-api-key" \
+    --name "/concierge-agent/${AMPLIFY_ID}/serp-api-key" \
     --value "$SERP_KEY" \
     --type "SecureString" \
     --overwrite \
@@ -54,13 +54,15 @@ if ! command -v ampx &>/dev/null; then
   npm install -g @aws-amplify/backend-cli@latest
 fi
 
-# The MCP server stacks bundle a recent aws-cdk-lib that emits cloud assembly
-# schema 53.x. CodeBuild's pre-installed CDK CLI (≤2.1100) only reads up to
-# schema 48 and bails with: "This CDK CLI is not compatible with the CDK
-# library used by your application." Pin a CLI new enough to read modern
-# manifests. Always upgrade — comparing versions in bash is fragile.
-echo "Upgrading CDK CLI to latest (was: $(cdk --version 2>/dev/null || echo none))..."
-npm install -g aws-cdk@latest
+# The MCP / agent / frontend stacks pin aws-cdk-lib ^2.225.0, which emits
+# cloud assembly schema newer than the pre-installed CDK CLI supports.
+# `npm install -g aws-cdk@latest` on CodeBuild's aarch64 image returns
+# 2.1130.0 (stale registry state, cache, or dist-tag lag) which still fails
+# the manifest compatibility check. Pin to 2.1131.0, the newest published
+# 2.x CLI that reads modern (schema >=54) manifests without pulling in the
+# 3.0 major.
+echo "Upgrading CDK CLI (was: $(cdk --version 2>/dev/null || echo none))..."
+npm install -g --force aws-cdk@2.1131.0
 echo "CDK CLI: $(cdk --version)"
 # Note: each `deploy:*` npm script also strips its local node_modules/aws-cdk
 # right after `npm install`, because the per-stack package-lock.json pins an
@@ -78,6 +80,16 @@ npx cdk bootstrap "aws://$ACCOUNT_ID/$AWS_REGION" 2>&1 || {
 # Install root dependencies (includes amplify workspace)
 npm install
 cd amplify && npm install && cd ..
+
+# npm scripts prepend <root>/node_modules/.bin to PATH. The root package-lock.json
+# pins aws-cdk to 2.1033 (max schema 48), which shadows the global 2.1131 (max
+# schema 54+) and fails MCP deploy with:
+#   "Cloud assembly schema version mismatch: Maximum schema version supported is
+#    48.x.x, but found 53.0.0"
+# The per-sub-stack `rm -rf node_modules/aws-cdk` in deploy:* only strips the
+# sub-stack copy, not the root. Purge here so `cdk` in npm scripts resolves to
+# the global 2.1131 we installed above.
+rm -rf node_modules/aws-cdk node_modules/.bin/cdk 2>/dev/null || true
 
 # Step 1: Amplify Backend (Cognito, DynamoDB, AppSync)
 echo "=== Step 1/4: Deploying Amplify backend ==="

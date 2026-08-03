@@ -1,0 +1,103 @@
+########################################################################
+# Sales Recommend — AVA CodeBuild Buildspec
+#
+# Fully automated: builds containers, deploys AgentCore runtime via SDK,
+# then runs Terraform with the runtime ARN injected automatically.
+# No manual steps — AVA Control Plane triggers this on "Deploy".
+########################################################################
+version: 0.2
+
+env:
+  variables:
+    AWS_REGION: "us-east-1"
+    PROJECT_NAME: "sales-recommend"
+    TF_VAR_project_name: "sales-recommend"
+    TF_VAR_environment: "prod"
+    TF_VAR_knowledge_base_id: "H1LK4MDM6O"
+    TF_VAR_model_id: "global.anthropic.claude-sonnet-4-6"
+  # AVA Control Plane injects these automatically:
+  #   STATE_BUCKET, LOCK_TABLE — shared Terraform backend per account
+  #   DEPLOYMENT_ID — unique ID for this deployment
+  #   BASIC_AUTH_USERNAME, BASIC_AUTH_PASSWORD — from deploy form
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+      python: 3.11
+    commands:
+      - echo "Installing tools..."
+      - curl -fsSL https://releases.hashicorp.com/terraform/1.9.0/terraform_1.9.0_linux_amd64.zip -o tf.zip
+      - unzip -q tf.zip -d /usr/local/bin && rm tf.zip
+      - pip install boto3 bedrock-agentcore --quiet
+      - terraform --version
+
+  pre_build:
+    commands:
+      - echo "=== ECR Login ==="
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_DOMAIN="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+      - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_DOMAIN}
+
+      # Terraform init + create ECR repos
+      - cd infrastructure
+      - |
+        terraform init -input=false \
+          -backend-config="bucket=${STATE_BUCKET}" \
+          -backend-config="dynamodb_table=${LOCK_TABLE}"
+      - |
+        terraform apply -input=false -auto-approve \
+          -target=module.ecr \
+          -target=module.networking \
+          -target=module.iam \
+          -target=module.ssm \
+          -var="deployment_id=${DEPLOYMENT_ID}" \
+          -var="basic_auth_username=${BASIC_AUTH_USERNAME}" \
+          -var="basic_auth_password=${BASIC_AUTH_PASSWORD}"
+      - AGENT_REPO=$(terraform output -raw agent_ecr_repo_url)
+      - UI_REPO=$(terraform output -raw ui_ecr_repo_url)
+      - ROLE_ARN=$(terraform output -raw agentcore_execution_role_arn 2>/dev/null || echo "")
+      - DEPLOY_PROJECT=$(terraform output -raw project_name_with_suffix 2>/dev/null || echo "${PROJECT_NAME}-${DEPLOYMENT_ID}")
+      - cd ..
+
+  build:
+    commands:
+      - echo "=== Building Agent Container ==="
+      - docker build --platform linux/amd64 -t ${PROJECT_NAME}-agent agent/
+      - docker tag ${PROJECT_NAME}-agent:latest ${AGENT_REPO}:latest
+      - docker push ${AGENT_REPO}:latest
+
+      - echo "=== Building UI Container ==="
+      - cd ui && npm ci && cd ..
+      - docker build --platform linux/amd64 -t ${PROJECT_NAME}-ui ui/
+      - docker tag ${PROJECT_NAME}-ui:latest ${UI_REPO}:latest
+      - docker push ${UI_REPO}:latest
+
+      - echo "=== Deploying AgentCore Runtime ==="
+      - |
+        RUNTIME_OUTPUT=$(python agent/scripts/deploy_runtime.py \
+          --name "${DEPLOY_PROJECT}-runtime" \
+          --image-uri "${AGENT_REPO}:latest" \
+          --role-arn "${ROLE_ARN}" \
+          --region "${AWS_REGION}")
+      - export TF_VAR_agent_runtime_arn=$(echo "$RUNTIME_OUTPUT" | grep "^AGENT_RUNTIME_ARN=" | cut -d= -f2)
+      - echo "AgentCore ARN: ${TF_VAR_agent_runtime_arn}"
+
+  post_build:
+    commands:
+      - echo "=== Full Terraform Apply ==="
+      - cd infrastructure
+      - |
+        terraform apply -input=false -auto-approve \
+          -var="deployment_id=${DEPLOYMENT_ID}" \
+          -var="basic_auth_username=${BASIC_AUTH_USERNAME}" \
+          -var="basic_auth_password=${BASIC_AUTH_PASSWORD}" \
+          -var="agent_runtime_arn=${TF_VAR_agent_runtime_arn}"
+      - echo "=== Deploy Complete ==="
+      - terraform output -json > /tmp/outputs.json
+      - cat /tmp/outputs.json
+
+artifacts:
+  files:
+    - /tmp/outputs.json
+  discard-paths: yes

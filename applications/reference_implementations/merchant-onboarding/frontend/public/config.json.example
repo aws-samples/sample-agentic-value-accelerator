@@ -1,0 +1,14 @@
+{
+  "API_BASE_URL": "https://<API_GATEWAY_ID>.execute-api.<REGION>.amazonaws.com/prod",
+  "ENABLE_API_CALLS": true,
+  "DEV_SETTINGS": { "LOG_API_CALLS": true, "TIMEOUT": 30000 },
+  "AUTH": {
+    "REGION": "<REGION>",
+    "USER_POOL_ID": "<UserPoolId from AuthStack>",
+    "USER_POOL_CLIENT_ID": "<UserPoolClientId from AuthStack>",
+    "IDENTITY_POOL_ID": "<IdentityPoolId from AuthStack>",
+    "OAUTH_DOMAIN": "<domain-prefix>.auth.<REGION>.amazoncognito.com",
+    "REDIRECT_SIGN_IN": "<CloudFrontUrl from FrontendStack>",
+    "REDIRECT_SIGN_OUT": "<CloudFrontUrl from FrontendStack>"
+  }
+}

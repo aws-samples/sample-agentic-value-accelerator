@@ -1,0 +1,91 @@
+# Local deployment of AVA Control Plane + LiteLLM Gateway
+# Usage: finch compose up --build -d (or: docker compose up --build -d)
+#
+# Services:
+#   - frontend:  React UI on http://localhost:3000
+#   - backend:   FastAPI on http://localhost:8000
+#   - gateway:   LiteLLM proxy on http://localhost:4000
+#   - redis:     Cache + rate limiting
+#   - postgres:  LiteLLM key/spend storage
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: litellm_local
+      POSTGRES_DB: litellm
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  gateway:
+    image: ghcr.io/berriai/litellm:main-latest
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    environment:
+      - LITELLM_MASTER_KEY=sk-local-dev-key
+      - DATABASE_URL=postgresql://litellm:litellm_local@postgres:5432/litellm
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=
+      - LITELLM_CONFIG_PATH=/app/config.yaml
+      - AWS_REGION_NAME=${AWS_REGION:-us-east-2}
+      - AWS_PROFILE=${AWS_PROFILE:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - BEDROCK_MANTLE_API_KEY=${BEDROCK_MANTLE_API_KEY:-}
+      - BEDROCK_MANTLE_REGION=${AWS_REGION:-us-east-2}
+    volumes:
+      - ./gateway/litellm-config-local.yaml:/app/config.yaml:ro
+      - ~/.aws:/root/.aws:ro
+    depends_on:
+      - redis
+      - postgres
+
+  backend:
+    build:
+      context: ../../
+      dockerfile: platform/control_plane/backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - LITELLM_GATEWAY_URL=http://gateway:4000
+      - LITELLM_MASTER_KEY=sk-local-dev-key
+      - LITELLM_LOCAL_CONFIG_PATH=/app/litellm-config.yaml
+      - LOCAL_MODE=true
+      - AWS_REGION=us-east-2
+      - USE_DEV_AUTH=true
+      - DEPLOYMENTS_TABLE_NAME=fsi-control-plane-deployments
+      - GUARDRAILS_TABLE_NAME=fsi-control-plane-guardrails
+      - FINOPS_SPEND_TABLE_NAME=fsi-control-plane-finops-spend
+      - PYTHONPATH=/app/src
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+    volumes:
+      - ~/.aws:/root/.aws:ro
+      - ./gateway/litellm-config-local.yaml:/app/litellm-config.yaml:ro
+    depends_on:
+      - gateway
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

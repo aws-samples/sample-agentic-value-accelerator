@@ -29,7 +29,7 @@ from botocore.exceptions import ClientError
 
 SCRIPT_DIR = Path(__file__).parent
 AGENTS_DIR = SCRIPT_DIR / "agents"
-DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
 def get_account_id(session: boto3.Session) -> str:

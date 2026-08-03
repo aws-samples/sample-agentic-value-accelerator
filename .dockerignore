@@ -6,6 +6,6 @@
 **/dist
 **/.DS_Store
 **/.terraform
-**/*.tfstate
+**/*.tfstate11
 **/*.tfstate.*
 **/terraform.tfstate.d

@@ -1,16 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { guardrailsApi } from '../../api/client';
 import type { GuardrailTemplate } from '../../types';
+import { FSI_TEMPLATES } from './FSIGuardrailTemplates';
 
 interface Props {
   value?: string;
   onChange: (guardrailId: string | undefined, guardrailVersion: string | undefined) => void;
+  useCaseId?: string;
 }
 
-export default function GuardrailSelector({ value, onChange }: Props) {
+const USE_CASE_ID_TO_TEMPLATE: Record<string, string> = {
+  'aml_transaction_monitoring': 'R01',
+  'kyc_risk_assessment': 'B01',
+  'claims_processing': 'I01',
+  'wealth_management': 'B09',
+  'customer_service_agent': 'B02',
+  'market_surveillance': 'C01',
+  'document_processing': 'O01',
+  'back_office_automation': 'O02',
+  'regulatory_reporting': 'R05',
+};
+
+export default function GuardrailSelector({ value, onChange, useCaseId }: Props) {
   const [templates, setTemplates] = useState<GuardrailTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [showFSITemplates, setShowFSITemplates] = useState(false);
 
   useEffect(() => {
     guardrailsApi.list('active')
@@ -20,6 +35,20 @@ export default function GuardrailSelector({ value, onChange }: Props) {
   }, []);
 
   const selected = templates.find((t) => t.guardrail_id === value);
+
+  const recommendedFSITemplate = useMemo(() => {
+    if (!useCaseId) return null;
+    const templateUseCaseId = USE_CASE_ID_TO_TEMPLATE[useCaseId];
+    if (!templateUseCaseId) return null;
+    return FSI_TEMPLATES.find(t => t.useCaseId === templateUseCaseId) || null;
+  }, [useCaseId]);
+
+  const compatibleFSITemplates = useMemo(() => {
+    return FSI_TEMPLATES.filter(t =>
+      t.useCaseId === 'AWS' ||
+      (recommendedFSITemplate && t.category === recommendedFSITemplate.category)
+    ).slice(0, 5);
+  }, [recommendedFSITemplate]);
 
   const featureTags = (t: GuardrailTemplate): string[] => {
     const tags: string[] = [];
@@ -49,9 +78,9 @@ export default function GuardrailSelector({ value, onChange }: Props) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="label mb-0">Guardrail (Optional)</label>
+        <label className="label mb-0">Guardrail {recommendedFSITemplate ? '(Recommended)' : '(Optional)'}</label>
         {value && (
           <button
             onClick={() => onChange(undefined, undefined)}
@@ -61,6 +90,35 @@ export default function GuardrailSelector({ value, onChange }: Props) {
           </button>
         )}
       </div>
+
+      {/* Recommended FSI Template Banner */}
+      {recommendedFSITemplate && !value && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">{recommendedFSITemplate.icon}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800">
+                  {recommendedFSITemplate.useCaseId}
+                </span>
+                <span className="text-xs font-bold text-emerald-800">Recommended Match</span>
+              </div>
+              <p className="text-sm font-medium text-emerald-900 mt-1">{recommendedFSITemplate.name}</p>
+              <p className="text-xs text-emerald-700 mt-0.5">{recommendedFSITemplate.description}</p>
+              <button
+                onClick={() => {
+                  onChange(recommendedFSITemplate.id, '1');
+                }}
+                className="mt-2 px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700"
+              >
+                Apply This Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Selected display or selector */}
       {selected ? (
@@ -89,27 +147,82 @@ export default function GuardrailSelector({ value, onChange }: Props) {
 
       {/* Dropdown list */}
       {expanded && (
-        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-lg max-h-64 overflow-y-auto">
-          {templates.map((t) => (
+        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-lg max-h-80 overflow-y-auto">
+          {/* Toggle between deployed and FSI templates */}
+          <div className="sticky top-0 bg-white border-b border-slate-100 px-3 py-2 flex gap-2">
             <button
-              key={t.template_id}
-              onClick={() => {
-                onChange(t.guardrail_id || undefined, t.guardrail_version || undefined);
-                setExpanded(false);
-              }}
-              className="w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
+              onClick={() => setShowFSITemplates(false)}
+              className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                !showFSITemplates ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'
+              }`}
             >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-800">{t.name}</p>
-                <div className="flex gap-1">
-                  {featureTags(t).map((tag) => (
-                    <span key={tag} className="px-1.5 py-0.5 text-[9px] bg-slate-100 text-slate-500 rounded">{tag}</span>
-                  ))}
-                </div>
-              </div>
-              {t.description && <p className="text-xs text-slate-500 mt-0.5 truncate">{t.description}</p>}
+              My Guardrails ({templates.length})
             </button>
-          ))}
+            <button
+              onClick={() => setShowFSITemplates(true)}
+              className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                showFSITemplates ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              FSI Templates ({compatibleFSITemplates.length})
+            </button>
+          </div>
+
+          {!showFSITemplates ? (
+            templates.length > 0 ? templates.map((t) => (
+              <button
+                key={t.template_id}
+                onClick={() => {
+                  onChange(t.guardrail_id || undefined, t.guardrail_version || undefined);
+                  setExpanded(false);
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-800">{t.name}</p>
+                  <div className="flex gap-1">
+                    {featureTags(t).map((tag) => (
+                      <span key={tag} className="px-1.5 py-0.5 text-[9px] bg-slate-100 text-slate-500 rounded">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+                {t.description && <p className="text-xs text-slate-500 mt-0.5 truncate">{t.description}</p>}
+              </button>
+            )) : (
+              <div className="px-4 py-6 text-center text-sm text-slate-500">
+                No deployed guardrails yet
+              </div>
+            )
+          ) : (
+            compatibleFSITemplates.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => {
+                  onChange(t.id, '1');
+                  setExpanded(false);
+                }}
+                className={`w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${
+                  recommendedFSITemplate?.id === t.id ? 'bg-emerald-50/50' : ''
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{t.icon}</span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                      {t.useCaseId}
+                    </span>
+                    <p className="text-sm font-medium text-slate-800">{t.shortName}</p>
+                  </div>
+                  {recommendedFSITemplate?.id === t.id && (
+                    <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-medium">
+                      MATCH
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 truncate ml-7">{t.description}</p>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>

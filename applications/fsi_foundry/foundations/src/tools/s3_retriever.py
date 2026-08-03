@@ -233,6 +233,68 @@ class S3RetrieverInput(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+def _call_via_gateway(customer_id: str, data_type: str, key: str) -> str:
+    """Route s3_retriever tool call through AgentCore Gateway for policy enforcement."""
+    import httpx
+    from botocore.auth import SigV4Auth
+    from botocore.awsrequest import AWSRequest
+    import botocore.session
+
+    gateway_url = settings.gateway_url.rstrip('/')
+    # MCP tools/call endpoint
+    mcp_endpoint = f"{gateway_url}/mcp"
+
+    # Build MCP tools/call request
+    mcp_body = {
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "tools/call",
+        "params": {
+            "name": "s3-retriever___s3_retriever",
+            "arguments": {
+                "customer_id": customer_id,
+                "data_type": data_type,
+                "key": key,
+            }
+        }
+    }
+
+    body_bytes = json.dumps(mcp_body).encode('utf-8')
+
+    # SigV4 sign the request
+    session = botocore.session.get_session()
+    credentials = session.get_credentials().get_frozen_credentials()
+    request = AWSRequest(method='POST', url=mcp_endpoint, data=body_bytes,
+                         headers={'Content-Type': 'application/json'})
+    SigV4Auth(credentials, 'bedrock-agentcore', settings.aws_region).add_auth(request)
+
+    # Make the request
+    response = httpx.post(
+        mcp_endpoint,
+        content=body_bytes,
+        headers=dict(request.headers),
+        timeout=30.0,
+    )
+
+    if response.status_code != 200:
+        logger.error("gateway_call_failed", status=response.status_code, body=response.text[:500])
+        return json.dumps({"error": f"Gateway returned {response.status_code}", "detail": response.text[:200]})
+
+    # Parse MCP response
+    try:
+        mcp_response = response.json()
+        result = mcp_response.get("result", {})
+        # MCP tool results come in content array
+        content = result.get("content", [])
+        if content and isinstance(content, list):
+            text_content = content[0].get("text", "")
+            return text_content if text_content else json.dumps(result)
+        return json.dumps(result)
+    except Exception as e:
+        logger.error("gateway_response_parse_error", error=str(e))
+        return response.text
+
+
 @tool(args_schema=S3RetrieverInput)
 def s3_retriever_tool(customer_id: str = "", data_type: str = "profile", key: str = "") -> str:
     """
@@ -254,6 +316,12 @@ def s3_retriever_tool(customer_id: str = "", data_type: str = "profile", key: st
         JSON string. For structured data_types: the decoded JSON object. For 'document':
         an envelope containing content_base64 and metadata.
     """
+    # Route through gateway if configured (for policy enforcement)
+    if settings.gateway_url:
+        logger.info("routing_through_gateway", gateway=settings.gateway_url, data_type=data_type)
+        return _call_via_gateway(customer_id, data_type, key)
+
+    # Direct S3 access (no policy enforcement)
     retriever = _get_retriever()
 
     if data_type == "document":

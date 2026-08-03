@@ -1,0 +1,220 @@
+{
+  "account_id": "A305",
+  "customer_name": "Dana Ortiz",
+  "account_type": "personal_checking",
+  "risk_profile": "low",
+  "opened_date": "2023-11-02",
+  "home_country": "US",
+  "home_city": "San Francisco",
+  "baseline": {
+    "typical_transaction_amount": 95.0,
+    "typical_weekly_count": 10,
+    "typical_networks": [
+      "card",
+      "rtp"
+    ]
+  },
+  "scenario": "velocity",
+  "scenario_note": "Eight outbound instant payments to three destinations inside a 32-minute window \u2014 far above the account's baseline frequency.",
+  "expected_assessment": {
+    "fraud_score": 0.9,
+    "risk_level": "high",
+    "decision": "step_up_review",
+    "reason_tags": [
+      "HIGH_VELOCITY"
+    ]
+  },
+  "flagged_patterns": [
+    {
+      "pattern": "HIGH_VELOCITY",
+      "confidence": 0.82,
+      "description": "8 transactions in 32 minutes vs. baseline of ~10/week"
+    }
+  ],
+  "transactions": [
+    {
+      "transaction_id": "TXN_VELO_1",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:04:00Z",
+      "amount": 127.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A402",
+        "name": "Merchant A402",
+        "account_number_masked": "****A402",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    },
+    {
+      "transaction_id": "TXN_VELO_2",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:08:00Z",
+      "amount": 135.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A403",
+        "name": "Merchant A403",
+        "account_number_masked": "****A403",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    },
+    {
+      "transaction_id": "TXN_VELO_3",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:12:00Z",
+      "amount": 142.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A401",
+        "name": "Merchant A401",
+        "account_number_masked": "****A401",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    },
+    {
+      "transaction_id": "TXN_VELO_4",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:16:00Z",
+      "amount": 150.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A402",
+        "name": "Merchant A402",
+        "account_number_masked": "****A402",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    },
+    {
+      "transaction_id": "TXN_VELO_5",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:20:00Z",
+      "amount": 157.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A403",
+        "name": "Merchant A403",
+        "account_number_masked": "****A403",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    },
+    {
+      "transaction_id": "TXN_VELO_6",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:24:00Z",
+      "amount": 165.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A401",
+        "name": "Merchant A401",
+        "account_number_masked": "****A401",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    },
+    {
+      "transaction_id": "TXN_VELO_7",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:28:00Z",
+      "amount": 172.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A402",
+        "name": "Merchant A402",
+        "account_number_masked": "****A402",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    },
+    {
+      "transaction_id": "TXN_VELO_8",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:32:00Z",
+      "amount": 180.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A403",
+        "name": "Merchant A403",
+        "account_number_masked": "****A403",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      }
+    }
+  ]
+}

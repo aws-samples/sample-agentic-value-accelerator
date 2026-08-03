@@ -591,6 +591,25 @@ else
   echo "    CloudFront distribution exists: ${CF_DIST_ID}"
 fi
 
+# ────────────────────────────────────────────────────────────
+# Attach AVA FSI SSO edge auth (opt-in via env vars from CodeBuild)
+# ────────────────────────────────────────────────────────────
+# When AVA_FSI_APP_SIGNING_SECRET is set, attach a CloudFront Function that
+# HMAC-verifies handoff tokens minted by the AVA backend. Same pattern as
+# FSI Foundry apps. See attach_cf_auth.py for the flow.
+if [ -n "${AVA_FSI_APP_SIGNING_SECRET:-}" ]; then
+  echo "  Attaching AVA FSI SSO edge auth CF Function..."
+  if [ -f "$ROOT/attach_cf_auth.py" ]; then
+    pip3 install --quiet boto3 || true
+    python3 "$ROOT/attach_cf_auth.py" "$CF_DIST_ID" "case-management" \
+      || echo "  ⚠️  SSO auth attach failed (non-fatal — deploy continues)"
+  else
+    echo "  ⚠️  attach_cf_auth.py not found — skipping SSO auth attach"
+  fi
+else
+  echo "  AVA_FSI_APP_SIGNING_SECRET not set — skipping SSO edge auth (open access)"
+fi
+
 # Update bucket policy to allow CloudFront OAC access
 CF_ARN=$(aws cloudfront get-distribution --id "$CF_DIST_ID" --query "Distribution.ARN" --output text)
 

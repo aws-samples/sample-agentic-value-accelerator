@@ -111,11 +111,11 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
 # ============================================================================
 
 resource "aws_apigatewayv2_domain_name" "main" {
-  count       = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-  domain_name = "api.${var.domain_name}"
+  count       = var.domain_name != "" && var.hosted_zone_id != "" && var.acm_certificate_arn != "" ? 1 : 0
+  domain_name = "${var.api_prefix}.${var.domain_name}"
 
   domain_name_configuration {
-    certificate_arn = aws_acm_certificate_validation.api[0].certificate_arn
+    certificate_arn = var.acm_certificate_arn
     endpoint_type   = "REGIONAL"
     security_policy = "TLS_1_2"
   }
@@ -126,53 +126,28 @@ resource "aws_apigatewayv2_domain_name" "main" {
 }
 
 resource "aws_apigatewayv2_api_mapping" "main" {
-  count       = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
+  count       = var.domain_name != "" && var.hosted_zone_id != "" && var.acm_certificate_arn != "" ? 1 : 0
   api_id      = aws_apigatewayv2_api.main.id
   domain_name = aws_apigatewayv2_domain_name.main[0].id
   stage       = aws_apigatewayv2_stage.main.id
 }
 
 # ============================================================================
-# ACM Certificate (Optional)
+# ACM Certificate
 # ============================================================================
-
-resource "aws_acm_certificate" "api" {
-  count             = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-  domain_name       = "api.${var.domain_name}"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-api-cert"
-  })
-}
-
-resource "aws_route53_record" "api_cert_validation" {
-  count   = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-  zone_id = var.hosted_zone_id
-  name    = tolist(aws_acm_certificate.api[0].domain_validation_options)[0].resource_record_name
-  type    = tolist(aws_acm_certificate.api[0].domain_validation_options)[0].resource_record_type
-  records = [tolist(aws_acm_certificate.api[0].domain_validation_options)[0].resource_record_value]
-  ttl     = 60
-}
-
-resource "aws_acm_certificate_validation" "api" {
-  count                   = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-  certificate_arn         = aws_acm_certificate.api[0].arn
-  validation_record_fqdns = [aws_route53_record.api_cert_validation[0].fqdn]
-}
+# Cert for api.<zone> is provisioned by scripts/acm.sh (Option A ownership
+# split) and passed in as var.acm_certificate_arn. The DNS-01 validation
+# CNAME record is created directly via the AWS CLI by acm.sh, not by
+# terraform.
 
 # ============================================================================
 # Route53 Record (Optional)
 # ============================================================================
 
 resource "aws_route53_record" "api" {
-  count   = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
+  count   = var.domain_name != "" && var.hosted_zone_id != "" && var.acm_certificate_arn != "" ? 1 : 0
   zone_id = var.hosted_zone_id
-  name    = "api.${var.domain_name}"
+  name    = "${var.api_prefix}.${var.domain_name}"
   type    = "A"
 
   alias {

@@ -3,7 +3,9 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from core.rbac import require_role, Role
 
 from core.config import settings
 from models.operating_model import (
@@ -39,7 +41,7 @@ def get_service() -> OperatingModelService:
 # --- Reference / framework metadata ---
 
 @router.get("/framework")
-async def get_framework():
+async def get_framework(_=Depends(require_role(Role.VIEWER))):
     return {
         "dimensions": [
             {
@@ -59,7 +61,7 @@ async def get_framework():
 # --- CRUD ---
 
 @router.post("", response_model=OperatingModel, status_code=201)
-async def create_operating_model(req: OperatingModelCreate):
+async def create_operating_model(req: OperatingModelCreate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     try:
         return svc.create(req, created_by="user")
@@ -68,14 +70,14 @@ async def create_operating_model(req: OperatingModelCreate):
 
 
 @router.get("", response_model=List[OperatingModel])
-async def list_operating_models(status: Optional[str] = Query(default=None)):
+async def list_operating_models(status: Optional[str] = Query(default=None), _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     status_filter = OperatingModelStatus(status) if status else None
     return svc.list(status=status_filter)
 
 
 @router.get("/{operating_model_id}", response_model=OperatingModel)
-async def get_operating_model(operating_model_id: str):
+async def get_operating_model(operating_model_id: str, _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     m = svc.get(operating_model_id)
     if not m:
@@ -84,7 +86,7 @@ async def get_operating_model(operating_model_id: str):
 
 
 @router.put("/{operating_model_id}", response_model=OperatingModel)
-async def update_operating_model(operating_model_id: str, req: OperatingModelUpdate):
+async def update_operating_model(operating_model_id: str, req: OperatingModelUpdate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     try:
         m = svc.update(operating_model_id, req)
@@ -96,7 +98,7 @@ async def update_operating_model(operating_model_id: str, req: OperatingModelUpd
 
 
 @router.delete("/{operating_model_id}", response_model=OperatingModel)
-async def delete_operating_model(operating_model_id: str):
+async def delete_operating_model(operating_model_id: str, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     m = svc.delete(operating_model_id)
     if not m:

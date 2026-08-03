@@ -1,0 +1,240 @@
+{
+  "id": "llm-gateway",
+  "name": "LLM Gateway — LiteLLM",
+  "description": "OpenAI-compatible LLM gateway built on LiteLLM. Enforces virtual keys, budgets, rate limits, Bedrock Guardrails, and Langfuse tracing across every model call. Deploys on ECS Fargate with Aurora PostgreSQL, ElastiCache Valkey, and a public ALB endpoint. Every agent that talks to Bedrock should route through this one chokepoint.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "security",
+  "type": "module",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "litellm",
+    "gateway",
+    "security",
+    "virtual-keys",
+    "budgets",
+    "rate-limiting",
+    "bedrock",
+    "ecs",
+    "aurora",
+    "valkey"
+  ],
+  "aws_services": [
+    "ecs",
+    "rds",
+    "elasticache",
+    "alb",
+    "ecr",
+    "secretsmanager",
+    "ssm",
+    "cloudwatch",
+    "bedrock"
+  ],
+  "frameworks_list": [],
+  "built_with": [
+    "LiteLLM",
+    "Amazon Bedrock",
+    "Aurora PostgreSQL",
+    "ElastiCache Valkey"
+  ],
+  "frameworks": [
+    {
+      "id": "infrastructure",
+      "name": "Infrastructure Only",
+      "path": "src/infrastructure",
+      "description": "No agent framework — gateway infrastructure only"
+    }
+  ],
+  "deployment_patterns": [
+    {
+      "id": "terraform",
+      "name": "LiteLLM on ECS",
+      "description": "ECS Fargate with Aurora PostgreSQL, ElastiCache Valkey, ALB, ECR mirror, SSM-rendered config",
+      "path": "iac/terraform"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "default": "llm-gateway",
+      "description": "Project name used for resource naming"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": false,
+      "default": "us-east-1",
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev/staging/prod)"
+    },
+    {
+      "name": "master_key",
+      "type": "string",
+      "required": true,
+      "input_type": "password",
+      "description": "LiteLLM admin master key. Stored in Secrets Manager — never echoed back."
+    },
+    {
+      "name": "enabled_models",
+      "type": "list(string)",
+      "required": false,
+      "description": "Bedrock model IDs / cross-region inference profiles to expose. Default exposes Claude Haiku 4.5, Claude Sonnet 5, and Nova Pro/Lite (Claude 3.5 and older are excluded)."
+    },
+    {
+      "name": "attach_guardrail_id",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Optional Bedrock Guardrail ID to attach to every gateway request (leave empty to skip)"
+    },
+    {
+      "name": "attach_guardrail_version",
+      "type": "string",
+      "required": false,
+      "default": "DRAFT",
+      "description": "Bedrock Guardrail version"
+    },
+    {
+      "name": "langfuse_host",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Optional Langfuse host URL (from the Foundation Stack output) for trace emission"
+    },
+    {
+      "name": "langfuse_public_key_secret_arn",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Secrets Manager ARN holding the Langfuse public key"
+    },
+    {
+      "name": "langfuse_secret_key_secret_arn",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Secrets Manager ARN holding the Langfuse secret key"
+    },
+    {
+      "name": "existing_vpc_id",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Existing VPC ID to reuse (leave empty to create new — Foundation Stack output recommended)"
+    },
+    {
+      "name": "cognito_user_pool_id",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Optional Control Plane Cognito user pool for admin-UI SSO"
+    },
+    {
+      "name": "litellm_version",
+      "type": "string",
+      "required": false,
+      "default": "main-stable",
+      "description": "LiteLLM container image tag"
+    }
+  ],
+  "outputs": {
+    "gateway_endpoint": "Public gateway endpoint. Set this as LITELLM_BASE_URL on every agent.",
+    "admin_ui_url": "LiteLLM admin UI URL",
+    "master_key_secret_arn": "Secrets Manager ARN for the LiteLLM master key",
+    "config_parameter_name": "SSM Parameter name holding the rendered LiteLLM config.yaml",
+    "model_list_endpoint": "OpenAI-compatible /v1/models discovery endpoint",
+    "audit_log_group_name": "CloudWatch log group holding request + audit logs",
+    "vpc_id": "VPC ID the gateway runs in",
+    "private_subnet_ids": "Private subnet IDs the gateway tasks attach to"
+  },
+  "dependencies": [],
+  "resources": [
+    {
+      "name": "ECS Fargate (LiteLLM)",
+      "description": "LiteLLM proxy tasks, autoscale 2 -> 10 on CPU"
+    },
+    {
+      "name": "Aurora PostgreSQL Serverless v2",
+      "description": "Virtual keys, teams, budgets, spend, audit"
+    },
+    {
+      "name": "ElastiCache Valkey 7.2",
+      "description": "Rate limiting, prompt cache, semantic cache"
+    },
+    {
+      "name": "Application Load Balancer",
+      "description": "Public ALB fronting LiteLLM"
+    },
+    {
+      "name": "ECR Repository",
+      "description": "Private mirror of ghcr.io/berriai/litellm-database"
+    },
+    {
+      "name": "Secrets Manager",
+      "description": "Master key, DB password, Redis password, salt"
+    },
+    {
+      "name": "SSM Parameter Store",
+      "description": "Rendered LiteLLM config.yaml — editable from the UI"
+    },
+    {
+      "name": "CloudWatch Logs",
+      "description": "30-day retention for request + audit logs"
+    },
+    {
+      "name": "IAM",
+      "description": "Task role with bedrock:InvokeModel + bedrock:ApplyGuardrail"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "LiteLLM Documentation",
+      "url": "https://docs.litellm.ai/"
+    },
+    {
+      "title": "LiteLLM Proxy — Virtual Keys + Budgets",
+      "url": "https://docs.litellm.ai/docs/proxy/virtual_keys"
+    },
+    {
+      "title": "LiteLLM Bedrock Provider",
+      "url": "https://docs.litellm.ai/docs/providers/bedrock"
+    },
+    {
+      "title": "Amazon Bedrock Guardrails",
+      "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html"
+    },
+    {
+      "title": "BerriAI/litellm on GitHub",
+      "url": "https://github.com/BerriAI/litellm"
+    }
+  ],
+  "jobs": [
+    {
+      "name": "onboarding",
+      "incoming_event": "llm_gateway_onboarding_request",
+      "outgoing_event": "llm_gateway_onboarding_success"
+    },
+    {
+      "name": "offboarding",
+      "incoming_event": "llm_gateway_offboarding_request",
+      "outgoing_event": "llm_gateway_offboarding_success"
+    }
+  ],
+  "hidden": false
+}

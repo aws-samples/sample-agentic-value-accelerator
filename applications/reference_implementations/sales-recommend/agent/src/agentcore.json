@@ -1,0 +1,14 @@
+{
+  "name": "sales-recommend",
+  "framework": "strands",
+  "language": "python",
+  "entrypoint": "recommend.py",
+  "runtime": {
+    "network_mode": "PUBLIC"
+  },
+  "environment": {
+    "DEPLOYMENT_MODE": "agentcore",
+    "KNOWLEDGE_BASE_ID": "H1LK4MDM6O",
+    "AWS_REGION": "us-east-1"
+  }
+}

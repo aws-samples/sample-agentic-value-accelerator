@@ -1,0 +1,132 @@
+// AVA FSI Foundry SSO edge auth — HMAC-SHA256 verification.
+// The AVA backend RS256-verifies the caller's Cognito id_token, then mints
+// a short-lived HMAC-signed handoff token using the shared secret. This
+// CloudFront Function re-computes the HMAC and compares. Uses only the
+// APIs documented as supported in CloudFront Functions 2.0
+// (crypto.createHmac + string operations — no createVerify, no subtle).
+//
+// Token shape: <b64url(header)>.<b64url(payload)>.<b64url(hmac_sig)>
+//   header  = {"alg":"HS256","typ":"AVA"}
+//   payload = {"sub":"<cognito_sub>","email":"<...>","iat":<ts>,"exp":<ts>}
+//   sig     = HMAC-SHA256(header + '.' + payload, SIGNING_SECRET)
+//
+// Template placeholders substituted at terraform plan time:
+//   ${signing_secret}, ${login_url}
+
+import crypto from 'crypto';
+
+var SIGNING_SECRET = "${signing_secret}";
+var LOGIN_URL = "${login_url}";
+
+// Response helper — 302s to AVA UI login with a debug header explaining why.
+function unauthorized(reason) {
+    return {
+        statusCode: 302,
+        statusDescription: 'Found',
+        headers: {
+            'location': { value: LOGIN_URL || '/' },
+            'x-ava-auth-fail': { value: reason },
+        }
+    };
+}
+
+// Constant-time-ish comparison to prevent timing side-channels (same
+// approach AWS uses in their documented CF Function JWT example).
+function constantTimeEquals(a, b) {
+    if (a.length !== b.length) return false;
+    var xor = 0;
+    for (var i = 0; i < a.length; i++) {
+        xor |= (a.charCodeAt(i) ^ b.charCodeAt(i));
+    }
+    return xor === 0;
+}
+
+// Standard base64 <-> base64url helpers. Node's Buffer supports 'base64url'
+// natively in CF Functions 2.0.
+function b64uToStd(s) {
+    return s.replace(/-/g, '+').replace(/_/g, '/') +
+           '===='.slice((s.length + 3) % 4 + 1);
+}
+
+// Verify the HMAC and standard claims. Throws on any failure.
+function verifyToken(token) {
+    var parts = token.split('.');
+    if (parts.length !== 3) throw new Error('malformed');
+
+    // Recompute HMAC over the signing input (header.payload) and compare
+    // against the provided signature in base64url form.
+    var signingInput = parts[0] + '.' + parts[1];
+    var expectedSig = crypto
+        .createHmac('sha256', SIGNING_SECRET)
+        .update(signingInput)
+        .digest('base64url');
+    if (!constantTimeEquals(expectedSig, parts[2])) {
+        throw new Error('bad_sig');
+    }
+
+    // Only decode the payload AFTER the signature has been verified.
+    var payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    var now = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp < now) throw new Error('expired');
+}
+
+function readCookies(request) {
+    var out = {};
+    var c = request.cookies || {};
+    for (var k in c) out[k] = c[k].value;
+    return out;
+}
+
+function handler(event) {
+    var request = event.request;
+    var uri = request.uri;
+    var qs = request.querystring || {};
+
+    // ---- 1. Bootstrap via ?ava_token= (first click from AVA UI) ----
+    if (qs.ava_token && qs.ava_token.value) {
+        try {
+            verifyToken(qs.ava_token.value);
+        } catch (e) {
+            return unauthorized('bootstrap_' + e.message);
+        }
+        // Strip the token from the URL, preserve any other query params.
+        var keep = [];
+        for (var k in qs) {
+            if (k === 'ava_token') continue;
+            keep.push(k + '=' + qs[k].value);
+        }
+        var cleanUrl = uri + (keep.length ? '?' + keep.join('&') : '');
+        return {
+            statusCode: 302,
+            statusDescription: 'Found',
+            headers: {
+                'location': { value: cleanUrl },
+            },
+            // CloudFront Functions require Set-Cookie to live in response.cookies,
+            // NOT response.headers — putting 'set-cookie' in headers yields a
+            // FunctionValidationError → 503 at the edge. See AWS docs:
+            // https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html
+            cookies: {
+                'ava_session': {
+                    value: qs.ava_token.value,
+                    attributes: 'Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=3600',
+                },
+            },
+        };
+    }
+
+    // ---- 2. Normal request — cookie must be present and valid ----
+    var cookies = readCookies(request);
+    if (!cookies.ava_session) return unauthorized('no_cookie');
+    try {
+        verifyToken(cookies.ava_session);
+    } catch (e) {
+        return unauthorized(e.message);
+    }
+
+    // ---- 3. SPA rewrite (only for non-/api/* S3-served paths) ----
+    if (!uri.startsWith('/api/') && !uri.includes('.')) {
+        request.uri = '/index.html';
+    }
+    return request;
+}

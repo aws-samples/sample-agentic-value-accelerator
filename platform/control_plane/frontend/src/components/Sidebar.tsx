@@ -3,7 +3,7 @@ import { useRef, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useUser } from '../contexts/UserContext';
 
-type SectionKey = 'plan' | 'apps' | 'aaas' | 'capabilities' | 'observability' | 'govern';
+type SectionKey = 'plan' | 'apps' | 'aaas' | 'capabilities' | 'secure' | 'observability' | 'govern';
 
 export default function Sidebar() {
   const location = useLocation();
@@ -16,9 +16,9 @@ export default function Sidebar() {
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>(() => {
     try {
       const raw = localStorage.getItem('sidebar.expanded');
-      if (raw) return { plan: true, apps: true, aaas: true, capabilities: true, observability: true, govern: true, ...JSON.parse(raw) };
+      if (raw) return { plan: true, apps: true, aaas: true, capabilities: true, secure: true, observability: true, govern: true, ...JSON.parse(raw) };
     } catch { /* noop */ }
-    return { plan: true, apps: true, aaas: true, capabilities: true, observability: true, govern: true };
+    return { plan: true, apps: true, aaas: true, capabilities: true, secure: true, observability: true, govern: true };
   });
   useEffect(() => {
     try { localStorage.setItem('sidebar.expanded', JSON.stringify(expanded)); } catch { /* noop */ }
@@ -28,7 +28,7 @@ export default function Sidebar() {
   const [flyout, setFlyout] = useState<SectionKey | null>(null);
   const [flyoutTop, setFlyoutTop] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
-  const iconRefs = useRef<Record<SectionKey, HTMLDivElement | null>>({ plan: null, apps: null, aaas: null, capabilities: null, observability: null, govern: null });
+  const iconRefs = useRef<Record<SectionKey, HTMLDivElement | null>>({ plan: null, apps: null, aaas: null, capabilities: null, secure: null, observability: null, govern: null });
   const flyoutRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname === path;
@@ -136,6 +136,7 @@ export default function Sidebar() {
       { to: '/operating-model', label: 'Operating Model' },
       { to: '/use-cases', label: 'Use Cases' },
       { to: '/business-cases', label: 'Business Cases' },
+      { to: '/organization-design', label: 'Organization Design' },
     ],
     apps: [
       { to: '/applications/fsi-foundry', label: 'FSI Foundry' },
@@ -153,16 +154,34 @@ export default function Sidebar() {
       { to: '/capabilities/knowledge', label: 'Knowledge' },
       { to: '/capabilities/prompts', label: 'Prompts' },
     ],
+    secure: [
+      { to: '/secure/guardrails', label: 'Guardrails' },
+      { to: '/secure/policy', label: 'Policy' },
+      { to: '/secure/llm-gateway', label: 'LLM Gateway' },
+    ],
     observability: [
-      { to: '/observability?tab=langfuse', label: 'Langfuse' },
+      { to: '/observability/langfuse', label: 'Langfuse' },
+      { to: '/observability/agentcore', label: 'AgentCore' },
+      { to: '/prompt-optimization', label: 'Prompt Optimization' },
     ],
     govern: [
+      // Overview & Framework
       { to: '/govern/command-center', label: 'Command Center' },
       { to: '/govern/trust-stack', label: 'Trust Stack' },
-      { to: '/govern/fleet', label: 'Fleet Overview' },
-      { to: '/govern/risk', label: 'Risk Management' },
+      // Inventory & Assets
+      { to: '/govern/fleet', label: 'Agentic Fleet' },
+      { to: '/govern/agents', label: 'Agent Registry' },
+      { to: '/govern/dev-tools', label: 'Agentic Coding' },
+      { to: '/govern/multi-cloud', label: 'Multi-Cloud' },
+      // Resources
       { to: '/govern/models', label: 'Model Management' },
+      { to: '/govern/data', label: 'Data Governance' },
+      // Risk & Compliance
+      { to: '/govern/risk', label: 'Risk Management' },
+      { to: '/govern/shadow-ai', label: 'Shadow AI' },
+      { to: '/govern/safety', label: 'AI Safety' },
       { to: '/govern/compliance', label: 'Compliance' },
+      // Operations
       { to: '/govern/finops', label: 'Cost & FinOps' },
       { to: '/govern/audit', label: 'Audit & Incidents' },
     ],
@@ -217,6 +236,7 @@ export default function Sidebar() {
                 {subLink('/operating-model', 'Operating Model', isActive('/operating-model'))}
                 {subLink('/use-cases', 'Use Cases', isActive('/use-cases'))}
                 {subLink('/business-cases', 'Business Cases', isActive('/business-cases'))}
+                {subLink('/organization-design', 'Organization Design', isActive('/organization-design'))}
               </div>
             )}
           </div>
@@ -259,20 +279,26 @@ export default function Sidebar() {
 
           <div className="pt-2">
             {!isCollapsed && <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Secure</div>}
-            {navLink('/secure/service-onboarding', 'Service Onboarding', 'M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z', isActivePrefix('/secure/service-onboarding'))}
-            {navLink('/secure/guardrails', 'Guardrails', 'M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.285z', isActivePrefix('/secure/guardrails'))}
-            {navLink('/secure/policy', 'Policy', 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z', isActive('/secure/policy'))}
+            {sectionHeader('secure', 'Secure', 'M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.285z', '/secure', '/secure')}
+            {!isCollapsed && expanded.secure && (
+              <div className="mt-0.5 space-y-0.5">
+                {subLink('/secure/guardrails', 'Guardrails', isActivePrefix('/secure/guardrails'))}
+                {subLink('/secure/policy', 'Policy', isActivePrefix('/secure/policy'))}
+                {subLink('/secure/llm-gateway', 'LLM Gateway', isActivePrefix('/secure/llm-gateway'))}
+              </div>
+            )}
           </div>
 
           <div className="pt-2">
             {!isCollapsed && <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Operate</div>}
-            {navLink('/deployments', 'Deployments', 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7', isActivePrefix('/deployments'))}
             {sectionHeader('observability', 'Observability', 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z', '/observability', '/observability')}
             {!isCollapsed && expanded.observability && (
               <div className="mt-0.5 space-y-0.5">
-                {subLink('/observability?tab=langfuse', 'Langfuse', location.search.includes('langfuse'))}
+                {subLink('/observability/langfuse', 'Langfuse', isActive('/observability/langfuse'))}
+                {subLink('/observability/agentcore', 'AgentCore', isActive('/observability/agentcore'))}
               </div>
             )}
+            {navLink('/deployments', 'Deployments', 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7', isActivePrefix('/deployments'))}
           </div>
 
           <div className="pt-2">
@@ -280,12 +306,24 @@ export default function Sidebar() {
             {sectionHeader('govern', 'Govern', 'M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z', '/govern', '/govern')}
             {!isCollapsed && expanded.govern && (
               <div className="mt-0.5 space-y-0.5">
+                {/* Overview & Framework */}
                 {subLink('/govern/command-center', 'Command Center', isActivePrefix('/govern/command-center'))}
                 {subLink('/govern/trust-stack', 'Trust Stack', isActivePrefix('/govern/trust-stack'))}
-                {subLink('/govern/fleet', 'Fleet Overview', isActivePrefix('/govern/fleet'))}
-                {subLink('/govern/risk', 'Risk Management', isActivePrefix('/govern/risk'))}
+                {/* Inventory & Assets */}
+                {subLink('/govern/fleet', 'Agentic Fleet', isActivePrefix('/govern/fleet'))}
+                {subLink('/govern/agents', 'Agent Registry', isActivePrefix('/govern/agents'))}
+                {subLink('/govern/dev-tools', 'Agentic Coding', isActivePrefix('/govern/dev-tools'))}
+                {subLink('/govern/multi-cloud', 'Multi-Cloud', isActivePrefix('/govern/multi-cloud'))}
+                {/* Resources */}
                 {subLink('/govern/models', 'Model Management', isActivePrefix('/govern/models'))}
+                {subLink('/govern/data', 'Data Governance', isActivePrefix('/govern/data'))}
+                {/* Risk & Compliance */}
+                {subLink('/govern/risk', 'Risk Management', isActivePrefix('/govern/risk'))}
+                {subLink('/govern/shadow-ai', 'Shadow AI', isActivePrefix('/govern/shadow-ai'))}
+                {subLink('/govern/prompt-governance', 'Prompt Governance', isActivePrefix('/govern/prompt-governance'))}
+                {subLink('/govern/safety', 'AI Safety', isActivePrefix('/govern/safety'))}
                 {subLink('/govern/compliance', 'Compliance', isActivePrefix('/govern/compliance'))}
+                {/* Operations */}
                 {subLink('/govern/finops', 'Cost & FinOps', isActivePrefix('/govern/finops'))}
                 {subLink('/govern/audit', 'Audit & Incidents', isActivePrefix('/govern/audit'))}
               </div>

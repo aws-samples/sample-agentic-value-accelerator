@@ -8,7 +8,7 @@ interface Item {
   description: string;
   iconBg: string;
   iconPath: string;
-  illustration: 'maturity' | 'operating-model' | 'use-cases' | 'business-cases';
+  illustration: 'maturity' | 'operating-model' | 'use-cases' | 'business-cases' | 'organization-design';
   tags: string[];
   stats?: { label: string; value: string }[];
   subItems?: { name: string; badge?: string; note?: string }[];
@@ -104,8 +104,30 @@ const BUSINESS_CASES: Item = {
   stepLabel: 'Justify',
 };
 
-// Narrative order: assess → design → identify → justify
-const ITEMS = [MATURITY, OPERATING_MODEL, PRIORITIZATION, BUSINESS_CASES];
+const ORGANIZATION_DESIGN: Item = {
+  id: 'organization-design',
+  path: '/organization-design',
+  name: 'Organization Design',
+  tagline: 'Assemble the future org.',
+  description: 'Design a blended organization where humans and AI agents deliver goals together. 8-dim scoring, 10-function agent config, 4-phase roadmap, and a 7-layer blended org chart.',
+  iconBg: 'from-pink-500 to-rose-600',
+  iconPath: 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z',
+  illustration: 'organization-design',
+  tags: ['8 dimensions', '10 functions', 'Sub vs Peer', '7-layer org', 'Phased'],
+  stats: [
+    { label: 'Functions', value: '10' },
+    { label: 'Phases',    value: '4' },
+  ],
+  subItems: [
+    { name: 'Agent Configuration', badge: 'Compose', note: 'Subordinate vs Peer per function' },
+    { name: 'Blended Org Chart',   badge: 'Assemble',note: '7 layers × humans + AI agents' },
+  ],
+  step: 5,
+  stepLabel: 'Assemble',
+};
+
+// Narrative order: assess → design → identify → justify → assemble
+const ITEMS = [MATURITY, OPERATING_MODEL, PRIORITIZATION, BUSINESS_CASES, ORGANIZATION_DESIGN];
 
 export default function PlanLanding() {
   const navigate = useNavigate();
@@ -118,30 +140,30 @@ export default function PlanLanding() {
         animation: 'gradientDrift 20s ease-in-out infinite',
       }} />
 
-      <div className="relative max-w-7xl mx-auto px-6 py-8 min-h-[calc(100dvh-4rem)] flex flex-col justify-center">
+      <div className="relative max-w-7xl mx-auto px-6 py-8">
         <div className="mb-3 animate-fade-in">
           <Link to="/" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Home</Link>
         </div>
 
         {/* Hero */}
-        <div className="mb-8 animate-fade-in stagger-1">
+        <div className="mb-6 animate-fade-in stagger-1">
           <h1 className="text-5xl font-semibold tracking-tight leading-tight" style={{ backgroundImage: 'linear-gradient(135deg, #4338ca 0%, #8b5cf6 50%, #ec4899 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', color: 'transparent' }}>
             From idea to investable. Before you build.
           </h1>
           <p className="text-slate-500 mt-4 max-w-3xl">
-            Four frameworks that turn AI agent ambition into an executable plan. <span className="font-semibold text-slate-700">Assess</span> where you stand, <span className="font-semibold text-slate-700">design</span> how to organize, <span className="font-semibold text-slate-700">identify</span> where to start, and <span className="font-semibold text-slate-700">justify</span> the spend. Use them in order, or jump to the one you need.
+            Five frameworks that turn AI agent ambition into an executable plan. <span className="font-semibold text-slate-700">Assess</span> where you stand, <span className="font-semibold text-slate-700">design</span> how to organize, <span className="font-semibold text-slate-700">identify</span> where to start, <span className="font-semibold text-slate-700">justify</span> the spend, and <span className="font-semibold text-slate-700">assemble</span> the blended human+AI org. Use them in order, or jump to the one you need.
           </p>
         </div>
 
-        {/* Four featured cards side by side */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in stagger-2">
+        {/* Five featured cards side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 animate-fade-in stagger-2">
           {ITEMS.map((item) => (
             <FeaturedCard key={item.id} item={item} onClick={() => navigate(item.path)} />
           ))}
         </div>
 
         {/* "Pick X if" inline guidance bar */}
-        <div className="mt-6 lg:mt-4 p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-slate-200/60 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5 animate-fade-in stagger-3">
+        <div className="mt-6 lg:mt-4 p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-slate-200/60 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-5 animate-fade-in stagger-3">
           <div className="md:border-l-2 md:border-indigo-400 md:pl-4">
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 mr-2">Pick Maturity if</span>
             <span className="text-sm text-slate-600 leading-snug">you&rsquo;re new to AI agents and need a baseline before investing — or want to defend a roadmap to your CIO.</span>
@@ -158,49 +180,56 @@ export default function PlanLanding() {
             <span className="text-xs font-bold uppercase tracking-wider text-pink-700 mr-2">Pick Business Cases if</span>
             <span className="text-sm text-slate-600 leading-snug">you have prioritized use cases and need NPV, IRR, and risk-adjusted returns to win budget approval.</span>
           </div>
+          <div className="md:border-l-2 md:border-rose-400 md:pl-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-700 mr-2">Pick Organization Design if</span>
+            <span className="text-sm text-slate-600 leading-snug">you&rsquo;re ready to assemble the blended human+AI org — teams, roles, sub vs peer agents, phased 4-year roadmap.</span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ───────── Featured card — mirrors AaaS/Capabilities pattern ───────── */
+/* ───────── Featured card — mirrors Govern landing pattern ───────── */
 
 function FeaturedCard({ item, onClick }: { item: Item; onClick: () => void }) {
   return (
     <div
       onClick={onClick}
-      className="group relative bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200/70 overflow-hidden cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-indigo-300/60 transition-all duration-300 flex flex-col"
+      className="group relative bg-white/90 backdrop-blur-sm rounded-xl border border-slate-200/70 overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-1 hover:border-indigo-300/60 transition-all duration-300 flex flex-col"
     >
-      {/* Hero illustration — top ~36% of the card */}
-      <div className="relative h-40 overflow-hidden flex-shrink-0">
-        {item.illustration === 'maturity'        && <MaturityArt />}
-        {item.illustration === 'operating-model' && <OperatingModelArt />}
-        {item.illustration === 'use-cases'       && <UseCasesArt />}
-        {item.illustration === 'business-cases'  && <BusinessCasesArt />}
+      {/* Hero illustration — compact */}
+      <div className="relative h-20 overflow-hidden flex-shrink-0">
+        {item.illustration === 'maturity'            && <MaturityArt />}
+        {item.illustration === 'operating-model'     && <OperatingModelArt />}
+        {item.illustration === 'use-cases'           && <UseCasesArt />}
+        {item.illustration === 'business-cases'      && <BusinessCasesArt />}
+        {item.illustration === 'organization-design' && <OrganizationDesignArt />}
 
         {/* Step pill — top-left */}
-        <div className="absolute top-3 left-3">
-          <div className="flex items-center gap-1.5 bg-white/25 backdrop-blur-sm rounded-full pl-1 pr-2.5 py-0.5 border border-white/30">
-            <span className="w-5 h-5 rounded-full bg-white text-[10px] font-bold text-slate-800 flex items-center justify-center">{item.step}</span>
-            <span className="text-[10px] uppercase tracking-wider text-white font-semibold">{item.stepLabel}</span>
+        <div className="absolute top-2 left-2">
+          <div className="flex items-center gap-1 bg-white/25 backdrop-blur-sm rounded-full pl-0.5 pr-2 py-0.5 border border-white/30">
+            <span className="w-4 h-4 rounded-full bg-white text-[9px] font-bold text-slate-800 flex items-center justify-center">{item.step}</span>
+            <span className="text-[9px] uppercase tracking-wider text-white font-semibold">{item.stepLabel}</span>
           </div>
         </div>
 
         {/* Stats floated top-right */}
-        <div className="absolute top-3 right-3 flex gap-1.5">
-          {item.stats?.map((s) => (
-            <div key={s.label} className="bg-white/20 backdrop-blur-sm rounded-lg px-2.5 py-1 border border-white/25 text-center">
-              <div className="text-sm font-bold text-white leading-none">{s.value}</div>
-              <div className="text-[9px] uppercase tracking-wider text-white/90 font-semibold mt-0.5">{s.label}</div>
-            </div>
-          ))}
-        </div>
+        {item.stats && (
+          <div className="absolute top-2 right-2 flex gap-1">
+            {item.stats.map((s) => (
+              <div key={s.label} className="bg-white/20 backdrop-blur-sm rounded px-2 py-0.5 border border-white/25 text-center">
+                <div className="text-xs font-bold text-white leading-none">{s.value}</div>
+                <div className="text-[8px] uppercase tracking-wider text-white/80 font-medium">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Icon badge pinned bottom-left */}
-        <div className="absolute bottom-3 left-4">
-          <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${item.iconBg} flex items-center justify-center shadow-md ring-2 ring-white/40 group-hover:scale-105 transition-transform`}>
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        {/* Icon badge */}
+        <div className="absolute bottom-2 left-3">
+          <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${item.iconBg} flex items-center justify-center shadow-sm ring-1 ring-white/30 group-hover:scale-110 transition-transform`}>
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d={item.iconPath} />
             </svg>
           </div>
@@ -208,38 +237,20 @@ function FeaturedCard({ item, onClick }: { item: Item; onClick: () => void }) {
       </div>
 
       {/* Body */}
-      <div className="relative p-5 flex flex-col flex-1">
-        <h2 className="text-xl font-bold text-indigo-700 mb-1 group-hover:text-indigo-800 transition-colors">{item.name}</h2>
-        <p className="text-sm font-medium text-slate-500 mb-2">{item.tagline}</p>
-        <p className="text-sm text-slate-600 leading-relaxed mb-4">{item.description}</p>
+      <div className="p-4 flex flex-col flex-1">
+        <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">{item.name}</h3>
+        <p className="text-xs font-medium text-slate-500 mb-2">{item.tagline}</p>
+        <p className="text-xs text-slate-600 leading-relaxed mb-3 flex-1">{item.description}</p>
 
-        {item.subItems && (
-          <div className="mb-4 space-y-1.5">
-            {item.subItems.map((s) => (
-              <div key={s.name} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 border border-slate-200/70">
-                <div className="flex flex-col">
-                  <span className="text-sm text-slate-800 font-medium">{s.name}</span>
-                  {s.note && <span className="text-[11px] text-slate-500">{s.note}</span>}
-                </div>
-                {s.badge && (
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                    {s.badge}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-1 mb-4">
-          {item.tags.map((t) => (
-            <span key={t} className="text-[10px] px-2 py-0.5 bg-indigo-50/60 text-indigo-700 rounded-md font-medium border border-indigo-100/70">{t}</span>
+        <div className="flex flex-wrap gap-1 mb-3">
+          {item.tags.slice(0, 3).map((t) => (
+            <span key={t} className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-medium">{t}</span>
           ))}
         </div>
 
-        <div className="mt-auto flex items-center text-sm font-semibold text-indigo-700 group-hover:text-indigo-800 transition-colors">
-          Explore {item.name}
-          <svg className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="flex items-center text-xs font-semibold text-indigo-600 group-hover:text-indigo-700 transition-colors">
+          Open
+          <svg className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
           </svg>
         </div>
@@ -256,7 +267,7 @@ function MaturityArt() {
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/30 via-transparent to-blue-700/40" />
       <div className="absolute -top-12 -left-8 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
       <div className="absolute -bottom-10 right-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" />
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 160" preserveAspectRatio="none">
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 128" preserveAspectRatio="xMidYMid meet">
         <g>
           <rect x="60"  y="100" width="28" height="40"  rx="4" fill="white" fillOpacity="0.35" />
           <rect x="100" y="80"  width="28" height="60"  rx="4" fill="white" fillOpacity="0.5" />
@@ -276,7 +287,7 @@ function OperatingModelArt() {
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 via-transparent to-violet-700/40" />
       <div className="absolute -top-12 -left-8 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
       <div className="absolute -bottom-10 right-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" />
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 160" preserveAspectRatio="none">
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 128" preserveAspectRatio="xMidYMid meet">
         {/* Hub-and-spoke org diagram: center node + 6 satellite nodes connected */}
         <g stroke="white" strokeOpacity="0.5" strokeWidth="1.2">
           <line x1="160" y1="80" x2="60"  y2="40" />
@@ -310,7 +321,7 @@ function BusinessCasesArt() {
       <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/30 via-transparent to-rose-700/40" />
       <div className="absolute -top-12 -left-8 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
       <div className="absolute -bottom-10 right-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" />
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 160" preserveAspectRatio="none">
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 128" preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id="roi-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"  stopColor="white" stopOpacity="0.45" />
@@ -335,7 +346,7 @@ function UseCasesArt() {
       <div className="absolute inset-0 bg-gradient-to-br from-violet-500/30 via-transparent to-fuchsia-700/40" />
       <div className="absolute -top-12 -left-8 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
       <div className="absolute -bottom-10 right-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" />
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 160" preserveAspectRatio="none">
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 128" preserveAspectRatio="xMidYMid meet">
         {[
           { y: 28,  w: 230, op: 0.95, rank: 1 },
           { y: 60,  w: 190, op: 0.78, rank: 2 },
@@ -351,6 +362,47 @@ function UseCasesArt() {
             <rect x="64" y={b.y + 4} width={b.w * 0.7} height="16" rx="4" fill="white" fillOpacity={b.op} />
           </g>
         ))}
+      </svg>
+    </div>
+  );
+}
+
+function OrganizationDesignArt() {
+  return (
+    <div className="absolute inset-0 bg-gradient-to-br from-pink-500 via-rose-500 to-red-500 overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-pink-500/30 via-transparent to-red-700/40" />
+      <div className="absolute -top-12 -left-8 w-44 h-44 rounded-full bg-white/10 blur-2xl" />
+      <div className="absolute -bottom-10 right-8 w-36 h-36 rounded-full bg-white/15 blur-2xl" />
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 128" preserveAspectRatio="xMidYMid meet">
+        {/* Blended team: 3 humans (circles) + 3 AI agents (rounded squares) linked to a supervisor */}
+        <g stroke="white" strokeOpacity="0.5" strokeWidth="1.2">
+          <line x1="160" y1="40" x2="60"  y2="110" />
+          <line x1="160" y1="40" x2="110" y2="110" />
+          <line x1="160" y1="40" x2="160" y2="110" />
+          <line x1="160" y1="40" x2="210" y2="110" />
+          <line x1="160" y1="40" x2="260" y2="110" />
+        </g>
+        {/* Supervisor at top */}
+        <circle cx="160" cy="40" r="16" fill="white" fillOpacity="0.95" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
+        <text x="160" y="46" textAnchor="middle" fill="#be185d" fontSize="12" fontWeight="700" fontFamily="Inter, sans-serif">MGR</text>
+        {/* Row of team members: humans (circles) alternate with agents (rounded squares) */}
+        <g>
+          {/* Human */}
+          <circle cx="60"  cy="120" r="11" fill="white" fillOpacity="0.85" />
+          <text x="60" y="124" textAnchor="middle" fill="#be185d" fontSize="9" fontWeight="700">H</text>
+          {/* Agent (subordinate) */}
+          <rect x="99" y="109" width="22" height="22" rx="5" fill="white" fillOpacity="0.7" />
+          <text x="110" y="124" textAnchor="middle" fill="#be185d" fontSize="9" fontWeight="700">AI</text>
+          {/* Human */}
+          <circle cx="160" cy="120" r="11" fill="white" fillOpacity="0.85" />
+          <text x="160" y="124" textAnchor="middle" fill="#be185d" fontSize="9" fontWeight="700">H</text>
+          {/* Agent (peer) — dashed border to indicate autonomous */}
+          <rect x="199" y="109" width="22" height="22" rx="5" fill="white" fillOpacity="0.55" stroke="white" strokeOpacity="0.7" strokeWidth="1" strokeDasharray="3 2" />
+          <text x="210" y="124" textAnchor="middle" fill="#be185d" fontSize="9" fontWeight="700">AI</text>
+          {/* Human */}
+          <circle cx="260" cy="120" r="11" fill="white" fillOpacity="0.85" />
+          <text x="260" y="124" textAnchor="middle" fill="#be185d" fontSize="9" fontWeight="700">H</text>
+        </g>
       </svg>
     </div>
   );

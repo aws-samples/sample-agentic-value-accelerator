@@ -13,6 +13,21 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _is_dev_auth_allowed() -> bool:
+    """Check if dev auth bypass is allowed in current environment.
+
+    Dev auth is never allowed in production, even if USE_DEV_AUTH=True.
+    """
+    if settings.ENVIRONMENT.lower() == "production":
+        if settings.USE_DEV_AUTH:
+            logger.warning(
+                "USE_DEV_AUTH is True but ENVIRONMENT=production - dev auth bypass disabled"
+            )
+        return False
+    return settings.USE_DEV_AUTH
+
+
 class Role(IntEnum):
     VIEWER = 0
     OPERATOR = 1
@@ -44,7 +59,8 @@ def _decode_jwt(token: str) -> dict:
         from jwt import PyJWKClient
     except ImportError:
         # Fallback: if PyJWT not installed, decode without verification in dev mode
-        if settings.USE_DEV_AUTH:
+        if _is_dev_auth_allowed():
+            logger.warning("PyJWT not installed - using unverified decode in dev mode")
             import base64
             payload = token.split(".")[1]
             payload += "=" * (4 - len(payload) % 4)
@@ -65,39 +81,47 @@ def _decode_jwt(token: str) -> dict:
 
 def _extract_role(request: Request) -> Role:
     auth = request.headers.get("Authorization", "")
+    dev_auth_allowed = _is_dev_auth_allowed()
 
     # Dev mode: check for x-user-email header to simulate different users
-    if settings.USE_DEV_AUTH:
+    if dev_auth_allowed:
         user_email = request.headers.get("x-user-email", "admin@example.com").lower()
         # Map user email to role
         if user_email == "demo@example.com":
+            logger.warning("Dev auth bypass: granting VIEWER role for demo user")
             return Role.VIEWER
         elif user_email in ["admin@example.com", "dev@example.com"]:
+            logger.warning("Dev auth bypass: granting ADMIN role for dev user")
             return Role.ADMIN
         # Default to admin in dev mode if no token
         if not auth:
+            logger.warning("Dev auth bypass: no auth header, granting ADMIN role")
             return Role.ADMIN
 
     if not auth or not auth.startswith("Bearer "):
-        if settings.USE_DEV_AUTH:
+        if dev_auth_allowed:
+            logger.warning("Dev auth bypass: missing/invalid auth header, granting ADMIN role")
             return Role.ADMIN
         raise HTTPException(status_code=401, detail="Missing authorization token")
 
     token = auth.split(" ", 1)[1]
 
     # Skip validation in dev mode when Cognito is not configured
-    if settings.USE_DEV_AUTH and not settings.COGNITO_USER_POOL_ID:
+    if dev_auth_allowed and not settings.COGNITO_USER_POOL_ID:
         role_str = request.headers.get("x-user-role", "admin").lower()
+        logger.warning(f"Dev auth bypass: Cognito not configured, using x-user-role header ({role_str})")
         return ROLE_MAP.get(role_str, Role.VIEWER)
 
     try:
         claims = _decode_jwt(token)
     except Exception as e:
-        logger.error(f"JWT validation failed: {type(e).__name__}: {e}")
-        logger.error(f"USE_DEV_AUTH={settings.USE_DEV_AUTH}, COGNITO_USER_POOL_ID={settings.COGNITO_USER_POOL_ID}")
-        if settings.USE_DEV_AUTH:
+        # Log only the error type to avoid leaking sensitive info from error messages
+        logger.error(f"JWT validation failed: {type(e).__name__}")
+        logger.debug(f"JWT error details (debug only): {e}")
+        if dev_auth_allowed:
+            logger.warning("Dev auth bypass: JWT validation failed, granting ADMIN role")
             return Role.ADMIN
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     # Extract role from cognito:groups
     groups = claims.get("cognito:groups", [])

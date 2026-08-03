@@ -11,6 +11,8 @@ data "archive_file" "auto_login" {
     content = templatefile("${path.module}/lambda_auto_login.js", {
       langfuse_email    = var.langfuse_init_user_email
       langfuse_password = var.langfuse_init_user_password
+      signing_secret    = var.fsi_app_signing_secret
+      login_url         = var.ava_ui_login_url
     })
     filename = "index.js"
   }

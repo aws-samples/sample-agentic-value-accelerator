@@ -89,10 +89,33 @@ class Settings(BaseSettings):
     langfuse_secret_name: Optional[str] = None  # AWS Secrets Manager secret with API keys
     langfuse_prompt_name: Optional[str] = None
 
+    # AgentCore Gateway Configuration
+    # When set, tool calls route through the gateway for policy enforcement
+    gateway_url: Optional[str] = None  # e.g., https://{id}.gateway.bedrock-agentcore.{region}.amazonaws.com
+
     # Bedrock Guardrails Configuration
     # Injected from control plane deployment parameters
     guardrail_id: Optional[str] = None
     guardrail_version: Optional[str] = None
+
+    # LLM Gateway (LiteLLM) Configuration
+    # When llm_gateway_base_url is set, all foundation model calls route
+    # through the gateway instead of direct Bedrock SDK. This is the
+    # production chokepoint that provides virtual keys, budgets, rate
+    # limits, attached guardrails, and audit. Leave unset for direct
+    # Bedrock (default — preserves existing behavior).
+    llm_gateway_base_url: Optional[str] = None
+    # Secrets Manager ARN holding the virtual key. Preferred over
+    # llm_gateway_api_key because secrets never land in env vars/logs.
+    llm_gateway_api_key_secret_arn: Optional[str] = None
+    # Direct API key — dev/local escape hatch only. Production deploys
+    # should use llm_gateway_api_key_secret_arn instead.
+    llm_gateway_api_key: Optional[str] = None
+
+    @property
+    def use_llm_gateway(self) -> bool:
+        """True when the foundations layer should route through LiteLLM."""
+        return bool(self.llm_gateway_base_url)
 
     class Config:
         env_file = ".env"

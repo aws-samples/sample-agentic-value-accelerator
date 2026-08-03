@@ -16,7 +16,7 @@ class Analysis(BaseModel):
     recommendation: str = Field(description="Recommended action")
 
 
-model = ChatBedrockConverse(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0")
+model = ChatBedrockConverse(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 structured_model = model.with_structured_output(Analysis)
 
 if __name__ == "__main__":

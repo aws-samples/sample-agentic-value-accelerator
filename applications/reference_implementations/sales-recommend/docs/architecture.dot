@@ -1,0 +1,71 @@
+digraph architecture {
+  rankdir=LR;
+  graph [fontname="Helvetica", fontsize=12, compound=true, splines=true,
+         nodesep=0.45, ranksep=0.9, labelloc="t",
+         label="AWS Solutions Advisor (Sales Recommend) — Architecture\nSolid = Query Flow   |   Dashed = Data Production Flow   |   Dotted = cross-cutting"];
+  node [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled",
+        fillcolor="#EAF2FB", color="#3B78C3"];
+  edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  user [label="End User\n(business leader)", shape=oval, fillcolor="#F5F5F5", color="#888888"];
+  git  [label="External Git Repos\n(GitHub)", shape=oval, fillcolor="#F5F5F5", color="#888888"];
+
+  subgraph cluster_edge {
+    label="Edge / Auth"; style="rounded,filled"; fillcolor="#FFF7E6"; color="#E0A800";
+    cloudfront [label="CloudFront\n+ Basic Auth Function"];
+    ssm [label="SSM Parameter Store\n(auth creds)", shape=cylinder, fillcolor="#FDECEC", color="#C0392B"];
+  }
+
+  subgraph cluster_vpc {
+    label="VPC (private subnets)"; style="rounded,filled"; fillcolor="#EEF7EE"; color="#2E8B57";
+    alb [label="Application\nLoad Balancer"];
+    ecs [label="ECS Fargate\nNext.js UI + API proxy"];
+  }
+  ecr [label="ECR\n(UI image)", shape=cylinder, fillcolor="#F0EEFB", color="#6C4AB6"];
+
+  subgraph cluster_agent {
+    label="Agent"; style="rounded,filled"; fillcolor="#EAF2FB"; color="#3B78C3";
+    agentcore [label="AgentCore Runtime\n(Strands agent)"];
+    claude [label="Bedrock\nClaude Sonnet 4.6"];
+  }
+
+  subgraph cluster_kb {
+    label="Knowledge Base (shared hub)"; style="rounded,filled"; fillcolor="#FDEFF6"; color="#C2185B";
+    kb [label="Bedrock\nKnowledge Base"];
+    titan [label="Titan\nEmbeddings V2"];
+    aoss [label="OpenSearch Serverless\nvector index", shape=cylinder, fillcolor="#FBE9F1"];
+    kbbucket [label="S3: KB data source\nprofiles + metadata\n(chunking = NONE)", shape=cylinder, fillcolor="#FBE9F1"];
+  }
+
+  subgraph cluster_data {
+    label="Data Production"; style="rounded,filled"; fillcolor="#FFF0E6"; color="#D35400";
+    srcbucket [label="S3: wiki source\ncode zip + config/repos.txt", shape=cylinder, fillcolor="#FCE7D6"];
+    dispatch [label="Dispatch Lambda\n(fan-out)"];
+    codebuild [label="CodeBuild\nWiki Generator"];
+  }
+
+  // ---- Query Flow (solid) ----
+  user -> cloudfront [label="HTTPS"];
+  cloudfront -> alb [label="origin secret"];
+  alb -> ecs;
+  ecs -> agentcore [label="InvokeAgentRuntime"];
+  agentcore -> claude [label="generate"];
+  agentcore -> kb [label="Retrieve"];
+  kb -> aoss [label="vector search"];
+
+  // ---- Data Production Flow (dashed) ----
+  srcbucket -> dispatch [label="ObjectCreated (config/)", style=dashed, color="#D35400"];
+  dispatch -> codebuild [label="StartBuild / URL", style=dashed, color="#D35400"];
+  srcbucket -> codebuild [label="build source", style=dashed, color="#D35400"];
+  git -> codebuild [label="clone", style=dashed, color="#D35400"];
+  codebuild -> claude [label="synthesize", style=dashed, color="#D35400"];
+  codebuild -> kbbucket [label="write .md + metadata", style=dashed, color="#D35400"];
+  codebuild -> kb [label="StartIngestionJob", style=dashed, color="#D35400"];
+  kb -> kbbucket [label="read", style=dashed, color="#C2185B"];
+  kb -> titan [label="embed", style=dashed, color="#C2185B"];
+  kb -> aoss [label="write vectors", style=dashed, color="#C2185B"];
+
+  // ---- Cross-cutting (dotted) ----
+  ssm -> cloudfront [label="creds (deploy-time)", style=dotted];
+  ecr -> ecs [label="image", style=dotted];
+}

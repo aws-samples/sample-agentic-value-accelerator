@@ -144,20 +144,40 @@ resource "aws_iam_role_policy_attachment" "agentcore_ecr" {
   policy_arn = aws_iam_policy.agentcore_ecr.arn
 }
 
-# Policy for Secrets Manager access (Langfuse API keys for tracing)
+# Policy for Secrets Manager access:
+#   * *langfuse*  — Langfuse API keys for OTEL tracing
+#   * llm-gateway-* — LLM Gateway virtual keys (LiteLLM virtual-key per
+#                    deployed use case, minted at deploy time by the control
+#                    plane and resolved at runtime by foundations/src/utils/
+#                    llm_gateway.py:resolve_gateway_api_key)
+#
+# Bedrock invoke perms are retained on the shared bedrock_policy (attached
+# above as agentcore_bedrock) as a transitional fallback while teams migrate
+# to the gateway. Once gateway-routing is validated in production for one
+# release cycle, swap that attachment for a "deny direct bedrock:Invoke*"
+# policy to make the gateway a hard chokepoint.
 resource "aws_iam_policy" "agentcore_secrets" {
   name        = "${local.resource_prefix}-agentcore-secrets-${local.region_suffix}"
-  description = "Allow AgentCore to read Langfuse API keys from Secrets Manager"
+  description = "Allow AgentCore to read Langfuse keys + LLM Gateway virtual keys from Secrets Manager"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "LangfuseTracingKeys"
         Effect = "Allow"
         Action = [
           "secretsmanager:GetSecretValue"
         ]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:*langfuse*"
+      },
+      {
+        Sid    = "LlmGatewayVirtualKeys"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:llm-gateway-*"
       }
     ]
   })

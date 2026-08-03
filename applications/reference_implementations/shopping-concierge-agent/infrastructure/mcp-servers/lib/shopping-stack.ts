@@ -8,13 +8,15 @@ const DEPLOYMENT_ID = deploymentConfig.deploymentId;
 
 export class ShoppingStack extends BaseMcpStack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    const serpApiKeyParam = `/concierge-agent/${DEPLOYMENT_ID}/serp-api-key`;
     super(scope, id, {
       ...props,
       mcpName: 'shopping',
       agentCodePath: 'concierge_agent/mcp_shopping_tools',
-      ssmParameters: [
-        `/concierge-agent/${DEPLOYMENT_ID}/serp-api-key`
-      ]
+      ssmParameters: [serpApiKeyParam],
+      environmentVariables: {
+        SERP_API_KEY_PARAM: serpApiKeyParam
+      }
     });
   }
 }

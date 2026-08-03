@@ -5,6 +5,8 @@ Provides a base class for coordinating multiple Strands agents.
 Optimized for Strands' agent-loop pattern.
 """
 
+import logging
+import os
 from abc import ABC
 from typing import Any, Dict, List, Optional
 import asyncio
@@ -16,6 +18,8 @@ from strands.models import BedrockModel
 from base.types import OrchestratorConfig, ExecutionResult
 from base.strands.agent import StrandsAgent
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class StrandsOrchestrator(ABC):
@@ -56,12 +60,53 @@ class StrandsOrchestrator(ABC):
         self._synthesis_agent: Optional[Agent] = None
     
     def _create_synthesis_agent(self) -> Agent:
-        """Create agent for synthesizing results."""
+        """Create agent for synthesizing results — LLM Gateway or direct Bedrock.
+
+        Fail-closed in production: raises GatewayConfigurationError if
+        gateway is enabled but the virtual key is unavailable.
+        Fail-open in dev (LOCAL_MODE=true): logs warning, falls back to Bedrock.
+        """
+        model_id = self.config.model_id or settings.bedrock_model_id or settings.effective_bedrock_model_id
+        temperature = self.config.model_kwargs.get("temperature", 0.2)
+        max_tokens = self.config.model_kwargs.get("max_tokens", 8192)
+
+        if settings.use_llm_gateway:
+            from utils.llm_gateway import (
+                resolve_gateway_api_key,
+                gateway_base_url,
+                gateway_model_id,
+                GatewayConfigurationError,
+            )
+            from strands.models.litellm import LiteLLMModel
+
+            api_key = resolve_gateway_api_key()
+            if api_key:
+                logger.info(
+                    "llm_gateway_selected",
+                    extra={"framework": "strands", "model": model_id, "gateway": gateway_base_url()},
+                )
+                model = LiteLLMModel(
+                    model_id=gateway_model_id(model_id),
+                    client_args={
+                        "base_url": gateway_base_url(),
+                        "api_key": api_key,
+                    },
+                    params={"temperature": temperature, "max_tokens": max_tokens},
+                )
+                return Agent(model=model, system_prompt=self.system_prompt)
+            # Fail-closed in production, fail-open in dev
+            if os.getenv("LOCAL_MODE", "").lower() not in ("true", "1", "yes"):
+                raise GatewayConfigurationError(
+                    "LLM Gateway enabled but virtual key unavailable. "
+                    "Set LLM_GATEWAY_API_KEY or LLM_GATEWAY_API_KEY_SECRET_ARN."
+                )
+            logger.warning("llm_gateway_key_unavailable_falling_back_to_direct_bedrock")
+
         model = BedrockModel(
-            model_id=self.config.model_id or settings.bedrock_model_id,
+            model_id=model_id,
             region_name=settings.aws_region,
-            temperature=self.config.model_kwargs.get("temperature", 0.2),
-            max_tokens=self.config.model_kwargs.get("max_tokens", 8192),
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         return Agent(
             model=model,

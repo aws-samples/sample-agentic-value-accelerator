@@ -8,7 +8,7 @@ Reference: https://github.com/strands-agents/samples/tree/main/python/01-learn/1
 from strands import Agent
 from strands.models import BedrockModel
 
-model = BedrockModel(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0")
+model = BedrockModel(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 
 # Specialist agents
 researcher = Agent(

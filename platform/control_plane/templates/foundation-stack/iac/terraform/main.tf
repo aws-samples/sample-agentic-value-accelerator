@@ -204,4 +204,9 @@ module "langfuse" {
 
   cognito_user_pool_id = var.cognito_user_pool_id
   cognito_region       = var.cognito_region != "" ? var.cognito_region : var.aws_region
+
+  # AVA FSI SSO — pass through from foundation-stack root (populated via TF_VAR_*).
+  # See modules/langfuse/lambda_auto_login.js for the gate implementation.
+  fsi_app_signing_secret = var.fsi_app_signing_secret
+  ava_ui_login_url       = var.ava_ui_login_url
 }

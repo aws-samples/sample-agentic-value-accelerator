@@ -42,7 +42,7 @@ def lookup_policy(topic: str) -> str:
 def customer_service_agent():
     """The agent task to evaluate."""
     return Agent(
-        model=BedrockModel(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0"),
+        model=BedrockModel(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
         system_prompt="You are a customer service agent. Use tools to look up policies and calculate refunds.",
         tools=[calculator, lookup_policy],
     )

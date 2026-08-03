@@ -118,6 +118,11 @@ fi
 
 terraform init -input=false
 
+# Extract IAM role ARN from current credentials for Lake Formation admin
+CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+LF_ADMIN_ROLE_ARN=$(echo "$CALLER_ARN" | sed 's|arn:aws:sts::\([0-9]*\):assumed-role/\([^/]*\)/.*|arn:aws:iam::\1:role/\2|')
+export TF_VAR_lf_admin_role_arn="$LF_ADMIN_ROLE_ARN"
+echo -e "${GREEN}Lake Formation admin role: ${LF_ADMIN_ROLE_ARN}${NC}"
 # Pre-import X-Ray Transaction Search prereqs that are account+region-scoped
 # and shared. They commonly pre-exist on accounts where AgentCore was tried
 # before, where a prior partial apply created them, or where AWS auto-created
@@ -150,11 +155,20 @@ fi
 terraform apply tfplan
 rm -f tfplan
 
+# Seed sample data lake if enabled
+GLUE_JOB_NAME=$(terraform output -raw sample_datalake_glue_job_name 2>/dev/null || true)
+if [ -n "$GLUE_JOB_NAME" ]; then
+    echo -e "${GREEN}Starting Glue seed job: ${GLUE_JOB_NAME}${NC}"
+    aws glue start-job-run --job-name "$GLUE_JOB_NAME" --region "$AWS_REGION" || echo -e "${YELLOW}Warning: Glue job start failed (may already be running)${NC}"
+fi
+
 # Capture outputs
 ECR_REPO=$(terraform output -raw ecr_repository_url)
 RUNNER_ECR_REPO=$(terraform output -raw service_approval_runner_ecr_repository_url 2>/dev/null || echo "")
 FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_name)
 CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+CLOUDFRONT_DOMAIN=$(terraform output -raw cloudfront_domain_name)
+CLOUDFRONT_HOSTED_ZONE_ID=$(terraform output -raw cloudfront_hosted_zone_id)
 API_ENDPOINT=$(terraform output -raw api_endpoint)
 FRONTEND_URL=$(terraform output -raw frontend_url)
 COGNITO_USER_POOL_ID=$(terraform output -raw cognito_user_pool_id)
@@ -167,6 +181,64 @@ AWS_REGION=$(echo "$ECR_REPO" | sed 's/.*\.ecr\.\(.*\)\.amazonaws\.com.*/\1/')
 
 echo -e "${GREEN}  Infrastructure deployed.${NC}"
 echo
+
+# ============================================================================
+# Step 1b: Route 53 hosted zone bootstrap
+# ============================================================================
+# Creates the demo hosted zone ONLY. Records that populate the zone are
+# NOT written from here:
+#   - The 2 ACM DNS-01 validation CNAMEs are written by scripts/acm.sh
+#     (bootstrap/acm terraform module) when the operator runs it manually
+#     after delegating the parent zone.
+#   - The apex A/AAAA alias and api. A alias are written by the CP
+#     terraform re-apply that scripts/acm.sh triggers, because they belong
+#     to the CloudFront and API Gateway modules -- see
+#     modules/cloudfront/main.tf and modules/api_gateway/main.tf, which
+#     gate their alias records on domain_name + hosted_zone_id +
+#     acm_certificate_arn all being set.
+#
+# Skipped when DEPLOY_HOSTED_ZONE=false. Zone name comes from HOSTED_ZONE_DOMAIN
+# env var (loaded from repo-root .env by default; see .env.example).
+
+# Load HOSTED_ZONE_DOMAIN from repo-root .env if not already exported. Users
+# customize the DNS name there; see .env.example for the canonical location.
+if [ -z "${HOSTED_ZONE_DOMAIN:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
+    HOSTED_ZONE_DOMAIN=$(grep -E '^HOSTED_ZONE_DOMAIN=' "$REPO_ROOT/.env" | tail -n1 | cut -d= -f2-)
+fi
+
+HZ_DIR="$INFRA_DIR/bootstrap/hosted_zone"
+HZ_DOMAIN="${HOSTED_ZONE_DOMAIN:?HOSTED_ZONE_DOMAIN not set. Add it to .env or export it before running deploy-full.sh.}"
+HZ_ID=""
+
+if [ "${DEPLOY_HOSTED_ZONE:-true}" = "true" ] && [ -d "$HZ_DIR" ]; then
+    echo -e "${BLUE}[1b/9] Route 53 hosted zone bootstrap${NC}"
+
+    pushd "$HZ_DIR" > /dev/null
+
+    terraform init -input=false
+
+    terraform apply -auto-approve \
+        -var "aws_region=$AWS_REGION" \
+        -var "domain_name=$HZ_DOMAIN"
+
+    HZ_ID=$(terraform output -raw zone_id 2>/dev/null || echo "")
+    HZ_NAMESERVERS=$(terraform output -json name_servers 2>/dev/null || echo "[]")
+
+    popd > /dev/null
+
+    echo -e "${GREEN}  Hosted zone ${HZ_DOMAIN} ready (id=${HZ_ID}).${NC}"
+    echo -e "${YELLOW}  Send these NS records to the parent-zone (example.com) owner:${NC}"
+    echo "$HZ_NAMESERVERS" | python3 -c "import sys,json;[print(f'    {n}') for n in json.load(sys.stdin)]" 2>/dev/null || echo "  (name_servers output unavailable)"
+    echo
+elif [ ! -d "$HZ_DIR" ]; then
+    echo -e "${YELLOW}[1b/9] Skipped: $HZ_DIR not present.${NC}"
+    echo
+fi
+
+# NOTE: deploy-full.sh stops short of any custom-domain wiring. The CP is
+# fully working here on its default *.cloudfront.net URL. To switch it to
+# a custom DNS name, run scripts/acm.sh AFTER delegating the parent zone
+# (example.com) to the four name servers Step 1b just printed.
 
 # ============================================================================
 # Step 2: Backend Docker Image
@@ -190,6 +262,31 @@ echo "  Pushing to ECR..."
 docker push "${ECR_REPO}:latest"
 
 echo -e "${GREEN}  Backend image pushed.${NC}"
+echo
+
+# Build and push Data Lake MCP server image
+DATALAKE_MCP_REPO=$(terraform output -raw datalake_mcp_repository_url 2>/dev/null || true)
+if [ -n "$DATALAKE_MCP_REPO" ]; then
+    echo "  Building Data Lake MCP server image..."
+    docker build \
+        -t "${DATALAKE_MCP_REPO}:latest" \
+        "${SCRIPT_DIR}/../../backend/mcp_servers/datalake"
+    echo "  Pushing MCP server image to ECR..."
+    docker push "${DATALAKE_MCP_REPO}:latest"
+    echo -e "${GREEN}  Data Lake MCP server image pushed.${NC}"
+fi
+
+# Build and push Knowledge Base MCP server image
+KB_MCP_REPO=$(terraform output -raw kb_mcp_repository_url 2>/dev/null || true)
+if [ -n "$KB_MCP_REPO" ]; then
+    echo "  Building Knowledge Base MCP server image..."
+    docker build \
+        -t "${KB_MCP_REPO}:latest" \
+        "${SCRIPT_DIR}/../../backend/mcp_servers/knowledge_base"
+    echo "  Pushing KB MCP server image to ECR..."
+    docker push "${KB_MCP_REPO}:latest"
+    echo -e "${GREEN}  Knowledge Base MCP server image pushed.${NC}"
+fi
 echo
 
 # ============================================================================

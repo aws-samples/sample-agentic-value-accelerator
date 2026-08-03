@@ -81,7 +81,7 @@ redis:
 s3:
   deploy: false
   bucket: ${aws_s3_bucket.langfuse.id}
-  region: ${data.aws_region.current.id}
+  region: ${data.aws_region.current.region}
   forcePathStyle: false
   eventUpload:
     prefix: "events/"
@@ -275,7 +275,7 @@ resource "null_resource" "wait_for_alb" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      aws eks update-kubeconfig --name ${aws_eks_cluster.langfuse.name} --region ${data.aws_region.current.id} --kubeconfig /tmp/kubeconfig-${aws_eks_cluster.langfuse.name}
+      aws eks update-kubeconfig --name ${aws_eks_cluster.langfuse.name} --region ${data.aws_region.current.region} --kubeconfig /tmp/kubeconfig-${aws_eks_cluster.langfuse.name}
       for i in $(seq 1 30); do
         ADDR=$(kubectl --kubeconfig /tmp/kubeconfig-${aws_eks_cluster.langfuse.name} get ingress langfuse -n langfuse -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
         if [ -n "$ADDR" ] && [ "$ADDR" != "" ]; then

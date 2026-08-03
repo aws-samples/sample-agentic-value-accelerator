@@ -196,28 +196,21 @@ export default ModuleGuide;
 // Pre-built guides for each Govern sub-module
 // ═══════════════════════════════════════════════════════════════
 
-export const GovernLandingGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+export const ModelManagementGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
   <ModuleGuide
-    title="Getting Started with Govern"
-    variant="landing"
+    title="How to Use Model Management"
     onNavigate={onNavigate}
     steps={[
-      { step: '1', title: 'Register Models', desc: 'Add AI models to the registry with risk tier, owner, and use cases.', color: '#4338ca' },
-      { step: '2', title: 'Assess Compliance', desc: 'Map to SR 26-2, OSFI E-23, NIST AI RMF, and EU AI Act frameworks.', color: '#8b5cf6' },
-      { step: '3', title: 'Track Findings', desc: 'Log issues from audits and validations. Assign owners and remediation.', color: '#a21caf' },
-      { step: '4', title: 'Monitor & Report', desc: 'Track fleet health, generate regulatory reports, schedule revalidations.', color: '#ec4899' },
+      { step: '1', title: 'Register', desc: 'Browse the model catalog with risk tiers, compliance status, and ownership in the Registry.', color: '#4338ca' },
+      { step: '2', title: 'Evaluate', desc: 'Pick a model, then run the evaluation suite: Evaluations (LLM-as-judge), RAG Evaluation, and Explainability & Fairness — the selected model carries across all three.', color: '#8b5cf6' },
+      { step: '3', title: 'Gate', desc: 'The Deployment Gate aggregates eval, safety, RAG, and fairness into a cleared / conditional / blocked verdict mapped to SageMaker ModelApprovalStatus.', color: '#a21caf' },
+      { step: '4', title: 'Operate', desc: 'Track drift in Monitoring, attestations in Governance, and versions/sunset in Lifecycle. (Evaluating an agent? See Agentic Evals in Agent Registry.)', color: '#ec4899' },
     ]}
     maturityStages={[
-      { stage: 'Ad-hoc',    desc: 'No formal MRM process',                 focus: 'Model Registry',          color: '#4338ca' },
-      { stage: 'Defined',   desc: 'Policies exist, partial coverage',      focus: 'Compliance Mapping',      color: '#8b5cf6' },
-      { stage: 'Managed',   desc: 'Full coverage, regular reviews',        focus: 'Monitoring + Evidence',   color: '#a21caf' },
-      { stage: 'Optimized', desc: 'Automated, continuous, proactive',      focus: 'Integration + Automation',color: '#ec4899' },
-    ]}
-    quickLinks={[
-      { label: 'Model Registry',     nav: 'models',     color: '#4338ca' },
-      { label: 'Compliance Center',  nav: 'compliance', color: '#8b5cf6' },
-      { label: 'Risk Management',    nav: 'risk',       color: '#a21caf' },
-      { label: 'Audit & Incidents',  nav: 'audit',      color: '#ec4899' },
+      { stage: 'Inventory', desc: 'Models cataloged, basic metadata', focus: 'Registry', color: '#4338ca' },
+      { stage: 'Evaluated', desc: 'Quality, RAG, fairness scored', focus: 'Evaluation Suite', color: '#8b5cf6' },
+      { stage: 'Gated', desc: 'Promotion gated on eval signals', focus: 'Deployment Gate', color: '#a21caf' },
+      { stage: 'Optimized', desc: 'Continuous monitoring & lifecycle', focus: 'Monitoring & Lifecycle', color: '#ec4899' },
     ]}
   />
 );
@@ -288,6 +281,82 @@ export const ModelOperationsGuide = ({ onNavigate }: { onNavigate?: (nav: string
       { label: 'Cost Optimization', nav: 'cost', color: '#ec4899' },
       { label: 'Trend Analytics', nav: 'trends', color: '#4338ca' },
       { label: 'Integrations', nav: 'integrations', color: '#8b5cf6' },
+    ]}
+  />
+);
+
+export const ModelExplainabilityGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Explainability & Fairness"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Attribute', desc: 'See which features drove a prediction with SHAP, LIME, and Anchor rule explanations.', color: '#4338ca' },
+      { step: '2', title: 'Explain Decisions', desc: 'Generate ECOA/Reg B adverse-action notices and counterfactual "what would change the outcome" paths.', color: '#8b5cf6' },
+      { step: '3', title: 'Test Fairness', desc: 'Check disparate impact (four-fifths rule) and subgroup metrics across protected attributes.', color: '#a21caf' },
+      { step: '4', title: 'Trace & Audit', desc: 'Diagnose drift root-cause and review the tamper-evident decision audit trail.', color: '#ec4899' },
+    ]}
+    maturityStages={[
+      { stage: 'Opaque', desc: 'Black-box decisions, no explanations', focus: 'Feature Attribution', color: '#4338ca' },
+      { stage: 'Explained', desc: 'Per-decision explanations available', focus: 'Adverse Action', color: '#8b5cf6' },
+      { stage: 'Fair', desc: 'Bias tested, disparate impact monitored', focus: 'Fairness Testing', color: '#a21caf' },
+      { stage: 'Accountable', desc: 'Full audit trail, regulator-ready evidence', focus: 'Decision Audit', color: '#ec4899' },
+    ]}
+  />
+);
+
+export const RagEvaluationsGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use RAG Evaluation"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Pick a Run', desc: 'Select a knowledge-base evaluation run. Each scores generation + retrieval quality via Bedrock LLM-as-a-judge.', color: '#4338ca' },
+      { step: '2', title: 'Read Metrics', desc: 'Faithfulness (grounding), Context Relevance, Context Coverage, Citation Coverage — the Bedrock KB-evaluation metric set.', color: '#8b5cf6' },
+      { step: '3', title: 'Inspect Queries', desc: 'Open any query to see the answer and the retrieved chunks with per-chunk relevance scores.', color: '#a21caf' },
+      { step: '4', title: 'Gate on Quality', desc: 'Faithfulness and hallucination feed the Deployment Gate. The weighted overall is a governance overlay on Bedrock per-metric scores.', color: '#ec4899' },
+    ]}
+    maturityStages={[
+      { stage: 'Unmeasured', desc: 'RAG quality unknown', focus: 'Run an evaluation', color: '#4338ca' },
+      { stage: 'Scored', desc: 'Per-metric scores available', focus: 'Faithfulness & Context', color: '#8b5cf6' },
+      { stage: 'Grounded', desc: 'Hallucination controlled, citations verified', focus: 'Citation Coverage', color: '#a21caf' },
+      { stage: 'Gated', desc: 'RAG quality gates promotion', focus: 'Deployment Gate', color: '#ec4899' },
+    ]}
+  />
+);
+
+export const AgentEvalGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Agentic Evaluation"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Choose Evaluators', desc: 'AgentCore built-in evaluators by scope: session (goal success), trace (quality/safety), and tool (selection & parameter accuracy).', color: '#4338ca' },
+      { step: '2', title: 'Run on a Runtime', desc: 'Evaluate a deployed AgentCore runtime via on-demand, online, or batch evaluation over OpenTelemetry traces.', color: '#8b5cf6' },
+      { step: '3', title: 'Inspect Scenarios', desc: 'Drill into each scenario for the agent trace and assertion compliance against supplied ground truth.', color: '#a21caf' },
+      { step: '4', title: 'Track Drift', desc: 'Compare against a locked baseline; regressions beyond threshold block promotion and can suspend the runtime.', color: '#ec4899' },
+    ]}
+    maturityStages={[
+      { stage: 'Untested', desc: 'Agent behavior unmeasured', focus: 'Evaluator Catalog', color: '#4338ca' },
+      { stage: 'Evaluated', desc: 'Tool use & goals scored', focus: 'Scenario Results', color: '#8b5cf6' },
+      { stage: 'Baselined', desc: 'Baseline set, drift watched', focus: 'Baseline Drift', color: '#a21caf' },
+      { stage: 'Continuous', desc: 'Online evals, auto-gated', focus: 'Online Evaluation', color: '#ec4899' },
+    ]}
+  />
+);
+
+export const DeploymentGateGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use the Deployment Gate"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Review Verdict', desc: 'Each model rolls up to Cleared / Conditional / Blocked, mapped to SageMaker ModelApprovalStatus.', color: '#4338ca' },
+      { step: '2', title: 'Check Blocking Failures', desc: 'Eval score, safety, RAG faithfulness, and four-fifths fairness are blocking checks — any failure halts promotion.', color: '#8b5cf6' },
+      { step: '3', title: 'Resolve & Re-run', desc: 'Fix the failing dimension and re-run that evaluation. The gate recomputes from live results.', color: '#a21caf' },
+      { step: '4', title: 'Record Evidence', desc: 'The verdict and checks are recorded on the model card as deployment evidence for auditors.', color: '#ec4899' },
+    ]}
+    maturityStages={[
+      { stage: 'Manual', desc: 'Ad-hoc promotion decisions', focus: 'Define thresholds', color: '#4338ca' },
+      { stage: 'Gated', desc: 'Checks aggregate to a verdict', focus: 'Blocking Checks', color: '#8b5cf6' },
+      { stage: 'Mapped', desc: 'Verdict drives ModelApprovalStatus', focus: 'Model Registry', color: '#a21caf' },
+      { stage: 'Automated', desc: 'Pipeline condition step auto-gates', focus: 'CI/CD Promotion', color: '#ec4899' },
     ]}
   />
 );
@@ -392,16 +461,42 @@ export const RiskManagementGuide = ({ onNavigate }: { onNavigate?: (nav: string)
     title="How to Use Risk Management"
     onNavigate={onNavigate}
     steps={[
-      { step: '1', title: 'Review Dashboard', desc: 'See risk heatmap, control effectiveness, and risk trend over time.', color: '#4338ca' },
-      { step: '2', title: 'Manage Register', desc: 'View and update the risk register with inherent/residual scores and owners.', color: '#8b5cf6' },
-      { step: '3', title: 'Run Assessments', desc: 'Execute periodic risk assessments and document findings.', color: '#a21caf' },
-      { step: '4', title: 'Track Controls', desc: 'Monitor control implementation status and effectiveness metrics.', color: '#ec4899' },
+      { step: '1', title: 'Review Dashboard', desc: 'See risk heatmap, OWASP Agentic AI threat coverage, and control effectiveness trends.', color: '#4338ca' },
+      { step: '2', title: 'Real-Time Monitoring', desc: 'Monitor live risk signals with 5-tier alerts (CRITICAL→INFO), cascade scores, and blast radius metrics.', color: '#e11d48' },
+      { step: '3', title: 'Third-Party Risk', desc: 'Track AI vendors (Anthropic, OpenAI, AWS Bedrock) with DDQ status, risk scores, and contract expiry.', color: '#f59e0b' },
+      { step: '4', title: 'Policy as Code', desc: 'Deploy OPA/Rego policies for tool permissions, MCP allowlists, data classification, and human oversight.', color: '#10b981' },
     ]}
     maturityStages={[
-      { stage: 'Initial', desc: 'Risk-aware but reactive', focus: 'Risk Register', color: '#4338ca' },
-      { stage: 'Repeatable', desc: 'Regular assessments', focus: 'Assessments', color: '#8b5cf6' },
-      { stage: 'Defined', desc: 'Controls mapped to risks', focus: 'Controls', color: '#a21caf' },
-      { stage: 'Managed', desc: 'Quantified and monitored', focus: 'Dashboard KPIs', color: '#ec4899' },
+      { stage: 'Initial', desc: 'Risk-aware but reactive', focus: 'Risk Register', color: '#ef4444' },
+      { stage: 'Monitored', desc: 'Real-time signals active', focus: 'Monitoring Tab', color: '#f59e0b' },
+      { stage: 'Governed', desc: 'Policies enforced via CI/CD', focus: 'Policy as Code', color: '#3b82f6' },
+      { stage: 'Optimized', desc: 'Automated response, circuit breakers', focus: 'Full Automation', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'OWASP Agentic Threats', nav: 'register', color: '#e11d48' },
+      { label: 'Real-Time Monitoring', nav: 'monitoring', color: '#f59e0b' },
+      { label: 'Third-Party Risk', nav: 'third-party', color: '#f59e0b' },
+      { label: 'Agent Profiles', nav: 'agent-profiles', color: '#8b5cf6' },
+      { label: 'OPA Policies', nav: 'policy-as-code', color: '#10b981' },
+    ]}
+  />
+);
+
+export const AISafetyGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use AI Safety"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Assess', desc: 'Read the RAI Coverage Rubric across AWS\'s 8 Responsible-AI dimensions, then decompose exposure with MAESTRO threat modeling.', color: '#4338ca' },
+      { step: '2', title: 'Prevent', desc: 'Gate deployment on the Frontier Capability Thresholds register — per-model CBRN/cyber/autonomy attestation (FMSF, RSP, Preparedness).', color: '#e11d48' },
+      { step: '3', title: 'Assure', desc: 'Evidence safety with GSN/CAE Safety Cases and continuous Red-Team & Safety Evals (HarmBench, WMDP, AILuminate, Cybench).', color: '#f59e0b' },
+      { step: '4', title: 'Respond', desc: 'Manage incidents and near-misses with EU AI Act Article 73 reporting clocks (2/10/15-day).', color: '#10b981' },
+    ]}
+    maturityStages={[
+      { stage: 'Aware', desc: 'RAI dimensions mapped, gaps visible', focus: 'Coverage Rubric', color: '#ef4444' },
+      { stage: 'Gated', desc: 'Frontier thresholds block risky deploys', focus: 'Capability Thresholds', color: '#f59e0b' },
+      { stage: 'Assured', desc: 'Safety cases + evals evidence each release', focus: 'Safety Cases', color: '#3b82f6' },
+      { stage: 'Responsive', desc: 'Incident clocks + near-miss learning loop', focus: 'Incident Management', color: '#10b981' },
     ]}
   />
 );
@@ -430,16 +525,22 @@ export const FleetOverviewGuide = ({ onNavigate }: { onNavigate?: (nav: string) 
     title="How to Use Fleet Overview"
     onNavigate={onNavigate}
     steps={[
-      { step: '1', title: 'View Fleet Health', desc: 'See aggregate metrics: total models, risk distribution, compliance scores.', color: '#4338ca' },
-      { step: '2', title: 'Identify Hot Spots', desc: 'Find models with highest risk, lowest compliance, or pending actions.', color: '#8b5cf6' },
-      { step: '3', title: 'Track Trends', desc: 'Monitor fleet-wide eval scores, drift signals, and cost trends over time.', color: '#a21caf' },
-      { step: '4', title: 'Drill Down', desc: 'Click any card or chart to navigate to detailed views.', color: '#ec4899' },
+      { step: '1', title: 'View Fleet Posture', desc: 'See 5-pillar control plane status, OWASP alignment, and emergency control readiness.', color: '#4338ca' },
+      { step: '2', title: 'Analyze Agent Chains', desc: 'Visualize agent execution paths with tools, MCP servers, IAM roles, network flows, and risk metrics (cascade, blast radius, human gates).', color: '#8b5cf6' },
+      { step: '3', title: 'Review Risk Heatmap', desc: 'Identify high-risk use cases across 5 dimensions with GO/NO GO decisions.', color: '#a21caf' },
+      { step: '4', title: 'Monitor Guardrails', desc: 'Track real-time guardrail metrics: blocked content, PII detections, grounding checks.', color: '#ec4899' },
     ]}
     maturityStages={[
-      { stage: 'Scattered', desc: 'Models exist, no central view', focus: 'Inventory', color: '#4338ca' },
-      { stage: 'Visible', desc: 'Fleet dashboard, basic metrics', focus: 'KPI Tracking', color: '#8b5cf6' },
-      { stage: 'Managed', desc: 'Trends tracked, hot spots flagged', focus: 'Trend Analysis', color: '#a21caf' },
-      { stage: 'Optimized', desc: 'Proactive management, auto-alerts', focus: 'Fleet Optimization', color: '#ec4899' },
+      { stage: 'Scattered', desc: 'Agents deployed, no visibility', focus: 'Agent Inventory', color: '#ef4444' },
+      { stage: 'Visible', desc: 'Fleet dashboard, basic chains', focus: 'Chain Visualization', color: '#f59e0b' },
+      { stage: 'Governed', desc: 'Risk metrics, human gates tracked', focus: 'Risk Analysis', color: '#3b82f6' },
+      { stage: 'Automated', desc: 'Circuit breakers, kill switches ready', focus: 'Emergency Controls', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'Agent Chain Analysis', nav: 'fleet', color: '#4338ca' },
+      { label: 'Risk Heatmap', nav: 'fleet', color: '#e11d48' },
+      { label: 'Emergency Controls', nav: 'fleet', color: '#f59e0b' },
+      { label: 'Guardrail Metrics', nav: 'fleet', color: '#10b981' },
     ]}
   />
 );
@@ -459,6 +560,314 @@ export const TrustStackGuide = ({ onNavigate }: { onNavigate?: (nav: string) => 
       { stage: 'Protected', desc: 'Guardrails active, basic policies', focus: 'Guardrail Config', color: '#8b5cf6' },
       { stage: 'Governed', desc: 'Full 3-layer coverage, audited', focus: 'Governance Layer', color: '#a21caf' },
       { stage: 'Integrated', desc: 'Layers connected, auto-enforced', focus: 'End-to-End Trust', color: '#ec4899' },
+    ]}
+  />
+);
+
+export const DataGovernanceGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Data Governance"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Assess Readiness', desc: 'Complete the 7-dimension AI Data Readiness assessment and maturity self-assessment.', color: '#22d3ee' },
+      { step: '2', title: 'Map Lineage', desc: 'Trace data from source systems through transformations to AI model consumption.', color: '#8b5cf6' },
+      { step: '3', title: 'Verify Provenance', desc: 'Ensure cryptographic integrity verification and chain of custody for all AI-feeding datasets.', color: '#ef4444' },
+      { step: '4', title: 'Assign Ownership', desc: 'Define domain stewards, data product SLAs, and cross-domain sharing agreements.', color: '#10b981' },
+    ]}
+    maturityStages={[
+      { stage: 'Initial', desc: 'Ad-hoc data handling, no lineage', focus: 'AI Readiness', color: '#ef4444', nav: '/govern/data/readiness' },
+      { stage: 'Developing', desc: 'Basic classification, manual tracking', focus: 'Lineage Mapping', color: '#f59e0b', nav: '/govern/data/lineage' },
+      { stage: 'Defined', desc: 'Automated quality rules, domain ownership', focus: 'Quality & Domains', color: '#3b82f6', nav: '/govern/data/quality' },
+      { stage: 'Optimizing', desc: 'Full lifecycle governance, AI-ready data', focus: 'Data Products', color: '#10b981', nav: '/govern/data/glossary' },
+    ]}
+  />
+);
+
+export const GuardrailsGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="Getting Started with Guardrails"
+    variant="landing"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Browse FSI Templates', desc: 'Explore 9 pre-configured templates aligned with FSI use cases (B01, R01, C01, etc.) and regulatory frameworks.', color: '#3b82f6' },
+      { step: '2', title: 'Create Guardrail', desc: 'Start from an FSI template or configure from scratch with content filters, PII detection, denied topics, and grounding.', color: '#8b5cf6' },
+      { step: '3', title: 'Deploy to Bedrock', desc: 'Push your guardrail configuration to AWS Bedrock Guardrails for real-time protection.', color: '#10b981' },
+      { step: '4', title: 'Monitor & Iterate', desc: 'Track guardrail events, blocked content, and PII detections in the Observability dashboard.', color: '#f59e0b' },
+    ]}
+    maturityStages={[
+      { stage: 'Unprotected', desc: 'No guardrails deployed', focus: 'FSI Templates', color: '#ef4444', nav: 'fsi-library' },
+      { stage: 'Basic', desc: 'Content filters active', focus: 'Create Guardrail', color: '#f59e0b', nav: 'create' },
+      { stage: 'Compliant', desc: 'PII, topics, grounding enabled', focus: 'Full Configuration', color: '#3b82f6', nav: 'create' },
+      { stage: 'Monitored', desc: 'Real-time observability, tuning', focus: 'Observability', color: '#10b981', nav: 'observability' },
+    ]}
+    quickLinks={[
+      { label: 'FSI Templates', nav: 'fsi-library', color: '#3b82f6' },
+      { label: 'Create Guardrail', nav: 'create', color: '#8b5cf6' },
+      { label: 'My Guardrails', nav: 'templates', color: '#10b981' },
+      { label: 'Observability', nav: 'observability', color: '#f59e0b' },
+    ]}
+  />
+);
+
+export const AgentRegistryGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Agent Registry"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Inventory Agents', desc: 'Every deployed agent with its scope level, owner, business purpose, rate limits, and incident history. Click a row for the full Agent 360.', color: '#4338ca' },
+      { step: '2', title: 'Review Providers', desc: 'See agent distribution across AWS, Azure, GCP, and SaaS platforms. Track governance status and costs by provider.', color: '#0078D4' },
+      { step: '3', title: 'Audit Permissions', desc: 'Use the matrix to verify agent→tool and agent-to-agent (A2A) authorization, plus user-rights propagation.', color: '#a21caf' },
+      { step: '4', title: 'Close Gaps', desc: 'Spot pending approvals, high-scope agents, and open incidents — then route shadow assets here to register them.', color: '#ec4899' },
+    ]}
+    maturityStages={[
+      { stage: 'Unknown', desc: 'Agents deployed, no inventory', focus: 'Registration', color: '#4338ca' },
+      { stage: 'Catalogued', desc: 'Agents listed with owners & scope', focus: 'Capabilities', color: '#8b5cf6' },
+      { stage: 'Multi-Provider', desc: 'Agents across AWS, Azure, GCP, SaaS', focus: 'Providers Tab', color: '#0078D4' },
+      { stage: 'Governed', desc: 'Full identity, approvals, incidents', focus: 'Continuous Oversight', color: '#ec4899' },
+    ]}
+  />
+);
+
+export const ShadowAIGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Shadow AI Detection"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Review Coverage', desc: 'See governed-vs-shadow coverage by asset type — every shadow asset is a gap between what is registered and what is running.', color: '#e11d48' },
+      { step: '2', title: 'Understand Signals', desc: 'Detection is a pipeline: CloudTrail, VPC Flow Logs, Macie, and Config feed EventBridge, which diffs against the Agent Registry.', color: '#f97316' },
+      { step: '3', title: 'Triage Findings', desc: 'Work detected assets by severity. Each shows the suspected owner, the AWS signal that found it, and the risk it poses.', color: '#f59e0b' },
+      { step: '4', title: 'Route to Governance', desc: 'Onboard legitimate assets via Service Approval, or block them — making the governed path the easy path.', color: '#8b5cf6' },
+    ]}
+    maturityStages={[
+      { stage: 'Blind', desc: 'No visibility into ungoverned AI', focus: 'Enable Signals', color: '#e11d48' },
+      { stage: 'Detecting', desc: 'CloudTrail & Config signals active', focus: 'Detection Sources', color: '#f59e0b' },
+      { stage: 'Triaging', desc: 'Findings worked by severity', focus: 'Remediation', color: '#3b82f6' },
+      { stage: 'Converging', desc: 'Governed path is the easy path', focus: 'Self-Service Onboarding', color: '#10b981' },
+    ]}
+  />
+);
+
+export const PolicyAsCodeGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Policy as Code"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Browse Policies', desc: 'View 15 OPA/Rego policies covering tool permissions, MCP allowlists, data classification, chain depth, and human oversight.', color: '#4338ca' },
+      { step: '2', title: 'Review Code', desc: 'Click any policy to see its Rego code with violation rules, remediation messages, and severity levels.', color: '#8b5cf6' },
+      { step: '3', title: 'Check Executions', desc: 'Monitor policy evaluation results — pass/fail/warn — across all agent deployments with remediation guidance.', color: '#a21caf' },
+      { step: '4', title: 'Integrate CI/CD', desc: 'Use the GitHub Actions / GitLab CI examples and Policy Check API to enforce governance gates before production.', color: '#10b981' },
+    ]}
+    maturityStages={[
+      { stage: 'Manual', desc: 'Ad-hoc policy checks', focus: 'Policy Library', color: '#ef4444' },
+      { stage: 'Defined', desc: 'Policies documented in code', focus: 'Rego Policies', color: '#f59e0b' },
+      { stage: 'Enforced', desc: 'CI/CD gates block violations', focus: 'Pipeline Integration', color: '#3b82f6' },
+      { stage: 'Automated', desc: 'Dynamic policy updates, auto-remediation', focus: 'Full GitOps', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'Tool Permissions', nav: 'policy-as-code', color: '#ef4444' },
+      { label: 'MCP Allowlist', nav: 'policy-as-code', color: '#f59e0b' },
+      { label: 'Data Classification', nav: 'policy-as-code', color: '#8b5cf6' },
+      { label: 'Human Oversight', nav: 'policy-as-code', color: '#10b981' },
+      { label: 'Chain Depth Limits', nav: 'policy-as-code', color: '#4338ca' },
+    ]}
+  />
+);
+
+export const WorkflowsGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Governance Workflows"
+    variant="submodule"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Select Workflow', desc: 'Choose from 9 pre-built workflows across Compliance, Security, Risk, Operations, and Data categories.', color: '#4338ca' },
+      { step: '2', title: 'Run Assessment', desc: 'Workflows analyze your live AVA data (guardrails, policies, use cases) and execute multi-step agent chains.', color: '#8b5cf6' },
+      { step: '3', title: 'Review Findings', desc: 'Each step surfaces actionable findings with severity levels and direct links to remediation pages.', color: '#a21caf' },
+      { step: '4', title: 'Export & Act', desc: 'Download JSON reports for evidence. Follow recommendations to close gaps and improve posture.', color: '#ec4899' },
+    ]}
+    maturityStages={[
+      { stage: 'Manual', desc: 'Ad-hoc checks, no automation', focus: 'Run First Workflow', color: '#4338ca' },
+      { stage: 'Simulated', desc: 'Workflows run with real data queries', focus: 'Review Findings', color: '#8b5cf6' },
+      { stage: 'Deployed', desc: 'Real agents via AgentCore/App Factory', focus: 'Deploy Agents', color: '#a21caf' },
+      { stage: 'Continuous', desc: 'Scheduled runs, auto-remediation', focus: 'Full Automation', color: '#ec4899' },
+    ]}
+    quickLinks={[
+      { label: 'App Factory', nav: '/applications/app-factory', color: '#10b981' },
+      { label: 'MCP Tools', nav: '/capabilities/tools', color: '#8b5cf6' },
+      { label: 'Compliance Center', nav: '/govern/compliance', color: '#4338ca' },
+      { label: 'Risk Management', nav: '/govern/risk', color: '#e11d48' },
+    ]}
+  />
+);
+
+export const HumanOversightGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Human Oversight"
+    variant="submodule"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Define HITL Gates', desc: 'Create gates that pause agent execution when risk thresholds, data sensitivity, or compliance requirements trigger.', color: '#f59e0b' },
+      { step: '2', title: 'Configure Approvers', desc: 'Assign primary approvers and escalation paths. Set timeout actions (auto-deny, escalate, or auto-approve).', color: '#ea580c' },
+      { step: '3', title: 'Integrate AWS Services', desc: 'Connect gates to Bedrock RETURN_CONTROL, A2I workflows, Step Functions callbacks, or SNS notifications.', color: '#dc2626' },
+      { step: '4', title: 'Monitor & Audit', desc: 'Track approval queue, response times, and decision history. Export audit trails for compliance evidence.', color: '#b91c1c' },
+    ]}
+    maturityStages={[
+      { stage: 'Manual', desc: 'Ad-hoc human reviews, no gates', focus: 'Define First Gate', color: '#f59e0b' },
+      { stage: 'Gated', desc: 'HITL gates active on high-risk actions', focus: 'AWS Integration', color: '#ea580c' },
+      { stage: 'Integrated', desc: 'Full AWS service integration (A2I, Step Functions)', focus: 'Escalation Paths', color: '#dc2626' },
+      { stage: 'Optimized', desc: 'Dynamic gates, SLA monitoring, continuous improvement', focus: 'Analytics & Tuning', color: '#b91c1c' },
+    ]}
+    quickLinks={[
+      { label: 'Agent Registry', nav: '/govern/agents', color: '#8b5cf6' },
+      { label: 'Risk Management', nav: '/govern/risk', color: '#e11d48' },
+      { label: 'A2A Governance', nav: '/govern/agents?tab=a2a', color: '#0891b2' },
+      { label: 'Compliance Center', nav: '/govern/compliance', color: '#4338ca' },
+    ]}
+  />
+);
+
+export const A2AGovernanceGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use A2A Governance"
+    variant="submodule"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Register Agents', desc: 'Add all agents to the trust network with type (orchestrator, supervisor, specialist, worker) and trust level.', color: '#0891b2' },
+      { step: '2', title: 'Define Trust Policies', desc: 'Create policies specifying which agents can invoke which, allowed actions, data classifications, and rate limits.', color: '#0d9488' },
+      { step: '3', title: 'Configure Protocols', desc: 'Set up message schemas, validation rules, and AWS service integrations (EventBridge, Step Functions, IAM).', color: '#059669' },
+      { step: '4', title: 'Monitor A2A Traffic', desc: 'Review audit trail for all inter-agent communications. Identify denied requests and policy violations.', color: '#047857' },
+    ]}
+    maturityStages={[
+      { stage: 'Unmanaged', desc: 'Agents communicate freely, no policies', focus: 'Inventory Agents', color: '#0891b2' },
+      { stage: 'Defined', desc: 'Trust policies established, basic controls', focus: 'Define Policies', color: '#0d9488' },
+      { stage: 'Enforced', desc: 'Policies enforced via IAM/EventBridge, violations blocked', focus: 'AWS Integration', color: '#059669' },
+      { stage: 'Governed', desc: 'Full observability, dynamic trust, continuous monitoring', focus: 'Analytics & Tuning', color: '#047857' },
+    ]}
+    quickLinks={[
+      { label: 'Agent Registry', nav: '/govern/agents', color: '#8b5cf6' },
+      { label: 'Human Oversight', nav: '/govern/agents?tab=human-oversight', color: '#f59e0b' },
+      { label: 'Fleet Overview', nav: '/govern/fleet', color: '#4338ca' },
+      { label: 'Policy as Code', nav: '/govern/risk', color: '#6366f1' },
+    ]}
+  />
+);
+
+export const CommandCenterGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Command Center"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Review Trust Score', desc: 'See the aggregated trust score across your AI fleet with breakdown by guardrails, policies, compliance, and security.', color: '#4338ca' },
+      { step: '2', title: 'Check Compliance', desc: 'View framework compliance status — SR 26-2, NIST AI RMF, EU AI Act, ISO 42001 — with quick links to gaps.', color: '#8b5cf6' },
+      { step: '3', title: 'Monitor Risk', desc: 'Track risk exposure metrics, active alerts, and OWASP Agentic AI threat coverage in real-time.', color: '#e11d48' },
+      { step: '4', title: 'Drill Down', desc: 'Click any metric card to navigate directly to the relevant governance module for detailed analysis.', color: '#ec4899' },
+    ]}
+    maturityStages={[
+      { stage: 'Blind', desc: 'No aggregated view, siloed metrics', focus: 'Deploy Command Center', color: '#ef4444' },
+      { stage: 'Visible', desc: 'Metrics aggregated, manual review', focus: 'Trust Score Tracking', color: '#f59e0b' },
+      { stage: 'Proactive', desc: 'Alerts configured, trends monitored', focus: 'Alert Configuration', color: '#3b82f6' },
+      { stage: 'Optimized', desc: 'Automated actions, predictive insights', focus: 'Full Automation', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'Fleet Overview', nav: '/govern/fleet', color: '#4338ca' },
+      { label: 'Risk Management', nav: '/govern/risk', color: '#e11d48' },
+      { label: 'Compliance Center', nav: '/govern/compliance', color: '#8b5cf6' },
+      { label: 'FinOps', nav: '/govern/finops', color: '#ec4899' },
+    ]}
+  />
+);
+
+export const ProvidersGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Providers"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Review Distribution', desc: 'See agent counts across AWS, Azure, GCP, ServiceNow, Salesforce, and other providers in one view.', color: '#FF9900' },
+      { step: '2', title: 'Check Governance', desc: 'Track compliance status by provider — identify which providers have agents needing review or blocked.', color: '#0078D4' },
+      { step: '3', title: 'Compare Costs', desc: 'Analyze monthly costs by provider to optimize spend and identify consolidation opportunities.', color: '#4285F4' },
+      { step: '4', title: 'Drill Into Details', desc: 'Click any provider to filter the Agents tab and see detailed per-agent metrics.', color: '#6366f1' },
+    ]}
+    maturityStages={[
+      { stage: 'Single Cloud', desc: 'Agents on one provider only', focus: 'Connect Providers', color: '#FF9900' },
+      { stage: 'Multi-Provider', desc: 'Agents across 2+ providers', focus: 'Unified Inventory', color: '#0078D4' },
+      { stage: 'Unified', desc: 'Single pane of glass, consistent policies', focus: 'Cross-Provider Policies', color: '#4285F4' },
+      { stage: 'Optimized', desc: 'Cost/performance optimization', focus: 'FinOps Integration', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'All Agents', nav: 'agents', color: '#8b5cf6' },
+      { label: 'Third-Party Risk', nav: '/govern/risk?tab=third-party', color: '#f59e0b' },
+      { label: 'Cost & FinOps', nav: '/govern/finops', color: '#ec4899' },
+    ]}
+  />
+);
+
+export const ThirdPartyRiskGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Third-Party Risk"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Review Vendors', desc: 'See all AI vendors (Anthropic, OpenAI, AWS Bedrock, etc.) with tier, status, and risk scores.', color: '#f59e0b' },
+      { step: '2', title: 'Check DDQ Status', desc: 'Track due diligence questionnaire completion — overdue DDQs are flagged for immediate action.', color: '#ea580c' },
+      { step: '3', title: 'Monitor Findings', desc: 'Review open findings and controls linked to third-party risks from the Risk Register.', color: '#dc2626' },
+      { step: '4', title: 'Manage Contracts', desc: 'Track contract expiry dates and schedule reassessments before renewals.', color: '#b91c1c' },
+    ]}
+    maturityStages={[
+      { stage: 'Ad-hoc', desc: 'No formal vendor tracking', focus: 'Add Vendors', color: '#ef4444' },
+      { stage: 'Registered', desc: 'Vendors tracked, basic contracts', focus: 'Complete DDQ', color: '#f59e0b' },
+      { stage: 'Assessed', desc: 'DDQ complete, risks documented', focus: 'Monitor Findings', color: '#3b82f6' },
+      { stage: 'Governed', desc: 'Continuous monitoring, exit plans ready', focus: 'Automate Alerts', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'Risk Register', nav: 'register', color: '#e11d48' },
+      { label: 'Controls', nav: 'controls', color: '#8b5cf6' },
+      { label: 'Agent Registry', nav: '/govern/agents', color: '#0ea5e9' },
+    ]}
+  />
+);
+
+export const MultiCloudGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Use Multi-Cloud Governance"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'View Overview', desc: 'See all providers (AWS, Azure, GCP, SaaS) with agent counts, costs, and compliance status at a glance.', color: '#FF9900' },
+      { step: '2', title: 'Compare Features', desc: 'Use the radar chart and matrix to compare guardrails, tracing, policy, and cost controls across providers.', color: '#0078D4' },
+      { step: '3', title: 'Plan Migrations', desc: 'Review migration scenarios with complexity assessments, considerations, and benefits for consolidation.', color: '#4285F4' },
+      { step: '4', title: 'Optimize Costs', desc: 'Identify consolidation savings, model optimization opportunities, and reserved capacity discounts.', color: '#10b981' },
+    ]}
+    maturityStages={[
+      { stage: 'Single Cloud', desc: 'Agents on one provider', focus: 'Inventory All', color: '#FF9900' },
+      { stage: 'Multi-Provider', desc: 'Agents across 2+ providers', focus: 'Unified View', color: '#0078D4' },
+      { stage: 'Unified Policies', desc: 'Consistent governance cross-cloud', focus: 'Cedar Policies', color: '#4285F4' },
+      { stage: 'Optimized', desc: 'Cost/performance balanced', focus: 'FinOps', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'Agent Registry', nav: '/govern/agents', color: '#8b5cf6' },
+      { label: 'Cost & FinOps', nav: '/govern/finops', color: '#ec4899' },
+      { label: 'Policies', nav: '/secure/policy', color: '#0ea5e9' },
+    ]}
+  />
+);
+
+export const AgenticCodingGuide = ({ onNavigate }: { onNavigate?: (nav: string) => void }) => (
+  <ModuleGuide
+    title="How to Govern Agentic Coding Tools"
+    onNavigate={onNavigate}
+    steps={[
+      { step: '1', title: 'Inventory Tools', desc: 'Discover all coding assistants in use — Claude Code, Kiro, Copilot, Cursor, Q Developer. Check sanctioned vs shadow usage.', color: '#8b5cf6' },
+      { step: '2', title: 'Verify API Routing', desc: 'Ensure tools route through governed APIs (Bedrock, Azure OpenAI). Direct API calls bypass guardrails and audit logging.', color: '#FF9900' },
+      { step: '3', title: 'Set Context Filters', desc: 'Exclude sensitive repos from AI context. Enable PII masking and secrets filtering to protect proprietary code.', color: '#ef4444' },
+      { step: '4', title: 'Enforce Policies', desc: 'Block unsanctioned tools, require enterprise tiers, set usage quotas. Route Claude Code through Bedrock for full governance.', color: '#10b981' },
+    ]}
+    maturityStages={[
+      { stage: 'Discovery', desc: 'Identify tools in use', focus: 'Shadow Detection', color: '#ef4444' },
+      { stage: 'Sanctioning', desc: 'Approve governed tools', focus: 'API Routing', color: '#f59e0b' },
+      { stage: 'Policy Enforcement', desc: 'Context filters active', focus: 'Exclusions', color: '#0ea5e9' },
+      { stage: 'Full Governance', desc: 'All tools through Bedrock', focus: 'Audit Complete', color: '#10b981' },
+    ]}
+    quickLinks={[
+      { label: 'Shadow AI', nav: '/govern/shadow-ai', color: '#ef4444' },
+      { label: 'Multi-Cloud', nav: '/govern/multi-cloud', color: '#0078D4' },
+      { label: 'Guardrails', nav: '/secure/guardrails', color: '#10b981' },
     ]}
   />
 );

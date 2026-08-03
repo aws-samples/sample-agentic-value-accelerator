@@ -19,7 +19,7 @@ const containerImageUri =
 const modelId =
   app.node.tryGetContext("modelId") ||
   process.env.MODEL_ID ||
-  "us.anthropic.claude-sonnet-4-20250514-v1:0";
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0";
 
 const deployRegion =
   app.node.tryGetContext("awsRegion") ||

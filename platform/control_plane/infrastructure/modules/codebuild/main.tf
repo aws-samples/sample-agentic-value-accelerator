@@ -268,6 +268,7 @@ resource "aws_iam_role_policy" "codebuild_iac_provisioning" {
           "elasticache:*",
           "rds:*",
           "rds-db:*",
+          "rds-data:*",
           "elasticfilesystem:*",
           "servicediscovery:*",
           "xray:*",
@@ -310,6 +311,45 @@ resource "aws_iam_role_policy" "codebuild_codecommit" {
 }
 
 # ============================================================================
+# Buildspec on S3 — escape hatch for the 25.6 KB inline buildspec limit
+# ============================================================================
+# CodeBuild inline buildspecs (source.buildspec = "<yaml>") are capped at
+# 25,600 bytes by the UpdateProject API. Sourcing from S3 raises the ceiling
+# to 1 MB. Terraform re-uploads on any content change (via filemd5), and
+# CodeBuild reads the current object version at build start — no manual
+# sync needed. IAM: the codebuild role already has `s3:*` via
+# codebuild_iac_provisioning, so no additional policy is required.
+
+resource "aws_s3_bucket" "buildspec" {
+  bucket        = "${var.name_prefix}-buildspec"
+  force_destroy = true
+  tags          = var.tags
+}
+
+resource "aws_s3_bucket_versioning" "buildspec" {
+  bucket = aws_s3_bucket.buildspec.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "buildspec" {
+  bucket                  = aws_s3_bucket.buildspec.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_object" "buildspec" {
+  bucket       = aws_s3_bucket.buildspec.id
+  key          = "deployment.yml"
+  content      = file("${path.module}/buildspec.yml")
+  content_type = "application/x-yaml"
+  etag         = filemd5("${path.module}/buildspec.yml")
+}
+
+# ============================================================================
 # CodeBuild Project
 # ============================================================================
 
@@ -345,11 +385,23 @@ resource "aws_codebuild_project" "deployment" {
       name  = "AGENT_REGISTRY_ARN"
       value = var.agent_registry_arn
     }
+
+    # FSI Foundry SSO — buildspec forwards these into ui_iac/deploy.auto.tfvars.
+    # Empty values keep JWT auth disabled for backward compatibility.
+    environment_variable {
+      name  = "AVA_FSI_APP_SIGNING_SECRET"
+      value = var.fsi_app_signing_secret
+    }
+
+    environment_variable {
+      name  = "AVA_UI_LOGIN_URL"
+      value = var.ava_ui_login_url
+    }
   }
 
   source {
     type      = "NO_SOURCE"
-    buildspec = file("${path.module}/buildspec.yml")
+    buildspec = "arn:aws:s3:::${aws_s3_bucket.buildspec.bucket}/${aws_s3_object.buildspec.key}"
   }
 
 

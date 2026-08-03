@@ -19,7 +19,7 @@
   "input_schema": {
     "id_field": "query",
     "id_label": "Search Query",
-    "id_placeholder": "e.g. anti-money laundering requirements",
+    "id_placeholder": "e.g. DOC001",
     "type_field": "document_type",
     "type_options": [
       {
@@ -48,9 +48,7 @@
       }
     ],
     "test_entities": [
-      "anti-money laundering requirements",
-      "KYC documentation standards",
-      "credit risk assessment procedures"
+      "DOC001"
     ]
   }
 }

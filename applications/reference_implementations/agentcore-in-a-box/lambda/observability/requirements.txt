@@ -1,0 +1,3 @@
+# Current boto3 for CloudWatch GetMetricData (Metrics Insights Expression queries).
+# PINNED EXACT for a reproducible bundle.
+boto3==1.43.42

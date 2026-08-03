@@ -196,8 +196,8 @@ export default function Prompts() {
       }} />
       <div className="relative max-w-7xl mx-auto px-6 py-10">
         <div className="mb-8 animate-fade-in">
-          <Link to="/capabilities" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Capabilities</Link>
-          <h1 className="text-3xl font-semibold text-slate-900 tracking-tight mt-3">Prompts</h1>
+          <Link to="/capabilities/prompts" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Prompts</Link>
+          <h1 className="text-3xl font-semibold text-slate-900 tracking-tight mt-3">Prompt Library</h1>
           <p className="text-slate-500 mt-2 max-w-2xl">
             Versioned, reusable prompt templates — system prompts, response patterns, evaluation rubrics, and guardrail clauses. Swap a prompt without redeploying an agent; every change is audited.
           </p>

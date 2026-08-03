@@ -3,6 +3,25 @@ import { useState } from 'react';
 import type { RuntimeConfig } from '../config';
 import type { MonitoringResponse } from '../types';
 
+function MarkdownBlock({ content }: { content: string }) {
+  if (!content) return null;
+  return (
+    <div className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-secondary)' }}>
+      {content.split('\n').map((line, i) => {
+        if (line.startsWith('###')) return <p key={i} className="font-bold mt-3 mb-1 text-xs uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>{line.replace(/^#{1,3}\s*/, '')}</p>;
+        if (line.startsWith('##')) return <p key={i} className="font-bold mt-3 mb-1" style={{ color: 'var(--text-primary)' }}>{line.replace(/^#{1,2}\s*/, '')}</p>;
+        if (line.startsWith('- **')) {
+          const parts = line.replace(/^- /, '').split('**');
+          return <p key={i} className="ml-4 mb-0.5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{parts[1]}</span>{parts[2]}</p>;
+        }
+        if (line.startsWith('- ')) return <p key={i} className="ml-4 mb-0.5">&bull; {line.slice(2)}</p>;
+        if (line.trim() === '') return <br key={i} />;
+        return <p key={i} className="mb-0.5">{line.replace(/\*\*(.*?)\*\*/g, '$1')}</p>;
+      })}
+    </div>
+  );
+}
+
 /* ---- Risk Score Gauge ---- */
 
 function RiskGauge({ score, level }: { score: number; level: string }) {
@@ -223,6 +242,69 @@ function Collapsible({ title, children, defaultOpen = false, delay = 0 }: { titl
    MAIN COMPONENT
    ============================================ */
 
+function normLevel(lvl: string | null | undefined): string {
+  if (!lvl) return 'MEDIUM';
+  const upper = lvl.toUpperCase();
+  const map: Record<string, string> = { INFO: 'LOW', WARNING: 'MEDIUM' };
+  return map[upper] || upper;
+}
+
+function parseFlat(obj: any) {
+  return {
+    risk_assessment: {
+      score: obj.risk_score || 0,
+      level: normLevel(obj.risk_level),
+      factors: obj.risk_factors || [],
+      recommendations: obj.recommended_actions || [],
+    },
+    alerts: (obj.alerts || []).map((a: any, i: number) => {
+      if (typeof a === 'string') {
+        const match = a.match(/^(CRITICAL|HIGH|MEDIUM|WARNING|LOW|INFO)\s*[-:]\s*/i);
+        const severity = match ? match[1] : 'MEDIUM';
+        const description = match ? a.slice(match[0].length) : a;
+        return { alert_id: `ALERT-${i + 1}`, severity: normLevel(severity), description, evidence: [], recommended_actions: [] };
+      }
+      return { ...a, severity: normLevel(a?.severity), evidence: a?.evidence || [], recommended_actions: a?.recommended_actions || [] };
+    }),
+    summary: obj.summary || '',
+  };
+}
+
+function normalizeResponse(response: any) {
+  const r = response as any;
+
+  // Shape C: MonitoringResponse where summary is a JSON string (extract_json failed in backend)
+  if (typeof r.summary === 'string' && r.summary.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(r.summary);
+      if (parsed.risk_score !== undefined || parsed.risk_level !== undefined) {
+        return parseFlat(parsed);
+      }
+    } catch { /* not JSON, fall through */ }
+  }
+
+  // Shape B: flat synthesis at top level
+  if (r.risk_score !== undefined || r.risk_level !== undefined) {
+    return parseFlat(r);
+  }
+
+  // Shape A: proper MonitoringResponse
+  const _ra = r.risk_assessment || {};
+  return {
+    risk_assessment: { score: 0, level: 'MEDIUM', factors: [], recommendations: [], ..._ra, level: normLevel(_ra?.level) },
+    alerts: (r.alerts || []).map((a: any, i: number) => {
+      if (typeof a === 'string') {
+        const match = a.match(/^(CRITICAL|HIGH|MEDIUM|WARNING|LOW|INFO)\s*[-:]\s*/i);
+        const severity = match ? match[1] : 'MEDIUM';
+        const description = match ? a.slice(match[0].length) : a;
+        return { alert_id: `ALERT-${i + 1}`, severity: normLevel(severity), description, evidence: [], recommended_actions: [] };
+      }
+      return { ...a, severity: normLevel(a?.severity), evidence: a?.evidence || [], recommended_actions: a?.recommended_actions || [] };
+    }),
+    summary: r.summary || '',
+  };
+}
+
 function ResultsPanelInternal({
   response,
   config,
@@ -232,8 +314,7 @@ function ResultsPanelInternal({
   config: RuntimeConfig;
   elapsed: number;
 }) {
-  const { risk_assessment: _ra = {}, alerts = [], summary = '' } = response as any;
-  const risk_assessment = { score: 0, level: 'MEDIUM', factors: [], recommendations: [], ..._ra };
+  const { risk_assessment, alerts, summary } = normalizeResponse(response);
 
   return (
     <div className="space-y-5">

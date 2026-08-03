@@ -235,6 +235,50 @@ resource "aws_dynamodb_table" "guardrails" {
 }
 
 # ============================================================================
+# Policies Table — AgentCore resource-level operational policies
+# ============================================================================
+
+resource "aws_dynamodb_table" "policies" {
+  name         = "${var.name_prefix}-policies"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-policies"
+  })
+}
+
+# ============================================================================
 # Prioritization Table — use cases + scores for the Plan / Prioritization page
 # ============================================================================
 
@@ -367,6 +411,36 @@ resource "aws_dynamodb_table" "business_cases" {
 }
 
 # ============================================================================
+# Knowledge Registry Table
+# ============================================================================
+
+resource "aws_dynamodb_table" "knowledge" {
+  name         = "${var.name_prefix}-knowledge"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-knowledge"
+  })
+}
 # Operating Model Table — Plan / Operating Model page
 # ============================================================================
 
@@ -407,5 +481,49 @@ resource "aws_dynamodb_table" "operating_model" {
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-operating-model"
+  })
+}
+
+# ============================================================================
+# Organization Design Table — Plan / Organization Design page
+# ============================================================================
+
+resource "aws_dynamodb_table" "organization_design" {
+  name         = "${var.name_prefix}-organization-design"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-organization-design"
   })
 }

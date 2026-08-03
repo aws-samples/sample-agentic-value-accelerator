@@ -1,0 +1,75 @@
+{
+  "account_id": "A160",
+  "customer_name": "Priya Nair",
+  "account_type": "personal_checking",
+  "risk_profile": "low",
+  "opened_date": "2019-09-30",
+  "home_country": "US",
+  "home_city": "Denver",
+  "baseline": {
+    "typical_transaction_amount": 300.0,
+    "typical_weekly_count": 5,
+    "typical_networks": [
+      "ach",
+      "card"
+    ]
+  },
+  "scenario": "clean",
+  "scenario_note": "Payroll deposit and a fuel purchase from home region. Control account expected to score low (approve).",
+  "expected_assessment": {
+    "fraud_score": 0.05,
+    "risk_level": "low",
+    "decision": "approve",
+    "reason_tags": []
+  },
+  "flagged_patterns": [],
+  "transactions": [
+    {
+      "transaction_id": "TXN_OK_4",
+      "account_id": "A160",
+      "timestamp": "2026-06-12T09:15:00Z",
+      "amount": 1200.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "EMP01",
+        "name": "Acme Payroll",
+        "account_number_masked": "****9001",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-3434",
+      "ip_address": "192.0.2.160",
+      "geo": {
+        "country": "US",
+        "city": "Denver",
+        "lat": 39.74,
+        "lon": -104.99
+      }
+    },
+    {
+      "transaction_id": "TXN_OK_5",
+      "account_id": "A160",
+      "timestamp": "2026-06-14T16:22:00Z",
+      "amount": 88.4,
+      "currency": "USD",
+      "network": "card",
+      "counterparty": {
+        "counterparty_id": "M003",
+        "name": "Gas N Go",
+        "account_number_masked": "****1003",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-android-3434",
+      "ip_address": "192.0.2.160",
+      "geo": {
+        "country": "US",
+        "city": "Denver",
+        "lat": 39.74,
+        "lon": -104.99
+      },
+      "merchant_category_code": "5541"
+    }
+  ]
+}

@@ -107,29 +107,16 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = true
 }
 
-# CloudFront will access this bucket via OAC
-resource "aws_s3_bucket_policy" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-  policy = data.aws_iam_policy_document.frontend_bucket_policy.json
-}
+# Frontend bucket policy is owned by the cloudfront module
+# (modules/cloudfront/main.tf → aws_s3_bucket_policy.frontend_cloudfront).
+# That policy locks s3:GetObject to specific CloudFront distribution ARNs
+# via AWS:SourceArn — preserving OAC security. Removed from this module
+# to avoid two terraform-managed policies fighting over the same bucket.
 
-data "aws_iam_policy_document" "frontend_bucket_policy" {
-  statement {
-    sid    = "AllowCloudFrontOAC"
-    effect = "Allow"
-
-    principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
-    }
-
-    actions = [
-      "s3:GetObject"
-    ]
-
-    resources = [
-      "${aws_s3_bucket.frontend.arn}/*"
-    ]
+removed {
+  from = aws_s3_bucket_policy.frontend
+  lifecycle {
+    destroy = false
   }
 }
 

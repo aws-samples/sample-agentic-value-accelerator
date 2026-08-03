@@ -3,6 +3,14 @@ import { useState } from 'react';
 import type { RuntimeConfig } from '../config';
 import type { SupportResponse } from '../types';
 
+
+function normLevel(lvl: string | null | undefined): string {
+  if (!lvl) return 'MEDIUM';
+  const upper = lvl.toUpperCase();
+  const map: Record<string, string> = { INFO: 'LOW', WARNING: 'MEDIUM' };
+  return map[upper] || upper;
+}
+
 /* ---- Urgency Badge ---- */
 
 function UrgencyBadge({ urgency }: { urgency: string }) {

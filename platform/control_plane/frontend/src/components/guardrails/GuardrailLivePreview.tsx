@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Icon } from '../govern/icons';
 import type { ContentFilterConfig, PiiEntityConfig, DeniedTopic, WordFilterConfig, ContextualGroundingConfig, GuardrailFilterType } from '../../types';
 
 interface Props {
@@ -25,7 +26,7 @@ const SAMPLE_MESSAGES = [
   },
   {
     role: 'assistant' as const,
-    text: `I'd be happy to help with your transfer. I can see your card ending in 6789. Let me also confirm — your email is john.smith@bankofamerica.com and your phone is (555) 234-8901, correct? I'll process the wire to the recipient's account.`,
+    text: `I'd be happy to help with your transfer. I can see your card ending in 6789. Let me also confirm — your email is john.smith@examplebank.com and your phone is (555) 234-8901, correct? I'll process the wire to the recipient's account.`,
     avatar: 'A',
   },
   {
@@ -288,10 +289,10 @@ export default function GuardrailLivePreview({ contentFilters, piiEntities, deni
                           const colors = getTypeColor(seg.type);
                           return (
                             <span key={j} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase ${colors.bg} ${colors.text} border ${colors.border}`}>
-                              {seg.type === 'pii' && '🔒'}
-                              {seg.type === 'content' && '🛡️'}
-                              {seg.type === 'topic' && '🚫'}
-                              {seg.type === 'word' && '💬'}
+                              {seg.type === 'pii' && <Icon name="lock-closed" className="w-2.5 h-2.5" />}
+                              {seg.type === 'content' && <Icon name="shield-check" className="w-2.5 h-2.5" />}
+                              {seg.type === 'topic' && <Icon name="no-symbol" className="w-2.5 h-2.5" />}
+                              {seg.type === 'word' && <Icon name="chat-bubble" className="w-2.5 h-2.5" />}
                               {seg.category}
                             </span>
                           );

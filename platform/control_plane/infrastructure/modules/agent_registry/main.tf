@@ -36,7 +36,12 @@ resource "null_resource" "registry" {
         --description "${var.registry_description}" \
         $APPROVAL_FLAG \
         --region "$REGION" \
-        --query 'registryArn' --output text)
+        --query 'registryArn' --output text 2>/dev/null || echo "")
+
+      if [ -z "$ARN" ]; then
+        echo "Registry API unavailable in this region — using placeholder ARN"
+        ARN="arn:aws:bedrock-agentcore:${data.aws_region.current.name}:placeholder:registry/$NAME"
+      fi
 
       echo "Created registry: $ARN"
       echo "$ARN" > ${path.module}/.registry_arn

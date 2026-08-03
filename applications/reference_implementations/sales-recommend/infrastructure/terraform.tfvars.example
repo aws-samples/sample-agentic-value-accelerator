@@ -1,0 +1,11 @@
+# FOR LOCAL DEVELOPMENT ONLY.
+# When deployed via AVA Control Plane, these are injected automatically
+# from the deployment form (deployment.json parameters).
+
+aws_region           = "us-east-1"
+project_name         = "sales-recommend"
+environment          = "prod"
+knowledge_base_id    = "H1LK4MDM6O"
+model_id             = "global.anthropic.claude-sonnet-4-6"
+basic_auth_username  = "admin"
+basic_auth_password  = "changeme"   # Override for local testing only

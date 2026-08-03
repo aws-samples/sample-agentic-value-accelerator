@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import Drawer from './Drawer';
 import { MODELS, MODEL_DETAILS, tooltipStyle, AI_GOVERNANCE_GATES } from './mockData';
+import { Icon } from './icons';
 
 const READINESS_DIMENSIONS = [
   { key: 'compliance', label: 'Compliance', fullMark: 100 },
@@ -64,7 +65,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
       {model && detail && (
         <div className="space-y-5">
           {/* Consolidated Model Overview Table */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
             <table className="w-full text-xs">
               <tbody className="divide-y divide-slate-100">
                 {/* Row 1: Core Identity */}
@@ -141,7 +142,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
                   <td className="px-3 py-2 text-slate-500 font-medium">EU AI Act</td>
                   <td className="px-3 py-2">
                     <span className="text-[10px] font-medium text-slate-700">{detail.attestation.euAiAct.classification}</span>
-                    {detail.attestation.euAiAct.documented && <span className="text-emerald-500 ml-1">✓</span>}
+                    {detail.attestation.euAiAct.documented && <Icon name="check" className="w-3 h-3 text-emerald-500 ml-1 inline-block" />}
                   </td>
                 </tr>
                 {/* Row 8: Readiness & Compliance Summary */}
@@ -159,10 +160,10 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
                     <td className="px-3 py-2 text-slate-500 font-medium">Attestation</td>
                     <td className="px-3 py-2">
                       <span className={detail.attestation.sr26_2.attested ? 'text-emerald-600' : 'text-amber-600'}>
-                        SR 26-2 {detail.attestation.sr26_2.attested ? '✓' : '○'}
+                        SR 26-2 {detail.attestation.sr26_2.attested ? <Icon name="check" className="w-3 h-3 inline-block" /> : <Icon name="circle" className="w-3 h-3 inline-block" />}
                       </span>
                       <span className={`ml-2 ${detail.attestation.modelCard.complete ? 'text-emerald-600' : 'text-amber-600'}`}>
-                        Card {detail.attestation.modelCard.complete ? '✓' : '○'}
+                        Card {detail.attestation.modelCard.complete ? <Icon name="check" className="w-3 h-3 inline-block" /> : <Icon name="circle" className="w-3 h-3 inline-block" />}
                       </span>
                     </td>
                   </tr>
@@ -204,7 +205,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
           {/* Compact Readiness Radar + Risk Controls Side by Side */}
           {detail.readiness && detail.riskProfile && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-3">
                 <div className="text-xs font-semibold text-slate-900 mb-2">Model 360 Readiness</div>
                 <ResponsiveContainer width="100%" height={140}>
                   <RadarChart data={READINESS_DIMENSIONS.map(d => ({
@@ -219,13 +220,13 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-3">
                 <div className="text-xs font-semibold text-slate-900 mb-2">Mitigating Controls</div>
                 <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
                   {detail.riskProfile.controls.map((ctrl, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${controlStatusStyle[ctrl.status]}`}>
-                        {ctrl.status === 'active' ? '✓' : ctrl.status === 'planned' ? '◐' : '○'}
+                        {ctrl.status === 'active' ? <Icon name="check" className="w-2.5 h-2.5" /> : ctrl.status === 'planned' ? <Icon name="circle-half" className="w-2.5 h-2.5" /> : <Icon name="circle" className="w-2.5 h-2.5" />}
                       </span>
                       <span className="text-[10px] text-slate-700 flex-1 truncate">{ctrl.name}</span>
                       {ctrl.status === 'active' && ctrl.mitigation > 0 && (
@@ -240,7 +241,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
 
           {/* Evaluation & Drift Charts - Side by Side */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl border border-slate-200 p-3">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-3">
               <div className="text-xs font-semibold text-slate-900 mb-2">Evaluation History</div>
               <ResponsiveContainer width="100%" height={120}>
                 <LineChart data={detail.evalHistory}>
@@ -259,7 +260,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
                 <span className="text-[9px] text-amber-600">● Latency</span>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 p-3">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-3">
               <div className="text-xs font-semibold text-slate-900 mb-2">Drift Signals (6-week)</div>
               <ResponsiveContainer width="100%" height={120}>
                 <BarChart data={detail.driftSignals}>
@@ -301,7 +302,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
               })}
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm divide-y divide-slate-100">
               {detail.approvalChain.map((a, i) => {
                 const gateInfo = AI_GOVERNANCE_GATES.find(g => g.gate === a.step);
                 const isAIGov = a.approver === 'AI Governance';
@@ -334,7 +335,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
                             a.status === 'approved' ? 'bg-emerald-50 text-emerald-600' :
                             a.status === 'pending' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-500'
                           }`}>
-                            {a.status === 'approved' ? '✓ ' : ''}{check.check.split('(')[0].trim()}
+                            {a.status === 'approved' && <Icon name="check" className="w-2.5 h-2.5 inline-block mr-0.5" />}{check.check.split('(')[0].trim()}
                           </span>
                         ))}
                         {gateInfo.checks.length > 4 && (
@@ -350,7 +351,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
 
           {/* Lifecycle Evidence - Compact Horizontal */}
           {detail.lifecycleEvidence && (
-            <div className="bg-white rounded-xl border border-slate-200 p-3">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-3">
               <div className="text-xs font-semibold text-slate-900 mb-2">Lifecycle Evidence</div>
               <div className="flex items-center gap-2">
                 {detail.lifecycleEvidence.map((stage, i) => {
@@ -362,7 +363,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
                       <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-bold ${
                         complete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                       }`}>
-                        {complete ? '✓' : `${collected}/${total}`}
+                        {complete ? <Icon name="check" className="w-4 h-4" /> : `${collected}/${total}`}
                       </div>
                       <div className="text-[10px] text-slate-600 mt-1">{stage.stage}</div>
                     </div>
@@ -374,7 +375,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
 
           {/* OSFI E-23 Inventory - Collapsible Summary */}
           {detail.osfiInventory && (
-            <details className="bg-white rounded-xl border border-slate-200">
+            <details className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm">
               <summary className="px-3 py-2 cursor-pointer flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-slate-900">OSFI E-23 Inventory</span>
@@ -408,7 +409,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
 
           {/* MRM Override Tracker - Compact */}
           {detail.overrides && detail.overrides.length > 0 && (
-            <details className="bg-white rounded-xl border border-slate-200">
+            <details className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm">
               <summary className="px-3 py-2 cursor-pointer flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-slate-900">Override & Exception Log</span>
@@ -473,7 +474,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
                         isCurrent ? 'bg-amber-500 text-white' :
                         'bg-slate-200 text-slate-500'
                       }`}>
-                        {isComplete ? '✓' : i + 1}
+                        {isComplete ? <Icon name="check" className="w-3 h-3" /> : i + 1}
                       </div>
                       {i < 3 && <div className={`flex-1 h-0.5 mx-1 ${isComplete ? 'bg-emerald-300' : 'bg-slate-200'}`} />}
                     </div>
@@ -503,7 +504,7 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
           )}
 
           {/* Use cases - Compact */}
-          <details className="bg-white rounded-xl border border-slate-200" open>
+          <details className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm" open>
             <summary className="px-3 py-2 cursor-pointer flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-900">Use Cases</span>
               <span className="text-[10px] text-slate-500">{detail.useCasesList.length} total</span>

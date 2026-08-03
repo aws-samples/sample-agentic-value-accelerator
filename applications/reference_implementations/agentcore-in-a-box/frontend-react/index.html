@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentCore in a Box</title>
+    <!-- Archivo (editorial grotesk · UI + display) + IBM Plex Mono (tabular data/tickers). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- No-flash theme + persona: the crafted PAPER look is the default (base :root); dark is
+         an opt-in companion applied via a `.dark` class. Apply the persisted theme + persona
+         accent-palette class before paint so there's no flash of the wrong colors.
+         capital_markets (default) uses the base :root tokens, so it gets no persona class. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('meridian-theme') || 'light';
+          document.documentElement.classList.toggle('dark', t === 'dark');
+          var p = localStorage.getItem('meridian-persona');
+          if (p && p !== 'capital_markets') document.documentElement.classList.add('persona-' + p);
+          // Set the tab title to the persisted desk's firm before React mounts, so a
+          // non-Meridian desk doesn't flash "Meridian". React re-asserts this on mount
+          // and on every persona switch (personaContext.tsx). Keep these firm names in
+          // lockstep with personas.ts.
+          var FIRMS = {
+            insurance: 'Ridgeline Mutual',
+            banking: 'Rampart Financial',
+            fintech: 'Kairo',
+          };
+          if (p && FIRMS[p]) document.title = FIRMS[p];
+        } catch (e) {}
+      })();
+    </script>
+    <!-- Runtime config (window.APP_CONFIG) MUST load before the bundle. Vite copies
+         files in public/ verbatim into dist/, and deploy.sh overwrites dist/config.js
+         per DEMO_ENV after the stack is deployed. -->
+    <script src="/config.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

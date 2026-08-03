@@ -2,6 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { deploymentsApi } from '../api/client';
 import type { Deployment, AppUseCase, ScriptTestResponse, TestDeploymentResponse } from '../types';
 import LoadingSpinner from './LoadingSpinner';
+// Route "Open Application" through openFsiApp so the AVA CP mints an HMAC-signed
+// ?ava_token= handoff — same as the tile-side buttons. Without this, apps that
+// enforce edge auth would redirect to the AVA login instead of setting the
+// session cookie.
+import { openFsiApp } from '../lib/fsiAppLink';
 
 type TabId = 'cli' | 'script' | 'custom' | 'app';
 
@@ -991,7 +996,7 @@ bash ${scriptPath}`;
               </div>
 
               <button
-                onClick={() => window.open(frontendUrl, '_blank')}
+                onClick={() => openFsiApp(frontendUrl)}
                 className="w-full py-3 px-4 rounded-lg font-medium text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors inline-flex items-center justify-center gap-2"
               >
                 Open Application

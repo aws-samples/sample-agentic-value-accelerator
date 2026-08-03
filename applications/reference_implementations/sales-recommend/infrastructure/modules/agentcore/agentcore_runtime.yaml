@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Sales Recommend — AgentCore Runtime (Streaming Strands Agent)'
+
+Parameters:
+  AgentName:
+    Type: String
+    Description: Name of the AgentCore runtime
+
+  RoleArn:
+    Type: String
+    Description: ARN of the IAM role for AgentCore runtime
+
+  ECRRepository:
+    Type: String
+    Description: ECR repository URI for container image
+
+  ImageTag:
+    Type: String
+    Default: latest
+    Description: Container image tag (tag@digest for immutable pinning)
+
+  BedrockModelId:
+    Type: String
+    Default: global.anthropic.claude-sonnet-4-6
+    Description: Bedrock model ID
+
+  KnowledgeBaseId:
+    Type: String
+    Description: Bedrock Knowledge Base ID
+
+  AwsRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS region
+
+  Environment:
+    Type: String
+    Default: prod
+    Description: Environment name
+
+Resources:
+  AgentCoreRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Ref AgentName
+      Description: !Sub 'AWS Solutions Advisor - streaming agent (${Environment})'
+      RoleArn: !Ref RoleArn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Sub '${ECRRepository}:${ImageTag}'
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      EnvironmentVariables:
+        DEPLOYMENT_MODE: agentcore
+        AWS_REGION: !Ref AwsRegion
+        KNOWLEDGE_BASE_ID: !Ref KnowledgeBaseId
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        APP_ENV: !Ref Environment
+        AGENT_NAME: sales_recommend
+      Tags:
+        Name: !Sub '${AgentName}-agentcore-runtime'
+        Environment: !Ref Environment
+        Project: sales-recommend
+
+Outputs:
+  AgentRuntimeId:
+    Description: ID of the AgentCore Runtime
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeId
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeId'
+
+  AgentRuntimeArn:
+    Description: ARN of the AgentCore Runtime
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeArn
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeArn'

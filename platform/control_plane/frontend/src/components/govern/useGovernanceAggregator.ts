@@ -21,6 +21,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   guardrailsApi,
+  guardrailValidationApi,
   deploymentsApi,
   prioritizationApi,
   maturityApi,
@@ -28,18 +29,31 @@ import {
   businessCasesApi,
   operatingModelApi,
   serviceApprovalApi,
+  policiesApi,
+  governAgentCoreApi,
+  type AwsDiscoveredAgentsResponse,
 } from '../../api/client';
-import type { UseCase, BusinessCase, OperatingModel, FrontierAgentCatalogEntry } from '../../api/client';
-import type { GuardrailTemplate, Deployment, ServiceApprovalRun, GuardrailMetrics } from '../../types';
+import type { UseCase, BusinessCase, OperatingModel, FrontierAgentCatalogEntry, PolicyRecord } from '../../api/client';
+import type { GuardrailTemplate, Deployment, ServiceApprovalRun, GuardrailMetrics, GuardrailValidationSummary } from '../../types';
 import {
   COMPLIANCE_FRAMEWORKS,
-  AGENT_RISK,
-  RISK_CATEGORIES,
   COST_BY_MODEL,
   BU_BUDGETS,
   ANOMALY_ALERTS,
   INCIDENT_SUMMARY,
 } from './mockData';
+import { costInputStore, computeExpectedCost, isPricedModelId, PRICED_MODEL_LABELS } from './finops/expectedCost';
+
+// Real risk categories from AVA's prioritization scoring framework
+export const USE_CASE_RISK_CATEGORIES = [
+  'Regulatory',
+  'Data Privacy',
+  'Ethical/Bias',
+  'Model Reliability',
+  'Autonomy Risk',
+] as const;
+
+export type UseCaseRiskCategory = typeof USE_CASE_RISK_CATEGORIES[number];
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -60,6 +74,8 @@ export interface GovernanceSummary {
   modelsInProduction: number;
   modelsPendingReview: number;
   totalAgents: number;
+  bedrockAgents: number;
+  agentcoreRuntimes: number;
   agentsWithPolicies: number;
 
   // Guardrails (REAL DATA)
@@ -90,6 +106,12 @@ export interface GovernanceSummary {
   recentDeployments: number;
   recentApprovals: number;
   recentGuardrailBlocks: number;
+
+  // Guardrail Validation (test results)
+  validationPassRate: number;
+  validationFailedTests: number;
+  validationCriticalFailures: number;
+  validationLastRun?: string;
 }
 
 export interface PipelineHealth {
@@ -138,6 +160,20 @@ export interface FrontierAgentSummary {
   status: string;
 }
 
+export interface PolicySummary {
+  policy_id: string;
+  name: string;
+  description: string | null;
+  resource_type: 'agent' | 'gateway' | 'tool';
+  resource_id: string | null;
+  status: 'draft' | 'active' | 'disabled';
+  rules_count: number;
+  blocking_rules: number;
+  triggered_count: number;
+  last_triggered: string | null;
+  created_at: string;
+}
+
 export interface DeploymentSummary {
   deployment_id: string;
   deployment_name: string;
@@ -156,6 +192,7 @@ export interface GovernanceAggregatorResult {
 
   // Real data from APIs
   guardrails: GuardrailSummary[];
+  policies: PolicySummary[];
   deployments: DeploymentSummary[];
   useCases: UseCase[];
   businessCases: BusinessCase[];
@@ -169,18 +206,96 @@ export interface GovernanceAggregatorResult {
     anonymizedCount: number;
     blockRate: number;
   };
+  policyMetricsTotal: {
+    totalPolicies: number;
+    activePolicies: number;
+    draftPolicies: number;
+    disabledPolicies: number;
+    totalRules: number;
+    blockingRules: number;
+    totalTriggers: number;
+  };
 
-  // Mock data (still needed)
-  riskHeatmap: { agent: string; scores: number[] }[];
-  riskCategories: readonly string[];
+  // Real risk data from use cases
+  useCaseRiskHeatmap: UseCaseRiskHeatmapRow[];
+  useCaseRiskCategories: readonly string[];
+  topRiskyUseCases: TopRiskyUseCase[];
+
+  // Trend data (computed from real metrics where available)
+  trendData30d: TrendDataPoint[];
+
+  // Governance Control Checklist (real data)
+  controlChecklist: GovernanceControl[];
+  controlStats: {
+    implemented: number;
+    total: number;
+    percentage: number;
+  };
+
+  // Guardrail Validation data
+  guardrailValidation: GuardrailValidationSummary | null;
+
+  // Mock data (still needed for some views)
   complianceFrameworks: typeof COMPLIANCE_FRAMEWORKS;
   costByModel: typeof COST_BY_MODEL;
   buBudgets: typeof BU_BUDGETS;
 
+  // Expected-cost roll-up across use cases that have a cost model (real Plan→FinOps join).
+  expectedCost: {
+    totalMonthly: number;
+    totalAnnual: number;
+    useCasesWithEstimate: number;
+    byModel: { modelId: string; modelName: string; monthly: number; useCases: number }[];
+  };
+
   refresh: () => void;
 }
 
+export interface GovernanceControl {
+  id: string;
+  name: string;
+  description: string;
+  category: 'technical' | 'process' | 'governance' | 'security';
+  implemented: boolean;
+  details?: string;
+  action?: string;
+  link?: string;
+}
+
+export interface TrendDataPoint {
+  day: number;
+  date: string;
+  trustScore: number;
+  guardrailHits: number;
+  violations: number;
+}
+
+export interface UseCaseRiskHeatmapRow {
+  useCaseId: string;
+  name: string;
+  status: string;
+  goNoGo: string;
+  scores: number[];  // Maps to USE_CASE_RISK_CATEGORIES order
+  compositeRisk: number;
+}
+
+export interface TopRiskyUseCase {
+  useCaseId: string;
+  name: string;
+  riskScore: number;
+  status: string;
+  goNoGo: string;
+  businessDomain: string;
+}
+
 // ─────────────────────────── Helper ───────────────────────────
+
+// Deterministic [0,1) pseudo-noise from an integer seed — keeps simulated
+// trend history stable across renders (no Math.random).
+function trendNoise(i: number): number {
+  const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
 
 function featureSummary(t: GuardrailTemplate): string[] {
   const features: string[] = [];
@@ -208,7 +323,10 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
   const [businessCases, setBusinessCases] = useState<BusinessCase[]>([]);
   const [operatingModels, setOperatingModels] = useState<OperatingModel[]>([]);
   const [serviceApprovalRuns, setServiceApprovalRuns] = useState<ServiceApprovalRun[]>([]);
-  
+  const [guardrailValidation, setGuardrailValidation] = useState<GuardrailValidationSummary | null>(null);
+  const [policyRecords, setPolicyRecords] = useState<PolicyRecord[]>([]);
+  const [awsAgents, setAwsAgents] = useState<AwsDiscoveredAgentsResponse | null>(null);
+
   // Load all data from AVA APIs
   useEffect(() => {
     const loadData = async () => {
@@ -226,6 +344,9 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
           businessCasesRes,
           operatingModelsRes,
           serviceApprovalRes,
+          validationRes,
+          policiesRes,
+          awsAgentsRes,
         ] = await Promise.allSettled([
           guardrailsApi.list(),
           deploymentsApi.list(),
@@ -235,6 +356,9 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
           businessCasesApi.list(),
           operatingModelApi.list(),
           serviceApprovalApi.list(),
+          guardrailValidationApi.getSummary(),
+          policiesApi.list(),
+          governAgentCoreApi.agents(),
         ]);
 
         // Process results (handle failures gracefully)
@@ -261,7 +385,16 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
         if (serviceApprovalRes.status === 'fulfilled') {
           setServiceApprovalRuns(serviceApprovalRes.value);
         }
-        
+        if (validationRes.status === 'fulfilled') {
+          setGuardrailValidation(validationRes.value);
+        }
+        if (policiesRes.status === 'fulfilled') {
+          setPolicyRecords(policiesRes.value);
+        }
+        if (awsAgentsRes.status === 'fulfilled') {
+          setAwsAgents(awsAgentsRes.value);
+        }
+
         // Fetch metrics for active guardrails (in parallel, non-blocking)
         const guardrailsWithIds = activeGuardrails.filter(g => g.guardrail_id && g.status === 'active');
         if (guardrailsWithIds.length > 0) {
@@ -320,6 +453,42 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       blockRate: totalInvocations > 0 ? (blockedCount / totalInvocations) * 100 : 0,
     };
   }, [guardrailMetrics]);
+
+  // Transform policies for display
+  const policies = useMemo<PolicySummary[]>(() => {
+    return policyRecords.map(p => ({
+      policy_id: p.policy_id,
+      name: p.name,
+      description: p.description,
+      resource_type: p.resource_type,
+      resource_id: p.resource_id,
+      status: p.status,
+      rules_count: p.rules_count,
+      blocking_rules: p.blocking_rules,
+      triggered_count: p.triggered_count,
+      last_triggered: p.last_triggered,
+      created_at: p.created_at,
+    }));
+  }, [policyRecords]);
+
+  // Aggregate policy metrics
+  const policyMetricsTotal = useMemo(() => {
+    const activePolicies = policyRecords.filter(p => p.status === 'active').length;
+    const draftPolicies = policyRecords.filter(p => p.status === 'draft').length;
+    const disabledPolicies = policyRecords.filter(p => p.status === 'disabled').length;
+    const totalRules = policyRecords.reduce((sum, p) => sum + p.rules_count, 0);
+    const blockingRules = policyRecords.reduce((sum, p) => sum + p.blocking_rules, 0);
+    const totalTriggers = policyRecords.reduce((sum, p) => sum + p.triggered_count, 0);
+    return {
+      totalPolicies: policyRecords.length,
+      activePolicies,
+      draftPolicies,
+      disabledPolicies,
+      totalRules,
+      blockingRules,
+      totalTriggers,
+    };
+  }, [policyRecords]);
 
   // Transform frontier agents for display
   const frontierAgents = useMemo<FrontierAgentSummary[]>(() => {
@@ -394,7 +563,9 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       totalModels: 5, // Mock - would come from Bedrock ListFoundationModels
       modelsInProduction: 4,
       modelsPendingReview: 1,
-      totalAgents: frontierAgentsList.length + deployments.filter(d => d.template_id?.toLowerCase().includes('agent')).length,
+      totalAgents: (awsAgents?.total ?? 0) + frontierAgentsList.length + deployments.filter(d => d.template_id?.toLowerCase().includes('agent')).length,
+      bedrockAgents: awsAgents?.bedrock_agents ?? 0,
+      agentcoreRuntimes: awsAgents?.agentcore_runtimes ?? 0,
       agentsWithPolicies: guardrailsActive,
 
       // Guardrails (REAL)
@@ -429,8 +600,14 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       }).length,
       recentApprovals: businessCases.filter(bc => bc.status === 'Approved').length + serviceApprovalRuns.filter(sa => sa.status === 'completed').length,
       recentGuardrailBlocks: guardrailMetricsTotal.blockedCount || 0, // REAL from metrics
+
+      // Guardrail Validation
+      validationPassRate: guardrailValidation?.passRate24h ?? 0,
+      validationFailedTests: guardrailValidation?.failedTests24h ?? 0,
+      validationCriticalFailures: guardrailValidation?.criticalFailures24h ?? 0,
+      validationLastRun: guardrailValidation?.lastRunTimestamp,
     };
-  }, [guardrailTemplates, deployments, useCases, frontierAgentsList, businessCases, serviceApprovalRuns, guardrailMetricsTotal]);
+  }, [guardrailTemplates, deployments, useCases, frontierAgentsList, businessCases, serviceApprovalRuns, guardrailMetricsTotal, guardrailValidation, awsAgents]);
 
   // Pipeline health from real use case data
   const pipeline = useMemo<PipelineHealth>(() => {
@@ -552,9 +729,271 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       });
     });
 
+    // Add guardrail validation test runs
+    if (guardrailValidation?.recentRuns) {
+      guardrailValidation.recentRuns.forEach(run => {
+        items.push({
+          id: `validation-${run.id}`,
+          ts: run.timestamp,
+          type: 'guardrail',
+          severity: run.status === 'success' ? 'low' : run.status === 'partial' ? 'medium' : 'high',
+          module: 'secure',
+          title: `Validation: ${run.suiteName} ${run.status}`,
+          description: `${run.passed}/${run.totalTests} tests passed • ${run.guardrailName}`,
+          link: '/secure/guardrails/observability',
+        });
+      });
+    }
+
     // Sort by timestamp (most recent first)
     return items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-  }, [deployments, guardrailTemplates, businessCases, operatingModels, serviceApprovalRuns]);
+  }, [deployments, guardrailTemplates, businessCases, operatingModels, serviceApprovalRuns, guardrailValidation]);
+
+  // Compute real risk heatmap from use case data
+  const useCaseRiskHeatmap = useMemo<UseCaseRiskHeatmapRow[]>(() => {
+    return useCases
+      .filter(uc => uc.scores?.risk_governance) // Only include use cases with risk scores
+      .map(uc => {
+        const rg = uc.scores.risk_governance;
+        // Convert 1-5 scores to 0-100 risk scale (higher = riskier)
+        // Original scores: 1=high risk, 5=low risk, so we invert: (5 - score) * 25
+        const scores = [
+          Math.round((5 - rg.regulatory_compliance) * 25),
+          Math.round((5 - rg.data_privacy_security) * 25),
+          Math.round((5 - rg.ethical_bias_risk) * 25),
+          Math.round((5 - rg.model_reliability) * 25),
+          Math.round((5 - rg.autonomous_decision_risk) * 25),
+        ];
+        const compositeRisk = uc.computed?.risk_score ?? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+        return {
+          useCaseId: uc.use_case_id,
+          name: uc.name,
+          status: uc.status,
+          goNoGo: uc.computed?.go_no_go ?? 'N/A',
+          scores,
+          compositeRisk,
+        };
+      })
+      .sort((a, b) => b.compositeRisk - a.compositeRisk); // Sort by risk, highest first
+  }, [useCases]);
+
+  // Top risky use cases for bar chart
+  const topRiskyUseCases = useMemo<TopRiskyUseCase[]>(() => {
+    return useCases
+      .filter(uc => uc.computed?.risk_score != null)
+      .map(uc => ({
+        useCaseId: uc.use_case_id,
+        name: uc.name,
+        riskScore: uc.computed?.risk_score ?? 0,
+        status: uc.status,
+        goNoGo: uc.computed?.go_no_go ?? 'N/A',
+        businessDomain: uc.business_domain,
+      }))
+      .sort((a, b) => b.riskScore - a.riskScore)
+      .slice(0, 8); // Top 8 riskiest
+  }, [useCases]);
+
+  // Compute 30-day trend data (using real metrics where available, simulated history otherwise)
+  const trendData30d = useMemo<TrendDataPoint[]>(() => {
+    const today = new Date();
+    const baselineTrust = summary.trustScore || 75;
+    const dailyInvocations = guardrailMetricsTotal.totalInvocations / 1; // 24h data
+    const dailyBlocks = guardrailMetricsTotal.blockedCount / 1;
+
+    return Array.from({ length: 30 }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() - (29 - i));
+
+      // If we have real data for today (day 30), use it. Otherwise, simulate based on baseline
+      const isToday = i === 29;
+      const dayVariance = Math.sin(i / 3) * 3;
+      const trendImprovement = i * 0.15; // Slight improvement trend
+
+      return {
+        day: i + 1,
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        trustScore: isToday
+          ? baselineTrust
+          : Math.round(Math.max(50, Math.min(100, baselineTrust - 5 + dayVariance + trendImprovement))),
+        guardrailHits: isToday
+          ? dailyInvocations
+          : Math.round(Math.max(0, dailyInvocations * (0.7 + trendNoise(i * 2 + 1) * 0.6))),
+        violations: isToday
+          ? dailyBlocks
+          : Math.round(Math.max(0, dailyBlocks * (0.5 + trendNoise(i * 2 + 2) * 1.0))),
+      };
+    });
+  }, [summary.trustScore, guardrailMetricsTotal]);
+
+  // Compute Governance Control Checklist from real AVA data
+  const controlChecklist = useMemo<GovernanceControl[]>(() => {
+    const hasPII = guardrailTemplates.some(g => g.status === 'active' && g.pii_entities && g.pii_entities.length > 0);
+    const hasContent = guardrailTemplates.some(g => g.status === 'active' && g.content_filters && g.content_filters.length > 0);
+    const hasTopics = guardrailTemplates.some(g => g.status === 'active' && g.denied_topics && g.denied_topics.length > 0);
+    const hasGrounding = guardrailTemplates.some(g => g.status === 'active' && g.contextual_grounding?.enabled);
+    const hasWordFilter = guardrailTemplates.some(g => g.status === 'active' && (g.word_filter?.enable_profanity || (g.word_filter?.blocked_words?.length ?? 0) > 0));
+
+    const activeGuardrails = guardrailTemplates.filter(g => g.status === 'active').length;
+    const totalDeployments = deployments.length;
+    const useCasesWithRisk = useCases.filter(uc => uc.computed?.risk_score != null).length;
+    const productionUseCases = useCases.filter(uc => uc.status === 'Production').length;
+    const approvedBusinessCases = businessCases.filter(bc => bc.status === 'Approved').length;
+    const hasValidationTests = guardrailValidation && guardrailValidation.totalSuites > 0;
+    const validationPassing = guardrailValidation && guardrailValidation.passRate24h >= 95;
+
+    return [
+      {
+        id: 'pii-protection',
+        name: 'PII Protection',
+        description: 'Detect and redact personally identifiable information',
+        category: 'technical',
+        implemented: hasPII,
+        details: hasPII ? `${guardrailTemplates.filter(g => g.pii_entities?.length).length} guardrail(s) with PII detection` : undefined,
+        action: hasPII ? undefined : 'Add PII entities to a guardrail in Secure',
+        link: '/secure/guardrails',
+      },
+      {
+        id: 'content-filtering',
+        name: 'Content Filtering',
+        description: 'Filter harmful or inappropriate content',
+        category: 'technical',
+        implemented: hasContent,
+        details: hasContent ? `Content filters active on ${guardrailTemplates.filter(g => g.content_filters?.length).length} guardrail(s)` : undefined,
+        action: hasContent ? undefined : 'Enable content filters on a guardrail',
+        link: '/secure/guardrails',
+      },
+      {
+        id: 'topic-blocking',
+        name: 'Topic Blocking',
+        description: 'Block sensitive or off-limits topics',
+        category: 'technical',
+        implemented: hasTopics,
+        details: hasTopics ? `${guardrailTemplates.filter(g => g.denied_topics?.length).length} guardrail(s) with denied topics` : undefined,
+        action: hasTopics ? undefined : 'Configure denied topics in a guardrail',
+        link: '/secure/guardrails',
+      },
+      {
+        id: 'grounding',
+        name: 'Contextual Grounding',
+        description: 'Reduce hallucinations with source grounding',
+        category: 'technical',
+        implemented: hasGrounding,
+        details: hasGrounding ? 'Grounding enabled with threshold checks' : undefined,
+        action: hasGrounding ? undefined : 'Enable contextual grounding in a guardrail',
+        link: '/secure/guardrails',
+      },
+      {
+        id: 'word-filter',
+        name: 'Word & Profanity Filter',
+        description: 'Block specific words and profanity',
+        category: 'technical',
+        implemented: hasWordFilter,
+        details: hasWordFilter ? 'Word filtering active' : undefined,
+        action: hasWordFilter ? undefined : 'Enable profanity filter or add blocked words',
+        link: '/secure/guardrails',
+      },
+      {
+        id: 'guardrail-deployed',
+        name: 'Guardrails Deployed',
+        description: 'At least one active guardrail protecting workloads',
+        category: 'security',
+        implemented: activeGuardrails > 0,
+        details: activeGuardrails > 0 ? `${activeGuardrails} active guardrail(s)` : undefined,
+        action: activeGuardrails > 0 ? undefined : 'Create and publish a guardrail in Secure',
+        link: '/secure/guardrails',
+      },
+      {
+        id: 'risk-assessment',
+        name: 'Risk Assessment Complete',
+        description: 'Use cases have been risk-scored',
+        category: 'governance',
+        implemented: useCasesWithRisk > 0,
+        details: useCasesWithRisk > 0 ? `${useCasesWithRisk}/${useCases.length} use cases scored` : undefined,
+        action: useCasesWithRisk > 0 ? undefined : 'Score use cases in Plan → Prioritization',
+        link: '/use-cases',
+      },
+      {
+        id: 'business-case',
+        name: 'Business Case Approved',
+        description: 'Financial justification reviewed and approved',
+        category: 'governance',
+        implemented: approvedBusinessCases > 0,
+        details: approvedBusinessCases > 0 ? `${approvedBusinessCases} business case(s) approved` : undefined,
+        action: approvedBusinessCases > 0 ? undefined : 'Create and approve a business case in Plan',
+        link: '/business-cases',
+      },
+      {
+        id: 'production-deployment',
+        name: 'Production Deployment',
+        description: 'Use cases deployed to production',
+        category: 'process',
+        implemented: productionUseCases > 0 || totalDeployments > 0,
+        details: productionUseCases > 0 || totalDeployments > 0
+          ? `${productionUseCases} use case(s) in production, ${totalDeployments} deployment(s)`
+          : undefined,
+        action: productionUseCases > 0 || totalDeployments > 0 ? undefined : 'Deploy an agent or application in Build',
+        link: '/deployments',
+      },
+      {
+        id: 'validation-testing',
+        name: 'Guardrail Validation Testing',
+        description: 'Automated tests verify guardrails block/pass as expected',
+        category: 'technical',
+        implemented: hasValidationTests ?? false,
+        details: hasValidationTests
+          ? `${guardrailValidation?.totalSuites} test suite(s), ${guardrailValidation?.passRate24h}% pass rate`
+          : undefined,
+        action: hasValidationTests ? undefined : 'Create test suites in Guardrails → Validation',
+        link: '/secure/guardrails/observability',
+      },
+      {
+        id: 'validation-passing',
+        name: 'Validation Tests Passing',
+        description: 'All guardrail validation tests passing (≥95%)',
+        category: 'security',
+        implemented: validationPassing ?? false,
+        details: validationPassing
+          ? `${guardrailValidation?.passRate24h}% pass rate, ${guardrailValidation?.failedTests24h} failed in 24h`
+          : guardrailValidation ? `${guardrailValidation.passRate24h}% pass rate - below 95% threshold` : undefined,
+        action: validationPassing ? undefined : 'Review failing tests in Guardrails → Validation',
+        link: '/secure/guardrails/observability',
+      },
+    ];
+  }, [guardrailTemplates, deployments, useCases, businessCases, guardrailValidation]);
+
+  const controlStats = useMemo(() => {
+    const implemented = controlChecklist.filter(c => c.implemented).length;
+    const total = controlChecklist.length;
+    return {
+      implemented,
+      total,
+      percentage: total > 0 ? Math.round((implemented / total) * 100) : 0,
+    };
+  }, [controlChecklist]);
+
+  // Expected-cost roll-up: join use cases to their client-side cost models and
+  // price them via the shared MODEL_PRICING. AVA's first real use-case→cost join.
+  const expectedCost = useMemo(() => {
+    const byModel = new Map<string, { modelId: string; modelName: string; monthly: number; useCases: number }>();
+    let totalMonthly = 0;
+    let useCasesWithEstimate = 0;
+    for (const uc of useCases) {
+      const cm = costInputStore.get(uc.use_case_id);
+      if (!cm || !isPricedModelId(cm.model_id)) continue;
+      const monthly = computeExpectedCost(cm).monthlyCost;
+      totalMonthly += monthly;
+      useCasesWithEstimate++;
+      const existing = byModel.get(cm.model_id);
+      if (existing) { existing.monthly += monthly; existing.useCases++; }
+      else byModel.set(cm.model_id, { modelId: cm.model_id, modelName: PRICED_MODEL_LABELS[cm.model_id], monthly, useCases: 1 });
+    }
+    return {
+      totalMonthly,
+      totalAnnual: totalMonthly * 12,
+      useCasesWithEstimate,
+      byModel: Array.from(byModel.values()).sort((a, b) => b.monthly - a.monthly),
+    };
+  }, [useCases]);
 
   const refresh = () => setRefreshKey(k => k + 1);
 
@@ -567,6 +1006,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
 
     // Real data
     guardrails,
+    policies,
     deployments: deploymentSummaries,
     useCases,
     businessCases,
@@ -574,13 +1014,30 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
     serviceApprovalRuns,
     frontierAgents,
     guardrailMetricsTotal,
+    policyMetricsTotal,
 
-    // Mock data
-    riskHeatmap: AGENT_RISK,
-    riskCategories: RISK_CATEGORIES,
+    // Real risk data from use cases
+    useCaseRiskHeatmap,
+    useCaseRiskCategories: USE_CASE_RISK_CATEGORIES,
+    topRiskyUseCases,
+
+    // Trend data
+    trendData30d,
+
+    // Governance Control Checklist
+    controlChecklist,
+    controlStats,
+
+    // Guardrail Validation data
+    guardrailValidation,
+
+    // Mock data (still needed for some views)
     complianceFrameworks: COMPLIANCE_FRAMEWORKS,
     costByModel: COST_BY_MODEL,
     buBudgets: BU_BUDGETS,
+
+    // Expected-cost roll-up across use cases (Plan → FinOps join)
+    expectedCost,
 
     refresh,
   };

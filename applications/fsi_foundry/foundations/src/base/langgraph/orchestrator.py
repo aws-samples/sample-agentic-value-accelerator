@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type, TypeVar, Callable
 import asyncio
 import logging
+import os
 
 from langgraph.graph import StateGraph, END
 from langchain_aws import ChatBedrockConverse
@@ -73,19 +74,68 @@ class LangGraphOrchestrator(ABC):
         )
         self._graph = None
     
-    def _create_llm(self, disable_guardrail: bool = False) -> ChatBedrockConverse:
-        """Create LLM for synthesis and routing decisions using the Converse API.
+    def _create_llm(self, disable_guardrail: bool = False):
+        """Create LLM for synthesis and routing decisions.
+
+        When settings.use_llm_gateway is True, returns a ChatLiteLLM configured
+        against the LiteLLM gateway. The gateway proxies the call to Bedrock
+        under the hood — same model, but routed through the platform's
+        virtual-key + budget + audit chokepoint.
+
+        Fail-closed in production: raises GatewayConfigurationError if
+        gateway is enabled but the virtual key is unavailable.
+        Fail-open in dev (LOCAL_MODE=true): logs warning, falls back to Bedrock.
+
+        When the gateway is not configured (default), returns ChatBedrockConverse
+        for direct Bedrock SDK access. This preserves existing behavior for any
+        deployment that hasn't been wired to a gateway yet.
 
         Guardrails are NOT injected into LLM calls. They are applied as
         post-processing via apply_guardrail_to_response() on the final output.
         Injecting guardrails into Converse calls corrupts tool-calling JSON
         and structured output schemas.
         """
+        model_id = self.config.model_id or settings.bedrock_model_id or settings.effective_bedrock_model_id
+        temperature = self.config.model_kwargs.get("temperature", 0.2)
+        max_tokens = self.config.model_kwargs.get("max_tokens", 4096)
+
+        if settings.use_llm_gateway:
+            from utils.llm_gateway import (
+                resolve_gateway_api_key,
+                gateway_base_url,
+                gateway_model_id,
+                GatewayConfigurationError,
+            )
+            from langchain_litellm import ChatLiteLLM
+
+            api_key = resolve_gateway_api_key()
+            if api_key:
+                logger.info(
+                    "llm_gateway_selected",
+                    extra={"framework": "langgraph", "model": model_id, "gateway": gateway_base_url()},
+                )
+                return ChatLiteLLM(
+                    model=gateway_model_id(model_id),
+                    api_base=gateway_base_url(),
+                    api_key=api_key,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            # Fail-closed in production, fail-open in dev
+            if os.getenv("LOCAL_MODE", "").lower() not in ("true", "1", "yes"):
+                raise GatewayConfigurationError(
+                    "LLM Gateway enabled but virtual key unavailable. "
+                    "Set LLM_GATEWAY_API_KEY or LLM_GATEWAY_API_KEY_SECRET_ARN."
+                )
+            logger.warning(
+                "llm_gateway_key_unavailable_falling_back_to_direct_bedrock"
+            )
+
         return ChatBedrockConverse(
-            model_id=self.config.model_id or settings.bedrock_model_id or settings.effective_bedrock_model_id,
+            model_id=model_id,
             region_name=settings.aws_region,
-            temperature=self.config.model_kwargs.get("temperature", 0.2),
-            max_tokens=self.config.model_kwargs.get("max_tokens", 4096),
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
     
     def add_agent(self, key: str, agent: LangGraphAgent) -> None:
