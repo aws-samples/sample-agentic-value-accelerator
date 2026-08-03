@@ -1,5 +1,49 @@
 # Release Notes
 
+## v3.1 — Secure, Govern expansion, and new reference apps
+
+Release date: August 2026
+
+Feature release building on v3.0.1. Adds fine-grained agent access control (Policy + LLM Gateway), a substantially expanded Govern module, four new reference implementations, and refreshed documentation.
+
+### Highlights
+
+#### 🔒 Secure — control what agents can do
+
+- **AgentCore Policy engine (Cedar)** — _Adarsh Parakh_
+  Fine-grained tool-access control on AgentCore gateways. Attach/detach a policy engine to any use-case gateway, switch between ENFORCE and LOG_ONLY, and author Cedar allow/deny rules the gateway enforces on every tool call (default-deny). Managed from the Control Plane Policy page, with an "Add Gateway" action to provision a dedicated per-use-case gateway on demand.
+
+- **LLM Gateway (LiteLLM on ECS Fargate)** — _Ashish Kumar_
+  OpenAI-compatible chokepoint for every Bedrock model call — virtual keys per agent/team, budgets and rate limits, Bedrock Guardrails attached as a during-call hook, Langfuse trace emission, and full CloudWatch audit. Aurora PostgreSQL + ElastiCache Valkey + ALB.
+
+#### 🏛️ Govern — expanded to twelve workspaces
+
+- **Model Management & Governance, Agentic Coding governance, Govern audit backend** — _Gregg Sorrels_
+  Model registry/lineage/evaluations, dev-tools (agentic coding) governance, and a backend for audit and activity data feeding the Command Center.
+- Command Center, Agent Registry (agents/tools/MCP/permissions/HITL/A2A), Data Governance, Shadow AI detection, Compliance Center (11 frameworks, 253 controls), and pre-built governance Workflows.
+
+#### 🧩 Capabilities & Agent-as-a-Service
+
+- **Advanced Prompt Optimization (Bedrock AdvPO)** — _Rafael Mosca_ — available under Capabilities → Prompts.
+- **Knowledge** (Data Lake: Glue + Athena + S3/Iceberg) available; **Custom Agents** catalog + create flow; **role-based access control (RBAC)** — _Hemal Gadhiya_.
+
+#### 📦 New reference implementations (5 → 8)
+
+- **Payments Fraud** — _Michael Sidler_ — agent-native fraud scoring, NL investigation, FinCEN-structured SAR drafting (Strands supervisor + 3 specialists).
+- **Merchant Onboarding** — _Sudhir Kalidindi_ — document processing, OFAC screening, fraud detection, HITL approvals.
+- **Sales Recommend (AWS Solutions Advisor)** — _Ronny Lloro_ — solution recommendation for non-technical business leaders.
+- **AgentCore-in-a-Box** — _Bikash Behera_ — grab-and-go field demo wiring every AgentCore primitive.
+
+#### 📖 Documentation
+
+- README refreshed with current platform screenshots (home + all pillars), expanded Key Features grid, corrected feature status, and updated contributor credits.
+
+### Upgrade notes
+
+- **Policy/Gateway:** use-case gateways are provisioned on demand via the "Add Gateway" action on a deployment; attach a policy engine and author rules from the Policy page.
+- **LLM Gateway:** deploy from Secure → LLM Gateway; point agents at the gateway via `LLM_GATEWAY_BASE_URL` (auto-wired at deploy when the gateway is present).
+- **Fresh deployments:** the Control Plane self-provisions its own ECR repositories; deploy scripts derive the account from the caller (no hardcoded registry).
+
 ## v3.0.1 — Deployment hardening
 
 Release date: June 2026
