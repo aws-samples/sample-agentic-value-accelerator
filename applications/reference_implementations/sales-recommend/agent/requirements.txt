@@ -1,7 +1,0 @@
-# Pinned to the exact versions proven to work through AgentCore's gateway
-# (the working code-deploy runtime recommend-ew5iwEGi0V uses these).
-# Unpinned versions pulled bedrock-agentcore 1.15.1 / strands 1.45.0, which
-# work via direct HTTP locally but return 502 through AgentCore's gateway.
-strands-agents==1.42.0
-strands-agents-tools==0.8.0
-bedrock-agentcore==1.14.0
