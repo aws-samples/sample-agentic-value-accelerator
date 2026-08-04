@@ -1,0 +1,141 @@
+{
+  "id": "agent-observability",
+  "name": "Agent Observability \u2014 Langfuse",
+  "description": "Deploy Langfuse v2 on ECS Fargate with Aurora PostgreSQL Serverless v2 and ElastiCache Redis for agent tracing, metrics, and prompt management.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "observability",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "langfuse",
+    "observability",
+    "tracing",
+    "ecs",
+    "aurora",
+    "redis",
+    "terraform"
+  ],
+  "aws_services": [
+    "ecs",
+    "rds",
+    "elasticache",
+    "alb",
+    "secretsmanager"
+  ],
+  "frameworks_list": [],
+  "built_with": [],
+  "resources": [
+    {
+      "name": "ECS Fargate Service",
+      "description": "Langfuse application running on ECS Fargate"
+    },
+    {
+      "name": "Application Load Balancer",
+      "description": "ALB exposing the Langfuse UI"
+    },
+    {
+      "name": "Aurora PostgreSQL Serverless v2",
+      "description": "Database backend for Langfuse"
+    },
+    {
+      "name": "ElastiCache Redis",
+      "description": "Caching layer for Langfuse"
+    },
+    {
+      "name": "Secrets Manager",
+      "description": "Database credentials and Langfuse secrets"
+    },
+    {
+      "name": "Security Groups",
+      "description": "Network rules for ALB, ECS, RDS, and Redis"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name prefix for all resources"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "vpc_id",
+      "type": "string",
+      "required": true,
+      "description": "VPC ID for deployment"
+    },
+    {
+      "name": "private_subnet_ids",
+      "type": "list(string)",
+      "required": true,
+      "description": "Private subnet IDs for ECS, RDS, Redis"
+    },
+    {
+      "name": "public_subnet_ids",
+      "type": "list(string)",
+      "required": true,
+      "description": "Public subnet IDs for ALB"
+    },
+    {
+      "name": "langfuse_admin_email",
+      "type": "string",
+      "required": true,
+      "description": "Admin email for initial Langfuse setup"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Environment name"
+    },
+    {
+      "name": "langfuse_image_tag",
+      "type": "string",
+      "required": false,
+      "default": "2",
+      "description": "Langfuse Docker image tag"
+    },
+    {
+      "name": "db_min_capacity",
+      "type": "number",
+      "required": false,
+      "default": "0.5",
+      "description": "Aurora Serverless v2 minimum ACU"
+    },
+    {
+      "name": "db_max_capacity",
+      "type": "number",
+      "required": false,
+      "default": "4",
+      "description": "Aurora Serverless v2 maximum ACU"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "Langfuse Self-Hosting Documentation",
+      "url": "https://langfuse.com/docs/deployment/self-host"
+    },
+    {
+      "title": "AgentCore: Observability Integrations",
+      "url": "https://github.com/awslabs/agentcore-samples/tree/main/03-integrations/observability"
+    },
+    {
+      "title": "Strands: Observability Tutorial",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/08-observability"
+    }
+  ]
+}

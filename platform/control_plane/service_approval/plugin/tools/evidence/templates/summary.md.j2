@@ -1,0 +1,37 @@
+# Evidence Summary — {{ service }}
+
+**Verdict:** {{ overall_verdict }}
+**Coverage:** {{ pass_count }}/{{ total_controls }} controls passed CLI validation
+**Not CLI-validatable:** {{ ncv_count }} controls (template-time or policy-only)
+**Failures:** {{ fail_count }} controls failed
+**Errors:** {{ error_count }} controls errored during execution
+
+Generated {{ evidence_run_id }} against stack `{{ stack_id }}`.
+
+## Quick Triage
+
+{% if overall_verdict == "PASS" -%}
+All CLI-validatable controls passed runtime verification. The {{ ncv_count }} NOT_CLI_VALIDATABLE controls were verified at IaC-time (Phase 4/5) or are policy-only (no runtime probe applicable).
+{% elif fail_count > 0 -%}
+**{{ fail_count }} control(s) FAILED runtime verification.** Review attestation-report.md for details. Failed controls:
+{% for result in results if result.verdict == "FAIL" %}
+- {{ result.control_id }}: {{ result.get("predicate_evaluation", "") | markdown_safe }}
+{%- endfor %}
+{% elif error_count > 0 -%}
+**{{ error_count }} control(s) ERRORED during execution.** Review attestation-results.json for details. Errors:
+{% for result in results if result.verdict == "ERROR" %}
+- {{ result.control_id }}: {{ result.get("error_message", "") | markdown_safe }}
+{%- endfor %}
+{%- endif %}
+
+## Next Steps
+
+- Review [attestation-report.md](attestation-report.md) for the full control × verdict matrix
+- Review [attestation-results.json](attestation-results.json) for machine-readable results
+- Inspect [cli-outputs/](cli-outputs/) for raw command stdout/stderr logs
+- Review [iac-time-evidence/](iac-time-evidence/) for supplemental IaC validation logs
+
+To re-run evidence collection:
+```bash
+python3 tools/evidence/replay.py --service={{ service_slug }} --all
+```

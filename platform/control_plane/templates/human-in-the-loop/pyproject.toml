@@ -1,0 +1,18 @@
+[project]
+name = "human-in-the-loop"
+version = "1.0.0"
+description = "Human-in-the-loop patterns for Strands (tool interrupt) and LangGraph (graph interrupt)"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+strands = ["strands-agents[otel]>=1.38.0,<2.0"]
+langgraph = ["langgraph>=0.2.0,<1.0", "langchain-aws>=0.2.0,<1.0"]
+all = ["strands-agents[otel]>=1.38.0,<2.0", "langgraph>=0.2.0,<1.0", "langchain-aws>=0.2.0,<1.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

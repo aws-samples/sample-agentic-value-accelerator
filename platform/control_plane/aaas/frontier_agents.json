@@ -55,6 +55,51 @@
           "description": "ARN emitted by an earlier Part 1 apply. Only set this when enabling cross-account monitoring in Part 2."
         }
       ]
+    },
+    {
+      "id": "aws-security",
+      "name": "AWS Security Agent",
+      "description": "Amazon's managed Security Agent — proactive application security across the development lifecycle. Provisions an Agent Space and three service-scoped IAM roles (Application, Penetration Test Service, Actor) for design review, code review, and on-demand pentesting.",
+      "status": "Available",
+      "iac_path": "frontier_agents/security/iac",
+      "supported_iac_types": ["terraform", "cdk", "cloudformation"],
+      "coming_soon_iac_types": [],
+      "parameters": [
+        {
+          "name": "agent_space_name",
+          "label": "Agent Space Name",
+          "type": "string",
+          "required": true,
+          "default": "FSIAgentKitSecurityAgentSpace",
+          "description": "Name assigned to the Security Agent Space."
+        },
+        {
+          "name": "agent_space_description",
+          "label": "Agent Space Description",
+          "type": "string",
+          "required": false,
+          "default": "Security Agent Space provisioned by AVA",
+          "description": "Free-text description shown on the Agent Space."
+        },
+        {
+          "name": "name_postfix",
+          "label": "Resource Name Postfix",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Fixed suffix appended to IAM role names. Leave empty to use a random 4-byte hex on first apply. Useful for re-deploys that need stable role names."
+        },
+        {
+          "name": "external_id",
+          "label": "External ID",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "External ID required when assuming the PenTest Service Role and Actor Role. Leave empty to auto-generate (Terraform) or derive from the stack ID (CloudFormation). Pin a value for production."
+        }
+      ],
+      "$comment_auto_injected": "create_application and existing_application_domain are auto-detected by the deploy route handler (api/routes/frontier_agents.py). The backend queries AWS::SecurityAgent::Application via Cloud Control, sets create_application based on existence, and looks up the domain when reusing. Hidden from the UI on purpose so users don't have to know about the singleton constraint.",
+      "advanced_parameters": []
     }
   ]
 }

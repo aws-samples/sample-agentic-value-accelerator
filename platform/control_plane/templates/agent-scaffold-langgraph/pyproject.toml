@@ -1,0 +1,15 @@
+[project]
+name = "agent-scaffold-langgraph"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=1.2.0,<2.0",
+    "langchain-core>=0.3.0,<1.0",
+    "langchain-aws>=1.4.0,<2.0",
+    "bedrock-agentcore>=1.9.0,<2.0",
+    "pydantic>=2.10.0,<3.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

@@ -1,0 +1,70 @@
+{
+  "id": "agent-scaffold-langgraph",
+  "name": "Agent Scaffold \u2014 LangGraph",
+  "description": "Production-ready LangGraph ReAct agent with tools, conversation memory, and AgentCore deployment. A research assistant that calculates and retrieves dates.",
+  "tier": "code",
+  "category": "agent_scaffold",
+  "iac_options": [],
+  "includes": {
+    "infra": false,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "frameworks_list": [
+    "langgraph"
+  ],
+  "aws_services": [
+    "bedrock"
+  ],
+  "parameters": [
+    {
+      "name": "MODEL_ID",
+      "description": "Bedrock model identifier",
+      "type": "string",
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "required": false
+    },
+    {
+      "name": "AWS_REGION",
+      "description": "AWS region for Bedrock API calls",
+      "type": "string",
+      "default": "us-east-1",
+      "required": false
+    },
+    {
+      "name": "LOG_LEVEL",
+      "description": "Application log level",
+      "type": "string",
+      "default": "INFO",
+      "required": false
+    }
+  ],
+  "version": "1.0.0",
+  "tags": [
+    "langgraph",
+    "agent",
+    "scaffold",
+    "bedrock",
+    "fastapi"
+  ],
+  "built_with": [],
+  "learn_more": [
+    {
+      "title": "LangGraph: Quick Start Tutorial",
+      "url": "https://langchain-ai.github.io/langgraph/tutorials/introduction/"
+    },
+    {
+      "title": "LangGraph: Tool-Calling Notebook",
+      "url": "https://github.com/langchain-ai/langgraph/blob/main/examples/tool-calling.ipynb"
+    },
+    {
+      "title": "LangGraph 101 Repository",
+      "url": "https://github.com/langchain-ai/langgraph-101"
+    },
+    {
+      "title": "LangChain Academy: Intro to LangGraph",
+      "url": "https://academy.langchain.com/courses/intro-to-langgraph"
+    }
+  ]
+}

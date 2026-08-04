@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Service Approval — Organization Defaults
+# ─────────────────────────────────────────────────────────────────────────────
+# These defaults apply to ALL service intake runs unless overridden by the
+# per-service intake file. Place this at the repo root or in a shared config.
+#
+# Resolution order (highest priority wins):
+#   CLI flags > per-service intake YAML > defaults.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Default control framework for all services
+framework: "ccmv4"
+
+# Default input-folder bootstrap behavior
+# Applied only when ./input/ is missing AND the run is non-interactive.
+# Interactive runs always prompt the user and ignore these defaults.
+input:
+  bootstrap:
+    seed_from_plugin: false
+    auto_download_ccmv4: false
+
+# Default testing configuration
+# mode: full-deploy | dry-run | skip | manual-cli
+testing:
+  mode: "skip"
+  region: "us-east-1"
+  keep: false
+  timeout_minutes: 30
+
+# Default pipeline options
+options:
+  include_attack_surface: true
+  include_artifact_matrix: true
+  include_unverified: false
+  clean: false

@@ -6,8 +6,7 @@ Shell and Python scripts for deploying, tearing down, and seeding the Control Pl
 
 | Script | Purpose | When to run |
 |--------|---------|-------------|
-| [`deploy-full.sh`](#deploy-fullsh) | End-to-end deployment — infra + backend image + frontend + Cognito user | First-time deployment, or after pulling new code |
-| [`deploy.sh`](#deploysh) | Infrastructure only (Terraform plan/apply with env var loading) | When you only need to update the infra, not the app |
+| [`deploy-full.sh`](#deploy-fullsh) | End-to-end deployment — infra + backend image + frontend + Cognito users | First-time deployment, or after pulling new code |
 | [`destroy.sh`](#destroysh) | Tear down everything this Terraform state owns | End of project, or resetting a dev environment |
 | [`import-existing.sh`](#import-existingsh) | Import pre-existing AWS resources into Terraform state | Recovering from partial failures or adopting manually-created resources |
 | [`seed-codecommit.sh`](#seed-codecommitsh) | Wrapper around the Python seeder (checks deps, forwards args) | Whenever you enable or refresh the "Deploy from Git" path |
@@ -36,7 +35,7 @@ One-command deployment of the entire Control Plane. Runs six phases in sequence 
 3. **Backend image** — builds the linux/amd64 Docker image from `platform/control_plane/backend/Dockerfile` and pushes to ECR
 4. **ECS rolling deploy** — `force-new-deployment` on the service so tasks pick up the new image
 5. **Frontend build** — generates `.env.production`, runs `npm install` + `vite build`, syncs to the frontend S3 bucket, invalidates CloudFront
-6. **Cognito user** — optional; prompts for an email and creates a user with a temporary password
+6. **Cognito users** — prompts for one email per RBAC role (admin, operator, viewer); each user is created and added to the matching Cognito group. Operator and viewer are optional (press Enter to skip)
 
 **Stale-state safeguard.** Before running Terraform, the script inspects `terraform.tfstate` for resource ARNs that belong to a different AWS account than the one currently authenticated. If it finds a mismatch, it offers to back up and reset the state — handy when switching accounts.
 
@@ -47,28 +46,6 @@ cd platform/control_plane/infrastructure/scripts
 ```
 
 Expected duration: ~10–15 minutes on a fresh account.
-
----
-
-## `deploy.sh`
-
-Infrastructure-only Terraform deploy. Loads values from `.env` and runs `init / plan / apply`. Use this when you've already built and pushed the backend image and just want to roll infra changes.
-
-**What it does**
-
-1. Sources `.env` (creates it from `.env.example` on first run)
-2. Verifies `AWS_REGION` and `ENVIRONMENT` are set
-3. Runs `aws sts get-caller-identity` to confirm credentials
-4. Creates `terraform.tfvars` from the example if missing, pulling values from `.env` via `sed`
-5. `terraform init` → `validate` → `plan -out=tfplan`
-6. Prompts for confirmation, then `terraform apply tfplan`
-7. Prints key outputs (ECR URL, API endpoint, frontend URL, Cognito pool ID, CodeCommit clone URL)
-
-**Usage**
-```bash
-cd platform/control_plane/infrastructure/scripts
-./deploy.sh
-```
 
 ---
 

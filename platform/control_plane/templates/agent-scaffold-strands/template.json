@@ -1,0 +1,71 @@
+{
+  "id": "agent-scaffold-strands",
+  "name": "Strands Agent Scaffold",
+  "description": "Production-ready Strands agent with tools, conversation memory, and AgentCore deployment. A research assistant that calculates and retrieves dates.",
+  "tier": "code",
+  "category": "agent_scaffold",
+  "version": "1.0.0",
+  "iac_options": [],
+  "includes": {
+    "infra": false,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "frameworks_list": [
+    "strands"
+  ],
+  "aws_services": [
+    "bedrock"
+  ],
+  "resources": [],
+  "parameters": [
+    {
+      "name": "MODEL_ID",
+      "description": "Bedrock model identifier",
+      "type": "string",
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "required": false
+    },
+    {
+      "name": "AWS_REGION",
+      "description": "AWS region for Bedrock API calls",
+      "type": "string",
+      "default": "us-east-1",
+      "required": false
+    },
+    {
+      "name": "LOG_LEVEL",
+      "description": "Application log level",
+      "type": "string",
+      "default": "INFO",
+      "required": false
+    }
+  ],
+  "tags": [
+    "strands",
+    "agent",
+    "scaffold",
+    "bedrock",
+    "fastapi"
+  ],
+  "built_with": [],
+  "learn_more": [
+    {
+      "title": "Strands: First Agent Tutorial",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/01-first-agent"
+    },
+    {
+      "title": "Strands: Model Providers",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/03-model-providers"
+    },
+    {
+      "title": "Strands SDK Documentation",
+      "url": "https://strandsagents.com/latest/"
+    },
+    {
+      "title": "AWS Sample: Getting Started with Strands",
+      "url": "https://github.com/aws-samples/sample-getting-started-with-strands-agents-course"
+    }
+  ]
+}

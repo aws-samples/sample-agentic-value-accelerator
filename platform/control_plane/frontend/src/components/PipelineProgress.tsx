@@ -20,35 +20,44 @@ const STAGE_LABELS: Record<string, string> = {
 interface Props {
   status: DeploymentStatus;
   failedStage?: string;
+  statusHistory?: { status: string }[];
 }
 
-export default function PipelineProgress({ status, failedStage }: Props) {
-  const isDestroy = isDestroyStatus(status);
+export default function PipelineProgress({ status, failedStage, statusHistory }: Props) {
+  const isDestroy = isDestroyStatus(status, statusHistory);
   const isFailed = status === 'failed';
 
   if (isDestroy) {
     return (
       <div className="flex items-center gap-2">
         {DESTROY_STAGES.map((stage, idx) => {
-          const destroyIdx = DESTROY_STAGES.indexOf(status as typeof DESTROY_STAGES[number]);
-          const isComplete = idx < destroyIdx;
-          const isCurrent = idx === destroyIdx;
+          const destroyIdx = isFailed ? 0 : DESTROY_STAGES.indexOf(status as typeof DESTROY_STAGES[number]);
+          const isComplete = !isFailed && idx < destroyIdx;
+          const isCurrent = !isFailed && idx === destroyIdx;
+          const isFailedStage = isFailed && idx === 0;
           return (
             <div key={stage} className="flex items-center">
               <div className="flex items-center gap-2">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${
+                  isFailedStage ? 'bg-red-500 text-white' :
                   isComplete ? 'bg-orange-600 text-white' :
                   isCurrent ? 'bg-orange-50 text-orange-700 border-2 border-orange-500' :
                   'bg-slate-100 text-slate-400'
                 }`}>
-                  {isComplete ? '✓' : idx + 1}
+                  {isFailedStage ? 'X' : isComplete ? '✓' : idx + 1}
                 </div>
-                <span className={`text-sm font-semibold ${isCurrent ? 'text-slate-900' : 'text-slate-400'}`}>
+                <span className={`text-sm font-semibold ${
+                  isFailedStage ? 'text-red-700' :
+                  isCurrent ? 'text-slate-900' : 'text-slate-400'
+                }`}>
                   {STAGE_LABELS[stage]}
                 </span>
               </div>
               {idx < DESTROY_STAGES.length - 1 && (
-                <div className={`h-0.5 w-12 mx-3 rounded-full ${isComplete ? 'bg-orange-500' : 'bg-slate-200'}`} />
+                <div className={`h-0.5 w-12 mx-3 rounded-full ${
+                  isFailedStage ? 'bg-red-300' :
+                  isComplete ? 'bg-orange-500' : 'bg-slate-200'
+                }`} />
               )}
             </div>
           );

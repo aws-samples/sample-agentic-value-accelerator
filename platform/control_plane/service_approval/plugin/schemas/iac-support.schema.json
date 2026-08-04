@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/iac-support.schema.json",
+  "title": "iac-support.json",
+  "description": "Phase 0 Assess Step 2b output: IaC provider discovery. Records which IaC formats the service is reachable from (CloudFormation, Terraform, CDK, CDKTF) plus any user-requested format overrides. Produced by skills/assess. Consumed by skills/generate-iac to decide which format subdirectories to populate. If the file is missing, generate-iac defaults to CloudFormation only (see assess/SKILL.md Step 2b).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "service",
+    "cloudformation",
+    "terraform",
+    "cdk",
+    "cdktf",
+    "generate_formats"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical service name (e.g. 'AWS Lambda', 'Amazon S3')."
+    },
+    "discovered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp marking when the IaC discovery ran."
+    },
+    "cloudformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "resource_type_count": {"type": "integer", "minimum": 0},
+        "resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^AWS::[A-Z][A-Za-z0-9]*::[A-Z][A-Za-z0-9]*$"
+          },
+          "description": "Every entry must match the AWS::<CfnPrefix>::<Type> pattern."
+        },
+        "template_reference_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "notes": {"type": "string"}
+      }
+    },
+    "terraform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "provider": {
+          "type": "string",
+          "enum": ["awscc", "aws", "both", "none"],
+          "description": "Which HashiCorp Terraform AWS provider covers the service. 'awscc' uses the Cloud Control-backed provider; 'aws' uses the native HashiCorp AWS provider; 'both' when native and awscc each cover distinct resource subsets; 'none' when no Terraform path exists yet."
+        },
+        "native_resource_count": {"type": "integer", "minimum": 0},
+        "cloud_control_available": {"type": "boolean"},
+        "notes": {"type": "string"}
+      }
+    },
+    "cdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "construct_level": {
+          "type": "string",
+          "enum": ["L1", "L2", "L2-alpha", "none"],
+          "description": "L1 = CloudFormation-direct (Cfn* constructs), L2 = high-level constructs, L2-alpha = experimental L2, none = no CDK module."
+        },
+        "module_name": {
+          "type": "string",
+          "description": "Canonical CDK module path (e.g. 'aws-cdk-lib/aws-lambda', '@aws-cdk/aws-iot-alpha')."
+        },
+        "notes": {"type": "string"}
+      }
+    },
+    "cdktf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "derives_from": {
+          "type": "string",
+          "enum": ["aws", "awscc", "both", "none"],
+          "description": "Which Terraform provider CDKTF bindings derive from. Mirrors terraform.provider values."
+        },
+        "notes": {"type": "string"}
+      }
+    },
+    "generate_formats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cloudformation",
+        "terraform",
+        "cdk_typescript",
+        "cdktf"
+      ],
+      "properties": {
+        "cloudformation": {"type": "boolean"},
+        "terraform": {"type": "boolean"},
+        "cdk_typescript": {"type": "boolean"},
+        "cdktf": {"type": "boolean"}
+      },
+      "description": "The final decision matrix consumed by skills/generate-iac. A 'true' entry means Phase 4 will populate that format's subdirectory; 'false' means skip. Values must be the logical AND of the corresponding <format>.supported flag and any user_override NOT skipping that format."
+    },
+    "user_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["format", "action", "reason"],
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": ["cloudformation", "terraform", "cdk_typescript", "cdktf"]
+          },
+          "action": {
+            "type": "string",
+            "enum": ["skip", "force"],
+            "description": "'skip' excludes a supported format; 'force' is not allowed when the format is unsupported (see assess/SKILL.md Step 2b: \"If a format is NOT supported, it cannot be forced\")."
+          },
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Free-text warnings surfaced during IaC discovery (e.g., 'Terraform aws provider coverage partial — falling back to awscc for 3 resource types')."
+    },
+    "_metadata": {"type": "object"}
+  }
+}

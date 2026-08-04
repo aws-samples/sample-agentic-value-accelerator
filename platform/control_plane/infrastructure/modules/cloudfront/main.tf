@@ -69,9 +69,9 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = var.domain_name == "" || var.hosted_zone_id == ""
-    acm_certificate_arn            = var.domain_name != "" && var.hosted_zone_id != "" ? aws_acm_certificate.cloudfront[0].arn : null
-    ssl_support_method             = var.domain_name != "" && var.hosted_zone_id != "" ? "sni-only" : null
+    cloudfront_default_certificate = var.acm_certificate_arn == ""
+    acm_certificate_arn            = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+    ssl_support_method             = var.acm_certificate_arn != "" ? "sni-only" : null
     minimum_protocol_version       = "TLSv1.2_2021"
   }
 
@@ -100,13 +100,7 @@ resource "aws_s3_bucket_policy" "frontend_cloudfront" {
         Resource = "${var.frontend_bucket_arn}/*"
         Condition = {
           StringEquals = {
-            # Include the TF-managed distribution plus any additional distributions
-            # (e.g., the vanity-aliased `ava-demo.fsi.pace.aws.dev` distribution)
-            # that are created out-of-band and must also be permitted.
-            "AWS:SourceArn" = concat(
-              [aws_cloudfront_distribution.main.arn],
-              var.additional_cloudfront_distribution_arns,
-            )
+            "AWS:SourceArn" = concat([aws_cloudfront_distribution.main.arn], var.extra_distribution_arns)
           }
         }
       }
@@ -115,49 +109,36 @@ resource "aws_s3_bucket_policy" "frontend_cloudfront" {
 }
 
 # ============================================================================
-# ACM Certificate for CloudFront (Optional - must be in us-east-1)
+# ACM Certificate for CloudFront
 # ============================================================================
-
-resource "aws_acm_certificate" "cloudfront" {
-  count             = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-  provider          = aws.us_east_1
-  domain_name       = var.domain_name
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-cloudfront-cert"
-  })
-}
-
-resource "aws_route53_record" "cloudfront_cert_validation" {
-  count   = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-  zone_id = var.hosted_zone_id
-  name    = tolist(aws_acm_certificate.cloudfront[0].domain_validation_options)[0].resource_record_name
-  type    = tolist(aws_acm_certificate.cloudfront[0].domain_validation_options)[0].resource_record_type
-  records = [tolist(aws_acm_certificate.cloudfront[0].domain_validation_options)[0].resource_record_value]
-  ttl     = 60
-}
-
-resource "aws_acm_certificate_validation" "cloudfront" {
-  count                   = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
-  provider                = aws.us_east_1
-  certificate_arn         = aws_acm_certificate.cloudfront[0].arn
-  validation_record_fqdns = [aws_route53_record.cloudfront_cert_validation[0].fqdn]
-}
+# Cert is provisioned by scripts/acm.sh (Option A ownership split) and passed
+# in as var.acm_certificate_arn. Terraform does not own the cert lifecycle.
+# The DNS-01 validation CNAME is also created by acm.sh directly in Route 53
+# via the AWS CLI, so no aws_route53_record.cloudfront_cert_validation
+# resource is needed here.
 
 # ============================================================================
 # Route53 Record for CloudFront (Optional)
 # ============================================================================
 
 resource "aws_route53_record" "cloudfront" {
-  count   = var.domain_name != "" && var.hosted_zone_id != "" ? 1 : 0
+  count   = var.domain_name != "" && var.hosted_zone_id != "" && var.acm_certificate_arn != "" ? 1 : 0
   zone_id = var.hosted_zone_id
   name    = var.domain_name
   type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.main.domain_name
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "cloudfront_aaaa" {
+  count   = var.domain_name != "" && var.hosted_zone_id != "" && var.acm_certificate_arn != "" ? 1 : 0
+  zone_id = var.hosted_zone_id
+  name    = var.domain_name
+  type    = "AAAA"
 
   alias {
     name                   = aws_cloudfront_distribution.main.domain_name

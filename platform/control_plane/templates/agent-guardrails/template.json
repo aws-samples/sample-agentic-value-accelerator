@@ -1,0 +1,100 @@
+{
+  "id": "agent-guardrails",
+  "name": "Agent Guardrails \u2014 Bedrock",
+  "description": "Amazon Bedrock Guardrails for content filtering, PII protection, topic denial, and profanity blocking. Configurable filter strengths per category.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "security",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "bedrock",
+    "guardrails",
+    "security",
+    "pii",
+    "content-filter",
+    "terraform"
+  ],
+  "aws_services": [
+    "bedrock"
+  ],
+  "frameworks_list": [],
+  "built_with": [],
+  "resources": [
+    {
+      "name": "Bedrock Guardrail",
+      "description": "Content filters, PII detection, topic denial, and word filters"
+    },
+    {
+      "name": "Guardrail Version",
+      "description": "Published version of the guardrail configuration"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name used for resource naming"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment"
+    },
+    {
+      "name": "content_filters",
+      "type": "list(object)",
+      "required": false,
+      "description": "Content filter types (SEXUAL, VIOLENCE, HATE, INSULTS, MISCONDUCT, PROMPT_ATTACK) with input/output strengths (NONE, LOW, MEDIUM, HIGH)"
+    },
+    {
+      "name": "pii_entities",
+      "type": "list(object)",
+      "required": false,
+      "description": "PII entity types (EMAIL, PHONE, CREDIT_DEBIT_CARD_NUMBER, etc.) with action (BLOCK or ANONYMIZE)"
+    },
+    {
+      "name": "denied_topics",
+      "type": "list(object)",
+      "required": false,
+      "description": "Topics to deny with name, definition, and examples"
+    },
+    {
+      "name": "enable_profanity_filter",
+      "type": "boolean",
+      "required": false,
+      "default": "true",
+      "description": "Enable managed profanity word list"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "AWS: Bedrock Guardrails Documentation",
+      "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html"
+    },
+    {
+      "title": "Strands: Guardrails Tutorial",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/05-guardrails"
+    },
+    {
+      "title": "Terraform: aws_bedrock_guardrail",
+      "url": "https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bedrock_guardrail"
+    }
+  ]
+}

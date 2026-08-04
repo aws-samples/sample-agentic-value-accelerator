@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/research-api-surface.schema.json",
+  "title": "research-api-surface.json",
+  "description": "Phase 1c output: full API surface with Phase B botocore enrichment overlay. Produced by research-api-surface skill. Consumed by research.json merge, validate phase, and map-generate-controls. Top-level `phase` MUST be 'research-api-surface'. api_surface.operations[] MUST be inlined — api_surface_ref string pointers are rejected per iter-14 finding 5/5-e.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "service", "api_surface"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "phase": {"type": "string", "const": "research-api-surface"},
+    "service": {"type": "string", "minLength": 1},
+    "service_prefix": {"type": "string"},
+    "cfn_prefix": {"type": "string"},
+    "source": {"type": "string"},
+    "api_surface": {"$ref": "#/$defs/apiSurface"},
+    "api_surface_counts": {"type": "object", "additionalProperties": true},
+    "cross_reference": {"type": "object", "additionalProperties": true},
+    "sar_cross_reference": {"type": "object", "additionalProperties": true},
+    "condition_key_validation": {"type": "object", "additionalProperties": true},
+    "gateable_by_summary_ref": {"type": "string"},
+    "completeness": {"type": "object", "additionalProperties": true},
+    "botocore_enrichment": {"$ref": "#/$defs/botocoreEnrichment"},
+    "doc_sources": {"type": "array", "items": {"type": ["object", "string"]}},
+    "_source_metadata": {"type": "object", "additionalProperties": true},
+    "_metadata": {"type": "object", "additionalProperties": true}
+  },
+
+  "$defs": {
+    "apiSurface": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["operations"],
+      "properties": {
+        "operations": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/operation"}
+        },
+        "permission_only_actions": {"type": "array", "items": {"type": "string"}},
+        "total_operations": {"type": "integer", "minimum": 0},
+        "total_parameters": {"type": "integer", "minimum": 0},
+        "source": {"type": "string"},
+        "boto3_version": {"type": "string"},
+        "gateable_by_stats": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["operation"],
+      "properties": {
+        "operation": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "parameters": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/parameter"}
+        },
+        "param_count": {"type": "integer", "minimum": 0},
+        "botocore_coverage": {"type": "boolean"}
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^\\$\\..*"},
+        "type": {"type": "string"},
+        "required": {"type": "boolean"},
+        "description": {"type": "string"},
+        "enum": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "min": {"type": "number"},
+        "max": {"type": "number"},
+        "pattern": {"type": "string"},
+        "mutability": {"type": "string", "enum": ["create_only", "mutable", "unknown"]},
+        "security_category": {
+          "type": ["string", "null"],
+          "enum": ["kms", "network", "iam", "tag", "log", "auth", "tls", "policy", null]
+        },
+        "gateable_by": {
+          "type": "array",
+          "items": {"type": "string", "enum": ["sar", "api"]}
+        },
+        "sar_condition_key": {"type": ["string", "null"]}
+      }
+    },
+    "botocoreEnrichment": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enriched_operations": {"type": "integer", "minimum": 0},
+        "enriched_params": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

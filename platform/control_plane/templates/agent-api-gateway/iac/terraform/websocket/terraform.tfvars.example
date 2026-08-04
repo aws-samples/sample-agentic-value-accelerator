@@ -1,0 +1,30 @@
+# =============================================================================
+# Agent API Gateway — WebSocket Variant
+# Copy this file to terraform.tfvars and fill in your values.
+# =============================================================================
+
+# --- Required ---
+
+project_name     = "my-agent-app"
+aws_region       = "us-east-1"
+backend_endpoint = "https://your-backend.example.com/ws/agent"
+
+# --- Optional ---
+
+# environment                = "dev"           # dev | staging | prod
+# route_selection_expression = "$request.body.action"
+# throttling_burst_limit     = 100
+# throttling_rate_limit      = 50
+# log_retention_days         = 30
+
+# --- Custom Domain (both required if using a custom domain) ---
+
+# custom_domain   = "ws.agents.example.com"
+# certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-123"
+
+# --- Additional Tags ---
+
+# tags = {
+#   Team  = "platform"
+#   Owner = "your-alias"
+# }

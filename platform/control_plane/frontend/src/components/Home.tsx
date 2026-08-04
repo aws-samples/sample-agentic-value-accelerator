@@ -18,23 +18,29 @@ export default function Home() {
         <div className="col-span-2 flex flex-col overflow-hidden">
           <div className="flex items-center gap-2.5 mb-2.5 flex-shrink-0">
             <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
-              <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+              <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" /></svg>
             </div>
             <h2 className="text-lg font-bold tracking-tight" style={{ backgroundImage: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 40%, #818cf8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', color: 'transparent' }}>Plan</h2>
           </div>
-          <div onClick={() => navigate('/accelerator-guide')}
+          <div onClick={() => navigate('/plan')}
             className="group relative bg-white/70 backdrop-blur-sm rounded-xl home-card cursor-pointer flex-1 flex flex-col overflow-hidden">
-            {/* Strategy hero image */}
-            <div className="relative flex-1 overflow-hidden rounded-t-xl">
-              <img src="/images/strategy-hero.png" alt="Strategy" className="absolute inset-0 w-full h-full object-cover" />
+            <div className="flex-1 relative overflow-hidden min-h-0">
+              <img src="/images/strategy-hero.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute top-3 left-3">
+                <span className="text-[9px] font-bold text-white/95 bg-slate-900/35 backdrop-blur-md px-2.5 py-1 rounded-full">3 frameworks</span>
+              </div>
             </div>
-            {/* Content */}
             <div className="p-4 flex-shrink-0">
               <div className="flex items-center justify-between mb-1">
-                <h3 className="text-lg font-semibold text-slate-900 group-hover:text-indigo-900 transition-colors">Guidance</h3>
+                <h3 className="text-lg font-semibold text-slate-900 group-hover:text-indigo-900 transition-colors">Plan</h3>
                 <svg className="w-4 h-4 text-slate-300 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" /></svg>
               </div>
-              <p className="text-sm text-slate-500 leading-relaxed">8-step discovery framework to identify and prioritize agentic AI opportunities.</p>
+              <p className="text-sm text-slate-500 leading-relaxed">Assess readiness, build the business case, and prioritize use cases — before you build.</p>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {['Maturity', 'Business Cases', 'Use Cases'].map(t => (
+                  <span key={t} className="text-[8px] font-medium text-indigo-600/80 bg-indigo-50 px-1.5 py-0.5 rounded-full">{t}</span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -148,7 +154,6 @@ export default function Home() {
                 <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
                   <svg className="w-4.5 h-4.5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                 </div>
-                <span className="text-[8px] font-bold text-red-600/70 bg-red-50 px-1.5 py-0.5 rounded-full">Coming Soon</span>
               </div>
               <h3 className="text-base font-semibold text-slate-900 mb-1 group-hover:text-red-900 transition-colors">Policy</h3>
               <p className="text-sm text-slate-500 leading-relaxed flex-1">Governance frameworks and compliance policy management.</p>

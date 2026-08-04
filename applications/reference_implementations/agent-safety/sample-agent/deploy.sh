@@ -55,19 +55,19 @@ fi
 
 echo ""
 echo "Available models:"
-echo "  1. Claude Sonnet 4 (us.anthropic.claude-sonnet-4-20250514-v1:0)"
-echo "  2. Claude 3.7 Sonnet (us.anthropic.claude-3-7-sonnet-20250219-v1:0)"
+echo "  1. Claude Sonnet 4.5 (us.anthropic.claude-sonnet-4-5-20250929-v1:0)"
+echo "  2. Claude Sonnet 4 (us.anthropic.claude-sonnet-4-20250514-v1:0)"
 echo "  3. Claude 3.5 Sonnet v2 (us.anthropic.claude-3-5-sonnet-20241022-v2:0)"
 echo "  4. Custom model ID"
 read -p "Choice [1]: " MODEL_CHOICE
 MODEL_CHOICE=${MODEL_CHOICE:-1}
 
 case $MODEL_CHOICE in
-    1) MODEL_ID="us.anthropic.claude-sonnet-4-20250514-v1:0" ;;
-    2) MODEL_ID="us.anthropic.claude-3-7-sonnet-20250219-v1:0" ;;
+    1) MODEL_ID="us.anthropic.claude-sonnet-4-5-20250929-v1:0" ;;
+    2) MODEL_ID="us.anthropic.claude-sonnet-4-20250514-v1:0" ;;
     3) MODEL_ID="us.anthropic.claude-3-5-sonnet-20241022-v2:0" ;;
     4) read -p "Enter model ID: " MODEL_ID ;;
-    *) MODEL_ID="us.anthropic.claude-sonnet-4-20250514-v1:0" ;;
+    *) MODEL_ID="us.anthropic.claude-sonnet-4-5-20250929-v1:0" ;;
 esac
 
 echo ""

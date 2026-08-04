@@ -232,8 +232,7 @@ infrastructure/
 ├── .env.example              # Environment variables template
 ├── terraform.tfvars.example  # Terraform variables template
 ├── scripts/                  # Deployment and seeding shell scripts
-│   ├── deploy-full.sh        # One-command full deployment (infra + backend image + frontend + Cognito user)
-│   ├── deploy.sh             # Infrastructure-only Terraform deploy
+│   ├── deploy-full.sh        # One-command full deployment (infra + backend image + frontend + Cognito users)
 │   ├── destroy.sh            # Tear down all resources
 │   ├── import-existing.sh    # Import pre-existing AWS resources into Terraform state
 │   ├── seed-codecommit.sh    # Shell wrapper around the Python seeder

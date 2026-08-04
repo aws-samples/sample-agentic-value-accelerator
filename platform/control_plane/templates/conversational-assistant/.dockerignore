@@ -1,0 +1,11 @@
+ui/
+node_modules/
+.git/
+__pycache__/
+*.md
+*.tfvars
+*.tfvars.example
+iac/
+data/
+.env
+.env.example

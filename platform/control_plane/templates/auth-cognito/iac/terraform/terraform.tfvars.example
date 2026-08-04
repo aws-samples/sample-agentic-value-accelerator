@@ -1,0 +1,36 @@
+# =============================================================================
+# Auth — Cognito Module Configuration
+# Copy to terraform.tfvars and adjust values for your environment.
+# =============================================================================
+
+# --- Required ---
+
+project_name = "ava"
+aws_region   = "us-east-1"
+
+# --- Optional ---
+
+# environment = "dev"                  # dev | staging | prod
+# mfa_configuration = "OFF"            # OFF | OPTIONAL | ON
+# password_min_length = 12             # 8–99
+# allow_self_signup = false             # true to allow public sign-up
+
+# callback_urls = ["http://localhost:3000/callback"]
+# logout_urls   = ["http://localhost:3000"]
+
+# domain_prefix = ""                   # Cognito hosted UI prefix; empty = project_name-environment
+# custom_domain = ""                   # Custom domain (requires certificate_arn)
+# certificate_arn = ""                 # ACM cert ARN in us-east-1 for custom domain
+
+# resource_server_identifier = "api"
+# resource_server_scopes = [
+#   { name = "invoke",  description = "Invoke agents" },
+#   { name = "manage",  description = "Manage agents and deployments" },
+#   { name = "read",    description = "Read agent metadata" },
+# ]
+
+# deletion_protection = "INACTIVE"     # ACTIVE | INACTIVE
+
+# tags = {
+#   Team = "platform"
+# }

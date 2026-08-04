@@ -104,26 +104,31 @@ phases:
             AGENT_SPACE_NAME=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_name // empty')
             AGENT_SPACE_DESC=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_description // empty')
             NAME_POSTFIX=$(echo "$PARAMETERS_JSON" | jq -r '.name_postfix // empty')
+            CREATE_APPLICATION=$(echo "$PARAMETERS_JSON" | jq -r '.create_application // empty')
+            EXISTING_APP_DOMAIN=$(echo "$PARAMETERS_JSON" | jq -r '.existing_application_domain // empty')
             [ -n "$AGENT_SPACE_NAME" ] && CDK_CONTEXT="$CDK_CONTEXT -c agentSpaceName=\"$AGENT_SPACE_NAME\""
             [ -n "$AGENT_SPACE_DESC" ] && CDK_CONTEXT="$CDK_CONTEXT -c agentSpaceDescription=\"$AGENT_SPACE_DESC\""
             [ -n "$NAME_POSTFIX" ] && CDK_CONTEXT="$CDK_CONTEXT -c namePostfix=\"$NAME_POSTFIX\""
+            [ -n "$CREATE_APPLICATION" ] && CDK_CONTEXT="$CDK_CONTEXT -c createApplication=\"$CREATE_APPLICATION\""
+            [ -n "$EXISTING_APP_DOMAIN" ] && CDK_CONTEXT="$CDK_CONTEXT -c existingApplicationDomain=\"$EXISTING_APP_DOMAIN\""
           fi
           CDK_CONTEXT="$CDK_CONTEXT -c awsRegion=$AWS_TARGET_REGION"
 
-          # CDK stack ID in app.ts is "DevOpsAgentStack" — that's what cdk deploy matches on.
-          # We don't rename it per-deployment since CDK identifies stacks by construct ID.
-          STACK_NAME="DevOpsAgentStack"
-
+          # Each frontier agent's CDK app registers a single stack with its
+          # own construct ID (DevOpsAgentStack, SecurityAgentStack, ...).
+          # Use --all so the buildspec is agent-agnostic and we don't have
+          # to keep an AGENT_ID -> stack-name mapping in lockstep with the
+          # frontier agent registry.
           echo "=== cdk bootstrap ==="
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           cdk bootstrap aws://$ACCOUNT_ID/$AWS_TARGET_REGION --require-approval never 2>&1 || echo "Bootstrap already done or not needed"
 
           if [ "$ACTION" = "destroy" ]; then
-            echo "=== cdk destroy ==="
-            eval cdk destroy $STACK_NAME --force $CDK_CONTEXT --require-approval never
+            echo "=== cdk destroy --all ==="
+            eval cdk destroy --all --force $CDK_CONTEXT --require-approval never
           else
-            echo "=== cdk deploy ==="
-            eval cdk deploy $STACK_NAME --require-approval never --outputs-file /tmp/cdk-outputs.json $CDK_CONTEXT
+            echo "=== cdk deploy --all ==="
+            eval cdk deploy --all --require-approval never --outputs-file /tmp/cdk-outputs.json $CDK_CONTEXT
           fi
           ;;
 
@@ -152,9 +157,13 @@ phases:
             AGENT_SPACE_NAME=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_name // empty')
             AGENT_SPACE_DESC=$(echo "$PARAMETERS_JSON" | jq -r '.agent_space_description // empty')
             NAME_POSTFIX=$(echo "$PARAMETERS_JSON" | jq -r '.name_postfix // empty')
+            CREATE_APPLICATION=$(echo "$PARAMETERS_JSON" | jq -r '.create_application // empty')
+            EXISTING_APP_DOMAIN=$(echo "$PARAMETERS_JSON" | jq -r '.existing_application_domain // empty')
             [ -n "$AGENT_SPACE_NAME" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"AgentSpaceName=$AGENT_SPACE_NAME\""
             [ -n "$AGENT_SPACE_DESC" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"AgentSpaceDescription=$AGENT_SPACE_DESC\""
             [ -n "$NAME_POSTFIX" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"NamePostfix=$NAME_POSTFIX\""
+            [ -n "$CREATE_APPLICATION" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"CreateApplication=$CREATE_APPLICATION\""
+            [ -n "$EXISTING_APP_DOMAIN" ] && PARAM_OVERRIDES="$PARAM_OVERRIDES \"ExistingApplicationDomain=$EXISTING_APP_DOMAIN\""
           fi
 
           if [ "$ACTION" = "destroy" ]; then

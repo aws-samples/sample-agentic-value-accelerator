@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { deploymentsApi } from '../api/client';
 import type { Deployment } from '../types';
+import { openOperatorApp } from '../lib/operatorAppLauncher';
+import { useUser } from '../contexts/UserContext';
 
 interface AgentCard {
   id: string;
@@ -38,7 +40,7 @@ const AWS_AGENTS: AgentCard[] = [
     description: 'Proactive, context-aware application security across the development lifecycle: design security review, code review on pull requests, and on-demand penetration testing that runs multi-step attack scenarios against live web apps and APIs.',
     domain: 'Application Security',
     domainColor: 'red',
-    status: 'Coming Soon',
+    status: 'Available',
     logo: '/logos/aws-security-agent.svg',
     capabilities: ['Design security review', 'Code security review (PRs)', 'On-demand penetration testing', 'OWASP Top Ten + 13 risk categories', 'Ready-to-apply remediation PRs'],
     integrations: ['GitHub', 'IAM Identity Center', 'CloudTrail'],
@@ -67,6 +69,8 @@ const DOMAIN_STYLES: Record<string, string> = {
 
 export default function AwsAgentsCatalog() {
   const navigate = useNavigate();
+  const { user } = useUser();
+  const isViewer = user?.role === 'viewer';
   // Keyed by agent.id — latest deployed deployment per agent, or null.
   const [latestByAgent, setLatestByAgent] = useState<Record<string, Deployment | null>>({});
 
@@ -183,18 +187,23 @@ export default function AwsAgentsCatalog() {
                         >
                           View Deployment
                         </button>
-                        {operatorUrl && (
-                          <button
-                            type="button"
-                            onClick={() => window.open(operatorUrl, '_blank')}
-                            className="text-xs py-2 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors inline-flex items-center justify-center gap-1.5"
-                          >
-                            Open Operator App
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                            </svg>
-                          </button>
-                        )}
+                        {operatorUrl && (() => {
+                          const blockedForViewer = isViewer && agent.id === 'aws-security';
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => openOperatorApp(agent.id, operatorUrl)}
+                              disabled={blockedForViewer}
+                              title={blockedForViewer ? 'Viewers cannot launch the Operator App for AWS Security Agent' : 'Open the Operator App'}
+                              className="text-xs py-2 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors inline-flex items-center justify-center gap-1.5 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed disabled:hover:bg-slate-100 disabled:hover:border-slate-200"
+                            >
+                              Open Operator App
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                              </svg>
+                            </button>
+                          );
+                        })()}
                       </div>
                     )}
                     <button

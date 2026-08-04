@@ -1,0 +1,110 @@
+# Attestation Guide — {{ service }} Service Approval
+
+Generated {{ generated_at }} by service-approval pipeline.
+
+**Verdict:** {{ overall_verdict }}. **Evidence:** {{ total_controls }} controls, {{ pass_count }} PASS, {{ fail_count }} FAIL, {{ ncv_count }} NOT_CLI_VALIDATABLE.
+
+## How to review this directory
+
+This tree substantiates the claim "{{ service }} can be deployed compliantly against {{ framework_name }}."
+Each numbered phase directory contains one layer of the chain of custody:
+
+### 00-intake/intake-manifest.json
+- **What:** Operator-provided input (service name, framework, inputs folder).
+- **Upstream:** Human operator (see `inputs[].path` values).
+- **Downstream:** Every phase reads `service.name` + framework settings.
+- **Claim it substantiates:** "This run targeted {{ service }} against {{ framework_name }} with provided input files."
+
+### 01-assess/sar-facts.json
+- **What:** Authoritative IAM facts scraped from the AWS Service Authorization Reference page.
+- **Upstream:** {{ sar_url }}
+- **Downstream:** 02-research/research-capabilities.json, 03-validate/validated.json, 04-map/map-generate-controls, 05-generate/preventive (IAM actions, condition keys).
+- **Claim it substantiates:** "Every IAM action and condition key referenced in generated controls exists on the SAR page for this service."
+
+### 01-assess/checkpoint-results.json
+- **What:** Factual checkpoint answers (RCP support, FIPS endpoints, Declarative policies, etc.).
+- **Upstream:** AWS documentation URLs (captured in file).
+- **Downstream:** 03-validate (SCP/RCP expressibility gates), 04-map, 05-generate.
+- **Claim it substantiates:** "The service's capability boundary matches what AWS publicly documents."
+
+### 01-assess/assessment-summary.md
+- **What:** 5-domain CAF assessment with GAPS compliance matrix.
+- **Upstream:** domains/*.md intermediate research + SAR + checkpoints.
+- **Downstream:** 07-summarize/APPROVAL-REPORT.md Security Posture Assessment section.
+- **Claim it substantiates:** "All known security posture gaps for this service were identified before control generation."
+
+### 02-research/research.json (merged)
+- **What:** Unified research bundle — existing mitigations + service capabilities + API surface + attack techniques.
+- **Upstream:** research-mitigations.json, research-capabilities.json, research-api-surface.json (all same dir), each MCP-verified.
+- **Downstream:** 03-validate/validated.json.
+- **Claim it substantiates:** "Every capability and API we plan to control was verified against live AWS documentation on the run date."
+
+### 03-validate/validated.json
+- **What:** Post-MCP-verification view of research.json with per-item verification_note strings.
+- **Upstream:** 02-research/research.json.
+- **Downstream:** 04-map/map-controls-generated.json, 05-generate/* (condition keys, parameter paths, mutability).
+- **Claim it substantiates:** "Every downstream control is grounded in an MCP-confirmed fact, not model guesswork."
+
+### 04-map/mapping-results.json
+- **What:** Final control inventory + threat-mitigation map + framework coverage.
+- **Upstream:** validated.json, map-framework-parsed.json, map-controls-generated.json, map-framework-mapped.json.
+- **Downstream:** 05-generate/* (each generator reads the control roster), 08-evidence (CLI synthesis reads controls[]).
+- **Claim it substantiates:** "The control set maps deterministically onto the customer's compliance framework, with every mapping rationale captured."
+
+### 05-generate/{preventive,proactive,detective,responsive,iac}/
+- **What:** Deployable artifacts — SCPs, Config rules, Lambda remediators, CFN/Terraform/CDK/CDKTF templates.
+- **Upstream:** mapping-results.json, validated.json, iac-support.json.
+- **Downstream:** 06-test (deployed), 08-evidence (validated via CLI probes).
+- **Claim it substantiates:** "Every control in mapping-results.json has at least one deployable artifact."
+
+### 06-test/test-results.json + deploy-logs/
+- **What:** Phase 5 deployment outcome: deploy + verify + teardown cycle for each IaC format.
+- **Upstream:** 05-generate/iac/**.
+- **Downstream:** 08-evidence (reads deployed-resources.json for ARNs).
+- **Claim it substantiates:** "The compliant-resource template actually deploys against a real AWS account and tears down cleanly."
+
+### 07-summarize/APPROVAL-REPORT.md
+- **What:** Customer-facing verdict with coverage matrix and traceability tables.
+- **Upstream:** EVERY file above.
+- **Downstream:** Human reviewer.
+- **Claim it substantiates:** "Here is the synthesized answer to 'Is this service approvable?' with evidence pointers."
+
+### 08-evidence/
+- **What:** Post-deploy runtime verification that each mapped control is actually enforced.
+- **Upstream:** mapping-results.json (control roster), test-results.json (deployed resource ARNs), validated.json (API surface).
+- **Downstream:** Final reviewer.
+- **Claim it substantiates:** "The generated controls aren't just written — they demonstrably fire in AWS against a live stack."
+  - **attestation-report.md** — the control × verdict matrix
+  - **attestation-results.json** — machine-readable form of the above
+  - **cli-commands.json** — every CLI command and its predicate (auditable BEFORE execution)
+  - **cli-outputs/*.log** — raw stdout/stderr of each probe
+  - **iac-time-evidence/** — supplemental linting output from Phase 4/5
+  - **summary.md** — top-level triage digest
+
+## Verification commands for an independent reviewer
+
+To re-run every CLI probe without re-deploying:
+```bash
+python3 tools/evidence/replay.py --service={{ service_slug }} --all
+```
+
+To re-verify that every schema-bearing file is well-formed:
+```bash
+python3 tools/validate/validate_state.py {{ service_slug }}/01-assess/sar-facts.json
+python3 tools/validate/validate_state.py {{ service_slug }}/03-validate/validated.json
+python3 tools/validate/validate_state.py {{ service_slug }}/04-map/mapping-results.json
+python3 tools/validate/validate_evidence.py {{ service_slug }}/08-evidence/attestation-results.json
+```
+
+## Source citations
+
+- **Service Authorization Reference:** {{ sar_url }}
+- **CloudFormation Template Reference:** {{ cfn_ref_url }}
+- **AWS Config Resource Types:** https://docs.aws.amazon.com/config/latest/developerguide/resource-config-reference.html
+- **Compliance framework parsed:** {{ framework_source_file }}
+
+---
+
+**Generated by:** service-approval pipeline v{{ pipeline_version }}
+**Git commit:** {{ git_commit }}
+**Operator:** {{ operator }}

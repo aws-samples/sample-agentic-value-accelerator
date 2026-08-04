@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/research-capabilities.schema.json",
+  "title": "research-capabilities.json",
+  "description": "Phase 1b output: AWS service security capabilities across 5 domains. Produced by research-capabilities skill. Consumed by research.json merge, validate phase, and map-generate-controls. Top-level `phase` MUST be 'research-capabilities' per validate_state.py CHECK-S7. condition_keys[] MUST be objects with applies_to_actions[] (iter-14 Class F13).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "service", "resources", "capabilities"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "phase": {"type": "string", "const": "research-capabilities"},
+    "service": {"type": "string", "minLength": 1},
+    "service_prefix": {"type": "string"},
+    "cfn_prefix": {"type": "string"},
+    "resources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["resource_type"],
+        "properties": {
+          "resource_type": {"type": "string"},
+          "arn_pattern": {"type": "string"}
+        }
+      }
+    },
+    "capabilities": {"$ref": "#/$defs/capabilities"},
+    "doc_sources": {
+      "type": "array",
+      "items": {"type": ["object", "string"]}
+    },
+    "_metadata": {"type": "object", "additionalProperties": true}
+  },
+
+  "$defs": {
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["iam", "encryption", "network", "logging", "organization_policies"],
+      "properties": {
+        "iam": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "condition_keys": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/conditionKey"},
+              "description": "Object form required since iter-14 Class F13. Strings-only arrays rejected by CHECK-S7 and schema."
+            },
+            "permission_only_actions": {"type": "array", "items": {"type": "string"}},
+            "resource_policies_supported": {"type": "boolean"},
+            "resource_based_policies": {
+              "description": "Boolean or object — some archives emit richer metadata here; pre-iter-14 schema didn't nail the type."
+            },
+            "abac_support": {
+              "type": "string",
+              "enum": ["full", "partial", "none"]
+            },
+            "service_linked_roles": {
+              "description": "Either an array of SLR objects or a boolean flag. Pre-iter-14 shape drift; downstream tolerates both."
+            },
+            "permission_boundaries_applicable": {"type": "boolean"}
+          }
+        },
+        "encryption": {"type": "object", "additionalProperties": true},
+        "network": {"type": "object", "additionalProperties": true},
+        "logging": {"type": "object", "additionalProperties": true},
+        "organization_policies": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "conditionKey": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["key"],
+      "properties": {
+        "key": {"type": "string"},
+        "applies_to_actions": {"type": "array", "items": {"type": "string"}},
+        "type": {"type": "string"},
+        "description": {"type": "string"}
+      }
+    }
+  }
+}

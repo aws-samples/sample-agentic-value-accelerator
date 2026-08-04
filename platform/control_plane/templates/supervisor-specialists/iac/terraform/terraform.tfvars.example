@@ -1,0 +1,24 @@
+# =============================================================================
+# Supervisor with Specialists — Starter Template
+# Copy this file to terraform.tfvars and edit the values.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Required
+# -----------------------------------------------------------------------------
+
+project_name        = "my-supervisor"
+aws_region          = "us-east-1"
+container_image_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-supervisor-dev-agent:latest"
+
+# -----------------------------------------------------------------------------
+# Optional
+# -----------------------------------------------------------------------------
+
+# environment = "dev"
+# model_id    = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+# tags = {
+#   Team  = "platform"
+#   Owner = "jane@example.com"
+# }

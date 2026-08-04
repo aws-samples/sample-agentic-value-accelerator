@@ -2,23 +2,52 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { deploymentsApi } from '../api/client';
 import LoadingSpinner from './LoadingSpinner';
 
+type LogSource = 'build' | 'runtime';
+
 interface Props {
   deploymentId: string;
   isOpen: boolean;
   onClose: () => void;
+  source?: LogSource;
 }
 
-export default function LogsViewer({ deploymentId, isOpen, onClose }: Props) {
+const TITLES: Record<LogSource, string> = {
+  build: 'Build Logs',
+  runtime: 'Runtime Logs',
+};
+
+// Each runtime line is "<iso_ts>  <message>". If <message> is JSON, pretty-print
+// it; otherwise leave it raw. Two spaces is the separator the backend emits in
+// pipeline_service.get_runtime_logs.
+function formatLogLine(line: string, pretty: boolean): string {
+  if (!pretty) return line;
+  const sepIdx = line.indexOf('  ');
+  if (sepIdx < 0) return line;
+  const ts = line.slice(0, sepIdx);
+  const rest = line.slice(sepIdx + 2);
+  const trimmed = rest.trim();
+  if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) return line;
+  try {
+    return `${ts}\n${JSON.stringify(JSON.parse(trimmed), null, 2)}`;
+  } catch {
+    return line;
+  }
+}
+
+export default function LogsViewer({ deploymentId, isOpen, onClose, source = 'build' }: Props) {
   const [logs, setLogs] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [pretty, setPretty] = useState(source === 'runtime');
   const logsEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchLogs = useCallback(async () => {
     try {
-      const data = await deploymentsApi.getDeploymentLogs(deploymentId);
+      const data = source === 'runtime'
+        ? await deploymentsApi.getRuntimeLogs(deploymentId)
+        : await deploymentsApi.getDeploymentLogs(deploymentId);
       setLogs(data.logs || '');
       setError(null);
     } catch (e: any) {
@@ -26,7 +55,7 @@ export default function LogsViewer({ deploymentId, isOpen, onClose }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [deploymentId]);
+  }, [deploymentId, source]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -61,9 +90,21 @@ export default function LogsViewer({ deploymentId, isOpen, onClose }: Props) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <h3 className="text-base font-semibold text-slate-900">Build Logs</h3>
+            <h3 className="text-base font-semibold text-slate-900">{TITLES[source]}</h3>
           </div>
           <div className="flex items-center gap-2">
+            {source === 'runtime' && (
+              <button
+                onClick={() => setPretty(!pretty)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all duration-150 ${
+                  pretty
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                Pretty {pretty ? 'ON' : 'OFF'}
+              </button>
+            )}
             <button
               onClick={() => setAutoScroll(!autoScroll)}
               className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all duration-150 ${
@@ -102,7 +143,7 @@ export default function LogsViewer({ deploymentId, isOpen, onClose }: Props) {
             <div className="text-red-400 text-sm font-mono">{error}</div>
           ) : logs ? (
             <pre className="text-emerald-400 text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
-              {logs}
+              {logs.split('\n').map(line => formatLogLine(line, pretty)).join('\n\n')}
             </pre>
           ) : (
             <div className="text-slate-500 text-sm font-mono">No logs available yet.</div>

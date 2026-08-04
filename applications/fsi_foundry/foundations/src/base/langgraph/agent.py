@@ -5,6 +5,8 @@ Provides a base class for creating LangGraph-compatible agents with minimal conf
 Subclasses define system_prompt, tools, and model settings; base class handles execution.
 """
 
+import logging
+import os
 from abc import ABC
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +17,8 @@ from langchain.agents import create_tool_calling_agent, AgentExecutor
 from base.types import AgentConfig, ExecutionResult
 from config.settings import settings
 from utils.telemetry import setup_tracing, get_langfuse_callback_handler
+
+logger = logging.getLogger(__name__)
 
 
 class LangGraphAgent(ABC):
@@ -45,7 +49,11 @@ class LangGraphAgent(ABC):
     model_id: Optional[str] = None
     model_kwargs: Dict[str, Any] = {"temperature": 0.1, "max_tokens": 4096}
     verbose: bool = True
-    max_iterations: int = 2  # Reduced from 5 to prevent iteration bloat in parallel execution
+    max_iterations: int = 10  # Was 5 historically, dropped to 2 in caa6d0dd to fix legacy_migration
+    # parallel-agent timeout. KYC/fraud/surveillance flows do 3-4 sequential S3 tool calls + final
+    # reasoning step (≥4 iterations); 5 was too tight when retries kicked in, so bumping to 10 with
+    # buffer for graceful failures. Real fix for parallel bloat is to cap concurrent agents in the
+    # orchestrator, not per-agent iterations.
 
     def __init__(self, **overrides):
         """
@@ -72,17 +80,59 @@ class LangGraphAgent(ABC):
             setup_tracing()
         self._langfuse_handler = get_langfuse_callback_handler() if self._enable_tracing else None
     
-    def _create_llm(self, disable_guardrail: bool = False) -> ChatBedrockConverse:
-        """Create the Bedrock LLM instance using the Converse API for native tool calling.
+    def _create_llm(self, disable_guardrail: bool = False):
+        """Create the LLM instance.
+
+        Routes through LLM Gateway (LiteLLM) when settings.use_llm_gateway is
+        True, else falls back to direct Bedrock via ChatBedrockConverse. See
+        base/langgraph/orchestrator.py:_create_llm for the same pattern.
+
+        Fail-closed in production: raises GatewayConfigurationError if
+        gateway is enabled but the virtual key is unavailable.
+        Fail-open in dev (LOCAL_MODE=true): logs warning, falls back to Bedrock.
 
         Guardrails are NOT injected into LLM calls. They are applied as
         post-processing on the final response via apply_guardrail_to_response().
         """
+        model_id = self.config.model_id or settings.bedrock_model_id or settings.effective_bedrock_model_id
+        temperature = self.config.model_kwargs.get("temperature", 0.1)
+        max_tokens = self.config.model_kwargs.get("max_tokens", 4096)
+
+        if settings.use_llm_gateway:
+            from utils.llm_gateway import (
+                resolve_gateway_api_key,
+                gateway_base_url,
+                gateway_model_id,
+                GatewayConfigurationError,
+            )
+            from langchain_litellm import ChatLiteLLM
+
+            api_key = resolve_gateway_api_key()
+            if api_key:
+                logger.info(
+                    "llm_gateway_selected",
+                    extra={"framework": "langgraph", "model": model_id, "gateway": gateway_base_url()},
+                )
+                return ChatLiteLLM(
+                    model=gateway_model_id(model_id),
+                    api_base=gateway_base_url(),
+                    api_key=api_key,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            # Fail-closed in production, fail-open in dev
+            if os.getenv("LOCAL_MODE", "").lower() not in ("true", "1", "yes"):
+                raise GatewayConfigurationError(
+                    "LLM Gateway enabled but virtual key unavailable. "
+                    "Set LLM_GATEWAY_API_KEY or LLM_GATEWAY_API_KEY_SECRET_ARN."
+                )
+            logger.warning("llm_gateway_key_unavailable_falling_back_to_direct_bedrock")
+
         return ChatBedrockConverse(
-            model_id=self.config.model_id or settings.bedrock_model_id or settings.effective_bedrock_model_id,
+            model_id=model_id,
             region_name=settings.aws_region,
-            temperature=self.config.model_kwargs.get("temperature", 0.1),
-            max_tokens=self.config.model_kwargs.get("max_tokens", 4096),
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
     
     def _create_prompt(self) -> ChatPromptTemplate:
@@ -101,11 +151,18 @@ class LangGraphAgent(ABC):
         Bedrock guardrails applied to structured tool-call outputs corrupt the JSON,
         causing parse errors and iteration exhaustion. Guardrails are instead applied
         at the orchestrator level on the final user-facing text output.
+
+        Note on tool_choice: LangChain's create_tool_calling_agent internally
+        calls llm.bind_tools(tools, tool_choice="any"). Bedrock Converse rejects
+        "any" (only "auto", "required", <tool object>). When routing through the
+        LLM Gateway, the fix is at the LiteLLM config layer (additional_drop_params
+        includes tool_choice) so LiteLLM strips it before proxying to Bedrock.
+        See platform/control_plane/templates/llm-gateway/.../config.tf.
         """
         llm = self._create_llm(disable_guardrail=True)
         prompt = self._create_prompt()
         agent = create_tool_calling_agent(llm, self.config.tools, prompt)
-        
+
         return AgentExecutor(
             agent=agent,
             tools=self.config.tools,

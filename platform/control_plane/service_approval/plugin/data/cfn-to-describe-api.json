@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "description": "Mapping from CloudFormation resource types to AWS CLI describe operations. Used by evidence synthesis (Phase 7) to probe deployed resources. Each entry maps a CFN type to the service, CLI verb, and name flag for the corresponding describe command.",
+  "mappings": {
+    "AWS::Lambda::Function": {
+      "service": "lambda",
+      "verb": "get-function-configuration",
+      "name_flag": "--function-name",
+      "description": "Get Lambda function configuration (KMS key, environment, etc.)"
+    },
+    "AWS::Lambda::CodeSigningConfig": {
+      "service": "lambda",
+      "verb": "get-code-signing-config",
+      "name_flag": "--code-signing-config-arn",
+      "description": "Get code signing configuration for Lambda function deployment"
+    },
+    "AWS::Lambda::EventSourceMapping": {
+      "service": "lambda",
+      "verb": "get-event-source-mapping",
+      "name_flag": "--uuid",
+      "description": "Get event source mapping (Kinesis, DynamoDB, SQS, etc.) for Lambda"
+    },
+    "AWS::Lambda::LayerVersion": {
+      "service": "lambda",
+      "verb": "get-layer-version",
+      "name_flag": "--layer-name",
+      "description": "Get Lambda layer version metadata",
+      "note": "Requires both --layer-name and --version-number; synthesis must extract version from ARN"
+    },
+    "AWS::Lambda::Url": {
+      "service": "lambda",
+      "verb": "get-function-url-config",
+      "name_flag": "--function-name",
+      "description": "Get Lambda function URL configuration (auth type, CORS, etc.)"
+    },
+    "AWS::Lambda::Permission": {
+      "service": null,
+      "verb": null,
+      "name_flag": null,
+      "description": "Policy-only resource — no direct describe API. Permissions are read via get-policy on the function.",
+      "alternative_probe": "aws lambda get-policy --function-name <name>"
+    },
+    "AWS::IAM::Role": {
+      "service": "iam",
+      "verb": "get-role",
+      "name_flag": "--role-name",
+      "description": "Get IAM role metadata (trust policy, tags, permissions boundary)"
+    },
+    "AWS::KMS::Key": {
+      "service": "kms",
+      "verb": "describe-key",
+      "name_flag": "--key-id",
+      "description": "Get KMS key metadata (key state, key manager, key policy)"
+    },
+    "AWS::Logs::LogGroup": {
+      "service": "logs",
+      "verb": "describe-log-groups",
+      "name_flag": "--log-group-name-prefix",
+      "description": "Get CloudWatch Logs log group metadata (retention, KMS key)"
+    }
+  },
+  "_metadata": {
+    "usage": "Extensible per service. Evidence synthesis (Phase 7) uses this to generate 'aws <service> <verb> <name_flag> <physical_id>' commands for deployed resources.",
+    "coverage_note": "Seeded for Lambda-relevant types. Add entries for other services as needed (S3, DynamoDB, EC2, etc.). If a CFN type is missing, synthesis falls back to NOT_CLI_VALIDATABLE with a coverage warning.",
+    "examples": {
+      "AWS::Lambda::Function": "aws lambda get-function-configuration --function-name my-function",
+      "AWS::IAM::Role": "aws iam get-role --role-name MyRole",
+      "AWS::KMS::Key": "aws kms describe-key --key-id alias/my-key"
+    }
+  }
+}

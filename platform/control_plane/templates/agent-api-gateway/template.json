@@ -1,0 +1,167 @@
+{
+  "id": "agent-api-gateway",
+  "name": "Agent API Gateway",
+  "description": "API Gateway for agent backends with two variants: HTTP API for request/response and SSE streaming, or WebSocket API for bidirectional streaming. Includes optional JWT auth (Cognito), custom domain, throttling, and access logging.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "api",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "api-gateway",
+    "http",
+    "websocket",
+    "streaming",
+    "cognito",
+    "terraform"
+  ],
+  "aws_services": [
+    "apigateway-v2",
+    "cloudwatch",
+    "acm",
+    "route53"
+  ],
+  "frameworks_list": [],
+  "built_with": [],
+  "resources": [
+    {
+      "name": "HTTP API Gateway",
+      "description": "API Gateway v2 HTTP API with CORS configuration"
+    },
+    {
+      "name": "API Stage",
+      "description": "Auto-deploy stage with access logging and throttling"
+    },
+    {
+      "name": "Backend Integration",
+      "description": "HTTP_PROXY integration forwarding requests to your agent endpoint"
+    },
+    {
+      "name": "Proxy Route",
+      "description": "Catch-all route (ANY /{proxy+}) forwarding all paths to backend"
+    },
+    {
+      "name": "JWT Authorizer",
+      "description": "Cognito JWT authorizer (optional, when auth_type=JWT)"
+    },
+    {
+      "name": "Custom Domain",
+      "description": "Custom domain with TLS 1.2 (optional)"
+    },
+    {
+      "name": "CloudWatch Log Group",
+      "description": "Access logs for API Gateway requests"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name used for resource naming"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "backend_endpoint",
+      "type": "string",
+      "required": true,
+      "description": "AgentCore or backend URL to proxy requests to"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "auth_type",
+      "type": "string",
+      "required": false,
+      "default": "NONE",
+      "description": "Authorization type: NONE, JWT, or AWS_IAM"
+    },
+    {
+      "name": "cognito_user_pool_id",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Cognito User Pool ID (required when auth_type=JWT)"
+    },
+    {
+      "name": "cognito_app_client_id",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Cognito App Client ID (required when auth_type=JWT)"
+    },
+    {
+      "name": "throttling_burst_limit",
+      "type": "number",
+      "required": false,
+      "default": "100",
+      "description": "API throttling burst limit"
+    },
+    {
+      "name": "throttling_rate_limit",
+      "type": "number",
+      "required": false,
+      "default": "50",
+      "description": "API throttling rate limit (requests/second)"
+    },
+    {
+      "name": "custom_domain",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Custom domain name for the API"
+    },
+    {
+      "name": "certificate_arn",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "ACM certificate ARN (required with custom_domain)"
+    },
+    {
+      "name": "cors_allow_origins",
+      "type": "list(string)",
+      "required": false,
+      "default": "[\"*\"]",
+      "description": "Allowed CORS origins"
+    },
+    {
+      "name": "log_retention_days",
+      "type": "number",
+      "required": false,
+      "default": "30",
+      "description": "CloudWatch log retention in days"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "AWS: HTTP API Developer Guide",
+      "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api.html"
+    },
+    {
+      "title": "Terraform: aws_apigatewayv2_api",
+      "url": "https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/apigatewayv2_api"
+    },
+    {
+      "title": "AWS: WebSocket API Guide",
+      "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api.html"
+    }
+  ]
+}

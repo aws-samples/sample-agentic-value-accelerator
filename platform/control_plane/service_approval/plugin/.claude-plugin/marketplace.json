@@ -1,0 +1,29 @@
+{
+  "name": "service-approval",
+  "metadata": {
+    "description": "AWS service security controls generator — proactive, preventive, detective, responsive",
+    "version": "1.0.0"
+  },
+  "owner": {
+    "name": "GFS PACE",
+    "email": "fsi-pace@amazon.com"
+  },
+  "plugins": [
+    {
+      "name": "service-approval",
+      "description": "Generate AWS security controls and compliant resource templates for any AWS service. Maps findings to CCMv4 control objectives.",
+      "source": "./",
+      "version": "1.0.0",
+      "keywords": [
+        "aws",
+        "security",
+        "controls",
+        "agentcore",
+        "ccmv4",
+        "compliance",
+        "scp",
+        "config-rules"
+      ]
+    }
+  ]
+}

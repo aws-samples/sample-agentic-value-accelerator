@@ -1,0 +1,12 @@
+{
+  "_comment": "Known aliases between botocore operation names and SAR IAM action names. Some AWS services publish different names in boto3 vs the Service Authorization Reference. Without this alias table, validator CHECK-S9 produces false-positive CRITICAL errors when condition_keys[].applies_to_actions references the SAR spelling but api_surface.operations[] uses the botocore spelling. Validators treat aliased pairs as equal during set comparison. Add entries as new mismatches surface during smoke-test.",
+  "_source": "service-agnostic by design — each entry names the AWS service but the mechanism (SAR↔botocore name drift) is cross-cutting. Surfaced during iter-14 run 3/5 Amazon Athena.",
+  "aliases": [
+    {
+      "service": "athena",
+      "botocore_operation": "StopQueryExecution",
+      "sar_iam_action": "CancelQueryExecution",
+      "_source": "iter-14 run 3/5 (Amazon Athena); boto3 uses Stop*, SAR grants use athena:Cancel*."
+    }
+  ]
+}

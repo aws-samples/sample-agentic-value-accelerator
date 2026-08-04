@@ -1,0 +1,24 @@
+{
+  "name": "security-agent-cdk",
+  "version": "1.0.0",
+  "description": "CDK deployment for AWS Security Agent — Agent Space and the Application/PenTest/Actor IAM roles.",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.245.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^20.1.0",
+    "aws-cdk": "^2.1109.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.0.4"
+  }
+}

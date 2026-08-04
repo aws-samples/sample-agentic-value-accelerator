@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/map-controls-generated.schema.json",
+  "title": "map-controls-generated.json",
+  "description": "Authoritative shape for map-generate-controls skill output. Produced by skills/map-generate-controls. Consumed by scripts/map-assemble.py and validate_state.py:check_controls_generated. Enforces the CTRL-<SCOPE>-<CAT>-NNN ID pattern locked in iter-14 Class C. additionalProperties:false at top level and inside controls[] to catch schema drift; permissive inside _metadata sidecars for operator-defined documentation fields.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "service", "controls", "control_summary"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "phase": {
+      "type": "string",
+      "const": "map-generate-controls",
+      "description": "Optional top-level marker. Validator CHECK-S11 does not require it today, but when present it must be the canonical phase name."
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1
+    },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/control"}
+    },
+    "control_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "total_controls": {"type": "integer", "minimum": 0}
+      }
+    },
+    "coverage_gaps": {
+      "type": "array",
+      "items": {"type": "object"},
+      "description": "Optional — Rule C1 feasibility filter gaps. Forwarded by map-assemble into mapping-results.coverage_gaps.posture_gap[]."
+    },
+    "classification_fallback_log": {
+      "type": "array",
+      "items": {"type": "object"},
+      "description": "Optional — iter-12 F11 classifier emits fallback entries when no verb/noun-phrase/title match fires. Each entry is {mitigation_id, reason}."
+    },
+    "mitigation_coverage": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional — summary stats on how many input mitigations ended up with at least one control."
+    },
+    "assessment_gap_coverage": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional — summary stats on how many assessment_gaps from Phase 0 ended up addressed by a control."
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional — generator-emitted counters (posture distribution, mechanism distribution, etc.)."
+    },
+    "_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Operator-defined documentation fields; not validated."
+    }
+  },
+
+  "$defs": {
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "name", "scope", "category", "mechanism",
+        "description", "actions", "mitigation_ids",
+        "security_rationale", "parameters_controlled",
+        "framework_keywords", "resource_types", "condition_keys"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$",
+          "description": "Canonical control-ID format (iter-14 Class C). Literal CTRL- prefix; service identity lives in _metadata.service and validated.service, NOT in the ID."
+        },
+        "name": {"type": "string", "minLength": 1},
+        "scope": {
+          "type": "string",
+          "enum": ["ORG", "ACC", "RES"],
+          "description": "ORG=organisation-wide (SCP/RCP/tag-policy), ACC=per-account (permission-boundary/IAM/Config-rule), RES=per-resource (resource-based-policy/KMS-key-policy)."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["PRO", "PRV", "DET", "COR"],
+          "description": "PRO=proactive (pre-deploy), PRV=preventive (request-time), DET=detective (post-deploy), COR=responsive (remediation)."
+        },
+        "posture": {
+          "type": "string",
+          "enum": [
+            "preventative-proactive",
+            "preventative-request",
+            "reactive-detective",
+            "reactive-corrective"
+          ],
+          "description": "Phase C Rule C1 posture classification. Should be present on every control generated after iter-11 Phase C (commit b9e9545). Not in the required list to avoid breaking pre-Phase-C archives, but validator CHECK-15 cross-checks it against the artifact's directory family when present."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["sar", "api", "both"],
+          "description": "Phase C Rule C1 source tag: sar = SAR condition keys drive the mechanism; api = botocore parameters drive it; both = tag-based controls usable via either path."
+        },
+        "mechanism": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "actions": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z0-9-]+:[A-Za-z0-9*]+$"},
+          "description": "IAM actions the control gates, e.g. 'dynamodb:CreateTable'."
+        },
+        "condition_keys": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Service-specific or global condition keys referenced by the control's enforcement logic."
+        },
+        "resource_types": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "parameters_controlled": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^\\$\\..+"},
+          "description": "Botocore parameter paths (JSONPath rooted at request body)."
+        },
+        "mitigation_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^M-.+"}
+        },
+        "security_rationale": {"type": "string", "minLength": 1},
+        "framework_keywords": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "framework_objectives": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Populated by scripts/map-assemble.py::build_reverse_index after map-framework-mapping runs. Absent in map-generate-controls output."
+        },
+        "assessment_gap_ids": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Optional — iter-13 addition linking the control back to GAP-NN entries from assessment-summary.md."
+        },
+        "attack_techniques": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Optional — MITRE ATT&CK technique IDs (e.g. T1078) the control addresses. iter-13 addition when a threat model is provided."
+        },
+        "_metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "id": "agent-memory-agentcore",
+  "name": "Agent Memory \u2014 AgentCore",
+  "description": "Deploys a Bedrock AgentCore memory store with a configurable extraction strategy. Gives agents persistent memory across sessions \u2014 semantic search, summarization, user preferences, or episodic recall.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "memory",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "agentcore",
+    "bedrock",
+    "memory",
+    "terraform"
+  ],
+  "aws_services": [
+    "bedrock-agentcore"
+  ],
+  "frameworks_list": [],
+  "built_with": [],
+  "resources": [
+    {
+      "name": "AgentCore Memory",
+      "description": "Persistent memory store for agent sessions and knowledge"
+    },
+    {
+      "name": "Memory Strategy",
+      "description": "Strategy defining how memories are extracted and consolidated"
+    },
+    {
+      "name": "IAM Role",
+      "description": "Execution role for memory operations"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name used in resource naming (lowercase, hyphens)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "event_expiry_duration",
+      "type": "number",
+      "required": false,
+      "default": "30",
+      "description": "Memory event expiry in days (7-365)"
+    },
+    {
+      "name": "memory_strategy_type",
+      "type": "string",
+      "required": false,
+      "default": "SEMANTIC",
+      "description": "Strategy type: SEMANTIC, SUMMARIZATION, USER_PREFERENCE, or EPISODIC"
+    },
+    {
+      "name": "namespaces",
+      "type": "list(string)",
+      "required": false,
+      "default": "[\"default\"]",
+      "description": "Namespaces for the memory strategy"
+    },
+    {
+      "name": "tags",
+      "type": "map(string)",
+      "required": false,
+      "default": "{}",
+      "description": "Additional tags applied to all resources"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "AgentCore: Memory Documentation",
+      "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html"
+    },
+    {
+      "title": "Strands: Memory Tutorial",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/06-memory"
+    },
+    {
+      "title": "Terraform: aws_bedrockagentcore_memory",
+      "url": "https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bedrockagentcore_memory"
+    }
+  ]
+}

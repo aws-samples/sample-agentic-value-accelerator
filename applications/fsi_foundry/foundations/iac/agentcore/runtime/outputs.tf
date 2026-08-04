@@ -43,6 +43,26 @@ output "guardrail_version" {
   value       = var.guardrail_version
 }
 
+output "agentcore_observability_enabled" {
+  description = "Whether AgentCore CloudWatch/X-Ray observability is wired for this runtime"
+  value       = var.enable_agentcore_observability
+}
+
+output "agentcore_log_group_name" {
+  description = "CloudWatch log group receiving AgentCore APPLICATION_LOGS for this runtime"
+  value       = var.enable_agentcore_observability ? aws_cloudwatch_log_group.agentcore_runtime[0].name : ""
+}
+
+output "agentcore_observability_console_url" {
+  description = "Deep link to the Bedrock AgentCore agents view in CloudWatch GenAI Observability"
+  value       = var.enable_agentcore_observability ? "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#/gen-ai-observability/agent-core/agents" : ""
+}
+
+output "fleet_dashboard_url" {
+  description = "Deep link to the AVA AgentCore fleet CloudWatch dashboard"
+  value       = var.create_fleet_dashboard ? "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.fleet[0].dashboard_name}" : ""
+}
+
 output "deployment_instructions" {
   description = "Instructions for testing the agent"
   value       = <<-EOT

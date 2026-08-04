@@ -1,0 +1,28 @@
+# Required
+project_name = "my-agent"
+aws_region   = "us-east-1"
+
+# Optional
+environment = "dev"
+
+# Custom denied topics example:
+# denied_topics = [
+#   {
+#     name       = "Investment Advice"
+#     definition = "Providing specific investment recommendations or financial advice"
+#     examples   = ["Should I buy AAPL stock?", "What crypto should I invest in?"]
+#   }
+# ]
+
+# PII entities to protect:
+# pii_entities = [
+#   { type = "EMAIL", action = "ANONYMIZE" },
+#   { type = "PHONE", action = "ANONYMIZE" },
+#   { type = "CREDIT_DEBIT_CARD_NUMBER", action = "BLOCK" },
+#   { type = "US_SOCIAL_SECURITY_NUMBER", action = "BLOCK" },
+#   { type = "IP_ADDRESS", action = "ANONYMIZE" }
+# ]
+
+# tags = {
+#   Team = "platform"
+# }

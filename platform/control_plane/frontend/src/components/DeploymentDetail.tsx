@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { deploymentsApi } from '../api/client';
 import type { Deployment, DeploymentStatus, AppUseCase } from '../types';
 import StatusBadge from './StatusBadge';
@@ -9,15 +9,27 @@ import PipelineVisualization from './PipelineVisualization';
 import LogsViewer from './LogsViewer';
 import TestDeploymentDrawer from './TestDeploymentDrawer';
 import MarkdownRenderer from './MarkdownRenderer';
+import { useUser } from '../contexts/UserContext';
+import { Icon } from './govern/icons';
+// Route "Open App" clicks through openFsiApp so the AVA CP mints an HMAC-signed
+// handoff token (?ava_token=...) — same behavior as the tile-side buttons in
+// ReferenceImplementations / FSIFoundryCatalog / MyApps. Without this, apps that
+// enforce edge auth (case-management, merchant-onboarding, agentcore-in-a-box,
+// foundry runtimes) would redirect the user to
+// the AVA login instead of setting the session cookie.
+import { openFsiApp } from '../lib/fsiAppLink';
 
 const TERMINAL_STATUSES: DeploymentStatus[] = ['deployed', 'destroyed', 'failed', 'rolled_back', 'delivered'];
 
 export default function DeploymentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useUser();
+  const isViewer = user?.role === 'viewer';
   const [deployment, setDeployment] = useState<Deployment | null>(null);
   const [loading, setLoading] = useState(true);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [runtimeLogsOpen, setRuntimeLogsOpen] = useState(false);
   const [destroying, setDestroying] = useState(false);
   const [destroyError, setDestroyError] = useState<string | null>(null);
   const [redeploying, setRedeploying] = useState(false);
@@ -27,6 +39,8 @@ export default function DeploymentDetail() {
   const [downloadingSource, setDownloadingSource] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [showAllOutputs, setShowAllOutputs] = useState(false);
+  const [provisioningGateway, setProvisioningGateway] = useState(false);
+  const [gatewayMessage, setGatewayMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -97,7 +111,28 @@ export default function DeploymentDetail() {
     }
   };
 
+  const handleProvisionGateway = async () => {
+    if (!id) return;
+    setProvisioningGateway(true);
+    setGatewayMessage(null);
+    try {
+      const res = await deploymentsApi.provisionGateway(id);
+      if (res.gateway_id) {
+        setGatewayMessage(`Gateway ready: ${res.gateway_name || res.gateway_id}. Attach it to a policy engine from the Policy page.`);
+        // refresh outputs so the gateway shows up
+        await pollStatus();
+      } else {
+        setGatewayMessage(res.status === 'skipped' ? 'Skipped — deployment not in a deployable state.' : 'Gateway request submitted.');
+      }
+    } catch (e: any) {
+      setGatewayMessage(e?.response?.data?.detail || e.message || 'Failed to provision gateway');
+    } finally {
+      setProvisioningGateway(false);
+    }
+  };
+
   const isAppFactory = deployment?.template_id?.startsWith('app-factory-') ?? false;
+  const hasGateway = Boolean(deployment?.outputs?.gateway_id);
   const hasSourceZip = isAppFactory && Boolean(deployment?.outputs?.source_zip_key);
   const aboutMarkdown = isAppFactory ? (deployment?.outputs?.about_markdown ?? '').trim() : '';
 
@@ -150,12 +185,15 @@ export default function DeploymentDetail() {
               const appUrl = deployment.outputs?.ui_url || deployment.outputs?.app_url || deployment.outputs?.AmplifyUrl;
               const launchUrl = operatorUrl || appUrl;
               const launchLabel = operatorUrl ? 'Open Operator App' : 'Open App';
+              const blockedForViewer = isViewer && !!operatorUrl && deployment.template_id === 'frontier-agents-aws-security';
               return (
               <div className="flex items-center gap-2 ml-auto">
                 {launchUrl && (
                   <button
-                    onClick={() => window.open(launchUrl, '_blank')}
-                    className="inline-flex items-center gap-1.5 text-sm py-2 px-4 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                    onClick={() => openFsiApp(launchUrl)}
+                    disabled={blockedForViewer}
+                    title={blockedForViewer ? 'Viewers cannot launch the Operator App for AWS Security Agent' : ''}
+                    className="inline-flex items-center gap-1.5 text-sm py-2 px-4 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed disabled:hover:bg-slate-100 disabled:hover:border-slate-200"
                   >
                     {launchLabel}
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -175,6 +213,19 @@ export default function DeploymentDetail() {
                   Test Deployment
                 </button>
                 )}
+                {deployment.template_id?.startsWith('foundry-') && (
+                <button
+                  onClick={handleProvisionGateway}
+                  disabled={provisioningGateway}
+                  className="inline-flex items-center gap-1.5 text-sm py-2 px-4 rounded-lg font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-colors disabled:opacity-50"
+                  title={hasGateway ? 'Re-provision / verify this use case gateway' : 'Create a dedicated AgentCore gateway for this use case'}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                  </svg>
+                  {provisioningGateway ? 'Provisioning...' : hasGateway ? 'Gateway ✓' : 'Add Gateway'}
+                </button>
+                )}
                 {hasSourceZip && (
                 <button
                   onClick={handleDownloadSource}
@@ -191,6 +242,11 @@ export default function DeploymentDetail() {
               );
             })()}
           </div>
+          {gatewayMessage && (
+            <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-800 animate-fade-in">
+              {gatewayMessage}
+            </div>
+          )}
           <p className="text-slate-500 mt-2">Deployed from <span className="font-semibold text-slate-700">{deployment.template_id}</span></p>
         </div>
 
@@ -220,7 +276,7 @@ export default function DeploymentDetail() {
         {showPipelineProgress && (
           <div className="card mb-6 animate-fade-in">
             <h3 className="text-base font-semibold text-slate-900 mb-4">Pipeline Progress</h3>
-            <PipelineProgress status={deployment.status} failedStage={deployment.failed_stage} />
+            <PipelineProgress status={deployment.status} failedStage={deployment.failed_stage} statusHistory={deployment.status_history} />
           </div>
         )}
 
@@ -234,7 +290,7 @@ export default function DeploymentDetail() {
                 </svg>
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-red-900 mb-1">Deployment Failed</h3>
+                <h3 className="text-sm font-semibold text-red-900 mb-1">{deployment.status_history && [...deployment.status_history].reverse().find(e => e.status !== 'failed')?.status === 'destroying' ? 'Destroy Failed' : 'Deployment Failed'}</h3>
                 {deployment.failed_stage && (
                   <p className="text-xs text-red-700 mb-2">Failed at stage: <span className="font-semibold">{deployment.failed_stage}</span></p>
                 )}
@@ -259,17 +315,15 @@ export default function DeploymentDetail() {
                 <p className="text-sm text-blue-700/80 mb-3">
                   The deployment is complete. Open the Amplify URL below to access the UI.
                 </p>
-                <a
-                  href={deployment.outputs.AmplifyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => openFsiApp(deployment.outputs.AmplifyUrl)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Open App
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                   </svg>
-                </a>
+                </button>
                 <p className="text-xs text-blue-600/70 mt-2 font-mono break-all">{deployment.outputs.AmplifyUrl}</p>
               </div>
             </div>
@@ -375,9 +429,154 @@ export default function DeploymentDetail() {
                 </div>
               </div>
             )}
+
+            {/* LLM Gateway routing badge — present when the deploy handler
+                provisioned a virtual key. Lets operators see at a glance
+                whether the agent's model calls are flowing through the
+                gateway (visible in /secure/llm-gateway audit log) or
+                hitting Bedrock directly. */}
+            {deployment.parameters?.LLM_GATEWAY_BASE_URL && (
+              <div className="mt-3 p-3 bg-white border border-rose-200/60 rounded-xl">
+                <div className="text-xs font-semibold text-rose-600 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                  </svg>
+                  Routed via LLM Gateway
+                </div>
+                <div className="text-sm font-mono text-slate-900 truncate" title={String(deployment.parameters.LLM_GATEWAY_BASE_URL)}>
+                  Endpoint: {deployment.parameters.LLM_GATEWAY_BASE_URL}
+                </div>
+                {deployment.parameters.LLM_GATEWAY_API_KEY_SECRET_ARN && (
+                  <div className="text-[11px] text-slate-500 mt-0.5 truncate" title={String(deployment.parameters.LLM_GATEWAY_API_KEY_SECRET_ARN)}>
+                    Virtual key: <span className="font-mono">{String(deployment.parameters.LLM_GATEWAY_API_KEY_SECRET_ARN).split(':secret:')[1]?.split('-')[0] || 'secret-stored'}</span>
+                  </div>
+                )}
+                <Link
+                  to="/secure/llm-gateway/audit"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 hover:text-rose-900 mt-1.5"
+                >
+                  View audit log
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </Link>
+              </div>
+            )}
           </div>
           );
         })()}
+
+        {/* Governance Status Section */}
+        {deployment.status === 'deployed' && (
+          <div className="card bg-violet-50/50 border-violet-200/60 mb-6 animate-fade-in">
+            <h3 className="text-base font-semibold text-violet-900 mb-4 flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+                <Icon name="shield-check" className="w-4 h-4 text-violet-600" />
+              </div>
+              Governance Status
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Guardrail Coverage */}
+              <Link
+                to="/govern/prompt-governance"
+                className="p-3 bg-white border border-violet-200/60 rounded-xl hover:bg-violet-50 hover:border-violet-300 transition-colors group"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name="shield-check" className="w-4 h-4 text-violet-600" />
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Guardrails</div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-medium ${deployment.parameters?.GUARDRAIL_ID ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {deployment.parameters?.GUARDRAIL_ID ? 'Protected' : 'Not Configured'}
+                  </span>
+                  <Icon name="chevron-right" className="w-4 h-4 text-slate-400 group-hover:text-violet-600 transition-colors" />
+                </div>
+              </Link>
+
+              {/* Policy Compliance */}
+              <Link
+                to="/govern/compliance"
+                className="p-3 bg-white border border-violet-200/60 rounded-xl hover:bg-violet-50 hover:border-violet-300 transition-colors group"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name="document-check" className="w-4 h-4 text-violet-600" />
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Compliance</div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">View Policies</span>
+                  <Icon name="chevron-right" className="w-4 h-4 text-slate-400 group-hover:text-violet-600 transition-colors" />
+                </div>
+              </Link>
+
+              {/* Audit Events */}
+              <Link
+                to={`/govern/audit?deployment=${deployment.deployment_id}`}
+                className="p-3 bg-white border border-violet-200/60 rounded-xl hover:bg-violet-50 hover:border-violet-300 transition-colors group"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name="clipboard-list" className="w-4 h-4 text-violet-600" />
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Audit Trail</div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">View Events</span>
+                  <Icon name="chevron-right" className="w-4 h-4 text-slate-400 group-hover:text-violet-600 transition-colors" />
+                </div>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {deployment.status === 'deployed' && ['true','True','TRUE','1'].includes(String(deployment.outputs?.agentcore_observability_enabled ?? '')) && (
+          <div className="card bg-sky-50/60 border-sky-200/60 mb-6 animate-fade-in">
+            <h3 className="text-base font-semibold text-sky-900 mb-4 flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center">
+                <svg className="w-4 h-4 text-sky-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12h3m12 0h3M5.636 5.636l2.122 2.122m8.484 8.484l2.122 2.122M12 3v3m0 12v3M5.636 18.364l2.122-2.122m8.484-8.484l2.122-2.122" />
+                </svg>
+              </div>
+              CloudWatch Observability
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              {deployment.outputs?.agentcore_log_group_name && (
+                <div className="p-3 bg-white border border-sky-200/60 rounded-xl">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Log Group</div>
+                  <div className="text-xs font-mono text-slate-900 break-all">{deployment.outputs.agentcore_log_group_name}</div>
+                </div>
+              )}
+              {deployment.outputs?.use_case_id && (
+                <div className="p-3 bg-white border border-sky-200/60 rounded-xl">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Use Case</div>
+                  <div className="text-xs font-mono text-slate-900 break-all">{deployment.outputs.use_case_id}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setRuntimeLogsOpen(true)}
+                className="text-xs px-3 py-2 rounded-lg font-semibold bg-sky-600 text-white hover:bg-sky-700 transition-colors"
+              >
+                View runtime logs
+              </button>
+              {(() => {
+                const region = deployment.aws_region || 'us-east-1';
+                const href = `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#/gen-ai-observability/agent-core/agents`;
+                return (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs px-3 py-2 rounded-lg font-semibold bg-white border border-sky-200 text-sky-700 hover:bg-sky-50 transition-colors"
+                  >
+                    Bedrock AgentCore Observability Dashboard ↗
+                  </a>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         {destroyError && (
           <div className="card bg-red-50 border-red-200 mb-6 animate-fade-in">
@@ -493,7 +692,7 @@ export default function DeploymentDetail() {
                     View Logs
                   </button>
                 )}
-                {(deployment.status === 'deployed' || deployment.status === 'failed') && (
+                {!isAppFactory && (deployment.status === 'deployed' || deployment.status === 'failed') && (
                   <button
                     onClick={handleRedeploy}
                     disabled={redeploying}
@@ -509,10 +708,10 @@ export default function DeploymentDetail() {
                     {redeploying ? 'Redeploying...' : 'Redeploy'}
                   </button>
                 )}
-                {redeployError && (
+                {!isAppFactory && redeployError && (
                   <p className="text-xs text-red-600 mt-1">{redeployError}</p>
                 )}
-                {(deployment.status === 'deployed' || deployment.status === 'failed') && (
+                {!isAppFactory && (deployment.status === 'deployed' || deployment.status === 'failed') && (
                   <button
                     onClick={handleDestroy}
                     disabled={destroying}
@@ -534,7 +733,8 @@ export default function DeploymentDetail() {
         </div>
       </div>
 
-      {id && <LogsViewer deploymentId={id} isOpen={logsOpen} onClose={() => setLogsOpen(false)} />}
+      {id && <LogsViewer deploymentId={id} isOpen={logsOpen} onClose={() => setLogsOpen(false)} source="build" />}
+      {id && <LogsViewer deploymentId={id} isOpen={runtimeLogsOpen} onClose={() => setRuntimeLogsOpen(false)} source="runtime" />}
       {testDrawerOpen && (
         <TestDeploymentDrawer
           deployment={deployment}

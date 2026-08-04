@@ -1,0 +1,701 @@
+{
+  "description": "Flat list of all sample transactions (derived from accounts/*/profile.json). Timestamps here are the fixed illustrative base dates; the seed script (scripts/seed_data.py) shifts them to recent dates at upload time.",
+  "count": 24,
+  "transactions": [
+    {
+      "transaction_id": "TXN_OK_1",
+      "account_id": "A150",
+      "timestamp": "2026-06-10T08:30:00Z",
+      "amount": 42.5,
+      "currency": "USD",
+      "network": "card",
+      "counterparty": {
+        "counterparty_id": "M001",
+        "name": "Corner Grocery",
+        "account_number_masked": "****1001",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-1212",
+      "ip_address": "203.0.113.9",
+      "geo": {
+        "country": "US",
+        "city": "Seattle",
+        "lat": 47.61,
+        "lon": -122.33
+      },
+      "merchant_category_code": "5411",
+      "expected_fraud_score": 0.08,
+      "expected_decision": "approve",
+      "expected_reason_tags": [],
+      "scenario": "clean"
+    },
+    {
+      "transaction_id": "TXN_OK_2",
+      "account_id": "A150",
+      "timestamp": "2026-06-11T19:05:00Z",
+      "amount": 18.99,
+      "currency": "USD",
+      "network": "card",
+      "counterparty": {
+        "counterparty_id": "M002",
+        "name": "Streamflix",
+        "account_number_masked": "****1002",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-1212",
+      "ip_address": "203.0.113.9",
+      "geo": {
+        "country": "US",
+        "city": "Seattle",
+        "lat": 47.61,
+        "lon": -122.33
+      },
+      "merchant_category_code": "5815",
+      "expected_fraud_score": 0.08,
+      "expected_decision": "approve",
+      "expected_reason_tags": [],
+      "scenario": "clean"
+    },
+    {
+      "transaction_id": "TXN_OK_4",
+      "account_id": "A160",
+      "timestamp": "2026-06-12T09:15:00Z",
+      "amount": 1200.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "EMP01",
+        "name": "Acme Payroll",
+        "account_number_masked": "****9001",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-3434",
+      "ip_address": "192.0.2.160",
+      "geo": {
+        "country": "US",
+        "city": "Denver",
+        "lat": 39.74,
+        "lon": -104.99
+      },
+      "expected_fraud_score": 0.05,
+      "expected_decision": "approve",
+      "expected_reason_tags": [],
+      "scenario": "clean"
+    },
+    {
+      "transaction_id": "TXN_OK_3",
+      "account_id": "A150",
+      "timestamp": "2026-06-13T12:40:00Z",
+      "amount": 250.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A150R",
+        "name": "Rent Co",
+        "account_number_masked": "****1500",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-1212",
+      "ip_address": "203.0.113.9",
+      "geo": {
+        "country": "US",
+        "city": "Seattle",
+        "lat": 47.61,
+        "lon": -122.33
+      },
+      "expected_fraud_score": 0.08,
+      "expected_decision": "approve",
+      "expected_reason_tags": [],
+      "scenario": "clean"
+    },
+    {
+      "transaction_id": "TXN_SMURF_1",
+      "account_id": "A705",
+      "timestamp": "2026-06-14T09:12:00Z",
+      "amount": 9800.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A901",
+        "name": "Coastal Holdings LLC",
+        "account_number_masked": "****0901",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {
+        "country": "US",
+        "city": "New York",
+        "lat": 40.71,
+        "lon": -74.01
+      },
+      "expected_fraud_score": 0.88,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "SMURFING"
+      ],
+      "scenario": "smurfing"
+    },
+    {
+      "transaction_id": "TXN_SMURF_2",
+      "account_id": "A705",
+      "timestamp": "2026-06-14T14:47:00Z",
+      "amount": 9650.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A901",
+        "name": "Coastal Holdings LLC",
+        "account_number_masked": "****0901",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {
+        "country": "US",
+        "city": "New York",
+        "lat": 40.71,
+        "lon": -74.01
+      },
+      "expected_fraud_score": 0.88,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "SMURFING"
+      ],
+      "scenario": "smurfing"
+    },
+    {
+      "transaction_id": "TXN_OK_5",
+      "account_id": "A160",
+      "timestamp": "2026-06-14T16:22:00Z",
+      "amount": 88.4,
+      "currency": "USD",
+      "network": "card",
+      "counterparty": {
+        "counterparty_id": "M003",
+        "name": "Gas N Go",
+        "account_number_masked": "****1003",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-android-3434",
+      "ip_address": "192.0.2.160",
+      "geo": {
+        "country": "US",
+        "city": "Denver",
+        "lat": 39.74,
+        "lon": -104.99
+      },
+      "merchant_category_code": "5541",
+      "expected_fraud_score": 0.05,
+      "expected_decision": "approve",
+      "expected_reason_tags": [],
+      "scenario": "clean"
+    },
+    {
+      "transaction_id": "TXN_SMURF_3",
+      "account_id": "A705",
+      "timestamp": "2026-06-15T08:30:00Z",
+      "amount": 9900.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A901",
+        "name": "Coastal Holdings LLC",
+        "account_number_masked": "****0901",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {
+        "country": "US",
+        "city": "New York",
+        "lat": 40.71,
+        "lon": -74.01
+      },
+      "expected_fraud_score": 0.88,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "SMURFING"
+      ],
+      "scenario": "smurfing"
+    },
+    {
+      "transaction_id": "TXN_LARGE_1",
+      "account_id": "A201",
+      "timestamp": "2026-06-15T11:20:00Z",
+      "amount": 48000.0,
+      "currency": "USD",
+      "network": "wire",
+      "counterparty": {
+        "counterparty_id": "A601",
+        "name": "Pinnacle Imports",
+        "account_number_masked": "****0601",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-8888",
+      "ip_address": "198.51.100.90",
+      "geo": {
+        "country": "US",
+        "city": "Miami",
+        "lat": 25.76,
+        "lon": -80.19
+      },
+      "expected_fraud_score": 0.87,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "LARGE_AMOUNT",
+        "NEW_BENEFICIARY"
+      ],
+      "scenario": "large_amount"
+    },
+    {
+      "transaction_id": "TXN_SMURF_4",
+      "account_id": "A705",
+      "timestamp": "2026-06-15T13:05:00Z",
+      "amount": 9750.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A901",
+        "name": "Coastal Holdings LLC",
+        "account_number_masked": "****0901",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {
+        "country": "US",
+        "city": "New York",
+        "lat": 40.71,
+        "lon": -74.01
+      },
+      "expected_fraud_score": 0.88,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "SMURFING"
+      ],
+      "scenario": "smurfing"
+    },
+    {
+      "transaction_id": "TXN_SMURF_5",
+      "account_id": "A705",
+      "timestamp": "2026-06-15T17:58:00Z",
+      "amount": 9500.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A901",
+        "name": "Coastal Holdings LLC",
+        "account_number_masked": "****0901",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-5555",
+      "ip_address": "198.51.100.21",
+      "geo": {
+        "country": "US",
+        "city": "New York",
+        "lat": 40.71,
+        "lon": -74.01
+      },
+      "expected_fraud_score": 0.88,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "SMURFING"
+      ],
+      "scenario": "smurfing"
+    },
+    {
+      "transaction_id": "TXN_VELO_1",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:04:00Z",
+      "amount": 127.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A402",
+        "name": "Merchant A402",
+        "account_number_masked": "****A402",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_VELO_2",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:08:00Z",
+      "amount": 135.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A403",
+        "name": "Merchant A403",
+        "account_number_masked": "****A403",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_VELO_3",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:12:00Z",
+      "amount": 142.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A401",
+        "name": "Merchant A401",
+        "account_number_masked": "****A401",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_VELO_4",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:16:00Z",
+      "amount": 150.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A402",
+        "name": "Merchant A402",
+        "account_number_masked": "****A402",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_VELO_5",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:20:00Z",
+      "amount": 157.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A403",
+        "name": "Merchant A403",
+        "account_number_masked": "****A403",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_VELO_6",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:24:00Z",
+      "amount": 165.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A401",
+        "name": "Merchant A401",
+        "account_number_masked": "****A401",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_VELO_7",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:28:00Z",
+      "amount": 172.5,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A402",
+        "name": "Merchant A402",
+        "account_number_masked": "****A402",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_VELO_8",
+      "account_id": "A305",
+      "timestamp": "2026-06-15T22:32:00Z",
+      "amount": 180.0,
+      "currency": "USD",
+      "network": "rtp",
+      "counterparty": {
+        "counterparty_id": "A403",
+        "name": "Merchant A403",
+        "account_number_masked": "****A403",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-6666",
+      "ip_address": "203.0.113.45",
+      "geo": {
+        "country": "US",
+        "city": "San Francisco",
+        "lat": 37.77,
+        "lon": -122.42
+      },
+      "expected_fraud_score": 0.9,
+      "expected_decision": "step_up_review",
+      "expected_reason_tags": [
+        "HIGH_VELOCITY"
+      ],
+      "scenario": "velocity"
+    },
+    {
+      "transaction_id": "TXN_MULE_1",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T01:11:00Z",
+      "amount": 1890,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A101",
+        "name": "Sender A101",
+        "account_number_masked": "****A101",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      },
+      "expected_fraud_score": 0.96,
+      "expected_decision": "hold_and_case",
+      "expected_reason_tags": [
+        "FAN_IN_TO_DST",
+        "MULE_DESTINATION"
+      ],
+      "scenario": "mule_network"
+    },
+    {
+      "transaction_id": "TXN_MULE_2",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T02:12:00Z",
+      "amount": 1930,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A102",
+        "name": "Sender A102",
+        "account_number_masked": "****A102",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      },
+      "expected_fraud_score": 0.96,
+      "expected_decision": "hold_and_case",
+      "expected_reason_tags": [
+        "FAN_IN_TO_DST",
+        "MULE_DESTINATION"
+      ],
+      "scenario": "mule_network"
+    },
+    {
+      "transaction_id": "TXN_MULE_3",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T03:13:00Z",
+      "amount": 1970,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A103",
+        "name": "Sender A103",
+        "account_number_masked": "****A103",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      },
+      "expected_fraud_score": 0.96,
+      "expected_decision": "hold_and_case",
+      "expected_reason_tags": [
+        "FAN_IN_TO_DST",
+        "MULE_DESTINATION"
+      ],
+      "scenario": "mule_network"
+    },
+    {
+      "transaction_id": "TXN_MULE_4",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T04:14:00Z",
+      "amount": 2010,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A104",
+        "name": "Sender A104",
+        "account_number_masked": "****A104",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      },
+      "expected_fraud_score": 0.96,
+      "expected_decision": "hold_and_case",
+      "expected_reason_tags": [
+        "FAN_IN_TO_DST",
+        "MULE_DESTINATION"
+      ],
+      "scenario": "mule_network"
+    },
+    {
+      "transaction_id": "TXN_MULE_5",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T05:15:00Z",
+      "amount": 2050,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A105",
+        "name": "Sender A105",
+        "account_number_masked": "****A105",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      },
+      "expected_fraud_score": 0.96,
+      "expected_decision": "hold_and_case",
+      "expected_reason_tags": [
+        "FAN_IN_TO_DST",
+        "MULE_DESTINATION"
+      ],
+      "scenario": "mule_network"
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/mapping-results.schema.json",
+  "title": "mapping-results.json",
+  "description": "Phase 3d output: assembled mapping artifact. Produced by scripts/map-assemble.py. Consumed by generate-* skills and summarize. Aggregates controls[], threat_mitigation_map[], framework_mapping[], and framework_header_canonical (iter-12 F7 + iter-14 Class F12). coverage_gaps is an object with 5 arrays (iter-12 added posture_gap).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "service",
+    "framework",
+    "controls",
+    "threat_mitigation_map",
+    "framework_mapping",
+    "framework_coverage_summary",
+    "coverage_gaps",
+    "control_summary"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "service": {"type": "string", "minLength": 1},
+    "framework": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "source_file": {"type": "string"},
+        "total_objectives": {"type": "integer", "minimum": 0}
+      }
+    },
+    "framework_header_canonical": {
+      "type": "string",
+      "description": "Canonical framework header (iter-14 Class F12). Every generated artifact copies this verbatim; CHECK-X1 enforces identity across artifacts."
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "scope", "category"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$"
+          },
+          "scope": {"type": "string", "enum": ["ORG", "ACC", "RES"]},
+          "category": {"type": "string", "enum": ["PRO", "PRV", "DET", "COR"]},
+          "framework_objectives": {"type": "array", "items": {"type": "string"}},
+          "posture": {
+            "type": "string",
+            "enum": ["preventative-proactive", "preventative-request", "reactive-detective", "reactive-corrective"]
+          },
+          "source": {"type": "string", "enum": ["sar", "api", "both"]}
+        }
+      }
+    },
+    "threat_mitigation_map": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["mitigation_id"],
+        "properties": {
+          "mitigation_id": {"type": "string", "pattern": "^M-.+"},
+          "statement": {"type": "string"},
+          "coverage": {"type": "string", "enum": ["FULL", "PARTIAL", "NONE"]},
+          "control_ids": {"type": "array", "items": {"type": "string"}},
+          "framework_objectives": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "iter-12 F7: forwarded from enriched controls. Union of framework_objectives across associated controls."
+          },
+          "layers": {"type": "object", "additionalProperties": true},
+          "residual_gaps": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "framework_mapping": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["objective_id", "status"],
+        "properties": {
+          "objective_id": {"type": "string"},
+          "status": {"type": "string", "enum": ["MAPPED", "N/A"]}
+        }
+      }
+    },
+    "framework_coverage_summary": {"type": "object", "additionalProperties": true},
+    "coverage_gaps": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "mitigation_gap": {"type": "array", "items": {"type": "object"}},
+        "single_layer": {"type": "array", "items": {"type": "object"}},
+        "framework_gap": {"type": "array", "items": {"type": "object"}},
+        "control_orphan": {"type": "array", "items": {"type": "object"}},
+        "posture_gap": {
+          "type": "array",
+          "items": {"type": "object"},
+          "description": "iter-12 F7: Rule C1 infeasibility gaps forwarded from map-controls-generated."
+        }
+      }
+    },
+    "control_summary": {"type": "object", "additionalProperties": true},
+    "_metadata": {"type": "object", "additionalProperties": true}
+  }
+}

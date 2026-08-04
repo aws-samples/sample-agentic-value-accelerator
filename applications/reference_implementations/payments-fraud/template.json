@@ -1,0 +1,36 @@
+{
+  "id": "payments-fraud",
+  "name": "Payments Fraud Scoring & Investigation",
+  "description": "Agent-native payments fraud platform: real-time transaction scoring, natural-language case investigation (smurfing, velocity, mule networks), and FinCEN-structured SAR drafting. A supervisor agent delegates to three specialists on Bedrock AgentCore using the Strands SDK, with Cognito auth and Langfuse observability.",
+  "version": "1.0.0",
+  "pattern_type": "orchestration",
+  "type": "reference",
+  "frameworks": [
+    {"id": "strands", "name": "Strands Agents SDK", "path": "src/strands", "description": "Supervisor + 3 specialist agents (scorer, investigator, SAR) on Bedrock AgentCore"}
+  ],
+  "deployment_patterns": [
+    {"id": "terraform", "name": "Terraform", "description": "Composes the AVA control-plane templates: agent-runtime-agentcore, auth-cognito, agent-observability", "path": "iac/terraform"}
+  ],
+  "built_with": [
+    "agent-runtime-agentcore",
+    "auth-cognito",
+    "agent-observability"
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name", "required": true, "default": "payments-fraud"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1", "enum": ["us-east-1", "us-east-2", "us-west-2"]}
+  ],
+  "example_use_cases": [
+    "Real-time payment fraud scoring (approve / step-up / hold-and-case)",
+    "Natural-language investigation of smurfing, velocity, and mule-network patterns",
+    "FinCEN-structured Suspicious Activity Report drafting with human-in-the-loop review"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": ["fraud", "payments", "aml", "sar", "multi-agent", "supervisor", "strands", "agentcore", "cognito", "langfuse", "terraform"],
+  "outputs": {
+    "cloudfront_url": "CloudFront distribution URL",
+    "agentcore_endpoint": "AgentCore Runtime endpoint"
+  },
+  "dependencies": []
+}

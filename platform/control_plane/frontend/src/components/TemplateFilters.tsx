@@ -1,29 +1,47 @@
 interface TemplateFiltersProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  selectedPatternType: string;
-  onPatternTypeChange: (type: string) => void;
+  selectedCategory: string;
+  onCategoryChange: (category: string) => void;
   selectedFramework: string;
   onFrameworkChange: (framework: string) => void;
-  patternTypes: string[];
+  categories: string[];
   frameworks: string[];
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+  compute: 'Compute & Runtime',
+  api: 'API & Access',
+  auth: 'Authentication',
+  memory: 'Memory & State',
+  knowledge: 'Knowledge & RAG',
+  observability: 'Observability',
+  cicd: 'CI/CD',
+  frontend: 'Frontend',
+  events: 'Events & Integration',
+  security: 'Security & Governance',
+  networking: 'Networking',
+  agent_scaffold: 'Agent Scaffolds',
+  tools: 'Tools',
+  integration: 'Integration',
+  agent_pattern: 'Agent Patterns',
+};
 
 export default function TemplateFilters({
   searchQuery,
   onSearchChange,
-  selectedPatternType,
-  onPatternTypeChange,
+  selectedCategory,
+  onCategoryChange,
   selectedFramework,
   onFrameworkChange,
-  patternTypes,
+  categories,
   frameworks,
 }: TemplateFiltersProps) {
-  const hasActiveFilters = searchQuery || selectedPatternType || selectedFramework;
+  const hasActiveFilters = searchQuery || selectedCategory || selectedFramework;
 
   const clearFilters = () => {
     onSearchChange('');
-    onPatternTypeChange('');
+    onCategoryChange('');
     onFrameworkChange('');
   };
 
@@ -60,16 +78,16 @@ export default function TemplateFilters({
         </div>
 
         <div>
-          <label className="label">Pattern Type</label>
+          <label className="label">Category</label>
           <select
-            value={selectedPatternType}
-            onChange={(e) => onPatternTypeChange(e.target.value)}
+            value={selectedCategory}
+            onChange={(e) => onCategoryChange(e.target.value)}
             className="input-field"
           >
-            <option value="">All Types</option>
-            {patternTypes.map(type => (
-              <option key={type} value={type}>
-                {type.replace('_', ' ').charAt(0).toUpperCase() + type.replace('_', ' ').slice(1)}
+            <option value="">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>
+                {CATEGORY_LABELS[cat] || cat}
               </option>
             ))}
           </select>
@@ -85,7 +103,7 @@ export default function TemplateFilters({
             <option value="">All Frameworks</option>
             {frameworks.map(framework => (
               <option key={framework} value={framework}>
-                {framework.replace('_', ' + ')}
+                {framework === 'langgraph' ? 'LangGraph' : framework.charAt(0).toUpperCase() + framework.slice(1)}
               </option>
             ))}
           </select>

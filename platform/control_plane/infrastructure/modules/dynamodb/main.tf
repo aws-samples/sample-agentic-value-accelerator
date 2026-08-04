@@ -233,3 +233,297 @@ resource "aws_dynamodb_table" "guardrails" {
     Name = "${var.name_prefix}-guardrails"
   })
 }
+
+# ============================================================================
+# Policies Table — AgentCore resource-level operational policies
+# ============================================================================
+
+resource "aws_dynamodb_table" "policies" {
+  name         = "${var.name_prefix}-policies"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-policies"
+  })
+}
+
+# ============================================================================
+# Prioritization Table — use cases + scores for the Plan / Prioritization page
+# ============================================================================
+
+resource "aws_dynamodb_table" "prioritization" {
+  name         = "${var.name_prefix}-prioritization"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-prioritization"
+  })
+}
+
+# ============================================================================
+# Maturity Assessment Table — Plan / Maturity Assessment page
+# ============================================================================
+
+resource "aws_dynamodb_table" "maturity" {
+  name         = "${var.name_prefix}-maturity"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-maturity"
+  })
+}
+
+# ============================================================================
+# Business Cases Table — Plan / Business Cases page
+# ============================================================================
+
+resource "aws_dynamodb_table" "business_cases" {
+  name         = "${var.name_prefix}-business-cases"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-business-cases"
+  })
+}
+
+# ============================================================================
+# Knowledge Registry Table
+# ============================================================================
+
+resource "aws_dynamodb_table" "knowledge" {
+  name         = "${var.name_prefix}-knowledge"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-knowledge"
+  })
+}
+# Operating Model Table — Plan / Operating Model page
+# ============================================================================
+
+resource "aws_dynamodb_table" "operating_model" {
+  name         = "${var.name_prefix}-operating-model"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-operating-model"
+  })
+}
+
+# ============================================================================
+# Organization Design Table — Plan / Organization Design page
+# ============================================================================
+
+resource "aws_dynamodb_table" "organization_design" {
+  name         = "${var.name_prefix}-organization-design"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "status"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "status-index"
+    hash_key        = "status"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-organization-design"
+  })
+}

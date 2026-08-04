@@ -1,0 +1,159 @@
+{
+  "account_id": "A801",
+  "customer_name": "Quik Cash Services",
+  "account_type": "business_checking",
+  "risk_profile": "high",
+  "opened_date": "2026-05-28",
+  "home_country": "US",
+  "home_city": "Houston",
+  "baseline": {
+    "typical_transaction_amount": 0.0,
+    "typical_weekly_count": 0,
+    "typical_networks": []
+  },
+  "scenario": "mule_network",
+  "scenario_note": "Newly opened account receiving rapid fan-in from five unrelated source accounts (A101-A105), consistent with a money-mule collection point. Funds aggregate then move on.",
+  "expected_assessment": {
+    "fraud_score": 0.96,
+    "risk_level": "critical",
+    "decision": "hold_and_case",
+    "reason_tags": [
+      "FAN_IN_TO_DST",
+      "MULE_DESTINATION"
+    ]
+  },
+  "flagged_patterns": [
+    {
+      "pattern": "FAN_IN_TO_DST",
+      "confidence": 0.91,
+      "description": "5 distinct sources funding one destination within hours"
+    },
+    {
+      "pattern": "MULE_DESTINATION",
+      "confidence": 0.88,
+      "description": "Account opened 19 days ago, no baseline, pure inbound aggregation"
+    },
+    {
+      "pattern": "MULE_NETWORK",
+      "confidence": 0.8,
+      "description": "Coordinated collection pattern across A101-A105"
+    }
+  ],
+  "transactions": [
+    {
+      "transaction_id": "TXN_MULE_1",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T01:11:00Z",
+      "amount": 1890,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A101",
+        "name": "Sender A101",
+        "account_number_masked": "****A101",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      }
+    },
+    {
+      "transaction_id": "TXN_MULE_2",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T02:12:00Z",
+      "amount": 1930,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A102",
+        "name": "Sender A102",
+        "account_number_masked": "****A102",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      }
+    },
+    {
+      "transaction_id": "TXN_MULE_3",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T03:13:00Z",
+      "amount": 1970,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A103",
+        "name": "Sender A103",
+        "account_number_masked": "****A103",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      }
+    },
+    {
+      "transaction_id": "TXN_MULE_4",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T04:14:00Z",
+      "amount": 2010,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A104",
+        "name": "Sender A104",
+        "account_number_masked": "****A104",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      }
+    },
+    {
+      "transaction_id": "TXN_MULE_5",
+      "account_id": "A801",
+      "timestamp": "2026-06-16T05:15:00Z",
+      "amount": 2050,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A105",
+        "name": "Sender A105",
+        "account_number_masked": "****A105",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-7777",
+      "ip_address": "192.0.2.77",
+      "geo": {
+        "country": "US",
+        "city": "Houston",
+        "lat": 29.76,
+        "lon": -95.36
+      }
+    }
+  ]
+}

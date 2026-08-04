@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "description": "AWS umbrella service prefixes that should be prefixed with 'aws' in canonical slugs. Example: 'lambda' → 'awslambda' to match user convention. Multi-word product IDs like 'bedrock-agentcore' are NOT umbrellas and keep their original form.",
+  "umbrellas": [
+    "lambda"
+  ],
+  "_metadata": {
+    "note": "Extensible list. Add IAM prefixes here when a service's slug should be 'aws<prefix>' instead of just '<prefix>'. Non-umbrella services (KMS, Bedrock AgentCore, etc.) are omitted — they use their IAM prefix directly.",
+    "examples": {
+      "lambda": "awslambda (umbrella service, gets 'aws' prefix)",
+      "s3": "s3 (NOT an umbrella — stays as-is)",
+      "kms": "kms (NOT an umbrella — stays as-is)",
+      "bedrock-agentcore": "bedrock-agentcore (multi-word product ID, NOT an umbrella)"
+    }
+  }
+}

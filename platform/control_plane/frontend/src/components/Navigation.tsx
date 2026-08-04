@@ -8,6 +8,7 @@ export default function Navigation() {
   const [appsOpen, setAppsOpen] = useState(false);
   const [aaasOpen, setAaasOpen] = useState(false);
   const [obsOpen, setObsOpen] = useState(false);
+  const [governOpen, setGovernOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [changePwdOpen, setChangePwdOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -19,6 +20,7 @@ export default function Navigation() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const aaasRef = useRef<HTMLDivElement>(null);
   const obsRef = useRef<HTMLDivElement>(null);
+  const governRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
@@ -33,6 +35,9 @@ export default function Navigation() {
       }
       if (obsRef.current && !obsRef.current.contains(e.target as Node)) {
         setObsOpen(false);
+      }
+      if (governRef.current && !governRef.current.contains(e.target as Node)) {
+        setGovernOpen(false);
       }
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false);
@@ -227,7 +232,7 @@ export default function Navigation() {
                       <div className="text-xs text-slate-400 group-hover:text-blue-100 transition-colors">Guardrails and anomaly detection</div>
                     </div>
                   </Link>
-                  <Link to="/observability?tab=langfuse" onClick={() => setObsOpen(false)}
+                  <Link to="/observability/langfuse" onClick={() => setObsOpen(false)}
                     className="flex items-center px-3 py-3 hover:bg-blue-500 hover:text-white hover:scale-105 transition-all duration-200 rounded-lg mx-1.5 hover:shadow-md group">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-violet-50 mr-3 group-hover:bg-white transition-colors">
                       <svg className="w-4.5 h-4.5 text-violet-600 group-hover:text-violet-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -242,6 +247,93 @@ export default function Navigation() {
                 </div>
               )}
             </div>
+            <div className="relative" ref={governRef}>
+              <div className={`rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center overflow-hidden ${
+                isActive('/govern') ? 'bg-blue-500 text-white shadow-md' : 'text-slate-600 hover:text-white hover:bg-blue-500 hover:shadow-md'
+              }`}>
+                <Link to="/govern" className="pl-4 pr-1.5 py-2 hover:scale-105 transition-transform">
+                  Govern
+                </Link>
+                <button
+                  onClick={() => setGovernOpen(!governOpen)}
+                  className="pl-1 pr-2.5 py-2 border-l border-current/10 hover:scale-110 transition-transform"
+                  aria-label="Toggle Govern menu"
+                >
+                  <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${governOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              {governOpen && (
+                <div className="absolute top-full right-0 mt-1.5 w-80 bg-white rounded-xl border border-slate-200 py-2 z-50 animate-fade-in-scale" style={{ animationDuration: '0.12s', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
+                  <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data Governance</div>
+                  <Link to="/govern/data/agents" onClick={() => setGovernOpen(false)}
+                    className="flex items-center px-3 py-2.5 hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-lg mx-1.5 group">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-50 mr-3 group-hover:bg-white transition-colors text-base">🤖</div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Agent Data Profiles</div>
+                      <div className="text-[10px] text-slate-400 group-hover:text-blue-100 transition-colors">Data sources & guardrails per agent</div>
+                    </div>
+                  </Link>
+                  <Link to="/govern/data/lineage" onClick={() => setGovernOpen(false)}
+                    className="flex items-center px-3 py-2.5 hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-lg mx-1.5 group">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 mr-3 group-hover:bg-white transition-colors text-base">🔗</div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Data Lineage</div>
+                      <div className="text-[10px] text-slate-400 group-hover:text-blue-100 transition-colors">Track data flow & provenance</div>
+                    </div>
+                  </Link>
+                  <Link to="/govern/data/quality" onClick={() => setGovernOpen(false)}
+                    className="flex items-center px-3 py-2.5 hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-lg mx-1.5 group">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-50 mr-3 group-hover:bg-white transition-colors text-base">✓</div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Data Quality</div>
+                      <div className="text-[10px] text-slate-400 group-hover:text-blue-100 transition-colors">Quality rules & validation</div>
+                    </div>
+                  </Link>
+                  <Link to="/govern/data/readiness" onClick={() => setGovernOpen(false)}
+                    className="flex items-center px-3 py-2.5 hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-lg mx-1.5 group">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-cyan-50 mr-3 group-hover:bg-white transition-colors text-base">🎯</div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">AI Readiness</div>
+                      <div className="text-[10px] text-slate-400 group-hover:text-blue-100 transition-colors">7-dimension assessment</div>
+                    </div>
+                  </Link>
+                  <div className="my-1.5 mx-3 border-t border-slate-100" />
+                  <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Platform</div>
+                  <Link to="/govern/finops" onClick={() => setGovernOpen(false)}
+                    className="flex items-center px-3 py-2.5 hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-lg mx-1.5 group">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-50 mr-3 group-hover:bg-white transition-colors text-base">💰</div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">FinOps</div>
+                      <div className="text-[10px] text-slate-400 group-hover:text-blue-100 transition-colors">Cost management & budgets</div>
+                    </div>
+                  </Link>
+                  <Link to="/govern/compliance" onClick={() => setGovernOpen(false)}
+                    className="flex items-center px-3 py-2.5 hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-lg mx-1.5 group">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-50 mr-3 group-hover:bg-white transition-colors text-base">📋</div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Compliance</div>
+                      <div className="text-[10px] text-slate-400 group-hover:text-blue-100 transition-colors">Regulatory conformance</div>
+                    </div>
+                  </Link>
+                  <Link to="/govern/audit" onClick={() => setGovernOpen(false)}
+                    className="flex items-center px-3 py-2.5 hover:bg-blue-500 hover:text-white transition-all duration-200 rounded-lg mx-1.5 group">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-50 mr-3 group-hover:bg-white transition-colors text-base">📝</div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-800 group-hover:text-white transition-colors">Audit & Incidents</div>
+                      <div className="text-[10px] text-slate-400 group-hover:text-blue-100 transition-colors">Activity logs & events</div>
+                    </div>
+                  </Link>
+                  <div className="my-1.5 mx-3 border-t border-slate-100" />
+                  <Link to="/govern" onClick={() => setGovernOpen(false)}
+                    className="flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
+                    View all Govern modules →
+                  </Link>
+                </div>
+              )}
+            </div>
+
             <Link to="/deployments" className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 ${isActive('/deployments') ? 'bg-blue-500 text-white shadow-md' : 'text-slate-600 hover:text-white hover:bg-blue-500 hover:shadow-md'}`}>
               Deployments
             </Link>
@@ -396,11 +488,57 @@ export default function Navigation() {
                 Agent Safety
               </Link>
               <Link
-                to="/observability?tab=langfuse"
+                to="/observability/langfuse"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
               >
                 Langfuse
+              </Link>
+            </div>
+
+            <div className="py-2">
+              <div className="px-4 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wide">Govern</div>
+              <Link
+                to="/govern/data/agents"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                🤖 Agent Data Profiles
+              </Link>
+              <Link
+                to="/govern/data/lineage"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                🔗 Data Lineage
+              </Link>
+              <Link
+                to="/govern/data/quality"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                ✓ Data Quality
+              </Link>
+              <Link
+                to="/govern/data/readiness"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                🎯 AI Readiness
+              </Link>
+              <Link
+                to="/govern/finops"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                💰 FinOps
+              </Link>
+              <Link
+                to="/govern"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                View all →
               </Link>
             </div>
 

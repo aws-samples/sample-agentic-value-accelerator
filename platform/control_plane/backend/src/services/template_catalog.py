@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 import logging
 
-from models.template import Template, TemplateMetadata, PatternType
+from models.template import Template, TemplateMetadata
 from services.template_validator import TemplateValidator
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class TemplateCatalog:
                     template = self._load_template(template_dir)
                     if template:
                         self._templates[template.metadata.id] = template
-                        logger.info(f"Loaded template: {template.metadata.id}{' (hidden)' if template.metadata.hidden else ''}")
+                        logger.info(f"Loaded template: {template.metadata.id}")
                 except Exception as e:
                     logger.error(f"Failed to load template from {template_dir}: {e}")
 
@@ -91,47 +91,34 @@ class TemplateCatalog:
 
     def list_templates(
         self,
-        pattern_type: Optional[str] = None,
+        tier: Optional[str] = None,
+        category: Optional[str] = None,
         framework: Optional[str] = None,
-        deployment_pattern: Optional[str] = None,
-        template_type: Optional[str] = None
     ) -> List[Template]:
         """
         List templates with optional filtering
 
         Args:
-            pattern_type: Filter by pattern type
-            framework: Filter by framework support
-            deployment_pattern: Filter by deployment pattern support
+            tier: Filter by tier (module, starter)
+            category: Filter by category (compute, api, auth, etc.)
+            framework: Filter by framework (strands, langgraph)
 
         Returns:
             List of matching templates
         """
-        templates = [t for t in self._templates.values() if not t.metadata.hidden]
+        templates = list(self._templates.values())
 
-        # Filter by pattern type
-        if pattern_type:
-            try:
-                pattern_enum = PatternType(pattern_type)
-                templates = [t for t in templates if t.metadata.pattern_type == pattern_enum]
-            except ValueError:
-                logger.warning(f"Invalid pattern type: {pattern_type}")
-                return []
+        if tier:
+            templates = [t for t in templates if t.metadata.tier == tier]
 
-        # Filter by type (foundation/usecase)
-        if template_type:
-            templates = [t for t in templates if t.metadata.type == template_type]
+        if category:
+            templates = [t for t in templates if t.metadata.category == category]
 
-        # Filter by framework
         if framework:
-            templates = [t for t in templates if t.supports_framework(framework)]
+            templates = [t for t in templates if framework in t.metadata.frameworks_list]
 
-        # Filter by deployment pattern
-        if deployment_pattern:
-            templates = [t for t in templates if t.supports_deployment_pattern(deployment_pattern)]
-
-        # Sort foundations first, then alphabetically by name
-        templates.sort(key=lambda t: (t.metadata.type != "foundation", t.metadata.name))
+        # Sort: starters first, then alphabetically
+        templates.sort(key=lambda t: (t.metadata.tier != "starter", t.metadata.name))
 
         return templates
 
@@ -147,14 +134,6 @@ class TemplateCatalog:
         """
         return self._templates.get(template_id)
 
-    def get_foundations(self) -> List[Template]:
-        """Get all foundation templates"""
-        return self.list_templates(template_type="foundation")
-
-    def get_usecases(self) -> List[Template]:
-        """Get all usecase templates"""
-        return self.list_templates(template_type="usecase")
-
     def search_templates(self, query: str) -> List[Template]:
         """
         Search templates by keyword
@@ -169,14 +148,11 @@ class TemplateCatalog:
         results = []
 
         for template in self._templates.values():
-            if template.metadata.hidden:
-                continue
-            # Search in name, description, tags, use cases
+            # Search in name, description, tags
             searchable = [
                 template.metadata.name.lower(),
                 template.metadata.description.lower(),
                 *[tag.lower() for tag in template.metadata.tags],
-                *[uc.lower() for uc in template.metadata.example_use_cases]
             ]
 
             if any(query_lower in text for text in searchable):
@@ -231,28 +207,35 @@ class TemplateCatalog:
         """
         templates = list(self._templates.values())
 
-        # Count by pattern type
-        pattern_counts = {}
-        for pattern_type in PatternType:
-            count = sum(1 for t in templates if t.metadata.pattern_type == pattern_type)
-            if count > 0:
-                pattern_counts[pattern_type.value] = count
+        # Count by tier
+        tiers = {}
+        for t in templates:
+            tier = t.metadata.tier
+            tiers[tier] = tiers.get(tier, 0) + 1
+
+        # Count by category
+        categories = {}
+        for t in templates:
+            cat = t.metadata.category
+            if cat:
+                categories[cat] = categories.get(cat, 0) + 1
 
         # Collect all frameworks
         frameworks = set()
-        for template in templates:
-            for framework in template.metadata.frameworks:
-                frameworks.add(framework.id)
+        for t in templates:
+            for fw in t.metadata.frameworks_list:
+                frameworks.add(fw)
 
-        # Collect all deployment patterns
-        deployment_patterns = set()
-        for template in templates:
-            for pattern in template.metadata.deployment_patterns:
-                deployment_patterns.add(pattern.id)
+        # Collect all IaC options
+        iac_options = set()
+        for t in templates:
+            for iac in t.metadata.iac_options:
+                iac_options.add(iac)
 
         return {
             "total_templates": len(templates),
-            "pattern_types": pattern_counts,
+            "tiers": tiers,
+            "categories": categories,
             "frameworks": sorted(list(frameworks)),
-            "deployment_patterns": sorted(list(deployment_patterns))
+            "iac_options": sorted(list(iac_options)),
         }

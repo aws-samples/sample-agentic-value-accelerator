@@ -6,13 +6,25 @@ and stores them in AWS Secrets Manager.
 
 Uses Langfuse's internal tRPC API with session auth (via the auto-login
 Lambda@Edge on CloudFront) to create projects and API keys.
+
+The Langfuse CloudFront distribution is guarded by an AVA SSO gate that
+short-circuits browser requests without an ava_session cookie. This
+service is a server-to-server caller (no browser, no cookie) so it
+proves identity via a signed X-Ava-S2s header the gate accepts. See
+foundation-stack/.../lambda_auto_login.js → verifyS2sHeader().
 """
 
+import hashlib
+import hmac
 import json
 import logging
+import time
+from urllib.parse import urlparse
 
 import boto3
 import requests
+
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +39,27 @@ class LangfuseProvisioningService:
         self._sm = boto3.client("secretsmanager", region_name=region)
         self._session = None
 
+    def _s2s_header(self, url: str) -> dict:
+        """Sign the request path with fsi_app_signing_secret so the Langfuse
+        SSO gate lets this call through. Format matches verifyS2sHeader() in
+        lambda_auto_login.js: '<unix_ts>.<hex(hmac-sha256(secret, ts + ':' + uri))>'.
+        The 5-minute replay window matches the edge check."""
+        secret = settings.FSI_APP_SIGNING_SECRET or ""
+        if not secret:
+            return {}
+        uri = urlparse(url).path or "/"
+        ts = str(int(time.time()))
+        sig = hmac.new(secret.encode(), f"{ts}:{uri}".encode(), hashlib.sha256).hexdigest()
+        return {"X-Ava-S2s": f"{ts}.{sig}"}
+
+    def _request(self, session: requests.Session, method: str, url: str, **kwargs) -> requests.Response:
+        """Thin wrapper that attaches a fresh S2S header on every call.
+        Each request signs its own timestamp+uri so long-lived sessions still
+        pass the edge's 5-minute replay check."""
+        headers = kwargs.pop("headers", None) or {}
+        headers.update(self._s2s_header(url))
+        return session.request(method, url, headers=headers, **kwargs)
+
     def _get_session(self) -> requests.Session:
         """Get an authenticated session via Langfuse's CSRF/auto-login flow."""
         if self._session:
@@ -34,13 +67,15 @@ class LangfuseProvisioningService:
 
         session = requests.Session()
         # Get CSRF token
-        r = session.get(f"{self.langfuse_host}/api/auth/csrf", timeout=10)
+        r = self._request(session, "GET", f"{self.langfuse_host}/api/auth/csrf", timeout=10)
         r.raise_for_status()
         csrf = r.json().get("csrfToken", "")
 
         # Trigger session creation via credentials callback
         # The auto-login Lambda@Edge handles actual authentication
-        session.post(
+        self._request(
+            session,
+            "POST",
             f"{self.langfuse_host}/api/auth/callback/credentials",
             data={"csrfToken": csrf, "email": "admin@langfuse.com", "password": "x", "callbackUrl": self.langfuse_host},
             timeout=10,
@@ -48,7 +83,7 @@ class LangfuseProvisioningService:
         )
 
         # Verify session
-        r = session.get(f"{self.langfuse_host}/api/auth/session", timeout=10)
+        r = self._request(session, "GET", f"{self.langfuse_host}/api/auth/session", timeout=10)
         if r.status_code != 200 or not r.json().get("user"):
             raise RuntimeError("Failed to establish Langfuse session")
 
@@ -85,7 +120,9 @@ class LangfuseProvisioningService:
         session = self._get_session()
 
         # Create project via tRPC
-        r = session.post(
+        r = self._request(
+            session,
+            "POST",
             f"{self.langfuse_host}/api/trpc/projects.create",
             json={"json": {"name": project_name, "orgId": "seed-org"}},
             timeout=10,
@@ -109,7 +146,9 @@ class LangfuseProvisioningService:
             logger.info(f"Found existing Langfuse project: {project_name} ({project_id})")
 
         # Create API keys for the project via tRPC
-        r = session.post(
+        r = self._request(
+            session,
+            "POST",
             f"{self.langfuse_host}/api/trpc/projectApiKeys.create",
             json={"json": {"projectId": project_id}},
             timeout=10,

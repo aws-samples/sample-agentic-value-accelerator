@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and customize.
+
+aws_region              = "us-east-1"
+agent_space_name        = "FSIAgentKitSecurityAgentSpace"
+agent_space_description = "Security Agent Space provisioned by AVA"
+
+# Optional: pin a stable suffix instead of the random hex one. Leave empty
+# in normal usage so re-deploys can coexist.
+# name_postfix = "demo"
+
+# Optional: pin an external ID for the PenTest Service and Actor roles.
+# Leave empty to auto-generate a random UUID per apply.
+# external_id = "your-external-id-here"
+
+tags = {
+  Project   = "ava"
+  Component = "frontier-agents/security"
+}

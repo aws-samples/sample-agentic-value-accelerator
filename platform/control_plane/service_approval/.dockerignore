@@ -1,0 +1,8 @@
+# Same exclusions as the M3a probe — keeps the plugin tree small (141 files
+# instead of 17,000+) and avoids the .venv re-bloat trap we hit before.
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.DS_Store
+**/node_modules
+**/.git

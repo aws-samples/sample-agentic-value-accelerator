@@ -193,7 +193,7 @@ export default function BootstrapForm({ templateId, onBack }: BootstrapFormProps
         </h1>
         <p className="text-gray-600 mb-4">{template.description}</p>
         <span className="inline-block px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded">
-          {template.pattern_type.replace('_', ' ')}
+          {(template.pattern_type || '').replace('_', ' ')}
         </span>
       </div>
 

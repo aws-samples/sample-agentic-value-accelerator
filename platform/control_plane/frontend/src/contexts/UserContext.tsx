@@ -21,9 +21,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = async () => {
-    // Don't fetch if there's no token - prevents 401 loop on initial load
+    // In dev mode (no Cognito), skip token check and fetch user directly
     const token = localStorage.getItem('auth_token');
-    if (!token) {
+    const cognitoConfigured = !!(import.meta.env.VITE_COGNITO_USER_POOL_ID);
+    if (!token && cognitoConfigured) {
       setUser(null);
       setIsLoading(false);
       return;

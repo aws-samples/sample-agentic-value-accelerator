@@ -20,6 +20,14 @@ export default function AppDeployCreate() {
   const [guardrailId, setGuardrailId] = useState<string | undefined>();
   const [guardrailVersion, setGuardrailVersion] = useState<string | undefined>();
 
+  // AgentCore CloudWatch observability flags. All three default off — the
+  // operator opts in per deployment. enable_xray_transaction_search and
+  // create_fleet_dashboard are once-per-region toggles; the warning text
+  // beneath each checkbox explains when to flip them on.
+  const [enableObservability, setEnableObservability] = useState(false);
+  const [enableXraySearch, setEnableXraySearch] = useState(false);
+  const [createFleetDashboard, setCreateFleetDashboard] = useState(false);
+
   // CodeCommit state
   const [repos, setRepos] = useState<CodeCommitRepo[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
@@ -82,6 +90,11 @@ export default function AppDeployCreate() {
           deployment_pattern: 'agentcore',
           aws_region: region,
           ...(guardrailId ? { guardrail_id: guardrailId, guardrail_version: guardrailVersion } : {}),
+          parameters: {
+            enable_agentcore_observability: enableObservability,
+            enable_xray_transaction_search: enableXraySearch,
+            create_fleet_dashboard: createFleetDashboard,
+          },
         });
       } else {
         result = await applicationsApi.deployFoundry({
@@ -91,6 +104,11 @@ export default function AppDeployCreate() {
           deployment_pattern: 'agentcore',
           aws_region: region,
           ...(guardrailId ? { guardrail_id: guardrailId, guardrail_version: guardrailVersion } : {}),
+          parameters: {
+            enable_agentcore_observability: enableObservability,
+            enable_xray_transaction_search: enableXraySearch,
+            create_fleet_dashboard: createFleetDashboard,
+          },
         });
       }
       navigate(`/deployments/${result.deployment_id}`);
@@ -239,7 +257,56 @@ export default function AppDeployCreate() {
           <GuardrailSelector
             value={guardrailId}
             onChange={(id, version) => { setGuardrailId(id); setGuardrailVersion(version); }}
+            useCaseId={useCaseId}
           />
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 space-y-3">
+          <div>
+            <label className="label">AgentCore CloudWatch Observability</label>
+            <p className="text-xs text-slate-500 mb-3">Routes runtime application logs to CloudWatch Logs and traces to X-Ray (CloudWatch GenAI Observability). Independent of Langfuse.</p>
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableObservability}
+              onChange={e => setEnableObservability(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div className="text-sm">
+              <div className="font-medium text-slate-700">Enable AgentCore observability</div>
+              <div className="text-xs text-slate-500">Wires APPLICATION_LOGS and TRACES delivery for this runtime.</div>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableXraySearch}
+              onChange={e => setEnableXraySearch(e.target.checked)}
+              disabled={!enableObservability}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+            />
+            <div className="text-sm">
+              <div className="font-medium text-slate-700">Enable X-Ray Transaction Search <span className="text-amber-600 text-xs font-normal">(once per region)</span></div>
+              <div className="text-xs text-slate-500">Account-level prerequisite. Only flip on for the FIRST AgentCore deployment in a given region.</div>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={createFleetDashboard}
+              onChange={e => setCreateFleetDashboard(e.target.checked)}
+              disabled={!enableObservability}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+            />
+            <div className="text-sm">
+              <div className="font-medium text-slate-700">Create fleet CloudWatch dashboard <span className="text-amber-600 text-xs font-normal">(once per region)</span></div>
+              <div className="text-xs text-slate-500">Per-region dashboard aggregating metrics across every AgentCore runtime via SEARCH() expressions.</div>
+            </div>
+          </label>
         </div>
 
         <button

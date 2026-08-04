@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { AppUseCase, Deployment } from '../types';
 import UseCaseDetailModal from './UseCaseDetailModal';
 import { deploymentsApi } from '../api/client';
-import { useUser } from '../contexts/UserContext';
+import { openFsiApp } from '../lib/fsiAppLink';
 
 const CATEGORIES: Record<string, { label: string; color: string; bg: string; iconBg: string }> = {
   B: { label: 'Banking', color: 'text-blue-700', bg: 'bg-blue-50', iconBg: 'from-blue-500 to-blue-600' },
@@ -28,7 +28,6 @@ export default function FSIFoundryCatalog() {
   });
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const navigate = useNavigate();
-  const { user } = useUser();
 
   useEffect(() => {
     fetch('/offerings.json').then(r => r.json()).then(d => setUseCases(d.use_cases || [])).catch(() => {});
@@ -162,8 +161,7 @@ export default function FSIFoundryCatalog() {
                           <button
                             onClick={() => navigate(`/applications/deploy/${uc.use_case_name}`)}
                             className="btn-primary text-xs py-2"
-                            disabled={!user?.can_deploy}
-                            title={!user?.can_deploy ? 'You do not have permission to deploy' : 'Deploy this use case'}
+                            title="Deploy this use case"
                           >
                             Deploy
                           </button>
@@ -193,7 +191,7 @@ export default function FSIFoundryCatalog() {
                                 View Deployment
                               </button>
                               {frontendUrl && (
-                                <button onClick={() => window.open(frontendUrl, '_blank')}
+                                <button onClick={() => openFsiApp(frontendUrl)}
                                   className="text-[11px] py-1.5 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors inline-flex items-center justify-center gap-1.5">
                                   Open App
                                   <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -210,8 +208,7 @@ export default function FSIFoundryCatalog() {
                         <button
                           onClick={() => navigate(`/applications/deploy/${uc.use_case_name}`)}
                           className="btn-primary text-[11px] py-2"
-                          disabled={!user?.can_deploy}
-                          title={!user?.can_deploy ? 'You do not have permission to deploy' : 'Deploy or redeploy this use case'}
+                          title="Deploy or redeploy this use case"
                         >
                           {deps.length > 0 ? 'Deploy / Redeploy' : 'Deploy'}
                         </button>
@@ -250,7 +247,7 @@ export default function FSIFoundryCatalog() {
                 <h3 className="text-base font-semibold text-slate-900">Tracing &amp; Logs</h3>
                 <p className="text-sm text-slate-500 mt-1">
                   If you want traceability and logs, please deploy Langfuse first.{' '}
-                  <Link to="/observability?tab=langfuse" className="text-violet-600 hover:text-violet-700 font-medium underline">
+                  <Link to="/observability/langfuse" className="text-violet-600 hover:text-violet-700 font-medium underline">
                     Go to Langfuse
                   </Link>
                 </p>

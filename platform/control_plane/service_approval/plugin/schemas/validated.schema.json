@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/validated.schema.json",
+  "title": "validated.json",
+  "description": "Phase 2 Validate output: research.json with verification overlays. Produced by validate skill. Consumed by map-generate-controls and generate-* skills. Adds verification_status/verification_note per item and botocore_enrichment metadata. Must carry existing_mitigations (CHECK-S13 requirement) which map-assemble.py reads.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "service", "assets", "capabilities", "api_surface", "existing_mitigations"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "phase": {"type": "string"},
+    "service": {"type": "string", "minLength": 1},
+    "service_prefix": {"type": "string"},
+    "cfn_prefix": {"type": "string"},
+    "doc_sources": {"type": "array", "items": {"type": ["object", "string"]}},
+    "resources": {"type": "array", "items": {"type": "object"}},
+    "assets": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+    "capabilities": {"type": "object", "additionalProperties": true},
+    "api_surface": {"type": "object", "additionalProperties": true},
+    "existing_mitigations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^M-.+"},
+          "statement": {"type": "string"},
+          "mitigation_goal": {"type": "string"},
+          "verification_status": {
+            "type": "string",
+            "enum": ["verified", "unverified", "skipped", "failed"]
+          },
+          "verification_note": {"type": "string"},
+          "verification_source": {"type": "string"}
+        }
+      }
+    },
+    "mitigations": {
+      "type": "array",
+      "items": {"type": "object"},
+      "description": "Legacy alias; downstream reads existing_mitigations."
+    },
+    "assessment_gaps": {"type": "array", "items": {"type": "object"}},
+    "validation_notes": {"type": ["array", "object", "string"]},
+    "validation_mode": {"type": "string"},
+    "mcp_skip_rationale": {"type": "string"},
+    "validation_metadata": {"type": "object", "additionalProperties": true},
+    "verification": {"type": "object", "additionalProperties": true},
+    "_validation": {"type": "object", "additionalProperties": true},
+    "botocore_enrichment": {"type": "object", "additionalProperties": true},
+    "_metadata": {"type": "object", "additionalProperties": true}
+  }
+}

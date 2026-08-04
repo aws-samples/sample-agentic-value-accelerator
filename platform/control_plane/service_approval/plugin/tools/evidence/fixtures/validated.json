@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "service": "AWS Lambda",
+  "service_prefix": "lambda",
+  "capabilities": [
+    {
+      "name": "KMS encryption for functions",
+      "verification_note": "Confirmed via AWS documentation"
+    }
+  ]
+}

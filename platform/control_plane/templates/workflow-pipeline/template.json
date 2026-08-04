@@ -1,0 +1,102 @@
+{
+  "id": "workflow-pipeline",
+  "name": "Sequential Workflow Pipeline",
+  "description": "Deterministic sequential agent pipeline for document processing. Demonstrates fixed-order execution with per-step error handling \u2014 when you need reliability over autonomy.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "pipeline",
+    "sequential",
+    "workflow",
+    "deterministic",
+    "document-processing",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the pipeline agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for invoking the agent"
+    },
+    {
+      "name": "IAM Role + 5 Policies",
+      "description": "Bedrock invoke, ECR pull, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "Deterministic sequential pipeline. A fixed sequence of agent steps where each step has defined inputs and outputs. Unlike dynamic routing (supervisor), this guarantees execution order. Use this for document processing, data pipelines, or any workflow requiring reliability over autonomy.",
+  "learn_more": [
+    {
+      "title": "Strands: Graph Builder (Deterministic Workflows)",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/12-graph"
+    },
+    {
+      "title": "LangGraph: Extraction Example",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/extraction"
+    },
+    {
+      "title": "LangGraph Docs: Workflows + Agents",
+      "url": "https://langchain-ai.github.io/langgraph/tutorials/introduction/"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID"
+    }
+  ]
+}

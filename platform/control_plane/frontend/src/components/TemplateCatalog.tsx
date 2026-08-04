@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getTemplates, getTemplateStats } from '../api/client';
 import TemplateCard from './TemplateCard';
 import TemplateFilters from './TemplateFilters';
+import TemplateDetailModal from './TemplateDetailModal';
 import LoadingSpinner from './LoadingSpinner';
 import type { Template, TemplateStats } from '../types';
 
@@ -11,10 +12,19 @@ export default function TemplateCatalog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Tier toggle
+  const [selectedTier, setSelectedTier] = useState<'starter' | 'infrastructure' | 'code'>('starter');
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPatternType, setSelectedPatternType] = useState<string>('');
-  const [selectedFramework, setSelectedFramework] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedFramework, setSelectedFramework] = useState('');
+
+  // Drawer
+  const [drawerTemplate, setDrawerTemplate] = useState<Template | null>(null);
+
+  // Decision banner
+  const [bannerOpen, setBannerOpen] = useState(true);
 
   useEffect(() => {
     loadTemplates();
@@ -25,7 +35,7 @@ export default function TemplateCatalog() {
     try {
       setLoading(true);
       const data = await getTemplates();
-      setTemplates(data.filter((t: any) => t.type !== 'reference'));
+      setTemplates(data);
       setError(null);
     } catch (err) {
       setError('Failed to load templates. Please try again.');
@@ -44,7 +54,14 @@ export default function TemplateCatalog() {
     }
   };
 
-  const filteredTemplates = templates.filter(template => {
+  // Derive available categories from templates in the selected tier
+  const templatesInTier = templates.filter(t => (t.tier || 'starter') === selectedTier && !(t as any).hidden);
+  const availableCategories = [...new Set(templatesInTier.map(t => t.category).filter(Boolean))] as string[];
+  const availableFrameworks = [...new Set(
+    templatesInTier.flatMap(t => t.frameworks_list || [])
+  )];
+
+  const filteredTemplates = templatesInTier.filter(template => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const matchesSearch =
@@ -53,10 +70,10 @@ export default function TemplateCatalog() {
         template.tags?.some(tag => tag.toLowerCase().includes(query));
       if (!matchesSearch) return false;
     }
-    if (selectedPatternType && template.pattern_type !== selectedPatternType) return false;
+    if (selectedCategory && template.category !== selectedCategory) return false;
     if (selectedFramework) {
-      const hasFramework = template.frameworks?.some(f => f.id === selectedFramework);
-      if (!hasFramework) return false;
+      const frameworkIds = template.frameworks_list || [];
+      if (!frameworkIds.includes(selectedFramework)) return false;
     }
     return true;
   });
@@ -98,20 +115,62 @@ export default function TemplateCatalog() {
               Templates
             </h1>
             <p className="text-slate-500 mt-2 max-w-2xl">
-              Starter templates for building AI agent applications. Each includes agent code, IaC, deploy scripts, and configuration.
+              Starter templates and reusable modules for building AI agent applications on AWS.
             </p>
           </div>
 
-          {/* How it works */}
-          <div className="card bg-teal-50/50 border-teal-200/60 animate-fade-in stagger-1">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <svg className="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z" /></svg>
+          {/* Decision Banner */}
+          {bannerOpen && (
+            <div className="card bg-teal-50/50 border-teal-200/60 animate-fade-in stagger-1">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg className="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-teal-900 font-semibold">Starters · Infrastructure · Code Libraries</p>
+                  <p className="text-sm text-teal-700/80 mt-1">
+                    <strong>Starters</strong> are complete agent applications with both frameworks, IaC, and deploy scripts.{' '}
+                    <strong>Infrastructure</strong> modules are Terraform/CDK for deploying AWS resources.{' '}
+                    <strong>Code Libraries</strong> are Python modules you drop into your agent project.
+                  </p>
+                  <p className="text-sm text-teal-700/80 mt-2">
+                    Looking for production use cases? Try <a href="/applications/fsi-foundry" className="underline font-medium">FSI Foundry</a> or <a href="/applications/reference-implementations" className="underline font-medium">Reference Implementations</a>.
+                  </p>
+                </div>
+                <button onClick={() => setBannerOpen(false)} className="p-1 hover:bg-teal-100 rounded-lg transition-colors flex-shrink-0">
+                  <svg className="w-4 h-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
-              <div>
-                <p className="text-sm text-teal-900 font-semibold">How Template deployment works</p>
-                <p className="text-sm text-teal-700/80 mt-1">Templates are <strong>project scaffolds</strong> — they package agent code, IaC (Terraform/CDK/CloudFormation), and deploy scripts into a zip delivered to S3. You then run the included IaC to provision resources in your account. <a href="/docs/deployments" className="underline font-medium">Learn more →</a></p>
-              </div>
+            </div>
+          )}
+
+          {/* Segmented Control */}
+          <div className="flex items-center gap-4 animate-fade-in stagger-1">
+            <div className="inline-flex items-center gap-1 px-2 py-1.5 rounded-full bg-white/85 backdrop-blur-md border border-slate-200/60 shadow-sm">
+              <button
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  selectedTier === 'starter' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+                onClick={() => setSelectedTier('starter')}
+              >
+                Starters
+              </button>
+              <button
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  selectedTier === 'infrastructure' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+                onClick={() => setSelectedTier('infrastructure')}
+              >
+                Infrastructure
+              </button>
+              <button
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  selectedTier === 'code' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+                onClick={() => setSelectedTier('code')}
+              >
+                Code Libraries
+              </button>
             </div>
           </div>
 
@@ -120,18 +179,18 @@ export default function TemplateCatalog() {
             <TemplateFilters
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              selectedPatternType={selectedPatternType}
-              onPatternTypeChange={setSelectedPatternType}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
               selectedFramework={selectedFramework}
               onFrameworkChange={setSelectedFramework}
-              patternTypes={stats?.pattern_types || []}
-              frameworks={stats?.frameworks || []}
+              categories={availableCategories.length > 0 ? availableCategories : Object.keys(stats?.categories || {})}
+              frameworks={availableFrameworks.length > 0 ? availableFrameworks : (stats?.frameworks || [])}
             />
           </div>
 
           {/* Results count */}
           <div className="text-sm text-slate-500 animate-fade-in stagger-2">
-            Showing <span className="font-semibold text-slate-900">{filteredTemplates.length}</span> of <span className="font-semibold text-slate-900">{templates.length}</span> templates
+            Showing <span className="font-semibold text-slate-900">{filteredTemplates.length}</span> {selectedTier === 'starter' ? 'starters' : selectedTier === 'infrastructure' ? 'infrastructure modules' : 'code libraries'}
           </div>
 
           {/* Template grid */}
@@ -139,7 +198,10 @@ export default function TemplateCatalog() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredTemplates.map((template, idx) => (
                 <div key={template.id} className={`animate-fade-in stagger-${Math.min(idx + 1, 4)}`}>
-                  <TemplateCard template={template} />
+                  <TemplateCard
+                    template={template}
+                    onViewDetails={(t) => setDrawerTemplate(t)}
+                  />
                 </div>
               ))}
             </div>
@@ -150,12 +212,12 @@ export default function TemplateCatalog() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-lg font-semibold text-slate-700 mb-2">No templates match your filters</p>
+              <p className="text-lg font-semibold text-slate-700 mb-2">No {selectedTier === 'starter' ? 'starters' : selectedTier === 'infrastructure' ? 'infrastructure modules' : 'code libraries'} match your filters</p>
               <p className="text-sm text-slate-500 mb-6">Try adjusting your search or filter criteria</p>
               <button
                 onClick={() => {
                   setSearchQuery('');
-                  setSelectedPatternType('');
+                  setSelectedCategory('');
                   setSelectedFramework('');
                 }}
                 className="btn-secondary"
@@ -166,6 +228,14 @@ export default function TemplateCatalog() {
           )}
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {drawerTemplate && (
+        <TemplateDetailModal
+          template={drawerTemplate}
+          onClose={() => setDrawerTemplate(null)}
+        />
+      )}
     </div>
   );
 }

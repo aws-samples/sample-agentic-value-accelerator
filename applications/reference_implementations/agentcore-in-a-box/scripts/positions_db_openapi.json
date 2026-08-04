@@ -1,0 +1,96 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Positions DB",
+    "description": "Identity-governed client holdings ledger (Aurora PostgreSQL). Rows are filtered to the caller's desk and PII/notional columns are masked by the caller's tier — enforced server-side by the caller's verified identity.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "POSITIONS_DB_API_URL_PLACEHOLDER" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "gatewayApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-meridian-api-key",
+        "description": "Shared API key injected by the AgentCore Gateway API_KEY credential provider (never supplied by the model/caller). The resolver validates it before running any query."
+      }
+    }
+  },
+  "security": [
+    { "gatewayApiKey": [] }
+  ],
+  "paths": {
+    "/holdings": {
+      "post": {
+        "operationId": "query_holdings",
+        "summary": "Query the identity-governed client holdings ledger",
+        "description": "Returns client holdings scoped to your desk. You cannot widen your own access: which rows you see (by desk) and whether client names / notional are visible (by your tier) are decided server-side from your verified identity. Optionally filter by sector, a minimum market value, and a row limit.",
+        "security": [
+          { "gatewayApiKey": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "principal_sub": {
+                    "type": "string",
+                    "description": "SERVER-INJECTED verified caller identity. Do not set this — any value you provide is overwritten at the gateway with your cryptographically-verified identity."
+                  },
+                  "sector": {
+                    "type": "string",
+                    "description": "Optional. Filter to a single sector, e.g. 'US Treasury', 'IG Corporate', 'Municipal', 'Agency MBS', 'TIPS'."
+                  },
+                  "min_market_value": {
+                    "type": "number",
+                    "description": "Optional. Only return holdings with market value at or above this amount (USD)."
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "description": "Optional. Maximum rows to return (default 100, capped at 500)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Governed holdings rows (row/column visibility reflects your identity).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "book": { "type": "string" },
+                          "sector": { "type": "string" },
+                          "client_name": { "type": "string" },
+                          "notional": { "type": "number" },
+                          "market_value": { "type": "number" },
+                          "currency": { "type": "string" },
+                          "as_of": { "type": "string" }
+                        }
+                      }
+                    },
+                    "row_count": { "type": "integer" },
+                    "source": { "type": "string" },
+                    "disclaimer": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

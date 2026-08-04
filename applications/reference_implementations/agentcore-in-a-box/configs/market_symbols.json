@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "description": "Fixed-income ETF universe for the Meridian Asset Management AgentCore demo. Used by scripts/seed_data/fetch_bond_etf_prices.py to fetch recent daily/monthly bars (Yahoo Finance) that ground the seeded fund positions in deploy.sh and the Code Interpreter analytics prompt. Dev-time only — NOT referenced by the deployed agent, lambdas, or CDK. Shape borrowed from quant-weather/configs/market_symbols.json.",
+  "symbols": [
+    "AGG",
+    "SHY",
+    "IEF",
+    "TLT",
+    "LQD",
+    "HYG",
+    "TIP",
+    "MUB",
+    "EMB"
+  ]
+}

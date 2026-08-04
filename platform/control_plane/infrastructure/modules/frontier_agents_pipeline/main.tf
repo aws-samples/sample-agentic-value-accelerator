@@ -151,9 +151,10 @@ resource "aws_iam_role_policy" "codebuild_provisioning" {
         # CDK bootstrap uses SSM parameter store for version tracking.
         "ssm:GetParameter",
         "ssm:PutParameter",
-        # DevOps Agent service (accessed via Cloud Control for awscc resources,
+        # Frontier Agent services (accessed via Cloud Control for awscc resources,
         # but direct API is used for reads + deletes).
         "aidevops:*",
+        "securityagent:*",
         # IAM — create/attach/tag the Agent Space + operator roles.
         "iam:CreateRole", "iam:DeleteRole",
         "iam:AttachRolePolicy", "iam:DetachRolePolicy",

@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "service": "AWS Lambda",
+  "service_prefix": "lambda",
+  "documentation": {
+    "service_authorization_reference": "https://docs.aws.amazon.com/service-authorization/latest/reference/list_awslambda.html"
+  }
+}

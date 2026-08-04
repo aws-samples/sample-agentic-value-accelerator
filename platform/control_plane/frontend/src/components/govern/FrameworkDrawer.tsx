@@ -1,5 +1,7 @@
+import React from 'react';
 import Drawer from './Drawer';
 import { FRAMEWORK_DETAILS } from './mockData';
+import { Icon } from './icons';
 
 interface Props {
   frameworkKey: string | null;
@@ -12,10 +14,10 @@ const statusBg: Record<string, string> = {
   fail:          'bg-rose-100 text-rose-700',
 };
 
-const statusIcon: Record<string, string> = {
-  pass:          '✓',
-  'in-progress': '·',
-  fail:          '✗',
+const statusIconName: Record<string, React.ReactNode> = {
+  pass:          <Icon name="check" className="w-3 h-3" />,
+  'in-progress': <span>·</span>,
+  fail:          <Icon name="x-mark" className="w-3 h-3" />,
 };
 
 export default function FrameworkDrawer({ frameworkKey, onClose }: Props) {
@@ -55,11 +57,11 @@ export default function FrameworkDrawer({ frameworkKey, onClose }: Props) {
           {detail.categories.map((cat) => (
             <div key={cat.name}>
               <div className="text-sm font-semibold text-slate-900 mb-2">{cat.name}</div>
-              <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm divide-y divide-slate-100">
                 {cat.controls.map((c) => (
                   <div key={c.id} className="px-4 py-3 flex items-start gap-3">
                     <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 font-semibold ${statusBg[c.status]}`}>
-                      {statusIcon[c.status]}
+                      {statusIconName[c.status]}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">

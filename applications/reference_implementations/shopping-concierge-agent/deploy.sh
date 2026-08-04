@@ -24,11 +24,28 @@ echo "{\"deploymentId\": \"$AMPLIFY_ID\"}" > deployment-config.json
 if [ -n "${SERP_KEY:-}" ] && [ "$SERP_KEY" != "" ]; then
   echo "Setting SERP API key in SSM Parameter Store..."
   aws ssm put-parameter \
-    --name "/concierge-agent/${DEPLOY_NAME}/serp-api-key" \
+    --name "/concierge-agent/${AMPLIFY_ID}/serp-api-key" \
     --value "$SERP_KEY" \
     --type "SecureString" \
     --overwrite \
     --region "${AWS_REGION:-us-east-1}" || echo "Warning: Failed to set SERP API key"
+fi
+
+# Amplify backend-cli (ampx) calls globalThis.crypto.randomUUID(), which only
+# exists on Node 20+. The default CodeBuild aarch64 image ships Node 18, so
+# `npx ampx sandbox` fails with "ReferenceError: crypto is not defined".
+# Detect the build's CPU arch and upgrade in place when needed.
+NODE_VER=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1 || echo 0)
+if [ -z "$NODE_VER" ] || [ "$NODE_VER" -lt 20 ]; then
+  ARCH=$(uname -m)
+  case "$ARCH" in
+    aarch64|arm64) NODE_ARCH="linux-arm64" ;;
+    x86_64)        NODE_ARCH="linux-x64" ;;
+    *)             echo "Unsupported arch: $ARCH"; exit 1 ;;
+  esac
+  echo "Upgrading Node.js (current: $(node --version 2>/dev/null || echo none), arch: $NODE_ARCH)..."
+  curl -fsSL "https://nodejs.org/dist/v22.15.0/node-v22.15.0-${NODE_ARCH}.tar.xz" | tar -xJ -C /usr/local --strip-components=1
+  echo "Node.js upgraded to: $(node --version)"
 fi
 
 # Install Amplify CLI if not present
@@ -36,6 +53,21 @@ if ! command -v ampx &>/dev/null; then
   echo "Installing Amplify CLI..."
   npm install -g @aws-amplify/backend-cli@latest
 fi
+
+# The MCP / agent / frontend stacks pin aws-cdk-lib ^2.225.0, which emits
+# cloud assembly schema newer than the pre-installed CDK CLI supports.
+# `npm install -g aws-cdk@latest` on CodeBuild's aarch64 image returns
+# 2.1130.0 (stale registry state, cache, or dist-tag lag) which still fails
+# the manifest compatibility check. Pin to 2.1131.0, the newest published
+# 2.x CLI that reads modern (schema >=54) manifests without pulling in the
+# 3.0 major.
+echo "Upgrading CDK CLI (was: $(cdk --version 2>/dev/null || echo none))..."
+npm install -g --force aws-cdk@2.1131.0
+echo "CDK CLI: $(cdk --version)"
+# Note: each `deploy:*` npm script also strips its local node_modules/aws-cdk
+# right after `npm install`, because the per-stack package-lock.json pins an
+# old aws-cdk (2.1032-2.1034) that ./node_modules/.bin/cdk would resolve to
+# instead of the global CLI we just installed. Stripping forces global resolve.
 
 # Ensure CDK is bootstrapped in this account/region
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -48,6 +80,16 @@ npx cdk bootstrap "aws://$ACCOUNT_ID/$AWS_REGION" 2>&1 || {
 # Install root dependencies (includes amplify workspace)
 npm install
 cd amplify && npm install && cd ..
+
+# npm scripts prepend <root>/node_modules/.bin to PATH. The root package-lock.json
+# pins aws-cdk to 2.1033 (max schema 48), which shadows the global 2.1131 (max
+# schema 54+) and fails MCP deploy with:
+#   "Cloud assembly schema version mismatch: Maximum schema version supported is
+#    48.x.x, but found 53.0.0"
+# The per-sub-stack `rm -rf node_modules/aws-cdk` in deploy:* only strips the
+# sub-stack copy, not the root. Purge here so `cdk` in npm scripts resolves to
+# the global 2.1131 we installed above.
+rm -rf node_modules/aws-cdk node_modules/.bin/cdk 2>/dev/null || true
 
 # Step 1: Amplify Backend (Cognito, DynamoDB, AppSync)
 echo "=== Step 1/4: Deploying Amplify backend ==="

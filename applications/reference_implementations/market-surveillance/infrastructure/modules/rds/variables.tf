@@ -36,7 +36,7 @@ variable "cluster_instance_count" {
 variable "engine_version" {
   description = "Aurora PostgreSQL engine version"
   type        = string
-  default     = "15.8"
+  default     = "15.15"
 }
 
 variable "availability_zones" {

@@ -124,7 +124,8 @@ Resources:
               return items
 
           def _get_agents():
-              return _scan_all(dynamodb.Table(REGISTRY_TABLE))
+              items = _scan_all(dynamodb.Table(REGISTRY_TABLE))
+              return [i for i in items if not i.get("agent_name", "").startswith("_")]
 
           def _resolve_role_from_arn(arn):
               """Get IAM role name from AgentCore runtime ARN."""

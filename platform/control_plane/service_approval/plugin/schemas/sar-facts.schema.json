@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/sar-facts.schema.json",
+  "title": "sar-facts.json",
+  "description": "Phase 0 Assess output: SAR-page extraction. Produced by skills/assess. Consumed by research phases for action/condition-key/resource-type grounding. additionalProperties:false at top level; permissive on _metadata. Condition keys MUST be objects with applies_to_actions[] (iter-14 Class F13 — assess/SKILL.md:67,92 emits the object shape at Phase 0).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["service", "sar_url", "condition_keys", "resource_types"],
+  "properties": {
+    "service": {"type": "string", "minLength": 1},
+    "service_prefix": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Lowercase machine identifier (e.g. 'ecs', 'bedrock-agentcore'). Consumers that look this up for eventBridge source strings rely on the lowercase+no-whitespace invariant (iter-14 Class B)."
+    },
+    "cfn_prefix": {
+      "type": "string",
+      "description": "CloudFormation prefix for the service (e.g. 'ECS' in 'AWS::ECS::Cluster')."
+    },
+    "sar_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://docs\\.aws\\.amazon\\.com/service-authorization/.+"
+    },
+    "sar_slug": {"type": "string"},
+    "total_actions": {"type": "integer", "minimum": 0},
+    "total_actions_note": {"type": "string"},
+    "actions": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "permission_only_actions": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "wildcard_only_actions": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "condition_keys": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/conditionKey"},
+      "description": "Object form required since iter-14 Class F13. Strings-only arrays (pre-F13 shape) are rejected."
+    },
+    "condition_keys_note": {"type": "string", "description": "Iter-14+ sometimes emits a caveat string alongside condition_keys (e.g. 'SAR lists only global tag keys')."},
+    "condition_keys_service_specific_count": {"type": "integer", "minimum": 0},
+    "resource_types": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/resourceType"}
+    },
+    "service_linked_roles": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "service_linked_role": {
+      "description": "Legacy single-role form (iter-11/12 archives). Object or null."
+    },
+    "cfn_resource_types": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^AWS::[A-Za-z0-9]+::[A-Za-z0-9]+$"}
+    },
+    "config_resource_types": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^AWS::[A-Za-z0-9]+::[A-Za-z0-9]+$"}
+    },
+    "encryption": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "vpc_endpoint": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "fips_endpoints": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Iter-13+ service-specific FIPS endpoint detail block (regions + supported flag)."
+    },
+    "function_url": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Lambda-specific FunctionURL detail (iter-13 Lambda archives). Service-specific extension."
+    },
+    "extraction_date": {"type": "string"},
+    "abac_support": {
+      "type": "string",
+      "enum": ["full", "partial", "none"]
+    },
+    "aws_managed_policies": {"type": "array", "items": {"type": ["object", "string"]}},
+    "cloudtrail_data_event_types": {"type": "array", "items": {"type": ["object", "string"]}},
+    "global_condition_keys_supported": {"description": "Legacy field — boolean or object."},
+    "notes": {"type": ["string", "array"]},
+    "_metadata": {"type": "object", "additionalProperties": true}
+  },
+
+  "$defs": {
+    "conditionKey": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["key"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*:[A-Za-z0-9:/${}._-]+$"
+        },
+        "applies_to_actions": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "type": {"type": "string"},
+        "description": {"type": "string"}
+      }
+    },
+    "resourceType": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "arn_pattern": {"type": "string"}
+      }
+    }
+  }
+}

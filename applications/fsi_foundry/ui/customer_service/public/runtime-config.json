@@ -20,7 +20,7 @@
       "description": "Specialized AI agent: Product Advisor"
     }
   ],
-  "api_endpoint": "https://PLACEHOLDER.cloudfront.net/api/invoke",
+  "api_endpoint": "https://d3txi0se9a5j5s.cloudfront.net/api/invoke",
   "input_schema": {
     "id_field": "customer_id",
     "id_label": "Customer ID",

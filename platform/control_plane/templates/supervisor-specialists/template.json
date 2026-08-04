@@ -1,0 +1,106 @@
+{
+  "id": "supervisor-specialists",
+  "name": "Supervisor with Specialists",
+  "description": "A supervisor/delegation pattern where a supervisor agent classifies incoming requests and delegates to specialist agents (researcher, writer, analyst), then synthesizes the results. Includes both Strands and LangGraph implementations with Terraform for AgentCore deployment.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "supervisor",
+    "delegation",
+    "multi-agent",
+    "specialists",
+    "routing",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the supervisor agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for invoking the agent"
+    },
+    {
+      "name": "IAM Role + 5 Policies",
+      "description": "Bedrock invoke, ECR pull, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "A supervisor agent classifies incoming requests and delegates to specialized agents. Each specialist has its own system prompt and tools. The supervisor synthesizes results. Use this when different request types need fundamentally different handling.",
+  "learn_more": [
+    {
+      "title": "Strands: Agents-as-Tools Example",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/10-agents-as-tools"
+    },
+    {
+      "title": "LangGraph Supervisor Package",
+      "url": "https://github.com/langchain-ai/langgraph-supervisor-py"
+    },
+    {
+      "title": "LangGraph: Multi-Agent Supervisor Tutorial",
+      "url": "https://langchain-ai.github.io/langgraph/tutorials/multi_agent/agent_supervisor/"
+    },
+    {
+      "title": "Strands: Swarm Pattern",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/11-swarm"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID"
+    }
+  ]
+}

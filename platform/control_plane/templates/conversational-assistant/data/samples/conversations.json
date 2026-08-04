@@ -1,0 +1,7 @@
+[
+  {"message": "What is the square root of 144 plus 8?"},
+  {"message": "What time is it right now?"},
+  {"message": "Can you explain what a neural network is in simple terms?"},
+  {"message": "Calculate the compound interest on $10,000 at 5% annual rate for 3 years: 10000 * (1 + 0.05)**3"},
+  {"message": "What did we just calculate?"}
+]

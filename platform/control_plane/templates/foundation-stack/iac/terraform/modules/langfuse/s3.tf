@@ -6,7 +6,7 @@ resource "random_string" "suffix" {
 
 resource "aws_s3_bucket" "langfuse" {
   bucket = "${local.bucket_prefix}-${var.name}-${random_string.suffix.result}"
-
+  force_destroy = true
   # Add tags for better resource management
   tags = merge({
     Name    = "${local.bucket_prefix}-${var.name}"

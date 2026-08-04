@@ -1,0 +1,111 @@
+{
+  "id": "event-driven-agent",
+  "name": "Event-Driven Agent",
+  "description": "Event-driven reactive agent triggered by S3 uploads, schedules, or webhooks. Demonstrates agents that respond to the world rather than waiting for user input.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "event-driven",
+    "reactive",
+    "s3",
+    "eventbridge",
+    "webhooks",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "s3",
+    "eventbridge",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the event-driven agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for receiving events"
+    },
+    {
+      "name": "IAM Role + 6 Policies",
+      "description": "Bedrock invoke, ECR pull, S3 read, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "Event-driven reactive agent. Triggered by events (S3 uploads, schedules, webhooks) rather than user chat messages. The agent classifies the event, processes it, and stores results. Use this for automation workflows where agents respond to system events.",
+  "learn_more": [
+    {
+      "title": "AWS: EventBridge + Lambda Architecture",
+      "url": "https://github.com/aws-samples/event-driven-arch-eventbridge-lambda"
+    },
+    {
+      "title": "Strands: Deploy to Lambda",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/02-deploy"
+    },
+    {
+      "title": "Amazon EventBridge User Guide",
+      "url": "https://docs.aws.amazon.com/eventbridge/latest/userguide/"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID"
+    },
+    {
+      "name": "event_bucket_name",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "S3 bucket name for reading event source objects"
+    }
+  ]
+}

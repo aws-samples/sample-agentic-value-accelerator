@@ -9,9 +9,10 @@ pydantic==2.9.2
 pydantic-settings==2.6.0
 
 # LangChain & LangGraph - pinned versions that work together
-langchain==0.3.30
+langchain==0.3.14
 langchain-aws==0.2.10
-langchain-core==0.3.63
+langchain-core==0.3.29
+langchain-litellm==0.2.0
 langgraph==0.2.60
 
 # AWS SDK (compatible with langchain-aws 0.2.10)

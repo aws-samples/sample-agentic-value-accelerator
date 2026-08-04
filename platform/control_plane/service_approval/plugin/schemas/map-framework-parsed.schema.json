@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/map-framework-parsed.schema.json",
+  "title": "map-framework-parsed.json",
+  "description": "Phase 3a output: parsed framework objectives from xlsx/json/md input. Produced by map-parse-framework skill. Consumed by map-framework-mapping and map-assemble. framework MUST be an object with name/version/source_file (or file)/total_objectives — bare string rejected per iter-14 finding 5/5-b.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["framework", "framework_objectives"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "phase": {
+      "type": "string",
+      "enum": ["map-framework-parsed", "map-parse-framework"],
+      "description": "Accepts both forms — the skill name (map-parse-framework, used in iter-13/14 archives) and the file-name form."
+    },
+    "framework": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string"},
+        "source_file": {"type": "string"},
+        "file": {"type": "string"},
+        "total_objectives": {"type": "integer", "minimum": 0}
+      }
+    },
+    "framework_objectives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "anyOf": [
+          {"required": ["objective_id"]},
+          {"required": ["id"]}
+        ],
+        "properties": {
+          "objective_id": {"type": "string", "minLength": 1, "description": "iter-14+ canonical name. Downstream map-framework-mapping reads this."},
+          "id": {"type": "string", "description": "Legacy field (iter-13 archives). Accepted for backwards compatibility; new skill runs should emit objective_id."},
+          "domain": {"type": "string"},
+          "title": {"type": "string"},
+          "specification": {"type": "string"},
+          "keywords": {"type": "array", "items": {"type": "string"}},
+          "csc_implementation_guidance": {"type": "string", "description": "iter-13 ECS field; optional."}
+        }
+      }
+    },
+    "framework_name": {"type": "string", "description": "Legacy top-level field; prefer framework.name"},
+    "framework_version": {"type": "string"},
+    "framework_file": {"type": "string"},
+    "objective_count": {"type": "integer", "minimum": 0},
+    "source_file": {"type": "string"},
+    "_metadata": {"type": "object", "additionalProperties": true}
+  }
+}

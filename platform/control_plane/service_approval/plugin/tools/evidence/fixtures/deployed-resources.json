@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "service": "AWS Lambda",
+  "service_slug": "awslambda",
+  "stack_id": "arn:aws:cloudformation:us-east-1:123456789012:stack/test-stack/12345678",
+  "stack_name": "test-stack",
+  "region": "us-east-1",
+  "deployed_at": "2026-05-13T10:00:00Z",
+  "resources": [
+    {
+      "cfn_type": "AWS::Lambda::Function",
+      "logical_id": "TestFunction",
+      "physical_id": "test-function",
+      "arn": "arn:aws:lambda:us-east-1:123456789012:function:test-function",
+      "resource_status": "CREATE_COMPLETE"
+    },
+    {
+      "cfn_type": "AWS::IAM::Role",
+      "logical_id": "TestRole",
+      "physical_id": "test-role",
+      "arn": "arn:aws:iam::123456789012:role/test-role",
+      "resource_status": "CREATE_COMPLETE"
+    },
+    {
+      "cfn_type": "AWS::KMS::Key",
+      "logical_id": "TestKey",
+      "physical_id": "12345678-1234-1234-1234-123456789012",
+      "arn": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+      "resource_status": "CREATE_COMPLETE"
+    },
+    {
+      "cfn_type": "AWS::Config::ConfigRule",
+      "logical_id": "LambdaKmsConfigRule",
+      "physical_id": "lambda-kms-config-rule-deployed",
+      "arn": "arn:aws:config:us-east-1:123456789012:config-rule/config-rule-abc123",
+      "resource_status": "CREATE_COMPLETE",
+      "_metadata": {
+        "controls": ["CTRL-ACC-DET-001"]
+      }
+    },
+    {
+      "cfn_type": "AWS::SSM::Document",
+      "logical_id": "LambdaRemediationDoc",
+      "physical_id": "Remediate-Lambda-NoKms-Doc",
+      "resource_status": "CREATE_COMPLETE",
+      "_metadata": {
+        "controls": ["CTRL-ACC-COR-001"]
+      }
+    },
+    {
+      "cfn_type": "AWS::CloudWatch::Alarm",
+      "logical_id": "LambdaErrorAlarm",
+      "physical_id": "test-stack-LambdaErrorAlarm-XYZ",
+      "arn": "arn:aws:cloudwatch:us-east-1:123456789012:alarm:test-stack-LambdaErrorAlarm-XYZ",
+      "resource_status": "CREATE_COMPLETE",
+      "_metadata": {
+        "controls": ["CTRL-ACC-DET-002"]
+      }
+    }
+  ]
+}

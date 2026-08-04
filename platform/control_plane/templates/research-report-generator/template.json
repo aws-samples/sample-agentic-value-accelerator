@@ -1,0 +1,114 @@
+{
+  "id": "research-report-generator",
+  "name": "Research & Report Generator",
+  "description": "RAG-powered research agent that retrieves documents from a Bedrock Knowledge Base, answers questions with citations, and generates structured reports. Includes both Strands and LangGraph implementations.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "rag",
+    "knowledge-base",
+    "research",
+    "citations",
+    "reports",
+    "bedrock",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore",
+    "knowledge-base-bedrock"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the RAG agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for invoking the agent"
+    },
+    {
+      "name": "IAM Role + 5 Policies",
+      "description": "Bedrock invoke, ECR pull, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "Retrieval-Augmented Generation (RAG) pattern. The agent searches a Bedrock Knowledge Base for relevant documents, answers questions with citations, and generates structured reports. Use this when your agent needs to ground responses in your organization's documents.",
+  "learn_more": [
+    {
+      "title": "Strands: AWS Services (Knowledge Bases)",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/07-aws-services"
+    },
+    {
+      "title": "LangGraph: RAG Examples",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/rag"
+    },
+    {
+      "title": "AWS: Bedrock Knowledge Bases Documentation",
+      "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html"
+    },
+    {
+      "title": "AWS Sample: Bedrock KB RAG Workshop",
+      "url": "https://github.com/aws-samples/bedrock-kb-rag-workshop"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "knowledge_base_id",
+      "type": "string",
+      "required": true,
+      "description": "Bedrock Knowledge Base ID to retrieve documents from"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID for generation"
+    }
+  ]
+}

@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "Control Plane API"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
-    USE_DEV_AUTH: bool = Field(default=True, description="Use development auth bypass")
+    ENVIRONMENT: str = Field(default="development", description="Runtime environment: development, staging, production")
+    USE_DEV_AUTH: bool = Field(default=True, description="Use development auth bypass (skips Cognito JWT validation)")
 
     # Database
     DATABASE_URL: str = Field(
@@ -27,10 +28,88 @@ class Settings(BaseSettings):
 
     # AWS
     AWS_REGION: str = Field(default="us-east-1")
+
+    # FSI Foundry SSO — shared HMAC secret. AVA backend signs handoff tokens
+    # AFTER real Cognito RS256 verification succeeds; each FSI app's edge
+    # verifies the HMAC with the same secret. Empty disables the endpoint.
+    FSI_APP_SIGNING_SECRET: str = Field(default="", description="HMAC secret for FSI Foundry SSO handoff tokens")
     DEPLOYMENTS_TABLE_NAME: str = Field(default="fsi-control-plane-deployments")
     GUARDRAILS_TABLE_NAME: str = Field(default="fsi-control-plane-guardrails")
+    POLICIES_TABLE_NAME: str = Field(default="")
+    POLICY_ENGINE_ID: str = Field(
+        default="",
+        description="AgentCore Policy Engine ID. Wire from terraform; backend errors on policy CRUD if empty."
+    )
+    GATEWAY_ID: str = Field(default="")
+    GATEWAY_ARN: str = Field(
+        default="",
+        description="AgentCore Gateway ARN baked into Cedar policy statements. Wire from terraform; backend errors on policy CRUD if empty."
+    )
+    PRIORITIZATION_TABLE_NAME: str = Field(default="fsi-control-plane-prioritization")
+    MATURITY_TABLE_NAME: str = Field(default="fsi-control-plane-maturity")
+    BUSINESS_CASES_TABLE_NAME: str = Field(default="fsi-control-plane-business-cases")
+    KNOWLEDGE_TABLE_NAME: str = Field(default="fsi-control-plane-knowledge")
+    DATALAKE_MCP_IMAGE_URI: str = Field(default="", description="ECR image URI for the data lake MCP server")
+    KB_MCP_IMAGE_URI: str = Field(default="", description="ECR image URI for the knowledge base MCP server")
+    OPERATING_MODEL_TABLE_NAME: str = Field(default="fsi-control-plane-operating-model")
+    ORGANIZATION_DESIGN_TABLE_NAME: str = Field(default="fsi-control-plane-organization-design")
     APP_FACTORY_TABLE_NAME: str = Field(default="fsi-control-plane-app-factory")
+    GOVERN_AUDIT_TABLE_NAME: str = Field(default="fsi-control-plane-govern-audit")
+    GOVERN_CONFORMANCE_TABLE_NAME: str = Field(default="fsi-control-plane-govern-conformance")
+    GOVERN_GRADUATION_TABLE_NAME: str = Field(default="fsi-control-plane-govern-graduation")
+    GOVERN_SR26_TABLE_NAME: str = Field(default="fsi-control-plane-govern-sr26")
+    GOVERN_ENFORCEMENT_TABLE_NAME: str = Field(default="fsi-control-plane-govern-enforcement")
+    GOVERN_A2A_TRUST_TABLE_NAME: str = Field(default="fsi-control-plane-govern-a2a-trust")
+    # FinOps cost-allocation tag keys the "Cost by Tag" view offers, when the
+    # account's activated tags can't be auto-discovered. Comma-separated; these
+    # mirror the taxonomy Plan owns (business_unit/domain/owner) + agent identity.
+    GOVERN_COST_TAG_KEYS: str = Field(default="business-unit,business-domain,agent,owner")
+    # FinOps per-use-case/model spend store — written by the spend_aggregator from
+    # LiteLLM usage. Govern reads it (by-use-case cost) to close the Build→FinOps
+    # loop: a deployed use case → its real token spend. Empty until provisioned.
+    FINOPS_SPEND_TABLE_NAME: str = Field(default="")
+    # Developer AI (Claude Code telemetry) configuration
+    DEVELOPER_AI_NAMESPACE: str = Field(
+        default="claude_code",
+        description="CloudWatch namespace for OpenTelemetry developer AI metrics"
+    )
+    DEVELOPER_AI_APPROVED_TOOLS: str = Field(
+        default="claude-code",
+        description="Comma-separated list of approved AI coding tools (e.g., claude-code,cursor)"
+    )
+    DEVELOPER_AI_APPROVED_DOMAINS: str = Field(
+        default="",
+        description="Comma-separated email domains approved for AI tool access (empty = no domain restriction)"
+    )
+    DEVELOPER_AI_SPEND_SPIKE_THRESHOLD: float = Field(
+        default=2.0,
+        description="Anomaly threshold: current spend rate >= N x baseline triggers spend-spike alert"
+    )
+    DEVELOPER_AI_RUNAWAY_TOKEN_RATE: int = Field(
+        default=100000,
+        description="Anomaly threshold: hourly token rate above this triggers runaway-loop alert"
+    )
+    SERVICE_APPROVAL_TABLE_NAME: str = Field(
+        default="",
+        description="DynamoDB table for service-approval (service onboarding) runs"
+    )
+    SERVICE_APPROVAL_BUCKET: str = Field(
+        default="",
+        description="S3 bucket holding service-approval per-phase artifacts"
+    )
+    SERVICE_APPROVAL_AGENT_RUNTIME_ARN: str = Field(
+        default="",
+        description="AgentCore Runtime ARN. Backend's create_run invokes this directly — Path B is the only execution path post-Phase B decommission."
+    )
+    SERVICE_APPROVAL_LOCAL_ROOT: str = Field(
+        default="",
+        description="Local filesystem root for the dev simulator (used when DDB/S3 are not configured)"
+    )
     S3_DELIVERY_BUCKET: str = Field(default="fsi-control-plane-deployments")
+    ADVPO_BUCKET: str = Field(
+        default="",
+        description="S3 bucket for advanced prompt optimization eval datasets and results"
+    )
     S3_BUCKET_NAME: str = Field(
         default="",
         description="S3 bucket for project archives (falls back to PROJECT_ARCHIVES_BUCKET)"
@@ -59,7 +138,13 @@ class Settings(BaseSettings):
     # API
     API_PREFIX: str = "/api/v1"
     ROOT_PATH: str = Field(default="", description="Root path for API (e.g., /dev for API Gateway stage)")
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173", "http://localhost:5174", "http://localhost:3000",
+        # IPv6 loopback — Vite dev server binds ::1, so a browser opened at
+        # http://[::1]:5173 sends that as the Origin. Without this, cost/govern
+        # API calls fail CORS and the UI shows the "unavailable" fallback.
+        "http://[::1]:5173", "http://[::1]:5174",
+    ]
 
     # Infrastructure
     CONTROL_PLANE_VPC_ID: str = Field(default="", description="Control plane VPC ID for foundation stack reuse")

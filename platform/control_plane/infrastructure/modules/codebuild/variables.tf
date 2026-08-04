@@ -55,3 +55,24 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# =============================================================================
+# FSI Foundry SSO — HMAC edge auth (opt-in)
+# =============================================================================
+# The buildspec forwards these into each FSI app's ui_iac/deploy.auto.tfvars.
+# When fsi_app_signing_secret is non-empty, ui_iac attaches a CloudFront
+# Function on viewer-request that HMAC-verifies handoff tokens minted by
+# the AVA backend. Empty values leave the FSI app publicly accessible.
+
+variable "fsi_app_signing_secret" {
+  description = "Shared HMAC secret. Empty disables edge auth on FSI apps."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ava_ui_login_url" {
+  description = "AVA UI login URL. Users hitting an FSI app without a valid token are redirected here."
+  type        = string
+  default     = ""
+}

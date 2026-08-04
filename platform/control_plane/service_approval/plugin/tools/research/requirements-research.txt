@@ -1,0 +1,7 @@
+# Pinned dependencies for the research tools (fetch_botocore_schema,
+# compute_mutability, compute_gateable_by).
+#
+# boto3 version pin is material: the SDK model the walker reads is versioned,
+# and model drift between developer machines / CI produces different output.
+# Bump this pin monthly (a CI job opens a PR); review the diff before merging.
+boto3>=1.40.0,<1.41.0

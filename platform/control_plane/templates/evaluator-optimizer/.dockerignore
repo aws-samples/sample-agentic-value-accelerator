@@ -1,0 +1,8 @@
+__pycache__/
+.git/
+*.md
+*.tfvars
+*.tfvars.example
+iac/
+.env
+.env.example

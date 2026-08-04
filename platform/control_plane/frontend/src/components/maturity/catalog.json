@@ -1,0 +1,2209 @@
+{
+  "people": {
+    "label": "People & Talent",
+    "parameters": [
+      {
+        "id": "P1",
+        "sub": "AI Talent",
+        "name": "AI/ML Talent Acquisition",
+        "description": "Ability to attract and hire AI/ML specialists",
+        "anchors": {
+          "L1": "No AI hiring; general IT staff only",
+          "L2": "Ad hoc AI hiring; 1-2 data scientists",
+          "L3": "Dedicated AI recruiting pipeline; competitive packages",
+          "L4": "Strategic AI talent program; university partnerships",
+          "L5": "Industry-leading AI employer brand; top-tier talent magnet"
+        }
+      },
+      {
+        "id": "P2",
+        "sub": "AI Talent",
+        "name": "AI Skills Inventory",
+        "description": "Tracking AI skills across the organization",
+        "anchors": {
+          "L1": "No skills tracking",
+          "L2": "Basic skills survey",
+          "L3": "Formal AI skills taxonomy and inventory",
+          "L4": "Dynamic skills platform with gap analysis",
+          "L5": "Predictive skills intelligence; auto-matching"
+        }
+      },
+      {
+        "id": "P3",
+        "sub": "AI Talent",
+        "name": "AI Training & Upskilling",
+        "description": "Structured AI learning programs",
+        "anchors": {
+          "L1": "No AI training programs",
+          "L2": "Ad hoc training; online courses",
+          "L3": "Structured curriculum by role; certifications",
+          "L4": "Personalized AI learning paths; hands-on labs",
+          "L5": "Continuous AI learning culture; innovation time"
+        }
+      },
+      {
+        "id": "P4",
+        "sub": "AI Talent",
+        "name": "Data Literacy Programs",
+        "description": "Organization-wide data literacy",
+        "anchors": {
+          "L1": "No data literacy programs",
+          "L2": "Basic data awareness sessions",
+          "L3": "Formal data literacy curriculum by level",
+          "L4": "Advanced analytics training; citizen data scientists",
+          "L5": "Data-native culture; universal data fluency"
+        }
+      },
+      {
+        "id": "P5",
+        "sub": "AI Talent",
+        "name": "AI Leadership Development",
+        "description": "Developing AI-savvy leaders",
+        "anchors": {
+          "L1": "No AI leadership focus",
+          "L2": "Basic AI awareness for executives",
+          "L3": "Formal AI leadership program",
+          "L4": "AI embedded in leadership competencies",
+          "L5": "AI-native leadership; board-level AI expertise"
+        }
+      },
+      {
+        "id": "P6",
+        "sub": "AI Talent",
+        "name": "AI Center of Excellence",
+        "description": "Centralized AI expertise hub",
+        "anchors": {
+          "L1": "No CoE",
+          "L2": "Informal AI working group",
+          "L3": "Formal CoE with defined charter",
+          "L4": "Mature CoE with federated model",
+          "L5": "Self-sustaining AI ecosystem; distributed excellence"
+        }
+      },
+      {
+        "id": "P7",
+        "sub": "AI Talent",
+        "name": "AI Talent Retention",
+        "description": "Retaining AI specialists",
+        "anchors": {
+          "L1": "High turnover; no retention strategy",
+          "L2": "Basic retention efforts",
+          "L3": "Competitive packages; career development",
+          "L4": "Industry-leading retention; internal mobility",
+          "L5": "AI talent magnet; near-zero unwanted attrition"
+        }
+      },
+      {
+        "id": "P8",
+        "sub": "Org Culture",
+        "name": "AI Innovation Culture",
+        "description": "Culture supporting AI experimentation",
+        "anchors": {
+          "L1": "No innovation culture",
+          "L2": "Limited experimentation tolerance",
+          "L3": "Formal innovation programs; hackathons",
+          "L4": "Innovation embedded in culture; fail-fast mindset",
+          "L5": "AI-first innovation; continuous experimentation"
+        }
+      },
+      {
+        "id": "P9",
+        "sub": "Org Culture",
+        "name": "Cross-Functional Collaboration",
+        "description": "AI collaboration across departments",
+        "anchors": {
+          "L1": "Siloed departments",
+          "L2": "Ad hoc cross-functional projects",
+          "L3": "Formal cross-functional AI teams",
+          "L4": "Embedded AI in all business functions",
+          "L5": "Seamless AI collaboration; no boundaries"
+        }
+      },
+      {
+        "id": "P10",
+        "sub": "Org Culture",
+        "name": "Executive AI Sponsorship",
+        "description": "C-suite commitment to AI",
+        "anchors": {
+          "L1": "No executive sponsor",
+          "L2": "Single executive champion",
+          "L3": "C-suite AI steering committee",
+          "L4": "Board-level AI oversight",
+          "L5": "AI embedded in corporate strategy at board level"
+        }
+      },
+      {
+        "id": "P11",
+        "sub": "Org Culture",
+        "name": "AI Ethics Awareness",
+        "description": "Organization-wide AI ethics understanding",
+        "anchors": {
+          "L1": "No ethics awareness",
+          "L2": "Basic ethics guidelines shared",
+          "L3": "Formal ethics training for AI teams",
+          "L4": "Ethics embedded in all AI processes",
+          "L5": "Proactive ethical AI culture; industry leadership"
+        }
+      },
+      {
+        "id": "P12",
+        "sub": "Org Culture",
+        "name": "Employee AI Adoption Rate",
+        "description": "% of employees actively using AI",
+        "anchors": {
+          "L1": "<5% using AI tools",
+          "L2": "5-15% adoption; early adopters",
+          "L3": "15-40% adoption; mainstream use",
+          "L4": "40-70% adoption; AI-augmented workforce",
+          "L5": ">70% adoption; AI-native workforce"
+        }
+      },
+      {
+        "id": "P13",
+        "sub": "Org Culture",
+        "name": "AI Communication Strategy",
+        "description": "Internal AI communication",
+        "anchors": {
+          "L1": "No AI communication",
+          "L2": "Ad hoc AI updates",
+          "L3": "Structured AI communication plan",
+          "L4": "Multi-channel AI engagement strategy",
+          "L5": "AI storytelling culture; continuous engagement"
+        }
+      },
+      {
+        "id": "P14",
+        "sub": "Change Mgmt",
+        "name": "Change Management Framework",
+        "description": "Structured change management for AI",
+        "anchors": {
+          "L1": "No change management",
+          "L2": "Ad hoc change efforts",
+          "L3": "Formal change management methodology",
+          "L4": "Integrated change management for all AI initiatives",
+          "L5": "Adaptive change management; self-organizing"
+        }
+      },
+      {
+        "id": "P15",
+        "sub": "Change Mgmt",
+        "name": "Stakeholder Engagement",
+        "description": "Engaging stakeholders in AI journey",
+        "anchors": {
+          "L1": "No stakeholder engagement",
+          "L2": "Reactive stakeholder communication",
+          "L3": "Proactive stakeholder mapping and engagement",
+          "L4": "Strategic stakeholder partnership",
+          "L5": "Co-creation with stakeholders; shared ownership"
+        }
+      },
+      {
+        "id": "P16",
+        "sub": "Change Mgmt",
+        "name": "AI Adoption Measurement",
+        "description": "Measuring AI adoption effectiveness",
+        "anchors": {
+          "L1": "No adoption measurement",
+          "L2": "Basic usage tracking",
+          "L3": "Structured adoption metrics and KPIs",
+          "L4": "Real-time adoption dashboards",
+          "L5": "Predictive adoption analytics; auto-optimization"
+        }
+      },
+      {
+        "id": "P17",
+        "sub": "Change Mgmt",
+        "name": "Resistance Management",
+        "description": "Managing resistance to AI adoption",
+        "anchors": {
+          "L1": "No resistance management",
+          "L2": "Reactive resistance handling",
+          "L3": "Proactive resistance identification",
+          "L4": "Systematic resistance resolution",
+          "L5": "Minimal resistance; AI-positive culture"
+        }
+      },
+      {
+        "id": "P18",
+        "sub": "Workforce Planning",
+        "name": "AI Workforce Planning",
+        "description": "Strategic workforce planning for AI era",
+        "anchors": {
+          "L1": "No AI workforce planning",
+          "L2": "Basic headcount planning for AI",
+          "L3": "Formal AI workforce strategy",
+          "L4": "Dynamic workforce planning with AI scenarios",
+          "L5": "Continuous AI workforce optimization"
+        }
+      },
+      {
+        "id": "P19",
+        "sub": "Workforce Planning",
+        "name": "Role Redesign for AI",
+        "description": "Redesigning roles for human-AI collaboration",
+        "anchors": {
+          "L1": "No role redesign",
+          "L2": "Ad hoc role adjustments",
+          "L3": "Systematic role analysis for AI impact",
+          "L4": "Comprehensive role redesign program",
+          "L5": "Continuous role evolution; AI-augmented roles"
+        }
+      },
+      {
+        "id": "P20",
+        "sub": "Workforce Planning",
+        "name": "AI Career Pathways",
+        "description": "Career development paths in AI",
+        "anchors": {
+          "L1": "No AI career paths",
+          "L2": "Basic AI role definitions",
+          "L3": "Formal AI career ladder",
+          "L4": "Multiple AI career tracks with progression",
+          "L5": "Dynamic AI career ecosystem"
+        }
+      },
+      {
+        "id": "P21",
+        "sub": "Workforce Planning",
+        "name": "Reskilling Programs",
+        "description": "Programs for AI-displaced workers",
+        "anchors": {
+          "L1": "No reskilling programs",
+          "L2": "Basic retraining options",
+          "L3": "Formal reskilling with placement support",
+          "L4": "Comprehensive reskilling with guaranteed roles",
+          "L5": "Proactive reskilling; zero involuntary displacement"
+        }
+      },
+      {
+        "id": "P22",
+        "sub": "Workforce Planning",
+        "name": "AI Vendor Management Skills",
+        "description": "Skills for managing AI vendors",
+        "anchors": {
+          "L1": "No vendor management skills",
+          "L2": "Basic procurement skills",
+          "L3": "AI-specific vendor evaluation capabilities",
+          "L4": "Strategic AI vendor management",
+          "L5": "AI ecosystem orchestration expertise"
+        }
+      },
+      {
+        "id": "P23",
+        "sub": "Performance",
+        "name": "AI-Linked Performance Metrics",
+        "description": "AI in performance management",
+        "anchors": {
+          "L1": "No AI-linked metrics",
+          "L2": "Basic AI usage tracking",
+          "L3": "AI adoption in performance criteria",
+          "L4": "AI outcomes in performance reviews",
+          "L5": "AI-driven performance optimization"
+        }
+      },
+      {
+        "id": "P24",
+        "sub": "Performance",
+        "name": "AI Productivity Measurement",
+        "description": "Measuring AI impact on productivity",
+        "anchors": {
+          "L1": "No productivity measurement",
+          "L2": "Anecdotal productivity claims",
+          "L3": "Structured productivity metrics",
+          "L4": "Real-time AI productivity dashboards",
+          "L5": "Predictive productivity optimization"
+        }
+      },
+      {
+        "id": "P25",
+        "sub": "Performance",
+        "name": "Knowledge Management for AI",
+        "description": "AI knowledge capture and sharing",
+        "anchors": {
+          "L1": "No knowledge management",
+          "L2": "Basic documentation",
+          "L3": "Formal AI knowledge base",
+          "L4": "AI-powered knowledge management",
+          "L5": "Self-organizing knowledge ecosystem"
+        }
+      },
+      {
+        "id": "P26",
+        "sub": "Human-AI Trust",
+        "name": "AI Trust Index",
+        "description": "Formal measurement of employee trust in AI",
+        "anchors": {
+          "L1": "No trust measurement",
+          "L2": "Ad hoc trust surveys",
+          "L3": "Formal AI Trust Index with regular measurement",
+          "L4": "Real-time trust monitoring; trust-adoption correlation",
+          "L5": "Trust as core KPI; automated trust-adoption correlation"
+        }
+      },
+      {
+        "id": "P27",
+        "sub": "Human-AI Trust",
+        "name": "Employee AI Sentiment",
+        "description": "Measuring AI displacement fear and sentiment",
+        "anchors": {
+          "L1": "No sentiment tracking",
+          "L2": "Basic annual survey",
+          "L3": "Regular AI sentiment pulse surveys",
+          "L4": "Real-time sentiment analytics; proactive intervention",
+          "L5": "AI-positive sentiment; fear fully addressed"
+        }
+      },
+      {
+        "id": "P28",
+        "sub": "Human-AI Trust",
+        "name": "Trust Calibration",
+        "description": "Managing over/under-reliance on AI",
+        "anchors": {
+          "L1": "No calibration awareness",
+          "L2": "Basic awareness of over-reliance risks",
+          "L3": "Formal trust calibration guidelines",
+          "L4": "Automated trust calibration in AI interfaces",
+          "L5": "Optimal human-AI trust balance; self-calibrating"
+        }
+      }
+    ],
+    "count": 28
+  },
+  "process": {
+    "label": "Process & Operations",
+    "parameters": [
+      {
+        "id": "PR1",
+        "sub": "AI Operations",
+        "name": "AI Use Case Identification",
+        "description": "Systematic process for identifying AI opportunities",
+        "anchors": {
+          "L1": "No formal process",
+          "L2": "Ad hoc idea collection",
+          "L3": "Structured ideation with business alignment",
+          "L4": "AI opportunity scoring framework",
+          "L5": "Continuous AI opportunity discovery engine"
+        }
+      },
+      {
+        "id": "PR2",
+        "sub": "AI Operations",
+        "name": "AI Project Prioritization",
+        "description": "Prioritizing AI initiatives",
+        "anchors": {
+          "L1": "No prioritization",
+          "L2": "Ad hoc selection",
+          "L3": "Formal scoring criteria",
+          "L4": "Portfolio-level optimization",
+          "L5": "Dynamic AI portfolio management"
+        }
+      },
+      {
+        "id": "PR3",
+        "sub": "AI Operations",
+        "name": "AI Development Lifecycle",
+        "description": "Standardized AI development process",
+        "anchors": {
+          "L1": "No standard process",
+          "L2": "Ad hoc development",
+          "L3": "Defined SDLC for AI",
+          "L4": "Mature AI lifecycle with gates",
+          "L5": "Self-optimizing AI development"
+        }
+      },
+      {
+        "id": "PR4",
+        "sub": "AI Operations",
+        "name": "MLOps Maturity",
+        "description": "ML operations and model lifecycle",
+        "anchors": {
+          "L1": "No MLOps practices",
+          "L2": "Manual model deployment",
+          "L3": "Basic MLOps pipeline",
+          "L4": "Automated MLOps with monitoring",
+          "L5": "Fully automated MLOps with self-healing"
+        }
+      },
+      {
+        "id": "PR5",
+        "sub": "AI Operations",
+        "name": "AI Testing & Validation",
+        "description": "Testing AI models and systems",
+        "anchors": {
+          "L1": "No AI testing",
+          "L2": "Manual testing",
+          "L3": "Structured test frameworks",
+          "L4": "Automated testing pipeline",
+          "L5": "Continuous AI testing with adversarial scenarios"
+        }
+      },
+      {
+        "id": "PR6",
+        "sub": "Workflow Integration",
+        "name": "Process Mining for AI",
+        "description": "Using process mining to identify AI opportunities",
+        "anchors": {
+          "L1": "No process mining",
+          "L2": "Basic process documentation",
+          "L3": "Process mining tools deployed",
+          "L4": "AI-driven process discovery",
+          "L5": "Continuous process intelligence"
+        }
+      },
+      {
+        "id": "PR7",
+        "sub": "Workflow Integration",
+        "name": "Human-AI Workflow Design",
+        "description": "Designing human-AI collaboration workflows",
+        "anchors": {
+          "L1": "No workflow design",
+          "L2": "Ad hoc AI insertion",
+          "L3": "Formal workflow redesign",
+          "L4": "Optimized human-AI workflows",
+          "L5": "Self-optimizing human-AI collaboration"
+        }
+      },
+      {
+        "id": "PR8",
+        "sub": "Workflow Integration",
+        "name": "AI Integration with Core Systems",
+        "description": "Integrating AI into ERP, CRM, core platforms",
+        "anchors": {
+          "L1": "No integration",
+          "L2": "Point integrations",
+          "L3": "API-based integration layer",
+          "L4": "Deep AI embedding in core systems",
+          "L5": "AI-native core systems architecture"
+        }
+      },
+      {
+        "id": "PR9",
+        "sub": "Workflow Integration",
+        "name": "End-to-End Process Automation",
+        "description": "Full process automation with AI",
+        "anchors": {
+          "L1": "No automation",
+          "L2": "Task-level automation",
+          "L3": "Process-level automation",
+          "L4": "End-to-end intelligent automation",
+          "L5": "Autonomous process orchestration"
+        }
+      },
+      {
+        "id": "PR10",
+        "sub": "Workflow Integration",
+        "name": "AI-Driven Decision Making",
+        "description": "AI in business decision processes",
+        "anchors": {
+          "L1": "No AI in decisions",
+          "L2": "AI as information source",
+          "L3": "AI recommendations in decisions",
+          "L4": "AI-augmented decision making",
+          "L5": "Autonomous AI decisions with oversight"
+        }
+      },
+      {
+        "id": "PR11",
+        "sub": "Quality & Monitoring",
+        "name": "Model Monitoring & Observability",
+        "description": "Monitoring AI model performance",
+        "anchors": {
+          "L1": "No monitoring",
+          "L2": "Basic accuracy tracking",
+          "L3": "Comprehensive model monitoring",
+          "L4": "Real-time observability platform",
+          "L5": "Self-healing models with predictive maintenance"
+        }
+      },
+      {
+        "id": "PR12",
+        "sub": "Quality & Monitoring",
+        "name": "AI Quality Assurance",
+        "description": "Quality assurance for AI outputs",
+        "anchors": {
+          "L1": "No QA process",
+          "L2": "Manual spot checks",
+          "L3": "Formal QA framework",
+          "L4": "Automated QA with benchmarks",
+          "L5": "Continuous quality optimization"
+        }
+      },
+      {
+        "id": "PR13",
+        "sub": "Quality & Monitoring",
+        "name": "Incident Management for AI",
+        "description": "AI-specific incident response",
+        "anchors": {
+          "L1": "No AI incident process",
+          "L2": "Ad hoc incident handling",
+          "L3": "Formal AI incident playbook",
+          "L4": "Automated incident detection and response",
+          "L5": "Predictive incident prevention"
+        }
+      },
+      {
+        "id": "PR14",
+        "sub": "Scaling",
+        "name": "AI Scaling Framework",
+        "description": "Framework for scaling AI enterprise-wide",
+        "anchors": {
+          "L1": "No scaling framework",
+          "L2": "Ad hoc scaling attempts",
+          "L3": "Formal scaling methodology",
+          "L4": "Proven scaling playbook",
+          "L5": "Self-scaling AI with automated resource optimization"
+        }
+      },
+      {
+        "id": "PR15",
+        "sub": "Scaling",
+        "name": "AI Reusability & Platforms",
+        "description": "Reusable AI components and platforms",
+        "anchors": {
+          "L1": "No reusability",
+          "L2": "Some code reuse",
+          "L3": "Shared AI component library",
+          "L4": "Enterprise AI platform",
+          "L5": "Self-service AI platform ecosystem"
+        }
+      },
+      {
+        "id": "PR16",
+        "sub": "Scaling",
+        "name": "Vendor & Build-vs-Buy Process",
+        "description": "AI vendor evaluation and make/buy decisions",
+        "anchors": {
+          "L1": "No formal process",
+          "L2": "Ad hoc vendor selection",
+          "L3": "Formal evaluation framework",
+          "L4": "Strategic vendor management",
+          "L5": "Optimized AI sourcing strategy"
+        }
+      },
+      {
+        "id": "PR17",
+        "sub": "Continuous Improvement",
+        "name": "AI Feedback Loops",
+        "description": "Feedback mechanisms for AI improvement",
+        "anchors": {
+          "L1": "No feedback mechanisms",
+          "L2": "Manual feedback collection",
+          "L3": "Structured feedback from users",
+          "L4": "Automated feedback integration",
+          "L5": "Self-improving AI systems with continuous learning"
+        }
+      },
+      {
+        "id": "PR18",
+        "sub": "Continuous Improvement",
+        "name": "AI Process Benchmarking",
+        "description": "Benchmarking AI processes against peers",
+        "anchors": {
+          "L1": "No benchmarking",
+          "L2": "Ad hoc comparisons",
+          "L3": "Formal benchmarking program",
+          "L4": "Continuous benchmarking with action plans",
+          "L5": "Industry-leading process performance"
+        }
+      },
+      {
+        "id": "CX-1",
+        "sub": "Customer AI Experience",
+        "name": "AI-Powered Journey Orchestration",
+        "description": "AI-driven customer touchpoint coordination",
+        "anchors": {
+          "L1": "No AI in customer journey; siloed channels",
+          "L2": "Basic chatbots on single channel",
+          "L3": "AI-assisted journey mapping across 2-3 channels; next-best-action",
+          "L4": "Unified AI orchestration across all channels; proactive issue detection",
+          "L5": "Fully autonomous journey orchestration; life-event anticipation"
+        }
+      },
+      {
+        "id": "CX-2",
+        "sub": "Customer AI Experience",
+        "name": "AI Personalization Depth",
+        "description": "Sophistication of AI-driven personalization",
+        "anchors": {
+          "L1": "No personalization; mass communications",
+          "L2": "Basic demographic segmentation",
+          "L3": "AI-driven micro-segmentation; behavioral recommendations",
+          "L4": "Individual-level real-time personalization; dynamic pricing",
+          "L5": "Autonomous hyper-personalization; predictive preference modeling"
+        }
+      },
+      {
+        "id": "CX-3",
+        "sub": "Customer AI Experience",
+        "name": "Customer AI Feedback Integration",
+        "description": "Capturing and acting on customer feedback via AI",
+        "anchors": {
+          "L1": "No structured feedback; manual surveys",
+          "L2": "Basic digital surveys; simple sentiment",
+          "L3": "AI-powered sentiment analysis; structured VoC pipeline",
+          "L4": "Real-time multi-channel feedback analysis; automated actions",
+          "L5": "Self-improving feedback ecosystem; predictive dissatisfaction detection"
+        }
+      },
+      {
+        "id": "CX-4",
+        "sub": "Customer AI Experience",
+        "name": "AI-Driven Customer Outcome Measurement",
+        "description": "Measuring business outcomes from AI CX",
+        "anchors": {
+          "L1": "No AI outcome measurement; anecdotal claims",
+          "L2": "Basic post-campaign ROI tracking",
+          "L3": "Structured CX-to-value framework with KPIs",
+          "L4": "Real-time AI value dashboards; automated attribution",
+          "L5": "Predictive business outcome modeling; autonomous value optimization"
+        }
+      }
+    ],
+    "count": 22
+  },
+  "technology": {
+    "label": "Technology & Infrastructure",
+    "parameters": [
+      {
+        "id": "T1",
+        "sub": "Infrastructure",
+        "name": "Cloud AI Infrastructure",
+        "description": "Cloud-based AI/ML compute and storage",
+        "anchors": {
+          "L1": "No cloud AI infrastructure",
+          "L2": "Basic cloud with manual provisioning",
+          "L3": "Managed AI services (SageMaker, Vertex, Azure ML)",
+          "L4": "Multi-cloud AI platform with auto-scaling",
+          "L5": "AI-optimized infrastructure with edge computing"
+        }
+      },
+      {
+        "id": "T2",
+        "sub": "Infrastructure",
+        "name": "GPU/Compute Resources",
+        "description": "GPU and compute resource management",
+        "anchors": {
+          "L1": "No GPU resources",
+          "L2": "Limited GPU access; shared resources",
+          "L3": "Dedicated GPU clusters with job scheduling",
+          "L4": "On-demand GPU scaling with spot instance optimization",
+          "L5": "Custom AI accelerators with optimized compute fabric"
+        }
+      },
+      {
+        "id": "T3",
+        "sub": "Infrastructure",
+        "name": "AI Development Environment",
+        "description": "Tools and environments for AI development",
+        "anchors": {
+          "L1": "No AI dev environment",
+          "L2": "Basic notebooks; local development",
+          "L3": "Standardized AI dev platform",
+          "L4": "Enterprise AI IDE with collaboration",
+          "L5": "AI-native development ecosystem"
+        }
+      },
+      {
+        "id": "T4",
+        "sub": "Infrastructure",
+        "name": "Data Infrastructure for AI",
+        "description": "Data infrastructure supporting AI workloads",
+        "anchors": {
+          "L1": "No data infrastructure for AI",
+          "L2": "Basic data storage",
+          "L3": "Data lake/warehouse for AI",
+          "L4": "Real-time data platform",
+          "L5": "Unified data fabric for AI"
+        }
+      },
+      {
+        "id": "T5",
+        "sub": "ML Engineering",
+        "name": "Model Development Practices",
+        "description": "ML model development standards",
+        "anchors": {
+          "L1": "No standards",
+          "L2": "Ad hoc development",
+          "L3": "Standardized model development",
+          "L4": "Advanced practices with AutoML",
+          "L5": "State-of-the-art model development"
+        }
+      },
+      {
+        "id": "T6",
+        "sub": "ML Engineering",
+        "name": "Feature Engineering & Stores",
+        "description": "Feature engineering and management",
+        "anchors": {
+          "L1": "No feature engineering",
+          "L2": "Manual feature creation",
+          "L3": "Feature store implemented",
+          "L4": "Enterprise feature platform",
+          "L5": "Self-optimizing feature ecosystem"
+        }
+      },
+      {
+        "id": "T7",
+        "sub": "ML Engineering",
+        "name": "Model Versioning & Registry",
+        "description": "Model version control and registry",
+        "anchors": {
+          "L1": "No versioning",
+          "L2": "Basic file versioning",
+          "L3": "Formal model registry",
+          "L4": "Enterprise model catalog",
+          "L5": "Automated model lifecycle management"
+        }
+      },
+      {
+        "id": "T8",
+        "sub": "ML Engineering",
+        "name": "Experiment Tracking",
+        "description": "Tracking ML experiments",
+        "anchors": {
+          "L1": "No tracking",
+          "L2": "Manual logging",
+          "L3": "Experiment tracking platform",
+          "L4": "Automated experiment management",
+          "L5": "AI-driven experiment optimization"
+        }
+      },
+      {
+        "id": "T9",
+        "sub": "GenAI & LLM",
+        "name": "LLM/Foundation Model Strategy",
+        "description": "Strategy for leveraging foundation models",
+        "anchors": {
+          "L1": "No LLM strategy",
+          "L2": "Basic API usage of LLMs",
+          "L3": "Formal LLM evaluation and selection",
+          "L4": "Multi-model orchestration; fine-tuning",
+          "L5": "Custom foundation models; model composition"
+        }
+      },
+      {
+        "id": "T10",
+        "sub": "GenAI & LLM",
+        "name": "RAG Architecture",
+        "description": "Retrieval-augmented generation capability",
+        "anchors": {
+          "L1": "No RAG capability",
+          "L2": "Basic document Q&A",
+          "L3": "Production RAG with vector DB",
+          "L4": "Advanced RAG with hybrid search; reranking",
+          "L5": "Enterprise RAG platform with continuous optimization"
+        }
+      },
+      {
+        "id": "T11",
+        "sub": "GenAI & LLM",
+        "name": "Prompt Engineering & Management",
+        "description": "Prompt design and management practices",
+        "anchors": {
+          "L1": "No prompt engineering",
+          "L2": "Ad hoc prompting",
+          "L3": "Prompt library and templates",
+          "L4": "Prompt optimization and A/B testing",
+          "L5": "Automated prompt engineering; self-optimizing"
+        }
+      },
+      {
+        "id": "T12",
+        "sub": "GenAI & LLM",
+        "name": "AI Agent Architecture",
+        "description": "Architecture for autonomous AI agents",
+        "anchors": {
+          "L1": "No agent capability",
+          "L2": "Basic single-agent tools",
+          "L3": "Multi-tool agent framework",
+          "L4": "Multi-agent orchestration with guardrails",
+          "L5": "Enterprise agent mesh with autonomous coordination"
+        }
+      },
+      {
+        "id": "T13",
+        "sub": "Deployment",
+        "name": "Model Serving & Inference",
+        "description": "Production model serving",
+        "anchors": {
+          "L1": "No production serving",
+          "L2": "Manual model deployment",
+          "L3": "Containerized model serving",
+          "L4": "Auto-scaling inference with A/B testing",
+          "L5": "Optimized inference with model compression"
+        }
+      },
+      {
+        "id": "T14",
+        "sub": "Deployment",
+        "name": "Edge AI Deployment",
+        "description": "AI at the edge",
+        "anchors": {
+          "L1": "No edge AI",
+          "L2": "Basic edge inference",
+          "L3": "Edge AI platform",
+          "L4": "Distributed edge AI network",
+          "L5": "Autonomous edge AI ecosystem"
+        }
+      },
+      {
+        "id": "T15",
+        "sub": "Deployment",
+        "name": "API Management for AI",
+        "description": "AI API management",
+        "anchors": {
+          "L1": "No API management",
+          "L2": "Basic API endpoints",
+          "L3": "API gateway for AI services",
+          "L4": "Enterprise AI API platform",
+          "L5": "Self-service AI API marketplace"
+        }
+      },
+      {
+        "id": "T16",
+        "sub": "Deployment",
+        "name": "CI/CD for ML",
+        "description": "Continuous integration/deployment for ML",
+        "anchors": {
+          "L1": "No CI/CD for ML",
+          "L2": "Manual deployment process",
+          "L3": "Basic ML CI/CD pipeline",
+          "L4": "Automated ML pipeline with testing",
+          "L5": "Fully automated with canary deployments"
+        }
+      },
+      {
+        "id": "T17",
+        "sub": "Advanced AI",
+        "name": "Computer Vision Capability",
+        "description": "Computer vision maturity",
+        "anchors": {
+          "L1": "No CV capability",
+          "L2": "Basic image classification",
+          "L3": "Production CV applications",
+          "L4": "Advanced multi-modal CV",
+          "L5": "State-of-the-art CV with real-time processing"
+        }
+      },
+      {
+        "id": "T18",
+        "sub": "Advanced AI",
+        "name": "NLP/NLU Capability",
+        "description": "Natural language processing maturity",
+        "anchors": {
+          "L1": "No NLP capability",
+          "L2": "Basic text processing",
+          "L3": "Production NLP applications",
+          "L4": "Advanced NLU with context understanding",
+          "L5": "Human-level language understanding"
+        }
+      },
+      {
+        "id": "T19",
+        "sub": "Advanced AI",
+        "name": "Responsible AI Tooling",
+        "description": "Tools for responsible AI",
+        "anchors": {
+          "L1": "No responsible AI tools",
+          "L2": "Basic bias checking",
+          "L3": "Responsible AI toolkit deployed",
+          "L4": "Integrated responsible AI platform",
+          "L5": "Automated responsible AI enforcement"
+        }
+      },
+      {
+        "id": "T20",
+        "sub": "Advanced AI",
+        "name": "Agent Governance & Safety",
+        "description": "Safety controls for AI agents",
+        "anchors": {
+          "L1": "No agent safety controls",
+          "L2": "Basic output filtering",
+          "L3": "Formal agent guardrails",
+          "L4": "Comprehensive agent safety platform",
+          "L5": "Self-monitoring agent safety ecosystem"
+        }
+      },
+      {
+        "id": "T21",
+        "sub": "Advanced AI",
+        "name": "AI Observability Platform",
+        "description": "Platform for AI system observability",
+        "anchors": {
+          "L1": "No AI observability",
+          "L2": "Basic logging",
+          "L3": "Observability platform deployed",
+          "L4": "Real-time AI observability",
+          "L5": "Predictive AI system health management"
+        }
+      },
+      {
+        "id": "T22",
+        "sub": "Advanced AI",
+        "name": "Synthetic Data Generation",
+        "description": "Synthetic data capabilities",
+        "anchors": {
+          "L1": "No synthetic data",
+          "L2": "Basic data augmentation",
+          "L3": "Synthetic data generation tools",
+          "L4": "Enterprise synthetic data platform",
+          "L5": "AI-driven synthetic data ecosystem"
+        }
+      },
+      {
+        "id": "T23",
+        "sub": "AI Security",
+        "name": "Red-Teaming Maturity",
+        "description": "AI security testing and adversarial evaluation",
+        "anchors": {
+          "L1": "No red-teaming",
+          "L2": "Basic prompt testing",
+          "L3": "Structured red-team program",
+          "L4": "Continuous automated red-teaming",
+          "L5": "Proactive adversarial resilience; industry-leading"
+        }
+      },
+      {
+        "id": "T24",
+        "sub": "AI Security",
+        "name": "Adversarial Attack Resilience",
+        "description": "Defense against adversarial attacks",
+        "anchors": {
+          "L1": "No adversarial defense",
+          "L2": "Basic input validation",
+          "L3": "Adversarial testing in SDLC",
+          "L4": "Automated adversarial defense",
+          "L5": "Self-adapting adversarial resilience"
+        }
+      },
+      {
+        "id": "T25",
+        "sub": "AI Security",
+        "name": "Prompt Injection Defense",
+        "description": "Defense against prompt injection attacks",
+        "anchors": {
+          "L1": "No prompt injection defense",
+          "L2": "Basic input sanitization",
+          "L3": "Layered prompt defense",
+          "L4": "Automated prompt security",
+          "L5": "Zero-trust prompt architecture"
+        }
+      },
+      {
+        "id": "T26",
+        "sub": "AI Security",
+        "name": "AI Incident Forensics",
+        "description": "AI-specific incident investigation",
+        "anchors": {
+          "L1": "No AI forensics",
+          "L2": "Basic log review",
+          "L3": "AI incident forensics playbook",
+          "L4": "Automated AI forensics platform",
+          "L5": "Predictive AI incident intelligence"
+        }
+      },
+      {
+        "id": "T27",
+        "sub": "AI Security",
+        "name": "AI SBOM Maturity",
+        "description": "AI software bill of materials",
+        "anchors": {
+          "L1": "No AI SBOM",
+          "L2": "Basic model documentation",
+          "L3": "Formal AI SBOM process",
+          "L4": "Automated AI SBOM generation",
+          "L5": "Comprehensive AI supply chain transparency"
+        }
+      },
+      {
+        "id": "T28",
+        "sub": "AI FinOps",
+        "name": "GPU/Compute Cost Optimization",
+        "description": "GPU cost management and optimization",
+        "anchors": {
+          "L1": "No cost tracking; on-demand only",
+          "L2": "Basic cloud billing; no cost controls",
+          "L3": "Managed AI services; initial Savings Plans; 80%+ utilization targets",
+          "L4": "Auto-scaling; spot optimization; multi-cloud capacity planning",
+          "L5": "FinOps-as-Code; carbon-aware scheduling; custom accelerators"
+        }
+      },
+      {
+        "id": "T29",
+        "sub": "AI FinOps",
+        "name": "Inference Cost Management",
+        "description": "Managing inference and serving costs",
+        "anchors": {
+          "L1": "No inference cost awareness",
+          "L2": "On-demand API pricing only; no attribution",
+          "L3": "Batch vs on-demand pricing; basic token cost tracking",
+          "L4": "Model routing by cost/performance; provisioned throughput",
+          "L5": "Model compression/quantization; cost per M tokens <$0.02"
+        }
+      },
+      {
+        "id": "T30",
+        "sub": "AI FinOps",
+        "name": "AI Spend Visibility & Chargeback",
+        "description": "AI cost allocation and chargeback",
+        "anchors": {
+          "L1": "No AI budget; costs buried in IT",
+          "L2": "Ad hoc spending; basic billing reports",
+          "L3": "Dedicated AI budget; FOCUS-aligned tagging; chargeback templates",
+          "L4": "Real-time AI cost dashboards; automated chargeback per BU",
+          "L5": "Unit economics; self-funding AI through optimization savings"
+        }
+      },
+      {
+        "id": "T31",
+        "sub": "AI FinOps",
+        "name": "AI Carbon Footprint & Sustainability",
+        "description": "AI environmental impact tracking",
+        "anchors": {
+          "L1": "No sustainability focus",
+          "L2": "Basic awareness of AI energy consumption",
+          "L3": "Carbon footprint tracked per training run; cloud tools adopted",
+          "L4": "Carbon pricing in chargeback; joules-per-token tracked",
+          "L5": "Real-time carbon-aware scheduling; Scope 3 AI emissions"
+        }
+      }
+    ],
+    "count": 31
+  },
+  "data": {
+    "label": "Data & AI Governance",
+    "parameters": [
+      {
+        "id": "D1",
+        "sub": "Data Quality",
+        "name": "Data Quality Management",
+        "description": "Processes for ensuring data quality",
+        "anchors": {
+          "L1": "No data quality processes",
+          "L2": "Ad hoc data cleaning",
+          "L3": "Formal DQ rules and monitoring",
+          "L4": "Automated DQ with real-time scoring",
+          "L5": "Self-healing data quality systems"
+        }
+      },
+      {
+        "id": "D2",
+        "sub": "Data Quality",
+        "name": "Data Completeness",
+        "description": "Ensuring data completeness",
+        "anchors": {
+          "L1": "No completeness tracking",
+          "L2": "Manual completeness checks",
+          "L3": "Automated completeness monitoring",
+          "L4": "Real-time completeness dashboards",
+          "L5": "Predictive completeness management"
+        }
+      },
+      {
+        "id": "D3",
+        "sub": "Data Quality",
+        "name": "Data Accuracy & Consistency",
+        "description": "Data accuracy and consistency",
+        "anchors": {
+          "L1": "No accuracy standards",
+          "L2": "Basic validation rules",
+          "L3": "Formal accuracy framework",
+          "L4": "Automated accuracy monitoring",
+          "L5": "Self-correcting data accuracy"
+        }
+      },
+      {
+        "id": "D4",
+        "sub": "Data Quality",
+        "name": "Data Timeliness",
+        "description": "Data freshness and timeliness",
+        "anchors": {
+          "L1": "No timeliness requirements",
+          "L2": "Batch processing; daily updates",
+          "L3": "Near-real-time data availability",
+          "L4": "Real-time streaming data",
+          "L5": "Predictive data freshness management"
+        }
+      },
+      {
+        "id": "D5",
+        "sub": "Data Architecture",
+        "name": "Data Catalog & Discovery",
+        "description": "Data catalog and discovery tools",
+        "anchors": {
+          "L1": "No data catalog",
+          "L2": "Basic spreadsheet inventory",
+          "L3": "Formal data catalog deployed",
+          "L4": "AI-powered data discovery",
+          "L5": "Self-maintaining intelligent data catalog"
+        }
+      },
+      {
+        "id": "D6",
+        "sub": "Data Architecture",
+        "name": "Data Lake/Warehouse Architecture",
+        "description": "Data storage architecture",
+        "anchors": {
+          "L1": "No data lake/warehouse",
+          "L2": "Basic data warehouse",
+          "L3": "Modern data lake/lakehouse",
+          "L4": "Multi-zone data platform",
+          "L5": "Unified data fabric architecture"
+        }
+      },
+      {
+        "id": "D7",
+        "sub": "Data Architecture",
+        "name": "Data Pipeline Automation",
+        "description": "Automated data pipelines",
+        "anchors": {
+          "L1": "Manual data movement",
+          "L2": "Basic ETL scripts",
+          "L3": "Automated ELT pipelines",
+          "L4": "Self-service data pipeline platform",
+          "L5": "Self-optimizing data pipelines"
+        }
+      },
+      {
+        "id": "D8",
+        "sub": "Data Architecture",
+        "name": "Master Data Management",
+        "description": "Master data management",
+        "anchors": {
+          "L1": "No MDM",
+          "L2": "Basic data deduplication",
+          "L3": "Formal MDM program",
+          "L4": "Enterprise MDM platform",
+          "L5": "AI-driven master data management"
+        }
+      },
+      {
+        "id": "D9",
+        "sub": "Data Architecture",
+        "name": "Data Lineage Tracking",
+        "description": "Tracking data lineage",
+        "anchors": {
+          "L1": "No lineage tracking",
+          "L2": "Manual documentation",
+          "L3": "Automated lineage capture",
+          "L4": "Real-time lineage visualization",
+          "L5": "Predictive impact analysis"
+        }
+      },
+      {
+        "id": "D10",
+        "sub": "Data Governance",
+        "name": "Data Governance Framework",
+        "description": "Formal data governance",
+        "anchors": {
+          "L1": "No data governance framework",
+          "L2": "Basic data policies",
+          "L3": "Formal governance framework",
+          "L4": "Automated governance enforcement",
+          "L5": "Adaptive governance with automated enforcement"
+        }
+      },
+      {
+        "id": "D11",
+        "sub": "Data Governance",
+        "name": "Data Classification & Sensitivity",
+        "description": "Data classification",
+        "anchors": {
+          "L1": "No classification",
+          "L2": "Basic sensitivity labels",
+          "L3": "Formal classification taxonomy",
+          "L4": "Automated classification",
+          "L5": "AI-driven dynamic classification"
+        }
+      },
+      {
+        "id": "D12",
+        "sub": "Data Governance",
+        "name": "Data Access Management",
+        "description": "Data access controls",
+        "anchors": {
+          "L1": "No access controls",
+          "L2": "Basic role-based access",
+          "L3": "Formal RBAC with audit trails",
+          "L4": "Dynamic access with context-aware controls",
+          "L5": "Zero-trust data access architecture"
+        }
+      },
+      {
+        "id": "D13",
+        "sub": "Data Governance",
+        "name": "Data Retention & Lifecycle",
+        "description": "Data lifecycle management",
+        "anchors": {
+          "L1": "No retention policies",
+          "L2": "Basic retention rules",
+          "L3": "Formal lifecycle management",
+          "L4": "Automated lifecycle enforcement",
+          "L5": "Intelligent data lifecycle optimization"
+        }
+      },
+      {
+        "id": "D14",
+        "sub": "Data Governance",
+        "name": "Data Privacy & Compliance",
+        "description": "Privacy compliance",
+        "anchors": {
+          "L1": "No privacy program",
+          "L2": "Basic privacy awareness",
+          "L3": "Formal privacy program (GDPR, CCPA)",
+          "L4": "Automated privacy compliance",
+          "L5": "Privacy-by-design architecture"
+        }
+      },
+      {
+        "id": "D15",
+        "sub": "Data Governance",
+        "name": "Consent Management",
+        "description": "Managing data consent",
+        "anchors": {
+          "L1": "No consent management",
+          "L2": "Basic consent tracking",
+          "L3": "Formal consent management platform",
+          "L4": "Dynamic consent with granular controls",
+          "L5": "AI-driven consent optimization"
+        }
+      },
+      {
+        "id": "D16",
+        "sub": "AI Data Ops",
+        "name": "Training Data Management",
+        "description": "Managing data for AI training",
+        "anchors": {
+          "L1": "No training data management",
+          "L2": "Ad hoc data collection",
+          "L3": "Formal training data pipelines",
+          "L4": "Automated training data with QA",
+          "L5": "Self-optimizing training data ecosystem"
+        }
+      },
+      {
+        "id": "D17",
+        "sub": "AI Data Ops",
+        "name": "Data Labeling & Annotation",
+        "description": "Data labeling processes",
+        "anchors": {
+          "L1": "No labeling process",
+          "L2": "Manual labeling",
+          "L3": "Labeling platform with QA",
+          "L4": "Semi-automated labeling with active learning",
+          "L5": "Fully automated labeling with human validation"
+        }
+      },
+      {
+        "id": "D18",
+        "sub": "AI Data Ops",
+        "name": "Bias Detection in Data",
+        "description": "Detecting bias in training data",
+        "anchors": {
+          "L1": "No bias detection",
+          "L2": "Ad hoc bias checks",
+          "L3": "Formal bias testing framework",
+          "L4": "Automated bias detection and mitigation",
+          "L5": "Continuous bias monitoring with auto-correction"
+        }
+      },
+      {
+        "id": "D19",
+        "sub": "AI Data Ops",
+        "name": "Privacy-Preserving AI Techniques",
+        "description": "Privacy-preserving ML techniques",
+        "anchors": {
+          "L1": "No privacy-preserving techniques",
+          "L2": "Basic anonymization",
+          "L3": "Differential privacy; federated learning awareness",
+          "L4": "Production federated learning; secure computation",
+          "L5": "Advanced privacy-preserving AI ecosystem"
+        }
+      },
+      {
+        "id": "D20",
+        "sub": "AI Data Ops",
+        "name": "Synthetic Data for AI",
+        "description": "Synthetic data generation for AI",
+        "anchors": {
+          "L1": "No synthetic data",
+          "L2": "Basic data augmentation",
+          "L3": "Synthetic data generation tools",
+          "L4": "Enterprise synthetic data platform",
+          "L5": "AI-driven synthetic data ecosystem"
+        }
+      },
+      {
+        "id": "D21",
+        "sub": "Data Strategy",
+        "name": "Data Monetization Strategy",
+        "description": "Monetizing data assets",
+        "anchors": {
+          "L1": "No monetization strategy",
+          "L2": "Basic data sharing",
+          "L3": "Formal data monetization plan",
+          "L4": "Active data products and services",
+          "L5": "Data-as-a-service platform"
+        }
+      },
+      {
+        "id": "D22",
+        "sub": "Data Strategy",
+        "name": "External Data Integration",
+        "description": "Integrating external data sources",
+        "anchors": {
+          "L1": "No external data",
+          "L2": "Ad hoc external data",
+          "L3": "Formal external data partnerships",
+          "L4": "Real-time external data integration",
+          "L5": "AI-curated external data ecosystem"
+        }
+      },
+      {
+        "id": "D23",
+        "sub": "Data Strategy",
+        "name": "Data Sharing & Collaboration",
+        "description": "Data sharing across org and partners",
+        "anchors": {
+          "L1": "No data sharing",
+          "L2": "Ad hoc sharing",
+          "L3": "Formal data sharing agreements",
+          "L4": "Data exchange platform",
+          "L5": "Open data ecosystem with governance"
+        }
+      },
+      {
+        "id": "D24",
+        "sub": "Data Strategy",
+        "name": "IoT & Streaming Data",
+        "description": "IoT and streaming data management",
+        "anchors": {
+          "L1": "No IoT/streaming data",
+          "L2": "Basic sensor data collection",
+          "L3": "Streaming data platform",
+          "L4": "Real-time IoT analytics",
+          "L5": "Autonomous IoT data ecosystem"
+        }
+      },
+      {
+        "id": "D25",
+        "sub": "Data Strategy",
+        "name": "Unstructured Data Strategy",
+        "description": "Managing unstructured data for AI",
+        "anchors": {
+          "L1": "No unstructured data strategy",
+          "L2": "Basic document storage",
+          "L3": "Unstructured data platform",
+          "L4": "AI-powered unstructured data processing",
+          "L5": "Unified structured/unstructured data fabric"
+        }
+      },
+      {
+        "id": "D26",
+        "sub": "Model Data Gov",
+        "name": "Model Data Documentation",
+        "description": "Documenting model data requirements",
+        "anchors": {
+          "L1": "No documentation",
+          "L2": "Basic model cards",
+          "L3": "Formal model data documentation",
+          "L4": "Automated model data documentation",
+          "L5": "Self-documenting model data ecosystem"
+        }
+      },
+      {
+        "id": "D27",
+        "sub": "Model Data Gov",
+        "name": "Feature Store Governance",
+        "description": "Governing feature stores",
+        "anchors": {
+          "L1": "No feature store governance",
+          "L2": "Basic feature documentation",
+          "L3": "Formal feature governance",
+          "L4": "Automated feature governance",
+          "L5": "Self-governing feature ecosystem"
+        }
+      },
+      {
+        "id": "D28",
+        "sub": "Model Data Gov",
+        "name": "Data Drift Monitoring",
+        "description": "Monitoring data distribution changes",
+        "anchors": {
+          "L1": "No drift monitoring",
+          "L2": "Manual drift checks",
+          "L3": "Automated drift detection",
+          "L4": "Real-time drift monitoring with alerts",
+          "L5": "Predictive drift detection with auto-remediation"
+        }
+      },
+      {
+        "id": "D29",
+        "sub": "Model Data Gov",
+        "name": "RAG Data Governance",
+        "description": "Governing data for RAG systems",
+        "anchors": {
+          "L1": "No RAG governance",
+          "L2": "Basic document management",
+          "L3": "Formal RAG data governance",
+          "L4": "Automated RAG data quality",
+          "L5": "Self-optimizing RAG data ecosystem"
+        }
+      },
+      {
+        "id": "D30",
+        "sub": "Model Data Gov",
+        "name": "Cross-Border Data Governance",
+        "description": "Cross-border data management",
+        "anchors": {
+          "L1": "No cross-border awareness",
+          "L2": "Basic awareness of data residency",
+          "L3": "Formal cross-border data policies",
+          "L4": "Automated cross-border compliance",
+          "L5": "Privacy-enhancing cross-border architecture"
+        }
+      },
+      {
+        "id": "D31",
+        "sub": "GenAI Data Readiness",
+        "name": "Unstructured Data Inventory",
+        "description": "Inventory of unstructured data for GenAI",
+        "anchors": {
+          "L1": "No unstructured data inventory",
+          "L2": "Basic document count",
+          "L3": "Comprehensive unstructured data catalog",
+          "L4": "AI-classified unstructured data inventory",
+          "L5": "Self-maintaining intelligent inventory"
+        }
+      },
+      {
+        "id": "D32",
+        "sub": "GenAI Data Readiness",
+        "name": "Content Rights & Licensing",
+        "description": "Managing content rights for AI training",
+        "anchors": {
+          "L1": "No content rights tracking",
+          "L2": "Basic copyright awareness",
+          "L3": "Formal content licensing framework",
+          "L4": "Automated rights management",
+          "L5": "Comprehensive IP-safe AI data ecosystem"
+        }
+      },
+      {
+        "id": "D33",
+        "sub": "GenAI Data Readiness",
+        "name": "Embedding Quality & RAG Readiness",
+        "description": "Quality of embeddings and RAG readiness",
+        "anchors": {
+          "L1": "No embedding capability",
+          "L2": "Basic embeddings; no quality metrics",
+          "L3": "Production embeddings with quality benchmarks",
+          "L4": "Advanced embedding optimization; hybrid search",
+          "L5": "Production-grade RAG with continuous quality optimization"
+        }
+      },
+      {
+        "id": "D34",
+        "sub": "GenAI Data Readiness",
+        "name": "Knowledge Graph & Data Freshness",
+        "description": "Knowledge graph and data freshness for GenAI",
+        "anchors": {
+          "L1": "No knowledge graph",
+          "L2": "Basic taxonomy",
+          "L3": "Knowledge graph with regular updates",
+          "L4": "Real-time knowledge graph with auto-refresh",
+          "L5": "Self-evolving knowledge graph ecosystem"
+        }
+      }
+    ],
+    "count": 34
+  },
+  "governance": {
+    "label": "Governance & Compliance",
+    "parameters": [
+      {
+        "id": "G1",
+        "sub": "AI Ethics",
+        "name": "AI Ethics Framework",
+        "description": "Formal AI ethics principles",
+        "anchors": {
+          "L1": "No ethics framework",
+          "L2": "Basic ethics guidelines drafted",
+          "L3": "Formal ethics framework with principles",
+          "L4": "Ethics embedded in AI lifecycle; ethics board",
+          "L5": "Proactive ethical AI leadership; industry influence"
+        }
+      },
+      {
+        "id": "G2",
+        "sub": "AI Ethics",
+        "name": "AI Fairness & Bias Governance",
+        "description": "Governing AI fairness",
+        "anchors": {
+          "L1": "No fairness governance",
+          "L2": "Basic bias awareness",
+          "L3": "Formal fairness testing framework",
+          "L4": "Automated fairness monitoring",
+          "L5": "Proactive fairness leadership"
+        }
+      },
+      {
+        "id": "G3",
+        "sub": "AI Ethics",
+        "name": "AI Transparency & Explainability",
+        "description": "AI decision transparency",
+        "anchors": {
+          "L1": "No transparency requirements",
+          "L2": "Basic model documentation",
+          "L3": "Explainability tools deployed",
+          "L4": "Automated explainability for all models",
+          "L5": "Real-time explainability for all AI decisions"
+        }
+      },
+      {
+        "id": "G4",
+        "sub": "AI Ethics",
+        "name": "AI Accountability Framework",
+        "description": "AI accountability structures",
+        "anchors": {
+          "L1": "No accountability framework",
+          "L2": "Basic responsibility assignment",
+          "L3": "Formal RACI for AI decisions",
+          "L4": "Automated accountability tracking",
+          "L5": "Full AI decision accountability chain"
+        }
+      },
+      {
+        "id": "G5",
+        "sub": "Compliance",
+        "name": "AI Regulatory Compliance",
+        "description": "Compliance with AI regulations",
+        "anchors": {
+          "L1": "No regulatory awareness",
+          "L2": "Basic awareness of EU AI Act",
+          "L3": "Compliance program for known regulations",
+          "L4": "Automated compliance monitoring",
+          "L5": "Proactive regulatory engagement; ahead of requirements"
+        }
+      },
+      {
+        "id": "G6",
+        "sub": "Compliance",
+        "name": "AI Risk Assessment Framework",
+        "description": "Systematic AI risk management",
+        "anchors": {
+          "L1": "No AI risk assessment",
+          "L2": "Basic risk checklist",
+          "L3": "Formal risk assessment framework",
+          "L4": "Automated risk scoring and monitoring",
+          "L5": "Predictive AI risk management"
+        }
+      },
+      {
+        "id": "G7",
+        "sub": "Compliance",
+        "name": "AI Audit & Assurance",
+        "description": "AI audit capabilities",
+        "anchors": {
+          "L1": "No AI audit",
+          "L2": "Ad hoc reviews",
+          "L3": "Formal AI audit program",
+          "L4": "Continuous AI auditing",
+          "L5": "Predictive audit with automated assurance"
+        }
+      },
+      {
+        "id": "G8",
+        "sub": "Compliance",
+        "name": "Third-Party AI Risk Management",
+        "description": "Managing third-party AI risks",
+        "anchors": {
+          "L1": "No third-party AI risk mgmt",
+          "L2": "Basic vendor assessment",
+          "L3": "Formal third-party AI risk framework",
+          "L4": "Continuous third-party monitoring",
+          "L5": "Automated third-party AI risk intelligence"
+        }
+      },
+      {
+        "id": "G9",
+        "sub": "Model Governance",
+        "name": "Model Risk Management",
+        "description": "Enterprise model risk management",
+        "anchors": {
+          "L1": "No model risk management",
+          "L2": "Basic model inventory",
+          "L3": "Formal MRM framework (SR 26-2 aligned)",
+          "L4": "Automated model risk monitoring",
+          "L5": "Enterprise-wide model risk intelligence"
+        }
+      },
+      {
+        "id": "G10",
+        "sub": "Model Governance",
+        "name": "Model Validation Process",
+        "description": "Model validation procedures",
+        "anchors": {
+          "L1": "No validation process",
+          "L2": "Ad hoc validation",
+          "L3": "Formal validation framework",
+          "L4": "Automated validation pipeline",
+          "L5": "Continuous model validation ecosystem"
+        }
+      },
+      {
+        "id": "G11",
+        "sub": "Model Governance",
+        "name": "Model Deprecation & Sunset",
+        "description": "Model lifecycle end management",
+        "anchors": {
+          "L1": "No deprecation process",
+          "L2": "Ad hoc model retirement",
+          "L3": "Formal deprecation policy",
+          "L4": "Automated model lifecycle management",
+          "L5": "Self-managing model portfolio"
+        }
+      },
+      {
+        "id": "G12",
+        "sub": "Model Governance",
+        "name": "AI Decision Logging",
+        "description": "Logging AI decisions for audit",
+        "anchors": {
+          "L1": "No decision logging",
+          "L2": "Basic output logging",
+          "L3": "Comprehensive decision audit trail",
+          "L4": "Real-time decision logging platform",
+          "L5": "Immutable AI decision ledger"
+        }
+      },
+      {
+        "id": "G13",
+        "sub": "Organizational Gov",
+        "name": "AI Governance Committee",
+        "description": "Cross-functional AI governance body",
+        "anchors": {
+          "L1": "No governance committee",
+          "L2": "Informal AI working group",
+          "L3": "Formal AI governance committee",
+          "L4": "Mature governance with subcommittees",
+          "L5": "Adaptive governance with real-time oversight"
+        }
+      },
+      {
+        "id": "G14",
+        "sub": "Organizational Gov",
+        "name": "AI Policy Management",
+        "description": "Managing AI policies",
+        "anchors": {
+          "L1": "No AI policies",
+          "L2": "Basic AI usage policy",
+          "L3": "Comprehensive AI policy framework",
+          "L4": "Automated policy enforcement",
+          "L5": "Self-updating AI policy ecosystem"
+        }
+      },
+      {
+        "id": "G15",
+        "sub": "Organizational Gov",
+        "name": "AI Intellectual Property",
+        "description": "AI IP management",
+        "anchors": {
+          "L1": "No AI IP strategy",
+          "L2": "Basic IP awareness",
+          "L3": "Formal AI IP framework",
+          "L4": "Strategic AI IP portfolio",
+          "L5": "AI-driven IP optimization"
+        }
+      },
+      {
+        "id": "G16",
+        "sub": "Organizational Gov",
+        "name": "Stakeholder AI Reporting",
+        "description": "Reporting AI to stakeholders",
+        "anchors": {
+          "L1": "No AI reporting",
+          "L2": "Ad hoc AI updates",
+          "L3": "Structured AI reporting",
+          "L4": "Real-time AI dashboards for stakeholders",
+          "L5": "Predictive AI impact reporting"
+        }
+      },
+      {
+        "id": "G17",
+        "sub": "Agentic AI Gov",
+        "name": "Agent Autonomy Level Framework",
+        "description": "Classifying agent autonomy levels",
+        "anchors": {
+          "L1": "No autonomy classification",
+          "L2": "Basic awareness of agent autonomy differences",
+          "L3": "Formal autonomy taxonomy (L0-L5) adopted; governance tiers defined",
+          "L4": "Automated autonomy classification in deployment pipeline",
+          "L5": "Adaptive autonomy with real-time level adjustment"
+        }
+      },
+      {
+        "id": "G18",
+        "sub": "Agentic AI Gov",
+        "name": "Multi-Agent Orchestration Gov",
+        "description": "Governing multi-agent interactions",
+        "anchors": {
+          "L1": "No multi-agent governance",
+          "L2": "Basic awareness of multi-agent patterns",
+          "L3": "Formal orchestration governance; centralized agent inventory",
+          "L4": "Automated orchestration monitoring; agent sprawl metrics tracked",
+          "L5": "Self-optimizing orchestration; <5% ungoverned agents"
+        }
+      },
+      {
+        "id": "G19",
+        "sub": "Agentic AI Gov",
+        "name": "Agent Failure Mode & Rollback",
+        "description": "Agent failure handling and recovery",
+        "anchors": {
+          "L1": "No agent-specific failure handling",
+          "L2": "Basic agent error logging; manual rollback",
+          "L3": "Formal failure taxonomy (OWASP Agentic AI Threats); circuit breakers",
+          "L4": "Automated failure detection; predictive prevention",
+          "L5": "Self-healing agents; zero-downtime rollback"
+        }
+      },
+      {
+        "id": "G20",
+        "sub": "Agentic AI Gov",
+        "name": "Agent-to-Agent Trust Protocol",
+        "description": "Trust mechanisms between agents",
+        "anchors": {
+          "L1": "No agent identity or trust framework",
+          "L2": "Basic agent identity assignment",
+          "L3": "Per-agent credentials; least-privilege RBAC; Zero Trust aligned",
+          "L4": "Automated trust scoring; DID integration; blockchain audit trails",
+          "L5": "Fully autonomous trust negotiation; cryptographic proof-of-work"
+        }
+      },
+      {
+        "id": "G21",
+        "sub": "Agentic AI Gov",
+        "name": "Agent Observability & Monitoring",
+        "description": "Monitoring agent behavior",
+        "anchors": {
+          "L1": "No agent-specific observability",
+          "L2": "Basic agent action logging",
+          "L3": "Comprehensive agent telemetry; decision logging; anomaly baselines",
+          "L4": "Real-time observability platform; SIEM/SOAR integration",
+          "L5": "Predictive behavioral analytics; automated compliance reporting"
+        }
+      },
+      {
+        "id": "G22",
+        "sub": "Agentic AI Gov",
+        "name": "Human Oversight Integration",
+        "description": "Human oversight models for agents",
+        "anchors": {
+          "L1": "No defined human oversight model",
+          "L2": "Ad hoc human review of high-risk actions",
+          "L3": "Formal HITL/HOTL models per autonomy level; escalation paths",
+          "L4": "Automated escalation with context-rich handoff",
+          "L5": "Adaptive oversight minimizing intervention for proven agents"
+        }
+      },
+      {
+        "id": "G23",
+        "sub": "Agentic AI Gov",
+        "name": "Agent Security & Red-Teaming",
+        "description": "Security testing for AI agents",
+        "anchors": {
+          "L1": "No agent-specific security testing",
+          "L2": "Basic prompt injection testing",
+          "L3": "Structured agent red-teaming (OWASP Agentic AI Threats)",
+          "L4": "Continuous automated red-teaming; purple team exercises",
+          "L5": "Proactive agent security research; zero-day discovery"
+        }
+      },
+      {
+        "id": "G24",
+        "sub": "Agentic AI Gov",
+        "name": "Agent Regulatory Compliance",
+        "description": "Agent-specific regulatory compliance",
+        "anchors": {
+          "L1": "No awareness of agent-specific regulations",
+          "L2": "Basic EU AI Act awareness for agents",
+          "L3": "Formal agent compliance program; risk classification documented",
+          "L4": "Automated compliance monitoring; real-time regulatory tracking",
+          "L5": "Proactive regulatory engagement; cross-jurisdictional compliance"
+        }
+      },
+      {
+        "id": "GRC-1",
+        "sub": "Geographic/Regulatory",
+        "name": "Multi-Jurisdiction AI Deployment",
+        "description": "Deploying AI across regulatory jurisdictions",
+        "anchors": {
+          "L1": "No awareness of jurisdictional requirements",
+          "L2": "Basic awareness of major regulations",
+          "L3": "Formal jurisdiction-by-jurisdiction deployment checklist",
+          "L4": "Automated regulatory mapping in CI/CD pipeline",
+          "L5": "Predictive regulatory intelligence; compliance-by-design"
+        }
+      },
+      {
+        "id": "GRC-2",
+        "sub": "Geographic/Regulatory",
+        "name": "Regional AI Regulation Mapping",
+        "description": "Tracking AI regulations across jurisdictions",
+        "anchors": {
+          "L1": "No regulatory tracking",
+          "L2": "Spreadsheet-based tracking of major regulations",
+          "L3": "Dedicated regulatory intelligence function; gap analysis",
+          "L4": "Automated regulatory intelligence with real-time alerts",
+          "L5": "AI-powered regulatory horizon scanning"
+        }
+      },
+      {
+        "id": "GRC-3",
+        "sub": "Geographic/Regulatory",
+        "name": "Cross-Border AI Incident Response",
+        "description": "Multi-jurisdiction incident response",
+        "anchors": {
+          "L1": "No AI-specific incident process",
+          "L2": "Basic awareness of reporting timelines (72hr-90day)",
+          "L3": "Multi-jurisdiction incident playbooks; tabletop exercises",
+          "L4": "Automated incident classification by jurisdiction",
+          "L5": "Predictive incident prevention; automated multi-authority notification"
+        }
+      },
+      {
+        "id": "GRC-4",
+        "sub": "Geographic/Regulatory",
+        "name": "Cross-Border Data Transfer Gov",
+        "description": "Managing AI data flows across borders",
+        "anchors": {
+          "L1": "No awareness of transfer restrictions",
+          "L2": "Basic awareness of EU SCCs, China security assessments",
+          "L3": "Comprehensive data flow mapping; transfer mechanism framework",
+          "L4": "Automated data flow monitoring with compliance verification",
+          "L5": "Privacy-enhancing tech (federated learning); zero-trust data architecture"
+        }
+      },
+      {
+        "id": "GRC-5",
+        "sub": "Geographic/Regulatory",
+        "name": "AI Transparency Harmonization",
+        "description": "Harmonized transparency across jurisdictions",
+        "anchors": {
+          "L1": "No transparency requirements tracked",
+          "L2": "Basic model documentation; EU AI Act awareness",
+          "L3": "Tiered transparency framework by jurisdiction",
+          "L4": "Automated explainability calibrated to jurisdiction requirements",
+          "L5": "Adaptive explainability exceeding all jurisdictional minimums"
+        }
+      }
+    ],
+    "count": 29
+  },
+  "strategy": {
+    "label": "Strategy & Innovation",
+    "parameters": [
+      {
+        "id": "S1",
+        "sub": "AI Vision",
+        "name": "AI Vision & Strategy",
+        "description": "Clear AI vision aligned with business strategy",
+        "anchors": {
+          "L1": "No AI strategy",
+          "L2": "Basic AI exploration plan",
+          "L3": "Formal AI strategy with roadmap",
+          "L4": "AI strategy integrated with business strategy",
+          "L5": "AI-first business strategy"
+        }
+      },
+      {
+        "id": "S2",
+        "sub": "AI Vision",
+        "name": "AI Ambition Level",
+        "description": "Level of AI ambition",
+        "anchors": {
+          "L1": "No AI ambition",
+          "L2": "Incremental AI improvements",
+          "L3": "Transformational AI goals",
+          "L4": "Industry-leading AI ambition",
+          "L5": "AI-native business model"
+        }
+      },
+      {
+        "id": "S3",
+        "sub": "ROI & Value",
+        "name": "AI ROI Measurement",
+        "description": "Measuring return on AI investments",
+        "anchors": {
+          "L1": "No ROI tracking",
+          "L2": "Anecdotal value claims",
+          "L3": "Structured ROI framework with KPIs",
+          "L4": "Real-time AI value dashboards",
+          "L5": "Predictive AI value optimization"
+        }
+      },
+      {
+        "id": "S4",
+        "sub": "ROI & Value",
+        "name": "AI Business Case Process",
+        "description": "Business case process for AI",
+        "anchors": {
+          "L1": "No business case process",
+          "L2": "Ad hoc business cases",
+          "L3": "Standardized AI business case template",
+          "L4": "Portfolio-level AI investment optimization",
+          "L5": "Dynamic AI investment allocation"
+        }
+      },
+      {
+        "id": "S5",
+        "sub": "ROI & Value",
+        "name": "AI Value Tracking",
+        "description": "Tracking AI value realization",
+        "anchors": {
+          "L1": "No value tracking",
+          "L2": "Post-implementation reviews",
+          "L3": "Continuous value tracking per use case",
+          "L4": "Enterprise AI value dashboard",
+          "L5": "AI-driven value optimization"
+        }
+      },
+      {
+        "id": "S6",
+        "sub": "Roadmap",
+        "name": "AI Roadmap & Planning",
+        "description": "AI roadmap and planning",
+        "anchors": {
+          "L1": "No AI roadmap",
+          "L2": "Basic project list",
+          "L3": "Formal multi-year AI roadmap",
+          "L4": "Dynamic roadmap with scenario planning",
+          "L5": "Self-adjusting AI roadmap"
+        }
+      },
+      {
+        "id": "S7",
+        "sub": "Roadmap",
+        "name": "AI Portfolio Management",
+        "description": "Managing AI project portfolio",
+        "anchors": {
+          "L1": "No portfolio management",
+          "L2": "Basic project tracking",
+          "L3": "Formal AI portfolio management",
+          "L4": "Strategic portfolio optimization",
+          "L5": "AI-driven portfolio management"
+        }
+      },
+      {
+        "id": "S8",
+        "sub": "Roadmap",
+        "name": "AI Budget & Investment",
+        "description": "Dedicated AI budget",
+        "anchors": {
+          "L1": "No AI budget",
+          "L2": "Ad hoc AI spending",
+          "L3": "Dedicated AI budget with allocation",
+          "L4": "Strategic AI investment with ROI targets",
+          "L5": "AI investment as core business investment"
+        }
+      },
+      {
+        "id": "S9",
+        "sub": "Competitive",
+        "name": "AI Competitive Intelligence",
+        "description": "Monitoring AI competitive landscape",
+        "anchors": {
+          "L1": "No competitive monitoring",
+          "L2": "Ad hoc competitor analysis",
+          "L3": "Structured AI competitive intelligence",
+          "L4": "Real-time competitive AI monitoring",
+          "L5": "Predictive competitive AI intelligence"
+        }
+      },
+      {
+        "id": "S10",
+        "sub": "Competitive",
+        "name": "AI Ecosystem Strategy",
+        "description": "AI ecosystem and partnership strategy",
+        "anchors": {
+          "L1": "No ecosystem strategy",
+          "L2": "Basic vendor relationships",
+          "L3": "Formal ecosystem strategy",
+          "L4": "Strategic AI partnerships",
+          "L5": "AI ecosystem orchestration leadership"
+        }
+      },
+      {
+        "id": "S11",
+        "sub": "Competitive",
+        "name": "AI Market Positioning",
+        "description": "AI-driven market positioning",
+        "anchors": {
+          "L1": "No AI market positioning",
+          "L2": "Basic AI messaging",
+          "L3": "AI as competitive differentiator",
+          "L4": "AI-led market leadership",
+          "L5": "AI-defined market category creation"
+        }
+      },
+      {
+        "id": "S12",
+        "sub": "Innovation",
+        "name": "AI Innovation Pipeline",
+        "description": "Pipeline of AI innovation",
+        "anchors": {
+          "L1": "No innovation pipeline",
+          "L2": "Ad hoc AI experiments",
+          "L3": "Formal innovation program",
+          "L4": "Strategic innovation portfolio",
+          "L5": "AI-driven innovation ecosystem"
+        }
+      },
+      {
+        "id": "S13",
+        "sub": "Innovation",
+        "name": "Emerging AI Technology Tracking",
+        "description": "Tracking emerging AI technologies",
+        "anchors": {
+          "L1": "No technology tracking",
+          "L2": "Ad hoc awareness",
+          "L3": "Formal technology radar",
+          "L4": "Strategic technology evaluation",
+          "L5": "Proactive technology leadership"
+        }
+      },
+      {
+        "id": "S14",
+        "sub": "Innovation",
+        "name": "AI Patents & IP Strategy",
+        "description": "AI intellectual property strategy",
+        "anchors": {
+          "L1": "No AI IP strategy",
+          "L2": "Basic IP awareness",
+          "L3": "Formal AI patent program",
+          "L4": "Strategic AI IP portfolio",
+          "L5": "AI-driven IP creation and monetization"
+        }
+      },
+      {
+        "id": "S15",
+        "sub": "Innovation",
+        "name": "AI Sustainability Strategy",
+        "description": "AI for sustainability",
+        "anchors": {
+          "L1": "No sustainability focus",
+          "L2": "Basic awareness",
+          "L3": "AI sustainability use cases identified",
+          "L4": "AI-driven sustainability programs",
+          "L5": "AI-first sustainability transformation"
+        }
+      },
+      {
+        "id": "S16",
+        "sub": "Ecosystem",
+        "name": "Partner AI Capability Assessment",
+        "description": "Assessing partner AI capabilities",
+        "anchors": {
+          "L1": "No partner AI assessment",
+          "L2": "Basic vendor capability review",
+          "L3": "Formal partner AI maturity assessment",
+          "L4": "Continuous partner AI capability monitoring",
+          "L5": "AI-driven partner ecosystem optimization"
+        }
+      },
+      {
+        "id": "S17",
+        "sub": "Ecosystem",
+        "name": "Vendor Lock-in Risk Management",
+        "description": "Managing AI vendor dependency",
+        "anchors": {
+          "L1": "No lock-in awareness",
+          "L2": "Basic awareness of vendor risks",
+          "L3": "Formal vendor diversification strategy",
+          "L4": "Multi-vendor AI architecture; portability testing",
+          "L5": "Fully optimized multi-cloud AI; near-zero switching costs"
+        }
+      },
+      {
+        "id": "S18",
+        "sub": "Ecosystem",
+        "name": "Open-Source Contribution Strategy",
+        "description": "Open-source AI engagement",
+        "anchors": {
+          "L1": "No open-source engagement",
+          "L2": "Basic open-source consumption",
+          "L3": "Formal open-source contribution policy",
+          "L4": "Strategic open-source leadership",
+          "L5": "Open-source AI ecosystem leadership"
+        }
+      },
+      {
+        "id": "S19",
+        "sub": "Ecosystem",
+        "name": "AI Marketplace Participation",
+        "description": "Participation in AI marketplaces",
+        "anchors": {
+          "L1": "No marketplace participation",
+          "L2": "Basic marketplace consumption",
+          "L3": "Active marketplace participation",
+          "L4": "Marketplace provider; AI model publishing",
+          "L5": "AI marketplace ecosystem leadership"
+        }
+      },
+      {
+        "id": "S20",
+        "sub": "ROI & Value",
+        "name": "AI ROI & Value Measurement",
+        "description": "Comprehensive AI value measurement",
+        "anchors": {
+          "L1": "No ROI tracking; no business case process",
+          "L2": "Anecdotal value claims; post-implementation reviews only",
+          "L3": "Structured ROI framework with KPIs; standardized business case",
+          "L4": "Real-time AI value dashboards; enterprise value tracking",
+          "L5": "Predictive AI value optimization; self-optimizing AI portfolio"
+        }
+      },
+      {
+        "id": "S21",
+        "sub": "Competitive",
+        "name": "AI Talent Market Intelligence",
+        "description": "Monitoring AI talent market",
+        "anchors": {
+          "L1": "No talent market awareness",
+          "L2": "Basic salary benchmarking",
+          "L3": "Formal AI talent market analysis",
+          "L4": "Real-time talent market intelligence",
+          "L5": "Predictive talent market positioning"
+        }
+      },
+      {
+        "id": "S22",
+        "sub": "Innovation",
+        "name": "Agentic AI Strategy",
+        "description": "Strategy for agentic AI adoption",
+        "anchors": {
+          "L1": "No agentic AI awareness",
+          "L2": "Basic agent experimentation",
+          "L3": "Formal agentic AI strategy with use cases",
+          "L4": "Enterprise agentic AI platform; multi-agent orchestration",
+          "L5": "Agentic AI-native operations; autonomous business processes"
+        }
+      },
+      {
+        "id": "S23",
+        "sub": "Innovation",
+        "name": "GenAI Business Model Innovation",
+        "description": "GenAI-driven business model innovation",
+        "anchors": {
+          "L1": "No GenAI business model thinking",
+          "L2": "Basic GenAI productivity use cases",
+          "L3": "GenAI-enhanced products/services",
+          "L4": "GenAI-driven new revenue streams",
+          "L5": "GenAI-native business model transformation"
+        }
+      }
+    ],
+    "count": 23
+  }
+}

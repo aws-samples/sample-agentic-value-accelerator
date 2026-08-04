@@ -35,4 +35,10 @@ USER appuser
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
-CMD ["python", "-m", "main"]
+# When ENABLE_TRACING=true and OTEL_PYTHON_DISTRO is set (we set both via the
+# control plane → runtime.tf path when AgentCore observability is enabled),
+# `opentelemetry-instrument` wraps the process and auto-instruments all
+# supported libraries (boto3, requests, langchain, etc) without code changes.
+# When ENABLE_TRACING=false, the wrapper is still used but emits nothing —
+# negligible overhead, no behavior change.
+CMD ["opentelemetry-instrument", "python", "-m", "main"]

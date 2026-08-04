@@ -1,0 +1,49 @@
+{
+  "id": "human-in-the-loop",
+  "name": "Human-in-the-Loop",
+  "description": "Approval gates and feedback loops for agent execution. Includes a simple DynamoDB-backed request-level pattern and LangGraph's interrupt-based pattern.",
+  "tier": "code",
+  "category": "integration",
+  "iac_options": [],
+  "includes": {
+    "infra": false,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "frameworks_list": [
+    "langgraph"
+  ],
+  "aws_services": [
+    "dynamodb"
+  ],
+  "parameters": [
+    {
+      "name": "APPROVAL_TABLE_NAME",
+      "description": "DynamoDB table name for storing approval requests",
+      "default": "agent-approval-requests"
+    }
+  ],
+  "version": "1.0.0",
+  "tags": [
+    "human-in-the-loop",
+    "approval",
+    "interrupt",
+    "feedback"
+  ],
+  "built_with": [],
+  "learn_more": [
+    {
+      "title": "Strands: Human-in-the-Loop Example",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/13-human-in-the-loop"
+    },
+    {
+      "title": "LangGraph: Human-in-the-Loop Examples",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/human_in_the_loop"
+    },
+    {
+      "title": "LangGraph Docs: interrupt() API",
+      "url": "https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/"
+    }
+  ]
+}

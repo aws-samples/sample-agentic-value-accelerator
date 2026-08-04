@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/research.schema.json",
+  "title": "research.json (merged)",
+  "description": "Phase 1 merge output combining research-mitigations + research-capabilities + research-api-surface. Produced by research skill's merge step. Consumed by Phase 2 validate. schema_version MUST be '3.0' per validate_state.py CHECK-S9. Assets MUST have data_classification and non-empty entry_points. api_surface MUST be inlined (not a _ref).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "service", "assets", "capabilities", "api_surface", "doc_sources"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "3.0"},
+    "phase": {"type": "string"},
+    "service": {"type": "string", "minLength": 1},
+    "service_prefix": {"type": "string"},
+    "cfn_prefix": {"type": "string"},
+    "doc_sources": {
+      "type": "array",
+      "items": {"type": ["object", "string"]}
+    },
+    "resources": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": true}
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/asset"}
+    },
+    "capabilities": {"$ref": "#/$defs/capabilities"},
+    "api_surface": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["operations"],
+      "properties": {
+        "operations": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "existing_mitigations": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": true}
+    },
+    "mitigations": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": true},
+      "description": "Legacy alias of existing_mitigations (iter-11/12). Some archives carry both."
+    },
+    "assessment_gaps": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": true}
+    },
+    "threat_model_summary": {"type": ["object", "null"]},
+    "sar_cross_reference": {"type": "object", "additionalProperties": true},
+    "completeness": {"type": "object", "additionalProperties": true},
+    "_metadata": {"type": "object", "additionalProperties": true}
+  },
+
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "cfn_type", "data_classification", "entry_points"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "cfn_type": {"type": "string", "pattern": "^AWS::"},
+        "description": {"type": "string"},
+        "data_classification": {
+          "type": "string",
+          "minLength": 1,
+          "not": {"enum": ["generic", "Service resource", ""]},
+          "description": "Must be specific. Generic placeholders like 'Service resource' fail CHECK-S9."
+        },
+        "entry_points": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        },
+        "purpose": {"type": "string"},
+        "primary": {"type": "boolean"}
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["iam", "encryption", "network", "logging", "organization_policies"],
+      "properties": {
+        "iam": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "condition_keys": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["key"],
+                "properties": {
+                  "key": {"type": "string"},
+                  "applies_to_actions": {"type": "array"}
+                }
+              }
+            }
+          }
+        },
+        "encryption": {"type": "object", "additionalProperties": true},
+        "network": {"type": "object", "additionalProperties": true},
+        "logging": {"type": "object", "additionalProperties": true},
+        "organization_policies": {"type": "object", "additionalProperties": true}
+      }
+    }
+  }
+}

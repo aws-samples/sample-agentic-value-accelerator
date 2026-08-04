@@ -328,8 +328,20 @@ resource "aws_sfn_state_machine" "deployment" {
         Next       = "RecordFailureWrite"
       }
 
-      # Stage 3: StartBuild
+      # Stage 3: StartBuild — set status based on action
       StartBuild = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable     = "$.action"
+            StringEquals = "destroy"
+            Next         = "RecordStatusDestroying"
+          }
+        ]
+        Default = "RecordStatusDeploying"
+      }
+
+      RecordStatusDeploying = {
         Type     = "Task"
         Resource = "arn:aws:states:::dynamodb:updateItem"
         Parameters = {
@@ -344,6 +356,35 @@ resource "aws_sfn_state_machine" "deployment" {
             ":status" = { S = "deploying" }
             ":ts"     = { "S.$" = "$$.State.EnteredTime" }
             ":entry"  = { "L" = [{ "M" = { "status" = { S = "deploying" }, "timestamp" = { "S.$" = "$$.State.EnteredTime" }, "message" = { S = "Starting infrastructure deployment" } } }] }
+            ":empty"  = { L = [] }
+          }
+        }
+        ResultPath = null
+        Next       = "NormalizeBuildInput"
+        Catch = [
+          {
+            ErrorEquals = ["States.ALL"]
+            ResultPath  = "$.error"
+            Next        = "RecordFailureStartBuild"
+          }
+        ]
+      }
+
+      RecordStatusDestroying = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::dynamodb:updateItem"
+        Parameters = {
+          TableName = var.deployments_table_name
+          Key = {
+            pk = { "S.$" = "States.Format('DEPLOY#{}', $.deployment_id)" }
+            sk = { S = "META" }
+          }
+          UpdateExpression         = "SET #status = :status, updated_at = :ts, status_history = list_append(if_not_exists(status_history, :empty), :entry)"
+          ExpressionAttributeNames = { "#status" = "status" }
+          ExpressionAttributeValues = {
+            ":status" = { S = "destroying" }
+            ":ts"     = { "S.$" = "$$.State.EnteredTime" }
+            ":entry"  = { "L" = [{ "M" = { "status" = { S = "destroying" }, "timestamp" = { "S.$" = "$$.State.EnteredTime" }, "message" = { S = "Destroying infrastructure" } } }] }
             ":empty"  = { L = [] }
           }
         }
@@ -398,6 +439,11 @@ resource "aws_sfn_state_machine" "deployment" {
             { Name = "GUARDRAIL_VERSION", "Value.$" = "$.parameters.GUARDRAIL_VERSION", Type = "PLAINTEXT" },
             { Name = "SUBMISSION_ID", "Value.$" = "$.parameters.SUBMISSION_ID", Type = "PLAINTEXT" },
             { Name = "APP_FACTORY_TABLE_NAME", "Value.$" = "$.parameters.APP_FACTORY_TABLE_NAME", Type = "PLAINTEXT" },
+            { Name = "ENABLE_AGENTCORE_OBSERVABILITY", "Value.$" = "$.parameters.ENABLE_AGENTCORE_OBSERVABILITY", Type = "PLAINTEXT" },
+            { Name = "ENABLE_XRAY_TRANSACTION_SEARCH", "Value.$" = "$.parameters.ENABLE_XRAY_TRANSACTION_SEARCH", Type = "PLAINTEXT" },
+            { Name = "CREATE_FLEET_DASHBOARD", "Value.$" = "$.parameters.CREATE_FLEET_DASHBOARD", Type = "PLAINTEXT" },
+            { Name = "LLM_GATEWAY_BASE_URL", "Value.$" = "$.parameters.LLM_GATEWAY_BASE_URL", Type = "PLAINTEXT" },
+            { Name = "LLM_GATEWAY_API_KEY_SECRET_ARN", "Value.$" = "$.parameters.LLM_GATEWAY_API_KEY_SECRET_ARN", Type = "PLAINTEXT" },
             { Name = "ACTION", "Value.$" = "$.action", Type = "PLAINTEXT" }
           ]
         }

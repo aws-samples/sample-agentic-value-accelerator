@@ -1,0 +1,122 @@
+{
+  "id": "knowledge-base-bedrock",
+  "name": "Knowledge Base \u2014 Bedrock",
+  "description": "Amazon Bedrock Knowledge Base with OpenSearch Serverless vector store and S3 document source. Supports configurable chunking strategies for document ingestion.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "knowledge",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "bedrock",
+    "knowledge-base",
+    "rag",
+    "opensearch",
+    "s3",
+    "terraform"
+  ],
+  "aws_services": [
+    "bedrock",
+    "opensearch-serverless",
+    "s3",
+    "iam"
+  ],
+  "frameworks_list": [],
+  "built_with": [],
+  "resources": [
+    {
+      "name": "Bedrock Knowledge Base",
+      "description": "Vector knowledge base with embedding model configuration"
+    },
+    {
+      "name": "Data Source (S3)",
+      "description": "S3 bucket as document source with chunking configuration"
+    },
+    {
+      "name": "OpenSearch Serverless Collection",
+      "description": "Vector search collection for document embeddings"
+    },
+    {
+      "name": "OpenSearch Security Policies",
+      "description": "Encryption and network policies for the collection"
+    },
+    {
+      "name": "S3 Document Bucket",
+      "description": "Versioned, encrypted bucket for source documents"
+    },
+    {
+      "name": "IAM Role",
+      "description": "KB execution role with S3, OpenSearch, and Bedrock permissions"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name used as prefix for all resources"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Environment name"
+    },
+    {
+      "name": "embedding_model_id",
+      "type": "string",
+      "required": false,
+      "default": "amazon.titan-embed-text-v2:0",
+      "description": "Bedrock embedding model ID"
+    },
+    {
+      "name": "chunking_strategy",
+      "type": "string",
+      "required": false,
+      "default": "FIXED_SIZE",
+      "description": "Document chunking strategy (FIXED_SIZE, SEMANTIC, HIERARCHICAL, NONE)"
+    },
+    {
+      "name": "chunk_max_tokens",
+      "type": "number",
+      "required": false,
+      "default": "512",
+      "description": "Max tokens per chunk"
+    },
+    {
+      "name": "chunk_overlap_percentage",
+      "type": "number",
+      "required": false,
+      "default": "20",
+      "description": "Overlap percentage between chunks"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "AWS: Bedrock Knowledge Bases",
+      "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html"
+    },
+    {
+      "title": "AWS Sample: KB RAG Concepts Notebook",
+      "url": "https://github.com/aws-samples/amazon-bedrock-samples/blob/main/rag/knowledge-bases/features-examples/01-rag-concepts/01_create_ingest_documents_test_kb_multi_ds.ipynb"
+    },
+    {
+      "title": "Terraform: aws_bedrockagent_knowledge_base",
+      "url": "https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bedrockagent_knowledge_base"
+    }
+  ]
+}

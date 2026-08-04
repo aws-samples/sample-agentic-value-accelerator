@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/map-framework-mapped.schema.json",
+  "title": "map-framework-mapped.json",
+  "description": "Phase 3c output: every framework objective mapped to service controls or marked N/A. Produced by map-framework-mapping skill. Consumed by map-assemble. Every entry in framework_mapping[] MUST carry objective_id, domain, title, status, coverage, reason, controls[]. status MUST be exactly 'MAPPED' or 'N/A' (iter-14 Class F15-revised).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["framework_mapping"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "phase": {"type": "string", "const": "map-framework-mapped"},
+    "framework": {"type": "object", "additionalProperties": true},
+    "framework_header_canonical": {
+      "type": "string",
+      "description": "Canonical framework-header string (iter-14 Class F12). map-assemble.py emits this into mapping-results; every generated artifact copies it verbatim."
+    },
+    "framework_name": {"type": "string"},
+    "framework_version": {"type": "string"},
+    "framework_mapping": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/mapping"}
+    },
+    "framework_coverage_summary": {"type": "object", "additionalProperties": true},
+    "quality_gate_results": {"type": "object", "additionalProperties": true},
+    "objective_mappings": {
+      "type": "array",
+      "items": {"type": "object"},
+      "description": "Legacy alias (iter-11/12); prefer framework_mapping."
+    },
+    "unmapped_objectives": {"type": "array", "items": {"type": "object"}},
+    "stats": {"type": "object", "additionalProperties": true},
+    "service": {"type": "string"},
+    "objective_coverage": {"type": "object", "additionalProperties": true},
+    "control_mappings": {"type": "array", "items": {"type": "object"}},
+    "_metadata": {"type": "object", "additionalProperties": true}
+  },
+
+  "$defs": {
+    "mapping": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["objective_id", "status"],
+      "properties": {
+        "objective_id": {"type": "string", "minLength": 1},
+        "domain": {"type": "string"},
+        "title": {"type": "string"},
+        "status": {
+          "type": "string",
+          "enum": ["MAPPED", "N/A"],
+          "description": "iter-14 Class F15-revised: EXACTLY 'MAPPED' or 'N/A'. No 'UNMAPPED', 'NOT_APPLICABLE', 'n/a' variants — validator CHECK-S13 rejects them."
+        },
+        "coverage": {
+          "type": "string",
+          "enum": ["FULL", "PARTIAL", "SUPPORTS", "NONE", ""]
+        },
+        "reason": {"type": "string"},
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["control_id"],
+            "properties": {
+              "control_id": {
+                "type": "string",
+                "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$"
+              },
+              "confidence": {
+                "type": "string",
+                "enum": ["High", "Medium", "Low"],
+                "description": "PascalCase only. Skill map-framework-mapping emits PascalCase (High/Medium/Low); iter-14 through iter-18 archives all use PascalCase. Lowercase was previously tolerated as LLM-drift slack but never observed in practice — tightened per MR-8 review to prevent foot-gun."
+              },
+              "rationale": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

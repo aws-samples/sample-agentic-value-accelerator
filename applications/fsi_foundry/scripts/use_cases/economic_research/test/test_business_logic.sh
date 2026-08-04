@@ -3,7 +3,7 @@
 set +e
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 PASSED=0; FAILED=0
-ENDPOINT="${API_ENDPOINT:?Set API_ENDPOINT to your deployed ALB DNS (e.g. http://<alb-name>.<region>.elb.amazonaws.com)}"
+ENDPOINT="${API_ENDPOINT:-http://<your-alb-dns>.us-east-1.elb.amazonaws.com}"
 
 check() { local name=$1 cond=$2; if eval "$cond"; then echo -e "${GREEN}✓ $name${NC}"; ((PASSED++)); else echo -e "${RED}✗ $name${NC}"; ((FAILED++)); fi; }
 

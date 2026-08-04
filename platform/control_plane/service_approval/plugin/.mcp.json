@@ -1,0 +1,65 @@
+{
+  "mcpServers": {
+    "aws-documentation": {
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_DOCUMENTATION_PARTITION": "aws"
+      }
+    },
+    "awsknowledge": {
+      "type": "http",
+      "url": "https://knowledge-mcp.global.api.aws"
+    },
+    "awsiac": {
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-iac-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "terraform": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "hashicorp/terraform-mcp-server:0.5.1"
+      ]
+    },
+    "kb-search": {
+      "command": "python3",
+      "args": [
+        "tools/kb-search-mcp/server.py"
+      ],
+      "env": {
+        "AWS_PROFILE": "claude-code",
+        "AWS_REGION": "us-east-1"
+      }
+    },
+    "iam": {
+      "command": "uvx",
+      "args": [
+        "awslabs.iam-mcp-server@latest"
+      ],
+      "env": {
+        "AWS_PROFILE": "claude-code",
+        "AWS_REGION": "us-east-1",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "mitre-attack": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/stoyky/mitre-attack-mcp",
+        "mitre-attack-mcp"
+      ]
+    }
+  }
+}

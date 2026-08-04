@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Service Approval V2 — AgentCore Runtime (production-shaped)'
+
+Parameters:
+  AgentName:
+    Type: String
+  RoleArn:
+    Type: String
+  ContainerUri:
+    Type: String
+  DdbTable:
+    Type: String
+  S3Bucket:
+    Type: String
+  BedrockModelId:
+    Type: String
+    Description: 'Bedrock model/inference-profile ID for Strands. Default matches v1 runner.'
+    Default: 'us.anthropic.claude-opus-4-7'
+
+Resources:
+  AgentCoreRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Ref AgentName
+      Description: Service Approval v2 — Strands orchestrator + AgentCore
+      RoleArn: !Ref RoleArn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref ContainerUri
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      # M3b — Path B hosts the v1 plugin pipeline, which can take 30-90
+      # min on Opus and occasionally drift longer on large services. v1's
+      # SFN TimeoutSeconds was 90 min (5400s); M3b raises max to the
+      # AgentCore ceiling (8h = 28800s) so a slow run never gets killed
+      # mid-Generate. Idle stays at 30 min — async tasks keep /ping busy
+      # throughout the pipeline, and the idle timer resets on every invoke.
+      LifecycleConfiguration:
+        IdleRuntimeSessionTimeout: 1800
+        MaxLifetime: 28800
+      EnvironmentVariables:
+        SERVICE_APPROVAL_TABLE: !Ref DdbTable
+        SERVICE_APPROVAL_BUCKET: !Ref S3Bucket
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+
+# Note: AgentCore auto-creates a DEFAULT endpoint when the Runtime is
+# created. Don't declare AWS::BedrockAgentCore::RuntimeEndpoint — CFN
+# fails with "An endpoint with the specified name already exists".
+
+Outputs:
+  AgentRuntimeArn:
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeArn
+  AgentRuntimeId:
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeId

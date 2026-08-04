@@ -1,0 +1,67 @@
+# Attestation Report — {{ service }}
+
+Generated {{ evidence_run_id }} | Stack `{{ stack_id }}`
+
+**Overall Verdict:** {{ overall_verdict }}
+
+## Control Matrix by Category × Scope
+
+{% for category in ["PRO", "PRV", "DET", "COR"] %}
+### {{ category_names[category] }} ({{ category }})
+
+| Control ID | Scope | Mechanism | Verdict | Evidence |
+|------------|-------|-----------|---------|----------|
+{%- for result in results %}
+{%- if result.get("control_id", "").endswith(category + "-") or ("-" + category + "-") in result.get("control_id", "") %}
+| {{ result.control_id }} | {{ result.get("scope", "N/A") | markdown_safe }} | {{ result.get("mechanism", "N/A") | markdown_safe }} | {{ result.verdict }} | {% if result.verdict == "NOT_CLI_VALIDATABLE" %}{{ result.get("supplemental_evidence", "N/A") | markdown_safe }}{% else %}[log]({{ result.get("output_log", "N/A") }}){% endif %} |
+{%- endif %}
+{%- endfor %}
+
+{% endfor %}
+
+## Summary Counts
+
+- **Total Controls:** {{ total_controls }}
+- **PASS:** {{ pass_count }}
+- **FAIL:** {{ fail_count }}
+- **ERROR:** {{ error_count }}
+- **NOT_CLI_VALIDATABLE:** {{ ncv_count }}
+
+## Failures
+
+{% if fail_count == 0 -%}
+No failures.
+{% else -%}
+{% for result in results if result.verdict == "FAIL" %}
+### {{ result.control_id }}
+
+- **Command:** `{{ result.get("command_str", "") | markdown_safe }}`
+- **Predicate:** {{ result.get("predicate_evaluation", "") | markdown_safe }}
+- **Exit Code:** {{ result.exit_code }}
+- **Output Log:** [{{ result.output_log }}]({{ result.output_log }})
+
+{% endfor %}
+{%- endif %}
+
+## Errors
+
+{% if error_count == 0 -%}
+No errors.
+{% else -%}
+{% for result in results if result.verdict == "ERROR" %}
+### {{ result.control_id }}
+
+- **Command:** `{{ result.get("command_str", "") | markdown_safe }}`
+- **Error:** {{ result.get("error_message", "") | markdown_safe }}
+- **Output Log:** [{{ result.output_log }}]({{ result.output_log }})
+
+{% endfor %}
+{%- endif %}
+
+---
+
+For detailed evidence, review:
+- [cli-commands.json](cli-commands.json) — synthesized CLI commands (pre-execution)
+- [attestation-results.json](attestation-results.json) — machine-readable verdicts (post-execution)
+- [cli-outputs/](cli-outputs/) — raw stdout/stderr logs per control
+- [iac-time-evidence/](iac-time-evidence/) — supplemental IaC validation logs

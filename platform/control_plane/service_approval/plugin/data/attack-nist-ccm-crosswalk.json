@@ -1,0 +1,262 @@
+{
+  "schema_version": "1.0",
+  "description": "Three-way crosswalk mapping ATT&CK techniques to NIST 800-53 controls and CCMv4 objectives. Sources: MITRE Mappings Explorer (ATT&CK→NIST), CSA CCMv4 Lite crosswalk (NIST→CCMv4).",
+  "sources": {
+    "attack_to_nist": "MITRE Center for Threat-Informed Defense Mappings Explorer v16",
+    "nist_to_ccmv4": "CSA CCMv4 — NIST 800-53 Rev 5 Crosswalk"
+  },
+  "mappings": [
+    {
+      "attack_technique_id": "T1078.004",
+      "attack_technique_name": "Valid Accounts: Cloud Accounts",
+      "nist_controls": ["AC-2", "AC-3", "AC-6", "IA-2", "IA-5", "IA-8"],
+      "ccmv4_objectives": ["IAM-01", "IAM-02", "IAM-03", "IAM-04", "IAM-05", "IAM-06", "IAM-12"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1190",
+      "attack_technique_name": "Exploit Public-Facing Application",
+      "nist_controls": ["AC-4", "CA-7", "SC-7", "SI-3", "SI-10"],
+      "ccmv4_objectives": ["AIS-01", "AIS-02", "AIS-04", "IVS-01", "IVS-06", "IVS-09"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1199",
+      "attack_technique_name": "Trusted Relationship",
+      "nist_controls": ["AC-3", "AC-4", "AC-20", "SA-9"],
+      "ccmv4_objectives": ["IAM-07", "IAM-08", "IAM-09", "STA-03", "STA-05"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1133",
+      "attack_technique_name": "External Remote Services",
+      "nist_controls": ["AC-3", "AC-17", "SC-7"],
+      "ccmv4_objectives": ["IAM-01", "IVS-01", "IVS-04", "IVS-06"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1059",
+      "attack_technique_name": "Command and Scripting Interpreter",
+      "nist_controls": ["CM-7", "SI-3", "SI-10"],
+      "ccmv4_objectives": ["AIS-01", "AIS-04", "CCC-01", "TVM-01"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1098",
+      "attack_technique_name": "Account Manipulation",
+      "nist_controls": ["AC-2", "AC-3", "AC-6", "CM-5"],
+      "ccmv4_objectives": ["IAM-01", "IAM-04", "IAM-06", "IAM-10", "IAM-12", "CCC-01", "CCC-02"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1098.001",
+      "attack_technique_name": "Additional Cloud Credentials",
+      "nist_controls": ["AC-2", "AC-6", "IA-5"],
+      "ccmv4_objectives": ["IAM-01", "IAM-04", "IAM-06", "IAM-12"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1098.003",
+      "attack_technique_name": "Additional Cloud Roles",
+      "nist_controls": ["AC-2", "AC-3", "AC-6"],
+      "ccmv4_objectives": ["IAM-01", "IAM-04", "IAM-06", "IAM-10"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1525",
+      "attack_technique_name": "Implant Internal Image",
+      "nist_controls": ["CM-2", "CM-6", "SI-7"],
+      "ccmv4_objectives": ["AIS-01", "AIS-04", "CCC-04", "TVM-03"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1556",
+      "attack_technique_name": "Modify Authentication Process",
+      "nist_controls": ["AC-3", "IA-2", "IA-5", "SI-7"],
+      "ccmv4_objectives": ["IAM-01", "IAM-02", "IAM-04", "IAM-13"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1548",
+      "attack_technique_name": "Abuse Elevation Control Mechanism",
+      "nist_controls": ["AC-2", "AC-3", "AC-6", "CM-5"],
+      "ccmv4_objectives": ["IAM-01", "IAM-04", "IAM-06", "IAM-10"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1562",
+      "attack_technique_name": "Impair Defenses",
+      "nist_controls": ["AC-6", "AU-6", "AU-12", "SC-7", "SI-4"],
+      "ccmv4_objectives": ["LOG-01", "LOG-02", "LOG-03", "LOG-05", "LOG-07", "LOG-09"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1562.008",
+      "attack_technique_name": "Disable or Modify Cloud Logs",
+      "nist_controls": ["AU-6", "AU-9", "AU-12", "SI-4"],
+      "ccmv4_objectives": ["LOG-01", "LOG-02", "LOG-03", "LOG-05", "LOG-09"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1562.001",
+      "attack_technique_name": "Disable or Modify Tools",
+      "nist_controls": ["AC-6", "AU-12", "SC-7", "SI-4"],
+      "ccmv4_objectives": ["LOG-01", "LOG-03", "LOG-07", "TVM-01"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1550",
+      "attack_technique_name": "Use Alternate Authentication Material",
+      "nist_controls": ["AC-3", "IA-2", "IA-5"],
+      "ccmv4_objectives": ["IAM-01", "IAM-02", "IAM-04", "IAM-13"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1550.001",
+      "attack_technique_name": "Application Access Token",
+      "nist_controls": ["AC-3", "IA-2", "IA-5"],
+      "ccmv4_objectives": ["IAM-01", "IAM-02", "IAM-04"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1070",
+      "attack_technique_name": "Indicator Removal",
+      "nist_controls": ["AU-9", "AU-12", "SI-4"],
+      "ccmv4_objectives": ["LOG-01", "LOG-05", "LOG-09", "SEF-03"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1528",
+      "attack_technique_name": "Steal Application Access Token",
+      "nist_controls": ["IA-5", "SC-28", "SI-4"],
+      "ccmv4_objectives": ["IAM-04", "CEK-01", "CEK-03", "DSP-05"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1552.005",
+      "attack_technique_name": "Cloud Instance Metadata API",
+      "nist_controls": ["AC-3", "AC-6", "SC-28"],
+      "ccmv4_objectives": ["IAM-01", "IAM-06", "CEK-03", "IVS-04"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1580",
+      "attack_technique_name": "Cloud Infrastructure Discovery",
+      "nist_controls": ["AC-3", "AC-6", "SC-7"],
+      "ccmv4_objectives": ["IAM-01", "IAM-06", "IVS-01", "IVS-06"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1619",
+      "attack_technique_name": "Cloud Storage Object Discovery",
+      "nist_controls": ["AC-3", "AC-6", "SC-28"],
+      "ccmv4_objectives": ["IAM-01", "IAM-06", "DSP-01", "DSP-05"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1021.007",
+      "attack_technique_name": "Remote Services: Cloud Services",
+      "nist_controls": ["AC-3", "AC-17", "AC-20"],
+      "ccmv4_objectives": ["IAM-01", "IAM-07", "IAM-08", "IVS-06"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1530",
+      "attack_technique_name": "Data from Cloud Storage",
+      "nist_controls": ["AC-3", "AC-6", "SC-28", "SC-8"],
+      "ccmv4_objectives": ["CEK-01", "CEK-03", "CEK-04", "DSP-01", "DSP-05", "DSP-10"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1537",
+      "attack_technique_name": "Transfer Data to Cloud Account",
+      "nist_controls": ["AC-3", "AC-4", "SC-7"],
+      "ccmv4_objectives": ["DSP-01", "DSP-05", "DSP-19", "IVS-01", "IVS-06"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1567.002",
+      "attack_technique_name": "Exfiltration to Cloud Storage",
+      "nist_controls": ["AC-4", "SC-7"],
+      "ccmv4_objectives": ["DSP-01", "DSP-19", "IVS-01", "IVS-06"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1485",
+      "attack_technique_name": "Data Destruction",
+      "nist_controls": ["AC-3", "AC-6", "CP-9", "SI-4"],
+      "ccmv4_objectives": ["BCR-01", "BCR-03", "BCR-11", "DSP-01", "DSP-04"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1486",
+      "attack_technique_name": "Data Encrypted for Impact",
+      "nist_controls": ["AC-3", "CP-9", "SC-28"],
+      "ccmv4_objectives": ["BCR-01", "BCR-03", "CEK-01", "CEK-09", "CEK-10"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1489",
+      "attack_technique_name": "Service Stop",
+      "nist_controls": ["AC-3", "AC-6", "CM-5"],
+      "ccmv4_objectives": ["BCR-01", "BCR-03", "BCR-11", "CCC-01"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1496",
+      "attack_technique_name": "Resource Hijacking",
+      "nist_controls": ["AC-3", "AC-6", "SC-7", "SI-4"],
+      "ccmv4_objectives": ["IAM-01", "IAM-06", "IVS-01", "TVM-01"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1498",
+      "attack_technique_name": "Network Denial of Service",
+      "nist_controls": ["SC-5", "SC-7"],
+      "ccmv4_objectives": ["BCR-01", "IVS-01", "IVS-06", "IVS-09"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1204.003",
+      "attack_technique_name": "Malicious Image",
+      "nist_controls": ["CM-2", "CM-7", "SI-3"],
+      "ccmv4_objectives": ["AIS-01", "AIS-04", "CCC-04", "TVM-03"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1556.006",
+      "attack_technique_name": "Multi-Factor Authentication",
+      "nist_controls": ["IA-2", "IA-5"],
+      "ccmv4_objectives": ["IAM-02", "IAM-04", "IAM-13"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1538",
+      "attack_technique_name": "Cloud Service Dashboard",
+      "nist_controls": ["AC-3", "AC-6"],
+      "ccmv4_objectives": ["IAM-01", "IAM-06"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1070.004",
+      "attack_technique_name": "File Deletion",
+      "nist_controls": ["AU-9", "SI-4"],
+      "ccmv4_objectives": ["LOG-05", "LOG-09", "SEF-03"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1213.003",
+      "attack_technique_name": "Code Repositories",
+      "nist_controls": ["AC-3", "AC-6", "SC-28"],
+      "ccmv4_objectives": ["DSP-01", "DSP-05", "IAM-06"],
+      "relationship": "mitigated-by"
+    },
+    {
+      "attack_technique_id": "T1565",
+      "attack_technique_name": "Data Manipulation",
+      "nist_controls": ["AC-3", "AC-6", "SI-7"],
+      "ccmv4_objectives": ["DSP-01", "DSP-04", "DSP-10", "CCC-01"],
+      "relationship": "mitigated-by"
+    }
+  ]
+}

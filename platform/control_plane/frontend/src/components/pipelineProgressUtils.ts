@@ -45,9 +45,15 @@ export function getFailedStageIndex(failedStageName: string): number {
 
 /**
  * Check if a status uses the destroy pipeline stages.
+ * For 'failed', checks if the last non-failed entry was 'destroying'.
  */
-export function isDestroyStatus(status: DeploymentStatus): boolean {
-  return status === 'destroying' || status === 'destroyed';
+export function isDestroyStatus(status: DeploymentStatus, statusHistory?: { status: string }[]): boolean {
+  if (status === 'destroying' || status === 'destroyed') return true;
+  if (status === 'failed' && statusHistory) {
+    const lastBeforeFail = [...statusHistory].reverse().find(e => e.status !== 'failed');
+    return lastBeforeFail?.status === 'destroying';
+  }
+  return false;
 }
 
 export type StageClassification = 'completed' | 'current' | 'pending' | 'failed';
@@ -95,6 +101,10 @@ export function classifyStages(
 export function classifyDestroyStages(
   status: DeploymentStatus,
 ): StageClassification[] {
+  if (status === 'failed') {
+    // Destroy failed — mark first stage as failed, rest pending
+    return DESTROY_STAGES.map((_stage, idx) => idx === 0 ? 'failed' : 'pending');
+  }
   const destroyIdx = DESTROY_STAGES.indexOf(status as DestroyStage);
 
   return DESTROY_STAGES.map((_stage, idx) => {

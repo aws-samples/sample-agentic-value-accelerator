@@ -82,7 +82,7 @@ resource "random_password" "clickhouse_password" {
 # Secrets Manager
 resource "aws_secretsmanager_secret" "langfuse" {
   name = "${var.name}-secrets"
-
+  recovery_window_in_days = 0
   tags = {
     Name = "${local.tag_name} Secrets"
   }

@@ -117,6 +117,91 @@ resource "aws_cognito_user_group" "viewer" {
 }
 
 # ============================================================================
+# Seed users (optional)
+# ============================================================================
+# Two demo users created when var.seed_demo_users is true. Convenient for
+# stamps where someone needs a working login on day one without running
+# `aws cognito-idp admin-create-user` by hand. Passwords default to a
+# documented non-production string and can be overridden via tfvars.
+#
+# These resources only manage user existence + group membership. They do
+# NOT manage the password — Cognito password lifecycle is one-way (set,
+# never rotated by Terraform), so the password is set via local-exec on
+# create only and is intentionally absent from the resource graph.
+
+resource "aws_cognito_user" "admin_demo" {
+  count        = var.seed_demo_users ? 1 : 0
+  user_pool_id = aws_cognito_user_pool.main.id
+  username     = "admin@example.com"
+  attributes = {
+    email          = "admin@example.com"
+    email_verified = "true"
+  }
+  message_action = "SUPPRESS"
+  lifecycle {
+    ignore_changes = [password, temporary_password, attributes]
+  }
+}
+
+resource "aws_cognito_user" "demo_viewer" {
+  count        = var.seed_demo_users ? 1 : 0
+  user_pool_id = aws_cognito_user_pool.main.id
+  username     = "demo@example.com"
+  attributes = {
+    email          = "demo@example.com"
+    email_verified = "true"
+  }
+  message_action = "SUPPRESS"
+  lifecycle {
+    ignore_changes = [password, temporary_password, attributes]
+  }
+}
+
+resource "aws_cognito_user_in_group" "admin_demo_to_admin" {
+  count        = var.seed_demo_users ? 1 : 0
+  user_pool_id = aws_cognito_user_pool.main.id
+  group_name   = aws_cognito_user_group.admin.name
+  username     = aws_cognito_user.admin_demo[0].username
+}
+
+resource "aws_cognito_user_in_group" "demo_viewer_to_viewer" {
+  count        = var.seed_demo_users ? 1 : 0
+  user_pool_id = aws_cognito_user_pool.main.id
+  group_name   = aws_cognito_user_group.viewer.name
+  username     = aws_cognito_user.demo_viewer[0].username
+}
+
+# Set permanent passwords once on create. The aws_cognito_user resource
+# above doesn't support permanent passwords directly, so we shell out.
+# Idempotent: setting the password is harmless on re-apply.
+resource "null_resource" "demo_user_passwords" {
+  count = var.seed_demo_users ? 1 : 0
+  triggers = {
+    pool       = aws_cognito_user_pool.main.id
+    admin_pwd  = sha256(var.demo_admin_password)
+    viewer_pwd = sha256(var.demo_viewer_password)
+  }
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws cognito-idp admin-set-user-password \
+        --user-pool-id ${aws_cognito_user_pool.main.id} \
+        --username admin@example.com \
+        --password '${var.demo_admin_password}' \
+        --permanent
+      aws cognito-idp admin-set-user-password \
+        --user-pool-id ${aws_cognito_user_pool.main.id} \
+        --username demo@example.com \
+        --password '${var.demo_viewer_password}' \
+        --permanent
+    EOT
+  }
+  depends_on = [
+    aws_cognito_user.admin_demo,
+    aws_cognito_user.demo_viewer,
+  ]
+}
+
+# ============================================================================
 # Cognito User Pool Domain
 # ============================================================================
 

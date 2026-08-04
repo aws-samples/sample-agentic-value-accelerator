@@ -1,0 +1,107 @@
+{
+  "id": "conversational-assistant",
+  "name": "Conversational Assistant",
+  "description": "A complete single-agent chat application with tools, multi-turn memory, and streaming responses. Includes both Strands and LangGraph implementations, a React chat UI, and Terraform for AgentCore deployment.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": true,
+    "tests": false
+  },
+  "tags": [
+    "conversational",
+    "chat",
+    "streaming",
+    "tools",
+    "memory",
+    "react",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the conversational agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for invoking the agent"
+    },
+    {
+      "name": "IAM Role + 5 Policies",
+      "description": "Bedrock invoke, ECR pull, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "Single agent with tools and multi-turn conversation memory. The agent maintains context across messages, uses tools when needed, and streams responses. This is the most common starting pattern for chat-based AI applications.",
+  "learn_more": [
+    {
+      "title": "Strands: First Agent + Tools Example",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/01-first-agent"
+    },
+    {
+      "title": "LangGraph: ReAct Agent from Scratch",
+      "url": "https://github.com/langchain-ai/langgraph/blob/main/examples/react-agent-from-scratch.ipynb"
+    },
+    {
+      "title": "AgentCore: Deploy Strands Agent",
+      "url": "https://github.com/awslabs/agentcore-samples/tree/main/01-tutorials/01-AgentCore-runtime/01-hosting-agent/01-strands-with-bedrock-model"
+    },
+    {
+      "title": "Strands SDK Documentation",
+      "url": "https://strandsagents.com/latest/"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID"
+    }
+  ]
+}

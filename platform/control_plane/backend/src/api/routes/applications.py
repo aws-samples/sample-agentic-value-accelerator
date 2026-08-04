@@ -17,6 +17,7 @@ from services.pipeline_inputs import FoundryPipelineInput
 from services.foundry_catalog import FoundryCatalog
 from services.s3_delivery_service import S3DeliveryService
 from services.langfuse_provisioning import LangfuseProvisioningService
+from services.llm_gateway_provisioning import LLMGatewayProvisioningService
 from core.config import settings
 from fastapi import Depends as RBACDepends
 from core.rbac import Role, require_role
@@ -143,6 +144,31 @@ async def deploy_foundry_use_case(req: FoundryDeployRequest, _=RBACDepends(requi
         merged_params["GUARDRAIL_ID"] = req.guardrail_id
         merged_params["GUARDRAIL_VERSION"] = req.guardrail_version or "DRAFT"
 
+    # AgentCore CloudWatch observability flags. Independent of Langfuse — when
+    # enabled, the runtime module wires APPLICATION_LOGS to CloudWatch Logs
+    # and TRACES to X-Ray, and (optionally) creates the per-region fleet
+    # dashboard. Defaults to false to preserve existing behavior; the UI
+    # only sets these when the operator opts in.
+    def _bool_str(v):
+        return "true" if str(v).lower() in ("true", "1", "yes") else "false"
+
+    for src_key, dst_key in (
+        ("enable_agentcore_observability", "ENABLE_AGENTCORE_OBSERVABILITY"),
+        ("enable_xray_transaction_search", "ENABLE_XRAY_TRANSACTION_SEARCH"),
+        ("create_fleet_dashboard",         "CREATE_FLEET_DASHBOARD"),
+    ):
+        if src_key in (req.parameters or {}):
+            merged_params[dst_key] = _bool_str(req.parameters[src_key])
+
+    # When AgentCore observability is on, also flip ENABLE_TRACING so the
+    # container's OTel SDK starts up and emits in-agent spans (LangGraph nodes,
+    # Bedrock calls, tool calls) via ADOT auto-instrumentation to CloudWatch.
+    # Don't override if Langfuse already set it true — both modes coexist;
+    # telemetry.py picks Langfuse export when LANGFUSE_HOST is set, otherwise
+    # ADOT/CloudWatch.
+    if merged_params.get("ENABLE_AGENTCORE_OBSERVABILITY") == "true":
+        merged_params.setdefault("ENABLE_TRACING", "true")
+
     # Provision per-use-case Langfuse project if foundation stack provides it
     langfuse_host = foundation_outputs.get("langfuse_host")
     langfuse_secret_name = foundation_outputs.get("langfuse_secret_name")
@@ -163,6 +189,37 @@ async def deploy_foundry_use_case(req: FoundryDeployRequest, _=RBACDepends(requi
             merged_params["ENABLE_TRACING"] = "true"
             merged_params["LANGFUSE_HOST"] = langfuse_host
             merged_params["LANGFUSE_SECRET_NAME"] = langfuse_secret_name
+
+    # Provision a per-deployment LLM Gateway virtual key if a gateway is
+    # deployed in this account. The agent's foundations layer reads the
+    # secret ARN at runtime and routes all model calls through the gateway
+    # instead of direct Bedrock. No-op if no gateway is deployed —
+    # use case keeps using direct Bedrock SDK.
+    try:
+        gw_provisioner = LLMGatewayProvisioningService(
+            region=req.aws_region,
+            deployments_table_name=settings.DEPLOYMENTS_TABLE_NAME,
+        )
+        # Deployment ID isn't created yet at this point, so we use a stable
+        # synthetic id derived from name+framework. The real deployment_id
+        # is used on destroy by re-deriving the same secret name.
+        synthetic_deployment_id = f"{req.use_case_name}-{req.framework}-{req.deployment_name}"
+        gw_info = gw_provisioner.provision_virtual_key(
+            use_case_name=req.use_case_name,
+            framework=req.framework,
+            deployment_id=synthetic_deployment_id,
+        )
+        if gw_info:
+            merged_params["LLM_GATEWAY_BASE_URL"] = gw_info["gateway_endpoint"]
+            merged_params["LLM_GATEWAY_API_KEY_SECRET_ARN"] = gw_info["virtual_key_secret_arn"]
+            logger.info(
+                f"Provisioned LLM Gateway virtual key for {req.use_case_name}: "
+                f"{gw_info['virtual_key_secret_name']}"
+            )
+    except Exception as e:
+        logger.warning(
+            f"LLM Gateway provisioning failed: {e}. Falling back to direct Bedrock."
+        )
 
     # Create deployment using the existing deployment service
     deploy_req = DeploymentCreate(
@@ -315,6 +372,44 @@ async def deploy_foundry_from_git(req: FoundryDeployFromGitRequest, _=RBACDepend
     if req.guardrail_id:
         git_params["GUARDRAIL_ID"] = req.guardrail_id
         git_params["GUARDRAIL_VERSION"] = req.guardrail_version or "DRAFT"
+
+    def _bool_str(v):
+        return "true" if str(v).lower() in ("true", "1", "yes") else "false"
+    for src_key, dst_key in (
+        ("enable_agentcore_observability", "ENABLE_AGENTCORE_OBSERVABILITY"),
+        ("enable_xray_transaction_search", "ENABLE_XRAY_TRANSACTION_SEARCH"),
+        ("create_fleet_dashboard",         "CREATE_FLEET_DASHBOARD"),
+    ):
+        if src_key in (req.parameters or {}):
+            git_params[dst_key] = _bool_str(req.parameters[src_key])
+    if git_params.get("ENABLE_AGENTCORE_OBSERVABILITY") == "true":
+        git_params.setdefault("ENABLE_TRACING", "true")
+
+    # Provision a per-deployment LLM Gateway virtual key (Git path mirrors
+    # the Quick Deploy path — both route through the gateway when one is
+    # deployed in the same account; otherwise no-op).
+    try:
+        gw_provisioner = LLMGatewayProvisioningService(
+            region=req.aws_region,
+            deployments_table_name=settings.DEPLOYMENTS_TABLE_NAME,
+        )
+        synthetic_deployment_id = f"{req.use_case_name}-{req.framework}-{req.deployment_name}"
+        gw_info = gw_provisioner.provision_virtual_key(
+            use_case_name=req.use_case_name,
+            framework=req.framework,
+            deployment_id=synthetic_deployment_id,
+        )
+        if gw_info:
+            git_params["LLM_GATEWAY_BASE_URL"] = gw_info["gateway_endpoint"]
+            git_params["LLM_GATEWAY_API_KEY_SECRET_ARN"] = gw_info["virtual_key_secret_arn"]
+            logger.info(
+                f"Provisioned LLM Gateway virtual key for {req.use_case_name}: "
+                f"{gw_info['virtual_key_secret_name']}"
+            )
+    except Exception as e:
+        logger.warning(
+            f"LLM Gateway provisioning failed: {e}. Falling back to direct Bedrock."
+        )
 
     deploy_req = DeploymentCreate(
         deployment_name=req.deployment_name,

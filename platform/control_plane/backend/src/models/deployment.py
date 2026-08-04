@@ -1,11 +1,18 @@
 """Deployment data models"""
 
 import json
+import os
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
 from datetime import datetime
 import uuid
+
+# Default deployment region. Derived from the AWS_REGION env var (set on the
+# backend task) so deployments land in the account's actual region. A hardcoded
+# "us-east-1" default previously shadowed this and made use-case CodeBuild deploys
+# init the tf-state S3 backend in the wrong region (301 redirect failures).
+_DEFAULT_REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
 
 
 def _coerce_str_dict(v: Any) -> Dict[str, str]:
@@ -72,7 +79,7 @@ class DeploymentCreate(BaseModel):
     template_id: str
     iac_type: str
     framework_id: Optional[str] = None
-    aws_region: str = "us-east-1"
+    aws_region: str = Field(default_factory=lambda: _DEFAULT_REGION)
     parameters: Dict[str, Any] = Field(default_factory=dict)
     target_account_id: Optional[str] = None
     target_role_arn: Optional[str] = None
@@ -85,7 +92,7 @@ class Deployment(BaseModel):
     iac_type: Optional[str] = "terraform"
     framework_id: Optional[str] = None
     aws_account: Optional[str] = "unknown"
-    aws_region: Optional[str] = "us-east-1"
+    aws_region: Optional[str] = Field(default_factory=lambda: _DEFAULT_REGION)
     s3_bucket: Optional[str] = "unknown"
     s3_key: Optional[str] = None
     parameters: Dict[str, Any] = Field(default_factory=dict)

@@ -1,0 +1,213 @@
+# LiteLLM Gateway Config — Local Development
+# Used by docker-compose.yaml for local deployments.
+# Environment variables are resolved by LiteLLM at startup.
+#
+# Each model has two entries:
+#   1. Display alias (used by UI / playground)
+#   2. Raw Bedrock model ID alias (used by agent foundations via gateway_model_id())
+
+model_list:
+# --- Claude Opus 4.8 ---
+- model_name: Claude Opus 4.8
+  litellm_params:
+    model: bedrock/us.anthropic.claude-opus-4-8
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 1.5e-05
+    output_cost_per_token: 7.5e-05
+    max_input_tokens: 200000
+    max_output_tokens: 32000
+- model_name: us.anthropic.claude-opus-4-8
+  litellm_params:
+    model: bedrock/us.anthropic.claude-opus-4-8
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 1.5e-05
+    output_cost_per_token: 7.5e-05
+    max_input_tokens: 200000
+    max_output_tokens: 32000
+
+# --- Claude Sonnet 4.6 ---
+- model_name: Claude Sonnet 4.6
+  litellm_params:
+    model: bedrock/us.anthropic.claude-sonnet-4-6
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 3.0e-06
+    output_cost_per_token: 1.5e-05
+    max_input_tokens: 200000
+    max_output_tokens: 16384
+- model_name: us.anthropic.claude-sonnet-4-6
+  litellm_params:
+    model: bedrock/us.anthropic.claude-sonnet-4-6
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 3.0e-06
+    output_cost_per_token: 1.5e-05
+    max_input_tokens: 200000
+    max_output_tokens: 16384
+
+# --- Claude Haiku 4.5 ---
+- model_name: Claude Haiku 4.5
+  litellm_params:
+    model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 8.0e-07
+    output_cost_per_token: 4.0e-06
+    max_input_tokens: 200000
+    max_output_tokens: 8192
+- model_name: us.anthropic.claude-haiku-4-5-20251001-v1:0
+  litellm_params:
+    model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 8.0e-07
+    output_cost_per_token: 4.0e-06
+    max_input_tokens: 200000
+    max_output_tokens: 8192
+
+# --- GPT-5.5 (Bedrock Mantle) ---
+- model_name: GPT-5.5
+  litellm_params:
+    model: bedrock_mantle/openai.gpt-5.5
+    api_key: os.environ/BEDROCK_MANTLE_API_KEY
+    api_base: "https://bedrock-mantle.us-east-2.api.aws/v1"
+    mode: chat
+  model_info:
+    mode: chat
+    input_cost_per_token: 5.5e-06
+    output_cost_per_token: 3.3e-05
+    max_input_tokens: 272000
+    max_output_tokens: 16384
+- model_name: openai.gpt-5.5
+  litellm_params:
+    model: bedrock_mantle/openai.gpt-5.5
+    api_key: os.environ/BEDROCK_MANTLE_API_KEY
+    api_base: "https://bedrock-mantle.us-east-2.api.aws/v1"
+    mode: chat
+  model_info:
+    mode: chat
+    input_cost_per_token: 5.5e-06
+    output_cost_per_token: 3.3e-05
+    max_input_tokens: 272000
+    max_output_tokens: 16384
+
+# --- GPT-5.4 (Bedrock Mantle) ---
+- model_name: GPT-5.4
+  litellm_params:
+    model: bedrock_mantle/openai.gpt-5.4
+    api_key: os.environ/BEDROCK_MANTLE_API_KEY
+    api_base: "https://bedrock-mantle.us-east-2.api.aws/v1"
+    mode: chat
+  model_info:
+    mode: chat
+    input_cost_per_token: 2.75e-06
+    output_cost_per_token: 1.65e-05
+    max_input_tokens: 272000
+    max_output_tokens: 16384
+- model_name: openai.gpt-5.4
+  litellm_params:
+    model: bedrock_mantle/openai.gpt-5.4
+    api_key: os.environ/BEDROCK_MANTLE_API_KEY
+    api_base: "https://bedrock-mantle.us-east-2.api.aws/v1"
+    mode: chat
+  model_info:
+    mode: chat
+    input_cost_per_token: 2.75e-06
+    output_cost_per_token: 1.65e-05
+    max_input_tokens: 272000
+    max_output_tokens: 16384
+
+# --- Amazon Nova Pro ---
+- model_name: Amazon Nova Pro
+  litellm_params:
+    model: bedrock/us.amazon.nova-pro-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 8.0e-07
+    output_cost_per_token: 3.2e-06
+    max_input_tokens: 300000
+    max_output_tokens: 5120
+- model_name: us.amazon.nova-pro-v1:0
+  litellm_params:
+    model: bedrock/us.amazon.nova-pro-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 8.0e-07
+    output_cost_per_token: 3.2e-06
+    max_input_tokens: 300000
+    max_output_tokens: 5120
+
+# --- Amazon Nova Lite ---
+- model_name: Amazon Nova Lite
+  litellm_params:
+    model: bedrock/us.amazon.nova-lite-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 6.0e-08
+    output_cost_per_token: 2.4e-07
+    max_input_tokens: 300000
+    max_output_tokens: 5120
+- model_name: us.amazon.nova-lite-v1:0
+  litellm_params:
+    model: bedrock/us.amazon.nova-lite-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 6.0e-08
+    output_cost_per_token: 2.4e-07
+    max_input_tokens: 300000
+    max_output_tokens: 5120
+
+# --- Amazon Nova Lite v2 ---
+- model_name: Amazon Nova Lite v2
+  litellm_params:
+    model: bedrock/us.amazon.nova-2-lite-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 4.0e-08
+    output_cost_per_token: 1.6e-07
+    max_input_tokens: 300000
+    max_output_tokens: 5120
+- model_name: us.amazon.nova-2-lite-v1:0
+  litellm_params:
+    model: bedrock/us.amazon.nova-2-lite-v1:0
+    aws_region_name: us-east-2
+  model_info:
+    mode: chat
+    input_cost_per_token: 4.0e-08
+    output_cost_per_token: 1.6e-07
+    max_input_tokens: 300000
+    max_output_tokens: 5120
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  cache: true
+  cache_params:
+    type: redis
+    host: os.environ/REDIS_HOST
+    port: 6379
+    password: os.environ/REDIS_PASSWORD
+  num_retries: 2
+  request_timeout: 60
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 2
+  timeout: 30
+  fallbacks:
+  - Claude Opus 4.8: [Claude Sonnet 4.6]

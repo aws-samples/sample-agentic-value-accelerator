@@ -32,7 +32,7 @@ Parameters:
   ModelId:
     Type: String
     Description: Bedrock model ID or Application Inference Profile ARN
-    Default: us.anthropic.claude-sonnet-4-20250514-v1:0
+    Default: us.anthropic.claude-sonnet-4-5-20250929-v1:0
 
   Entrypoint:
     Type: String

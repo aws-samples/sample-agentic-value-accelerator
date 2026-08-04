@@ -3,6 +3,14 @@ import { useState } from 'react';
 import type { RuntimeConfig } from '../config';
 import type { GenerationResponse } from '../types';
 
+
+function normLevel(lvl: string | null | undefined): string {
+  if (!lvl) return 'MEDIUM';
+  const upper = lvl.toUpperCase();
+  const map: Record<string, string> = { INFO: 'LOW', WARNING: 'MEDIUM' };
+  return map[upper] || upper;
+}
+
 /* ---- Metric Card ---- */
 
 function MetricCard({ label, value, color }: { label: string; value: string | number; color: string }) {

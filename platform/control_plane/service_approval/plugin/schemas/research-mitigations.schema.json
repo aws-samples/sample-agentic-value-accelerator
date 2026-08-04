@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/research-mitigations.schema.json",
+  "title": "research-mitigations.json",
+  "description": "Phase 1a output: existing mitigations extracted from input documents + assessment GAPS + initial asset inventory. Produced by research-mitigations skill. Consumed by research.json merge and by map-generate-controls. Top-level `phase` MUST be 'research-mitigations' per validate_state.py CHECK-S6.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "service", "existing_mitigations", "assets_partial"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "phase": {"type": "string", "const": "research-mitigations"},
+    "service": {"type": "string", "minLength": 1},
+    "service_prefix": {"type": "string"},
+    "cfn_prefix": {"type": "string"},
+    "source_file": {"type": "string"},
+    "source_files": {"type": "array", "items": {"type": "string"}},
+    "source_format": {"type": "string"},
+    "source_treatment": {"type": "string"},
+    "total_mitigations_in_input": {"type": "integer", "minimum": 0},
+    "input_files_parsed": {"type": "array", "items": {"type": "string"}},
+    "framework_file": {"type": "string"},
+    "threat_model_summary": {"type": ["object", "null"]},
+    "tm_threats_parsed": {"type": "integer", "minimum": 0},
+    "tm_mitigations_parsed": {"type": "integer", "minimum": 0},
+    "existing_mitigations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/mitigation"}
+    },
+    "assets_partial": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/asset"}
+    },
+    "assessment_gaps": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/gap"}
+    },
+    "_metadata": {"type": "object", "additionalProperties": true}
+  },
+
+  "patternProperties": {
+    "^applicable_to_[a-z0-9-]+$": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional per-service counters like applicable_to_lambda / applicable_to_datasync. Pattern matches any `applicable_to_<service>` form — service-agnostic."
+    }
+  },
+
+  "$defs": {
+    "mitigation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "mitigation_goal", "statement"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^M-.+"},
+        "mitigation_goal": {"type": "string", "minLength": 1},
+        "statement": {"type": "string", "minLength": 1},
+        "resource_type": {"type": "string"},
+        "source": {"type": "string"},
+        "source_mitigation": {"type": "string"},
+        "applies_to_actions": {"type": "array", "items": {"type": "string"}},
+        "request_parameters": {"type": "array", "items": {"type": "string"}},
+        "category": {"type": "string"}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "cfn_type"],
+      "properties": {
+        "asset_id": {"type": "string"},
+        "name": {"type": "string"},
+        "cfn_type": {"type": "string", "pattern": "^AWS::"},
+        "purpose": {"type": "string"},
+        "primary": {"type": "boolean"}
+      }
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^GAP-"},
+        "question": {"type": "string"},
+        "domain": {"type": "string"}
+      }
+    }
+  }
+}

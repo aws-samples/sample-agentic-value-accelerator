@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/deployed-resources.schema.json",
+  "title": "deployed-resources.json",
+  "description": "Phase 5 Test output: Deployed resource inventory from CloudFormation stack. Produced by /test skill after successful deployment. Consumed by /evidence skill (Phase 7) to synthesize CLI probes with physical resource IDs and ARNs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "service_slug",
+    "stack_id",
+    "resources"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Full service name (e.g., 'AWS Lambda')"
+    },
+    "service_slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "Canonical service slug (e.g., 'awslambda')"
+    },
+    "stack_id": {
+      "type": "string",
+      "pattern": "^arn:aws:cloudformation:",
+      "description": "CloudFormation stack ARN"
+    },
+    "stack_name": {
+      "type": "string",
+      "description": "CloudFormation stack name"
+    },
+    "region": {
+      "type": "string",
+      "pattern": "^[a-z]{2}-[a-z]+-\\d{1}$",
+      "description": "AWS region where stack was deployed"
+    },
+    "deployed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when stack completed deployment"
+    },
+    "resources": {
+      "type": "array",
+      "description": "List of deployed resources from CloudFormation describe-stack-resources",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/resource"
+      }
+    },
+    "_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional metadata (IaC format used, test environment, etc.)"
+    }
+  },
+  "$defs": {
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cfn_type",
+        "logical_id",
+        "physical_id"
+      ],
+      "properties": {
+        "cfn_type": {
+          "type": "string",
+          "pattern": "^AWS::[A-Z][A-Za-z0-9]+::[A-Z][A-Za-z0-9]+$",
+          "description": "CloudFormation resource type (e.g., 'AWS::Lambda::Function')",
+          "examples": [
+            "AWS::Lambda::Function",
+            "AWS::IAM::Role",
+            "AWS::KMS::Key",
+            "AWS::Logs::LogGroup"
+          ]
+        },
+        "logical_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CloudFormation logical ID from template"
+        },
+        "physical_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:=+@-]{0,1023}$",
+          "description": "AWS physical resource ID (function name, role name, key ID, ARN, etc.). Pattern restricts to characters CFN actually emits: alphanumerics plus '. _ / : = + @ -' — explicitly excludes shell metacharacters (semicolon, ampersand, backtick, pipe, dollar, parens) so that a malicious or malformed physical_id can never be smuggled into a CLI argv. Length capped at 1024 to cover ARNs (max 2048 in service docs but 1024 is enough for first-party CFN resources)."
+        },
+        "arn": {
+          "type": "string",
+          "pattern": "^arn:aws:",
+          "description": "Resource ARN if available (not all CFN resources have ARNs)"
+        },
+        "resource_status": {
+          "type": "string",
+          "enum": [
+            "CREATE_COMPLETE",
+            "UPDATE_COMPLETE",
+            "DELETE_COMPLETE",
+            "CREATE_IN_PROGRESS",
+            "UPDATE_IN_PROGRESS",
+            "DELETE_IN_PROGRESS",
+            "CREATE_FAILED",
+            "UPDATE_FAILED",
+            "DELETE_FAILED"
+          ],
+          "description": "CloudFormation resource status at time of capture"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this resource was created/updated"
+        },
+        "_metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "controls": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$"
+              },
+              "description": "Control IDs this resource implements (used by F3/F4/F5 synthesis to resolve deployed Config rules / SSM docs / CW alarms back to their authoring control)."
+            }
+          }
+        }
+      }
+    }
+  }
+}

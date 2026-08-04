@@ -399,8 +399,8 @@ async def exchange_token(request: Request):
                 "expires_in": tokens.get("expires_in", 3600),
             }
     except Exception as e:
-        logger.error(f"Token exchange failed: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Token exchange failed")
+        logger.error(f"Token exchange failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Token exchange failed: {e}")
 
 
 class StopSessionRequest(BaseModel):
@@ -500,8 +500,7 @@ async def save_settings(req: SettingsRequest):
             item[k] = str(v)
         table.put_item(Item=item)
     except ClientError as e:
-        logger.error(f"Failed to save settings: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to save settings")
+        raise HTTPException(status_code=500, detail=str(e))
 
     # If budget amount changed, update all AWS Budgets
     budget_results = {}
@@ -725,8 +724,7 @@ async def list_registry():
         agents = [i for i in items if not i.get("agent_name", "").startswith("_")]
         return {"agents": agents}
     except ClientError as e:
-        logger.error(f"Failed to list registry: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to list registry")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/registry/{agent_name}")
@@ -740,8 +738,7 @@ async def get_registry_agent(agent_name: str):
             raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
         return item
     except ClientError as e:
-        logger.error(f"Failed to get registry agent: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get registry agent")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/agent-registry")
@@ -824,8 +821,7 @@ async def list_sessions(agent_id: str | None = None):
     try:
         sessions = table.scan().get("Items", [])
     except ClientError as e:
-        logger.error(f"Failed to list sessions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to list sessions")
+        raise HTTPException(status_code=500, detail=str(e))
 
     result = []
     for s in sessions:
@@ -855,8 +851,7 @@ async def list_agent_sessions(agent_name: str):
     try:
         all_sessions = table.scan().get("Items", [])
     except ClientError as e:
-        logger.error(f"Failed to list agent sessions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to list agent sessions")
+        raise HTTPException(status_code=500, detail=str(e))
     result = []
     for s in all_sessions:
         if _normalize(s.get("agent_name", "")) != norm_target:
@@ -876,8 +871,7 @@ async def list_interventions(limit: int = 50):
         items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         return {"interventions": items}
     except ClientError as e:
-        logger.error(f"Failed to list interventions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to list interventions")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/cost-signals")
@@ -891,8 +885,7 @@ async def get_cost_signals():
         signals.sort(key=lambda x: (sev.get(x.get("severity", "low"), 9), -float(x.get("pct_used", 0))))
         return {"signals": signals}
     except ClientError as e:
-        logger.error(f"Failed to get cost signals: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get cost signals")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/obs-signals")
@@ -906,8 +899,7 @@ async def get_obs_signals():
         signals.sort(key=lambda x: (sev.get(x.get("severity", "low"), 9), x.get("agent_name", "")))
         return {"signals": signals}
     except ClientError as e:
-        logger.error(f"Failed to get obs signals: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get obs signals")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/obs-signals/{agent_name}/child-alarms")
@@ -936,23 +928,38 @@ async def get_obs_child_alarms(agent_name: str):
             })
         return {"alarms": alarms, "agent_name": agent_name}
     except ClientError as e:
-        logger.error(f"Failed to get child alarms: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get child alarms")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/eval-signals")
-async def get_eval_signals():
+async def get_eval_signals(endpoint: str | None = None):
     table = _get_dynamo_table(EVAL_SIGNALS_TABLE)
     if not table:
-        return {"signals": [], "source": "table_not_found"}
+        return {"signals": [], "endpoints": [], "source": "table_not_found"}
     try:
         signals = table.scan().get("Items", [])
+
+        # Extract endpoint from signal_key for items that don't have explicit endpoint field
+        for s in signals:
+            if "endpoint" not in s:
+                sk = s.get("signal_key", "")
+                if "#" in sk:
+                    s["endpoint"] = sk.rsplit("#", 1)[1]
+                else:
+                    s["endpoint"] = "DEFAULT"
+
+        # Collect unique endpoints for the dropdown
+        endpoints = sorted(set(s.get("endpoint", "DEFAULT") for s in signals))
+
+        # Filter by endpoint if requested
+        if endpoint:
+            signals = [s for s in signals if s.get("endpoint", "DEFAULT") == endpoint]
+
         sev = {"critical": 0, "medium": 1, "low": 2}
-        signals.sort(key=lambda x: (sev.get(x.get("severity", "low"), 9), x.get("agent_name", "")))
-        return {"signals": signals}
+        signals.sort(key=lambda x: (sev.get(x.get("severity", "low"), 9), x.get("agent_name", ""), x.get("endpoint", "")))
+        return {"signals": signals, "endpoints": endpoints}
     except ClientError as e:
-        logger.error(f"Failed to get eval signals: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get eval signals")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ===================================================================
 # WRITE ENDPOINTS — Stop sessions, set budgets
@@ -1045,7 +1052,6 @@ async def stop_session(req: StopSessionRequest):
         agent_runtime_arn = rt["agentRuntimeArn"]
         agent_name = rt["agentRuntimeName"]
     except ClientError as e:
-        logger.error(f"Runtime lookup failed: {e}", exc_info=True)
         raise HTTPException(status_code=404, detail=f"Runtime {req.agent_runtime_id} not found")
 
     data_client = _get_client("bedrock-agentcore")
@@ -1114,8 +1120,7 @@ async def stop_all_sessions(req: StopAllSessionsRequest):
             _notify_creator_of_stop(req.agent_name, req.reason, req.admin_user, ", ".join(stopped_ids))
         return result
     except ClientError as e:
-        logger.error(f"Lambda invoke failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Lambda invoke failed")
+        raise HTTPException(status_code=500, detail=f"Lambda invoke failed: {e}")
 
 
 @app.post("/api/registry/set-budget")
@@ -1132,8 +1137,7 @@ async def set_budget(req: SetBudgetRequest):
             ExpressionAttributeValues={":b": str(req.monthly_budget_usd), ":now": now})
         return {"status": "ok", "agent_name": req.agent_name, "monthly_budget_usd": req.monthly_budget_usd}
     except ClientError as e:
-        logger.error(f"Failed to set budget: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to set budget")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ===================================================================
 # KILL SWITCH ENDPOINTS — Revoke/restore Bedrock access for all agents
@@ -1155,8 +1159,7 @@ async def kill_switch_status():
         result = _json.loads(payload["body"]) if isinstance(payload.get("body"), str) else payload
         return result
     except ClientError as e:
-        logger.error(f"Kill switch status failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Kill switch status failed")
+        raise HTTPException(status_code=500, detail=f"Kill switch status failed: {e}")
 
 
 @app.post("/api/kill-switch/revoke")
@@ -1186,8 +1189,7 @@ async def kill_switch_revoke(req: KillSwitchRequest):
             raise HTTPException(status_code=payload["statusCode"], detail=result.get("error", "Lambda error"))
         return result
     except ClientError as e:
-        logger.error(f"Kill switch revoke failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Kill switch revoke failed")
+        raise HTTPException(status_code=500, detail=f"Kill switch revoke failed: {e}")
 
 
 @app.post("/api/kill-switch/restore")
@@ -1217,8 +1219,7 @@ async def kill_switch_restore(req: KillSwitchRequest):
             raise HTTPException(status_code=payload["statusCode"], detail=result.get("error", "Lambda error"))
         return result
     except ClientError as e:
-        logger.error(f"Kill switch restore failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Kill switch restore failed")
+        raise HTTPException(status_code=500, detail=f"Kill switch restore failed: {e}")
 
 
 @app.post("/api/kill-switch/revoke-agent")
@@ -1251,8 +1252,7 @@ async def kill_switch_revoke_agent(req: AgentRevokeRequest):
             raise HTTPException(status_code=payload["statusCode"], detail=result.get("error", "Lambda error"))
         return result
     except ClientError as e:
-        logger.error(f"Agent revoke failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Agent revoke failed")
+        raise HTTPException(status_code=500, detail=f"Agent revoke failed: {e}")
 
 
 @app.post("/api/kill-switch/restore-agent")
@@ -1285,8 +1285,7 @@ async def kill_switch_restore_agent(req: AgentRevokeRequest):
             raise HTTPException(status_code=payload["statusCode"], detail=result.get("error", "Lambda error"))
         return result
     except ClientError as e:
-        logger.error(f"Agent restore failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Agent restore failed")
+        raise HTTPException(status_code=500, detail=f"Agent restore failed: {e}")
 
 # ===================================================================
 # SYNC ENDPOINT — Populates DynamoDB from AWS services
@@ -1371,376 +1370,25 @@ def _sync_registry() -> dict:
     return {"status": "ok", "synced": synced, "total_runtimes": len(runtimes), "marked_deleted": removed}
 
 
-def _sync_cost_signals() -> dict:
-    table = _get_dynamo_table(COST_SIGNALS_TABLE)
-    budgets_client = _get_client("budgets")
-    account_id = _get_account_id()
-    if not table:
-        return {"status": "error", "detail": f"{COST_SIGNALS_TABLE} not found"}
-    if not budgets_client or not account_id:
-        return {"status": "skipped", "detail": "Budgets client or account ID unavailable"}
-
-    # Load configurable thresholds once
-    _settings = _get_settings()
-    _cost_warn = _settings.get("cost_warning_pct", 80)
-    _cost_crit = _settings.get("cost_critical_pct", 95)
-
-    # Load registry — only show agents that are registered
-    reg_table = _get_dynamo_table(REGISTRY_TABLE)
-    registry_names = set()
-    if reg_table:
-        try:
-            registry_names = {_normalize(r.get("agent_name", "")) for r in reg_table.scan().get("Items", [])}
-        except ClientError:
-            pass
-
-    now = datetime.now(timezone.utc)
-    expires_at = int(now.timestamp()) + 86400
-    written = 0
-    synced_agents = set()
-    try:
-        for page in budgets_client.get_paginator("describe_budgets").paginate(AccountId=account_id):
-            for b in page.get("Budgets", []):
-                name = b.get("BudgetName", "")
-                if not name.startswith(BUDGET_PREFIX):
-                    continue
-                agent_name = name[len(BUDGET_PREFIX):]
-                # Only include agents that exist in the registry
-                if registry_names and _normalize(agent_name) not in registry_names:
-                    continue
-                synced_agents.add(agent_name)
-                limit = float(b.get("BudgetLimit", {}).get("Amount", 0))
-                actual = float(b.get("CalculatedSpend", {}).get("ActualSpend", {}).get("Amount", 0))
-                fr = b.get("CalculatedSpend", {}).get("ForecastedSpend", {}).get("Amount")
-                forecast = float(fr) if fr is not None else 0.0
-                pct = (actual / limit * 100) if limit > 0 else 0.0
-                fpct = (forecast / limit * 100) if limit > 0 else 0.0
-                # Use configurable thresholds
-                sev = "critical" if pct >= _cost_crit else ("medium" if pct >= _cost_warn or fpct >= _cost_crit else "low")
-                try:
-                    table.put_item(Item={"agent_name": agent_name, "budget_name": name,
-                        "budget_limit_usd": str(round(limit, 2)), "actual_spend_usd": str(round(actual, 4)),
-                        "forecasted_spend_usd": str(round(forecast, 4)), "pct_used": str(round(pct, 1)),
-                        "forecast_pct": str(round(fpct, 1)), "severity": sev,
-                        "synced_at": now.isoformat(), "expires_at": expires_at})
-                    written += 1
-                except ClientError:
-                    pass
-    except ClientError as e:
-        return {"status": "error", "detail": str(e)}
-
-    # Cleanup: remove DynamoDB entries for budgets that no longer exist
-    removed = 0
-    try:
-        existing = table.scan().get("Items", [])
-        for item in existing:
-            if item.get("agent_name") not in synced_agents:
-                try:
-                    table.delete_item(Key={"agent_name": item["agent_name"]})
-                    removed += 1
-                except ClientError:
-                    pass
-    except ClientError:
-        pass
-
-    return {"status": "ok", "signals_written": written, "removed": removed}
-
-
-def _sync_obs_signals() -> dict:
-    """Sync CloudWatch alarms into observability-signals DynamoDB table."""
-    table = _get_dynamo_table(OBS_SIGNALS_TABLE)
-    cw = _get_client("cloudwatch")
-    if not table:
-        return {"status": "error", "detail": f"{OBS_SIGNALS_TABLE} not found"}
-    if not cw:
-        return {"status": "skipped", "detail": "CloudWatch client unavailable"}
-
-    now = datetime.now(timezone.utc)
-    expires_at = int(now.timestamp()) + 86400
-
-    alarms = []
-    try:
-        for page in cw.get_paginator("describe_alarms").paginate(AlarmTypes=["MetricAlarm", "CompositeAlarm"]):
-            alarms.extend(page.get("MetricAlarms", []))
-            alarms.extend(page.get("CompositeAlarms", []))
-    except ClientError as e:
-        return {"status": "error", "detail": str(e)}
-
-    # Load registry for agent name matching
-    reg_table = _get_dynamo_table(REGISTRY_TABLE)
-    registry = reg_table.scan().get("Items", []) if reg_table else []
-    registry_names = {_normalize(r.get("agent_name", "")) for r in registry}
-
-    def _extract_agent(alarm):
-        name = alarm.get("AlarmName", "")
-        desc = alarm.get("AlarmDescription", "")
-        if name.startswith("AgentSafety-"):
-            parts = name.split("-", 2)
-            if len(parts) >= 3:
-                return parts[2]
-        for a in registry:
-            an = a.get("agent_name", "")
-            if an and (an in name or an in desc):
-                return an
-        for dim in alarm.get("Dimensions", []):
-            if dim.get("Name") == "service.name" and dim.get("Value", "").endswith(".DEFAULT"):
-                return dim["Value"].replace(".DEFAULT", "")
-        return None
-
-    written = 0
-    # Aggregate: one signal per agent (worst severity wins)
-    agent_signals: dict[str, dict] = {}
-    for alarm in alarms:
-        # Skip eval alarms — those belong in the evaluation signals view
-        alarm_name = alarm.get("AlarmName", "")
-        if alarm_name.startswith("AgentSafety-Eval-"):
-            continue
-        # Skip individual child alarms — only show composite (children visible in side panel)
-        child_suffixes = ("-high-latency", "-error-rate", "-token-usage", "-invocation-count")
-        if any(alarm_name.endswith(s) for s in child_suffixes):
-            continue
-
-        agent_name = _extract_agent(alarm)
-        if not agent_name:
-            continue
-        if registry_names and _normalize(agent_name) not in registry_names:
-            continue
-        state = alarm.get("StateValue", "INSUFFICIENT_DATA")
-        sev = "critical" if state == "ALARM" else ("medium" if state == "INSUFFICIENT_DATA" else "low")
-        aname = alarm.get("AlarmName", "")
-        updated = alarm.get("StateUpdatedTimestamp", "")
-        if hasattr(updated, "isoformat"):
-            updated = updated.isoformat()
-        # Only show StateReason when alarm is in ALARM state
-        reason = alarm.get("StateReason", "") if state == "ALARM" else ""
-        desc = alarm.get("AlarmDescription", "") or f"Alarm {aname}: {state}"
-
-        sev_rank = {"critical": 2, "medium": 1, "low": 0}
-        existing = agent_signals.get(agent_name)
-        if existing is None or sev_rank.get(sev, 0) > sev_rank.get(existing["severity"], 0):
-            # This alarm is worse — use it as the representative
-            agent_signals[agent_name] = {
-                "agent_name": agent_name, "signal_key": f"{agent_name}-composite" if "-composite" in aname else aname,
-                "signal_type": "alarm", "severity": sev, "alarm_state": state,
-                "alarm_name": aname, "current_value": state, "baseline_value": "OK",
-                "description": (reason[:200] if reason else desc[:200]),
-                "state_updated_at": str(updated), "generated_at": now.isoformat(),
-                "expires_at": expires_at,
-                "_alarm_count": (existing["_alarm_count"] if existing else 0) + 1,
-            }
-        elif existing:
-            existing["_alarm_count"] = existing.get("_alarm_count", 1) + 1
-
-    # Write aggregated signals to DynamoDB
-    for agent_name, sig in agent_signals.items():
-        count = sig.pop("_alarm_count", 1)
-        if count > 1:
-            sig["description"] = f"[{count} alarms] " + sig["description"]
-        try:
-            table.put_item(Item=sig)
-            written += 1
-        except ClientError:
-            pass
-
-    # Cleanup: remove DynamoDB entries for agents whose alarms no longer exist,
-    # and remove duplicate non-composite entries when a composite exists
-    removed = 0
-    synced_keys = {sig["signal_key"] for sig in agent_signals.values()}
-    try:
-        existing = table.scan().get("Items", [])
-        for item in existing:
-            sk = item.get("signal_key", "")
-            an = item.get("agent_name", "")
-            # Remove if agent no longer has alarms
-            if sk not in synced_keys and an not in agent_signals:
-                try:
-                    table.delete_item(Key={"agent_name": an, "signal_key": sk})
-                    removed += 1
-                except ClientError:
-                    pass
-            # Remove duplicate: if this is a non-composite entry but a composite exists for same agent
-            elif an in agent_signals and not sk.endswith("-composite") and f"{an}-composite" in synced_keys:
-                try:
-                    table.delete_item(Key={"agent_name": an, "signal_key": sk})
-                    removed += 1
-                except ClientError:
-                    pass
-    except ClientError:
-        pass
-
-    return {"status": "ok", "signals_written": written, "alarms_checked": len(alarms), "removed": removed}
-
-
-def _sync_eval_signals() -> dict:
-    """Sync evaluation signals: alarm state + per-evaluator scores from CloudWatch."""
-    table = _get_dynamo_table(EVAL_SIGNALS_TABLE)
-    ctrl = _get_client("bedrock-agentcore-control")
-    cw = _get_client("cloudwatch")
-    if not table:
-        return {"status": "error", "detail": f"{EVAL_SIGNALS_TABLE} not found"}
-    if not ctrl:
-        return {"status": "skipped", "detail": "AgentCore client unavailable"}
-
-    # Load configurable thresholds once
-    _settings = _get_settings()
-    _eval_harm_max = _settings.get("eval_harm_max", 1)
-    _eval_bad_crit = _settings.get("eval_bad_critical_pct", 50)
-    _eval_bad_warn = _settings.get("eval_bad_warning_pct", 20)
-
-    now = datetime.now(timezone.utc)
-    expires_at = int(now.timestamp()) + 86400
-    eval_ns = "Bedrock-AgentCore/Evaluations"
-
-    # Load registry for filtering
-    reg_table = _get_dynamo_table(REGISTRY_TABLE)
-    registry_names = set()
-    if reg_table:
-        try:
-            registry_names = {_normalize(r.get("agent_name", "")) for r in reg_table.scan().get("Items", [])}
-        except ClientError:
-            pass
-
-    # Get eval configs
-    configs = []
-    try:
-        for page in ctrl.get_paginator("list_online_evaluation_configs").paginate():
-            configs.extend(page.get("onlineEvaluationConfigs", []))
-    except (ClientError, AttributeError):
-        return {"status": "skipped", "detail": "Evaluation API unavailable"}
-
-    if not configs:
-        return {"status": "ok", "signals_written": 0, "configs_found": 0}
-
-    # Get all eval-related alarms
-    eval_alarms = {}
-    if cw:
-        try:
-            for page in cw.get_paginator("describe_alarms").paginate(AlarmNamePrefix="AgentSafety-Eval-", AlarmTypes=["MetricAlarm", "CompositeAlarm"]):
-                for a in page.get("MetricAlarms", []):
-                    eval_alarms[a["AlarmName"]] = a
-                for a in page.get("CompositeAlarms", []):
-                    eval_alarms[a["AlarmName"]] = a
-        except ClientError:
-            pass
-
-    evaluators = [
-        {"id": "Builtin.Harmfulness", "bad": ["Harmful"], "good": ["Not Harmful"]},
-        {"id": "Builtin.Correctness", "bad": ["Incorrect", "Partially Correct"], "good": ["Perfectly Correct"]},
-        {"id": "Builtin.Helpfulness", "bad": ["Not Helpful At All", "Very Unhelpful", "Somewhat Unhelpful"], "good": ["Above And Beyond", "Very Helpful", "Somewhat Helpful"]},
-        {"id": "Builtin.GoalSuccessRate", "bad": ["No"], "good": ["Yes"]},
-        {"id": "Builtin.ToolSelectionAccuracy", "bad": ["No"], "good": ["Yes"]},
-        {"id": "Builtin.ToolParameterAccuracy", "bad": ["No"], "good": ["Yes"]},
-        {"id": "Builtin.Faithfulness", "bad": ["Not At All", "Not Generally"], "good": ["Completely Yes", "Generally Yes"]},
-    ]
-
-    written = 0
-    synced_agents = set()
-
-    for cfg in configs:
-        cname = cfg.get("onlineEvaluationConfigName", "")
-        config_id = cfg.get("onlineEvaluationConfigId", "")
-        agent_name = cname.replace("eval_", "", 1) if cname.startswith("eval_") else cname
-        if registry_names and _normalize(agent_name) not in registry_names:
-            continue
-        synced_agents.add(agent_name)
-        svc = f"{agent_name}.DEFAULT"
-        alarm_name = f"AgentSafety-Eval-{agent_name}"
-
-        # Write alarm summary
-        alarm = eval_alarms.get(alarm_name, {})
-        alarm_state = alarm.get("StateValue", "INSUFFICIENT_DATA") if alarm else "INSUFFICIENT_DATA"
-        alarm_reason = alarm.get("StateReason", "") if alarm and alarm_state == "ALARM" else ""
-        alarm_updated = alarm.get("StateUpdatedTimestamp", "") if alarm else ""
-        if hasattr(alarm_updated, "isoformat"):
-            alarm_updated = alarm_updated.isoformat()
-        sev = "critical" if alarm_state == "ALARM" else ("medium" if alarm_state == "INSUFFICIENT_DATA" else "low")
-
-        try:
-            table.put_item(Item={
-                "agent_name": agent_name, "signal_key": "alarm_summary",
-                "alarm_name": alarm_name, "alarm_state": alarm_state,
-                "alarm_reason": alarm_reason, "alarm_updated_at": str(alarm_updated),
-                "eval_config_id": config_id, "eval_config_name": cname,
-                "evaluator_count": len(evaluators), "sampling_pct": "100.0",
-                "severity": sev, "synced_at": now.isoformat(), "expires_at": expires_at,
-            })
-            written += 1
-        except ClientError:
-            pass
-
-        # Write per-evaluator scores — parallelized for speed
-        if cw:
-            def _fetch_eval_metric(ev_id, label, svc_name, is_bad):
-                try:
-                    resp = cw.get_metric_statistics(Namespace=eval_ns, MetricName=ev_id,
-                        Dimensions=[{"Name": "service.name", "Value": svc_name}, {"Name": "label", "Value": label}],
-                        StartTime=now - timedelta(days=30), EndTime=now, Period=2592000, Statistics=["Sum"])
-                    return (ev_id, is_bad, sum(dp.get("Sum", 0) for dp in resp.get("Datapoints", [])))
-                except ClientError:
-                    return (ev_id, is_bad, 0)
-
-            # Build all metric fetch tasks
-            fetch_tasks = []
-            for ev in evaluators:
-                for label in ev["bad"]:
-                    fetch_tasks.append((ev["id"], label, svc, True))
-                for label in ev["good"]:
-                    fetch_tasks.append((ev["id"], label, svc, False))
-
-            # Execute in parallel (up to 20 concurrent)
-            eval_counts: dict[str, dict] = {ev["id"]: {"bad": 0, "good": 0} for ev in evaluators}
-            with ThreadPoolExecutor(max_workers=20) as pool:
-                futures = [pool.submit(_fetch_eval_metric, t[0], t[1], t[2], t[3]) for t in fetch_tasks]
-                for future in as_completed(futures):
-                    ev_id, is_bad, count = future.result()
-                    if is_bad:
-                        eval_counts[ev_id]["bad"] += count
-                    else:
-                        eval_counts[ev_id]["good"] += count
-
-            for ev in evaluators:
-                bad_count = eval_counts[ev["id"]]["bad"]
-                good_count = eval_counts[ev["id"]]["good"]
-                total_count = bad_count + good_count
-                bad_pct = (bad_count / total_count * 100) if total_count > 0 else 0
-                # Use configurable thresholds
-                if ev["id"] == "Builtin.Harmfulness":
-                    esev = "critical" if bad_count >= _eval_harm_max else "low"
-                elif bad_pct >= _eval_bad_crit:
-                    esev = "critical"
-                elif bad_pct >= _eval_bad_warn:
-                    esev = "medium"
-                else:
-                    esev = "low"
-                bad_label = ev["bad"][0].lower()
-                try:
-                    table.put_item(Item={
-                        "agent_name": agent_name, "signal_key": ev["id"],
-                        "evaluator_name": ev["id"].replace("Builtin.", ""), "severity": esev,
-                        "bad_count": int(bad_count), "good_count": int(good_count),
-                        "total_count": int(total_count), "bad_pct": str(round(bad_pct, 1)),
-                        "description": f"{ev['id'].replace('Builtin.', '')}: {int(bad_count)} {bad_label} / {int(total_count)} total ({bad_pct:.1f}%)" if total_count > 0 else f"{ev['id'].replace('Builtin.', '')}: waiting for data",
-                        "config_name": cname, "synced_at": now.isoformat(), "expires_at": expires_at,
-                    })
-                    written += 1
-                except ClientError:
-                    pass
-
-    # Cleanup: remove entries for agents that no longer have eval configs
-    removed = 0
-    try:
-        existing = table.scan().get("Items", [])
-        for item in existing:
-            if item.get("agent_name") not in synced_agents:
-                try:
-                    table.delete_item(Key={"agent_name": item["agent_name"], "signal_key": item["signal_key"]})
-                    removed += 1
-                except ClientError:
-                    pass
-    except ClientError:
-        pass
-
-    return {"status": "ok", "signals_written": written, "configs_found": len(configs), "removed": removed}
+# ===================================================================
+# SIGNAL SYNC FUNCTIONS — REMOVED (Event-Driven Architecture)
+# ===================================================================
+# The following functions have been replaced by dedicated Lambda functions
+# that run independently of the dashboard:
+#
+# _sync_cost_signals()  → cost_signal_event.py (SNS trigger)
+#                        + cost_signal_poll.py (scheduled every 5 min)
+#
+# _sync_obs_signals()   → obs_signal_event.py (EventBridge alarm state change)
+#                        + obs_signal_poll.py (scheduled every 5 min)
+#
+# _sync_eval_signals()  → eval_signal_event.py (EventBridge eval alarm change)
+#                        + eval_signal_poll.py (scheduled every 15 min)
+#
+# The dashboard now reads signal data from DynamoDB only (GET endpoints).
+# Signal data is written by the event-driven Lambdas deployed in the
+# agent-safety-event-driven-signals CloudFormation stack.
+# ===================================================================
 
 
 def _sync_sessions_from_memory() -> dict:
@@ -1780,15 +1428,12 @@ def _sync_sessions_from_memory() -> dict:
 
 @app.post("/api/sync")
 async def sync_all():
-    # Run all syncs in parallel for speed
+    """Sync registry and sessions only. Signal data is now event-driven (managed by dedicated Lambdas)."""
     import asyncio
     loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         futures = {
             "registry": loop.run_in_executor(pool, _sync_registry),
-            "cost_signals": loop.run_in_executor(pool, _sync_cost_signals),
-            "obs_signals": loop.run_in_executor(pool, _sync_obs_signals),
-            "eval_signals": loop.run_in_executor(pool, _sync_eval_signals),
             "memory_sessions": loop.run_in_executor(pool, _sync_sessions_from_memory),
         }
         results = {}
@@ -1862,17 +1507,9 @@ async def sync_all():
 async def sync_registry_only():
     return _sync_registry()
 
-@app.post("/api/sync/cost-signals")
-async def sync_cost_only():
-    return _sync_cost_signals()
-
-@app.post("/api/sync/obs-signals")
-async def sync_obs_only():
-    return _sync_obs_signals()
-
-@app.post("/api/sync/eval-signals")
-async def sync_eval_only():
-    return _sync_eval_signals()
+# Signal sync endpoints removed — signals are now event-driven (managed by dedicated Lambdas).
+# Cost, obs, and eval signals are written to DynamoDB by EventBridge-triggered and scheduled Lambdas.
+# The dashboard only reads from DynamoDB via GET endpoints.
 
 # ===================================================================
 # HEALTH CHECK

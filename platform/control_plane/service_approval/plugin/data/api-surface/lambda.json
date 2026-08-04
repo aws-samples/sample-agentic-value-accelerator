@@ -1,0 +1,2931 @@
+{
+  "_metadata": {
+    "service": "lambda",
+    "boto3_version": "1.40.0",
+    "api_version": "2015-03-31",
+    "endpoint_prefix": "lambda",
+    "total_operations": 68,
+    "total_parameters": 347,
+    "source": "boto3._service_model (offline, no AWS API calls)"
+  },
+  "api_surface": {
+    "operations": [
+      {
+        "operation": "AddLayerVersionPermission",
+        "parameters": [
+          {
+            "path": "$.LayerName",
+            "type": "string",
+            "required": true,
+            "description": "The name or Amazon Resource Name (ARN) of the layer."
+          },
+          {
+            "path": "$.VersionNumber",
+            "type": "long",
+            "required": true,
+            "description": "The version number."
+          },
+          {
+            "path": "$.StatementId",
+            "type": "string",
+            "required": true,
+            "description": "An identifier that distinguishes the policy from others on the same layer version."
+          },
+          {
+            "path": "$.Action",
+            "type": "string",
+            "required": true,
+            "description": "The API action that grants access to the layer. For example, lambda:GetLayerVersion."
+          },
+          {
+            "path": "$.Principal",
+            "type": "string",
+            "required": true,
+            "description": "An account ID, or * to grant layer usage permission to all accounts in an organization, or all Amazon Web Services accounts (if organizationId is not specified). For the last case, make sure that you ",
+            "security_category": "iam"
+          },
+          {
+            "path": "$.OrganizationId",
+            "type": "string",
+            "required": false,
+            "description": "With the principal set to *, grant permission to all accounts in the specified organization."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Only update the policy if the revision ID matches the ID specified. Use this option to avoid modifying a policy that has changed since you last read it."
+          }
+        ],
+        "param_count": 7
+      },
+      {
+        "operation": "AddPermission",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name \u2013 my-function (name-only), my-function:v1 (with alias). Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.StatementId",
+            "type": "string",
+            "required": true,
+            "description": "A statement identifier that differentiates the statement from others in the same policy."
+          },
+          {
+            "path": "$.Action",
+            "type": "string",
+            "required": true,
+            "description": "The action that the principal can use on the function. For example, lambda:InvokeFunction or lambda:GetFunction."
+          },
+          {
+            "path": "$.Principal",
+            "type": "string",
+            "required": true,
+            "description": "The Amazon Web Services service, Amazon Web Services account, IAM user, or IAM role that invokes the function. If you specify a service, use SourceArn or SourceAccount to limit who can invoke the func",
+            "security_category": "iam"
+          },
+          {
+            "path": "$.SourceArn",
+            "type": "string",
+            "required": false,
+            "description": "For Amazon Web Services services, the ARN of the Amazon Web Services resource that invokes the function. For example, an Amazon S3 bucket or Amazon SNS topic. Note that Lambda configures the compariso"
+          },
+          {
+            "path": "$.SourceAccount",
+            "type": "string",
+            "required": false,
+            "description": "For Amazon Web Services service, the ID of the Amazon Web Services account that owns the resource. Use this together with SourceArn to ensure that the specified account owns the resource. It is possib"
+          },
+          {
+            "path": "$.EventSourceToken",
+            "type": "string",
+            "required": false,
+            "description": "For Alexa Smart Home functions, a token that the invoker must supply."
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version or alias to add permissions to a published version of the function."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Update the policy only if the revision ID matches the ID that's specified. Use this option to avoid modifying a policy that has changed since you last read it."
+          },
+          {
+            "path": "$.PrincipalOrgID",
+            "type": "string",
+            "required": false,
+            "description": "The identifier for your organization in Organizations. Use this to grant permissions to all the Amazon Web Services accounts under this organization.",
+            "security_category": "iam"
+          },
+          {
+            "path": "$.FunctionUrlAuthType",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "NONE",
+              "AWS_IAM"
+            ],
+            "description": "The type of authentication that your function URL uses. Set to AWS_IAM if you want to restrict access to authenticated users only. Set to NONE if you want to bypass IAM authentication to create a publ"
+          }
+        ],
+        "param_count": 11
+      },
+      {
+        "operation": "CreateAlias",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          },
+          {
+            "path": "$.Name",
+            "type": "string",
+            "required": true,
+            "description": "The name of the alias."
+          },
+          {
+            "path": "$.FunctionVersion",
+            "type": "string",
+            "required": true,
+            "description": "The function version that the alias invokes."
+          },
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "A description of the alias."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "CreateCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "Descriptive name for this code signing configuration."
+          },
+          {
+            "path": "$.AllowedPublishers.SigningProfileVersionArns[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.CodeSigningPolicies.UntrustedArtifactOnDeployment",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "Warn",
+              "Enforce"
+            ],
+            "description": "Code signing configuration policy for deployment validation failure. If you set the policy to Enforce, Lambda blocks the deployment request if signature validation checks fail. If you set the policy t",
+            "security_category": "policy"
+          }
+        ],
+        "param_count": 3
+      },
+      {
+        "operation": "CreateEventSourceMapping",
+        "parameters": [
+          {
+            "path": "$.EventSourceArn",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the event source. Amazon Kinesis \u2013 The ARN of the data stream or a stream consumer. Amazon DynamoDB Streams \u2013 The ARN of the stream. Amazon Simple Queue Service \u2013 The"
+          },
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 MyFunction. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Version or Alias ARN \u2013 arn:aws:lambda:us-west"
+          },
+          {
+            "path": "$.Enabled",
+            "type": "boolean",
+            "required": false,
+            "description": "When true, the event source mapping is active. When false, Lambda pauses polling and invocation. Default: True"
+          },
+          {
+            "path": "$.BatchSize",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of records in each batch that Lambda pulls from your stream or queue and sends to your function. Lambda passes all of the records in the batch to the function in a single call, up t"
+          },
+          {
+            "path": "$.FilterCriteria.Filters[*].Pattern",
+            "type": "string",
+            "required": false,
+            "description": "A filter pattern. For more information on the syntax of a filter pattern, see Filter rule syntax."
+          },
+          {
+            "path": "$.MaximumBatchingWindowInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum amount of time, in seconds, that Lambda spends gathering records before invoking the function. You can configure MaximumBatchingWindowInSeconds to any value from 0 seconds to 300 seconds i"
+          },
+          {
+            "path": "$.ParallelizationFactor",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) The number of batches to process from each shard concurrently."
+          },
+          {
+            "path": "$.StartingPosition",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "TRIM_HORIZON",
+              "LATEST",
+              "AT_TIMESTAMP"
+            ],
+            "description": "The position in a stream from which to start reading. Required for Amazon Kinesis and Amazon DynamoDB Stream event sources. AT_TIMESTAMP is supported only for Amazon Kinesis streams, Amazon DocumentDB"
+          },
+          {
+            "path": "$.StartingPositionTimestamp",
+            "type": "timestamp",
+            "required": false,
+            "description": "With StartingPosition set to AT_TIMESTAMP, the time from which to start reading. StartingPositionTimestamp cannot be in the future."
+          },
+          {
+            "path": "$.DestinationConfig.OnSuccess.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource."
+          },
+          {
+            "path": "$.DestinationConfig.OnFailure.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource. To retain records of unsuccessful asynchronous invocations, you can configure an Amazon SNS topic, Amazon SQS queue, Amazon S3 bucket, Lambd"
+          },
+          {
+            "path": "$.MaximumRecordAgeInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) Discard records older than the specified age. The default value is infinite (-1)."
+          },
+          {
+            "path": "$.BisectBatchOnFunctionError",
+            "type": "boolean",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) If the function returns an error, split the batch in two and retry."
+          },
+          {
+            "path": "$.MaximumRetryAttempts",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) Discard records after the specified number of retries. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record ex"
+          },
+          {
+            "path": "$.TumblingWindowInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) The duration in seconds of a processing window for DynamoDB and Kinesis Streams event sources. A value of 0 seconds indicates no tumbling window."
+          },
+          {
+            "path": "$.Topics[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Queues[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.SourceAccessConfigurations[*].Type",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BASIC_AUTH",
+              "VPC_SUBNET",
+              "VPC_SECURITY_GROUP",
+              "SASL_SCRAM_512_AUTH",
+              "SASL_SCRAM_256_AUTH",
+              "VIRTUAL_HOST",
+              "CLIENT_CERTIFICATE_TLS_AUTH",
+              "SERVER_ROOT_CA_CERTIFICATE"
+            ],
+            "description": "The type of authentication protocol, VPC components, or virtual host for your event source. For example: \"Type\":\"SASL_SCRAM_512_AUTH\". BASIC_AUTH \u2013 (Amazon MQ) The Secrets Manager secret that stores y"
+          },
+          {
+            "path": "$.SourceAccessConfigurations[*].URI",
+            "type": "string",
+            "required": false,
+            "description": "The value for your chosen configuration in Type. For example: \"URI\": \"arn:aws:secretsmanager:us-east-1:01234567890:secret:MyBrokerSecretName\"."
+          },
+          {
+            "path": "$.SelfManagedEventSource.Endpoints.*",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.FunctionResponseTypes[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "ReportBatchItemFailures"
+            ]
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.ConsumerGroupId",
+            "type": "string",
+            "required": false,
+            "description": "The identifier for the Kafka consumer group to join. The consumer group ID must be unique among all your Kafka event sources. After creating a Kafka event source mapping with the consumer group ID spe"
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaRegistryURI",
+            "type": "string",
+            "required": false,
+            "description": "The URI for your schema registry. The correct URI format depends on the type of schema registry you're using. For Glue schema registries, use the ARN of the registry. For Confluent schema registries, "
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.EventRecordFormat",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "JSON",
+              "SOURCE"
+            ],
+            "description": "The record format that Lambda delivers to your function after schema validation. Choose JSON to have Lambda deliver the record to your function as a standard JSON object. Choose SOURCE to have Lambda "
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].Type",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BASIC_AUTH",
+              "CLIENT_CERTIFICATE_TLS_AUTH",
+              "SERVER_ROOT_CA_CERTIFICATE"
+            ],
+            "description": "The type of authentication Lambda uses to access your schema registry."
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].URI",
+            "type": "string",
+            "required": false,
+            "description": "The URI of the secret (Secrets Manager secret ARN) to authenticate with your schema registry."
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaValidationConfigs[*].Attribute",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "KEY",
+              "VALUE"
+            ],
+            "description": "The attributes you want your schema registry to validate and filter for. If you selected JSON as the EventRecordFormat, Lambda also deserializes the selected message attributes."
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.ConsumerGroupId",
+            "type": "string",
+            "required": false,
+            "description": "The identifier for the Kafka consumer group to join. The consumer group ID must be unique among all your Kafka event sources. After creating a Kafka event source mapping with the consumer group ID spe"
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaRegistryURI",
+            "type": "string",
+            "required": false,
+            "description": "The URI for your schema registry. The correct URI format depends on the type of schema registry you're using. For Glue schema registries, use the ARN of the registry. For Confluent schema registries, "
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.EventRecordFormat",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "JSON",
+              "SOURCE"
+            ],
+            "description": "The record format that Lambda delivers to your function after schema validation. Choose JSON to have Lambda deliver the record to your function as a standard JSON object. Choose SOURCE to have Lambda "
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].Type",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BASIC_AUTH",
+              "CLIENT_CERTIFICATE_TLS_AUTH",
+              "SERVER_ROOT_CA_CERTIFICATE"
+            ],
+            "description": "The type of authentication Lambda uses to access your schema registry."
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].URI",
+            "type": "string",
+            "required": false,
+            "description": "The URI of the secret (Secrets Manager secret ARN) to authenticate with your schema registry."
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaValidationConfigs[*].Attribute",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "KEY",
+              "VALUE"
+            ],
+            "description": "The attributes you want your schema registry to validate and filter for. If you selected JSON as the EventRecordFormat, Lambda also deserializes the selected message attributes."
+          },
+          {
+            "path": "$.ScalingConfig.MaximumConcurrency",
+            "type": "integer",
+            "required": false,
+            "description": "Limits the number of concurrent instances that the Amazon SQS event source can invoke."
+          },
+          {
+            "path": "$.DocumentDBEventSourceConfig.DatabaseName",
+            "type": "string",
+            "required": false,
+            "description": "The name of the database to consume within the DocumentDB cluster."
+          },
+          {
+            "path": "$.DocumentDBEventSourceConfig.CollectionName",
+            "type": "string",
+            "required": false,
+            "description": "The name of the collection to consume within the database. If you do not specify a collection, Lambda consumes all collections."
+          },
+          {
+            "path": "$.DocumentDBEventSourceConfig.FullDocument",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "UpdateLookup",
+              "Default"
+            ],
+            "description": "Determines what DocumentDB sends to your event stream during document update operations. If set to UpdateLookup, DocumentDB sends a delta describing the changes, along with a copy of the entire docume"
+          },
+          {
+            "path": "$.KMSKeyArn",
+            "type": "string",
+            "required": false,
+            "description": "The ARN of the Key Management Service (KMS) customer managed key that Lambda uses to encrypt your function's filter criteria. By default, Lambda does not encrypt your filter criteria object. Specify t",
+            "security_category": "kms"
+          },
+          {
+            "path": "$.MetricsConfig.Metrics[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "EventCount"
+            ]
+          },
+          {
+            "path": "$.ProvisionedPollerConfig.MinimumPollers",
+            "type": "integer",
+            "required": false,
+            "description": "The minimum number of event pollers this event source can scale down to."
+          },
+          {
+            "path": "$.ProvisionedPollerConfig.MaximumPollers",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of event pollers this event source can scale up to."
+          }
+        ],
+        "param_count": 41
+      },
+      {
+        "operation": "CreateFunction",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Runtime",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "nodejs",
+              "nodejs4.3",
+              "nodejs6.10",
+              "nodejs8.10",
+              "nodejs10.x",
+              "nodejs12.x",
+              "nodejs14.x",
+              "nodejs16.x",
+              "java8",
+              "java8.al2",
+              "java11",
+              "python2.7",
+              "python3.6",
+              "python3.7",
+              "python3.8",
+              "python3.9",
+              "dotnetcore1.0",
+              "dotnetcore2.0",
+              "dotnetcore2.1",
+              "dotnetcore3.1",
+              "dotnet6",
+              "dotnet8",
+              "nodejs4.3-edge",
+              "go1.x",
+              "ruby2.5",
+              "ruby2.7",
+              "provided",
+              "provided.al2",
+              "nodejs18.x",
+              "python3.10",
+              "java17",
+              "ruby3.2",
+              "ruby3.3",
+              "ruby3.4",
+              "python3.11",
+              "nodejs20.x",
+              "provided.al2023",
+              "python3.12",
+              "java21",
+              "python3.13",
+              "nodejs22.x"
+            ],
+            "description": "The identifier of the function's runtime. Runtime is required if the deployment package is a .zip file archive. Specifying a runtime results in an error if you're deploying a function using a containe"
+          },
+          {
+            "path": "$.Role",
+            "type": "string",
+            "required": true,
+            "description": "The Amazon Resource Name (ARN) of the function's execution role."
+          },
+          {
+            "path": "$.Handler",
+            "type": "string",
+            "required": false,
+            "description": "The name of the method within your code that Lambda calls to run your function. Handler is required if the deployment package is a .zip file archive. The format includes the file name. It can also inc"
+          },
+          {
+            "path": "$.Code.ZipFile",
+            "type": "blob",
+            "required": false,
+            "description": "The base64-encoded contents of the deployment package. Amazon Web Services SDK and CLI clients handle the encoding for you."
+          },
+          {
+            "path": "$.Code.S3Bucket",
+            "type": "string",
+            "required": false,
+            "description": "An Amazon S3 bucket in the same Amazon Web Services Region as your function. The bucket can be in a different Amazon Web Services account."
+          },
+          {
+            "path": "$.Code.S3Key",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon S3 key of the deployment package."
+          },
+          {
+            "path": "$.Code.S3ObjectVersion",
+            "type": "string",
+            "required": false,
+            "description": "For versioned objects, the version of the deployment package object to use."
+          },
+          {
+            "path": "$.Code.ImageUri",
+            "type": "string",
+            "required": false,
+            "description": "URI of a container image in the Amazon ECR registry."
+          },
+          {
+            "path": "$.Code.SourceKMSKeyArn",
+            "type": "string",
+            "required": false,
+            "description": "The ARN of the Key Management Service (KMS) customer managed key that's used to encrypt your function's .zip deployment package. If you don't provide a customer managed key, Lambda uses an Amazon Web "
+          },
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "A description of the function."
+          },
+          {
+            "path": "$.Timeout",
+            "type": "integer",
+            "required": false,
+            "description": "The amount of time (in seconds) that Lambda allows a function to run before stopping it. The default is 3 seconds. The maximum allowed value is 900 seconds. For more information, see Lambda execution "
+          },
+          {
+            "path": "$.MemorySize",
+            "type": "integer",
+            "required": false,
+            "description": "The amount of memory available to the function at runtime. Increasing the function memory also increases its CPU allocation. The default value is 128 MB. The value can be any multiple of 1 MB."
+          },
+          {
+            "path": "$.Publish",
+            "type": "boolean",
+            "required": false,
+            "description": "Set to true to publish the first version of the function during creation."
+          },
+          {
+            "path": "$.VpcConfig.SubnetIds[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.VpcConfig.SecurityGroupIds[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.VpcConfig.Ipv6AllowedForDualStack",
+            "type": "boolean",
+            "required": false,
+            "description": "Allows outbound IPv6 traffic on VPC functions that are connected to dual-stack subnets.",
+            "security_category": "network"
+          },
+          {
+            "path": "$.PackageType",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "Zip",
+              "Image"
+            ],
+            "description": "The type of deployment package. Set to Image for container image and set to Zip for .zip file archive."
+          },
+          {
+            "path": "$.DeadLetterConfig.TargetArn",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of an Amazon SQS queue or Amazon SNS topic."
+          },
+          {
+            "path": "$.KMSKeyArn",
+            "type": "string",
+            "required": false,
+            "description": "The ARN of the Key Management Service (KMS) customer managed key that's used to encrypt the following resources: The function's environment variables. The function's Lambda SnapStart snapshots. When u",
+            "security_category": "kms"
+          },
+          {
+            "path": "$.TracingConfig.Mode",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "Active",
+              "PassThrough"
+            ],
+            "description": "The tracing mode."
+          },
+          {
+            "path": "$.Layers[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.FileSystemConfigs[*].Arn",
+            "type": "string",
+            "required": true,
+            "description": "The Amazon Resource Name (ARN) of the Amazon EFS access point that provides access to the file system."
+          },
+          {
+            "path": "$.FileSystemConfigs[*].LocalMountPath",
+            "type": "string",
+            "required": true,
+            "description": "The path where the function can access the file system, starting with /mnt/."
+          },
+          {
+            "path": "$.ImageConfig.EntryPoint[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.ImageConfig.Command[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.ImageConfig.WorkingDirectory",
+            "type": "string",
+            "required": false,
+            "description": "Specifies the working directory."
+          },
+          {
+            "path": "$.CodeSigningConfigArn",
+            "type": "string",
+            "required": false,
+            "description": "To enable code signing for this function, specify the ARN of a code-signing configuration. A code-signing configuration includes a set of signing profiles, which define the trusted publishers for this"
+          },
+          {
+            "path": "$.Architectures[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "x86_64",
+              "arm64"
+            ]
+          },
+          {
+            "path": "$.EphemeralStorage.Size",
+            "type": "integer",
+            "required": true,
+            "description": "The size of the function's /tmp directory."
+          },
+          {
+            "path": "$.SnapStart.ApplyOn",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "PublishedVersions",
+              "None"
+            ],
+            "description": "Set to PublishedVersions to create a snapshot of the initialized execution environment when you publish a function version."
+          },
+          {
+            "path": "$.LoggingConfig.LogFormat",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "JSON",
+              "Text"
+            ],
+            "description": "The format in which Lambda sends your function's application and system logs to CloudWatch. Select between plain text and structured JSON."
+          },
+          {
+            "path": "$.LoggingConfig.ApplicationLogLevel",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "TRACE",
+              "DEBUG",
+              "INFO",
+              "WARN",
+              "ERROR",
+              "FATAL"
+            ],
+            "description": "Set this property to filter the application logs for your function that Lambda sends to CloudWatch. Lambda only sends application logs at the selected level of detail and lower, where TRACE is the hig"
+          },
+          {
+            "path": "$.LoggingConfig.SystemLogLevel",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "DEBUG",
+              "INFO",
+              "WARN"
+            ],
+            "description": "Set this property to filter the system logs for your function that Lambda sends to CloudWatch. Lambda only sends system logs at the selected level of detail and lower, where DEBUG is the highest level"
+          },
+          {
+            "path": "$.LoggingConfig.LogGroup",
+            "type": "string",
+            "required": false,
+            "description": "The name of the Amazon CloudWatch log group the function sends logs to. By default, Lambda functions send logs to a default log group named /aws/lambda/&lt;function name&gt;. To use a different log gr",
+            "security_category": "log"
+          }
+        ],
+        "param_count": 35
+      },
+      {
+        "operation": "CreateFunctionUrlConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "The alias name."
+          },
+          {
+            "path": "$.AuthType",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "NONE",
+              "AWS_IAM"
+            ],
+            "description": "The type of authentication that your function URL uses. Set to AWS_IAM if you want to restrict access to authenticated users only. Set to NONE if you want to bypass IAM authentication to create a publ",
+            "security_category": "auth"
+          },
+          {
+            "path": "$.Cors.AllowCredentials",
+            "type": "boolean",
+            "required": false,
+            "description": "Whether to allow cookies or other credentials in requests to your function URL. The default is false.",
+            "security_category": "auth"
+          },
+          {
+            "path": "$.Cors.AllowHeaders[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.AllowMethods[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.AllowOrigins[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.ExposeHeaders[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.MaxAge",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. By default, this is set to 0, which means that the browser doesn't cache results."
+          },
+          {
+            "path": "$.InvokeMode",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BUFFERED",
+              "RESPONSE_STREAM"
+            ],
+            "description": "Use one of the following options: BUFFERED \u2013 This is the default option. Lambda invokes your function using the Invoke API operation. Invocation results are available when the payload is complete. The"
+          }
+        ],
+        "param_count": 10
+      },
+      {
+        "operation": "DeleteAlias",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          },
+          {
+            "path": "$.Name",
+            "type": "string",
+            "required": true,
+            "description": "The name of the alias."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "DeleteCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.CodeSigningConfigArn",
+            "type": "string",
+            "required": true,
+            "description": "The The Amazon Resource Name (ARN) of the code signing configuration."
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "DeleteEventSourceMapping",
+        "parameters": [
+          {
+            "path": "$.UUID",
+            "type": "string",
+            "required": true,
+            "description": "The identifier of the event source mapping."
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "DeleteFunction",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function or version. Name formats Function name \u2013 my-function (name-only), my-function:1 (with version). Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version to delete. You can't delete a version that an alias references."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "DeleteFunctionCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "DeleteFunctionConcurrency",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "DeleteFunctionEventInvokeConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name - my-function (name-only), my-function:v1 (with alias). Function ARN - arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "A version number or alias name."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "DeleteFunctionUrlConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "The alias name."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "DeleteLayerVersion",
+        "parameters": [
+          {
+            "path": "$.LayerName",
+            "type": "string",
+            "required": true,
+            "description": "The name or Amazon Resource Name (ARN) of the layer."
+          },
+          {
+            "path": "$.VersionNumber",
+            "type": "long",
+            "required": true,
+            "description": "The version number."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "DeleteProvisionedConcurrencyConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": true,
+            "description": "The version number or alias name."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetAccountSettings",
+        "parameters": [],
+        "param_count": 0
+      },
+      {
+        "operation": "GetAlias",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          },
+          {
+            "path": "$.Name",
+            "type": "string",
+            "required": true,
+            "description": "The name of the alias."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.CodeSigningConfigArn",
+            "type": "string",
+            "required": true,
+            "description": "The The Amazon Resource Name (ARN) of the code signing configuration."
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "GetEventSourceMapping",
+        "parameters": [
+          {
+            "path": "$.UUID",
+            "type": "string",
+            "required": true,
+            "description": "The identifier of the event source mapping."
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "GetFunction",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name \u2013 my-function (name-only), my-function:v1 (with alias). Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version or alias to get details about a published version of the function."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetFunctionCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "GetFunctionConcurrency",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "GetFunctionConfiguration",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name \u2013 my-function (name-only), my-function:v1 (with alias). Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version or alias to get details about a published version of the function."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetFunctionEventInvokeConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name - my-function (name-only), my-function:v1 (with alias). Function ARN - arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "A version number or alias name."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetFunctionRecursionConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "GetFunctionUrlConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "The alias name."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetLayerVersion",
+        "parameters": [
+          {
+            "path": "$.LayerName",
+            "type": "string",
+            "required": true,
+            "description": "The name or Amazon Resource Name (ARN) of the layer."
+          },
+          {
+            "path": "$.VersionNumber",
+            "type": "long",
+            "required": true,
+            "description": "The version number."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetLayerVersionByArn",
+        "parameters": [
+          {
+            "path": "$.Arn",
+            "type": "string",
+            "required": true,
+            "description": "The ARN of the layer version."
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "GetLayerVersionPolicy",
+        "parameters": [
+          {
+            "path": "$.LayerName",
+            "type": "string",
+            "required": true,
+            "description": "The name or Amazon Resource Name (ARN) of the layer."
+          },
+          {
+            "path": "$.VersionNumber",
+            "type": "long",
+            "required": true,
+            "description": "The version number."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetPolicy",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name \u2013 my-function (name-only), my-function:v1 (with alias). Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version or alias to get the policy for that resource."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetProvisionedConcurrencyConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": true,
+            "description": "The version number or alias name."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "GetRuntimeManagementConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version of the function. This can be $LATEST or a published version number. If no value is specified, the configuration for the $LATEST version is returned."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "Invoke",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name \u2013 my-function (name-only), my-function:v1 (with alias). Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.InvocationType",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "Event",
+              "RequestResponse",
+              "DryRun"
+            ],
+            "description": "Choose from the following options. RequestResponse (default) \u2013 Invoke the function synchronously. Keep the connection open until the function returns a response or times out. The API response includes"
+          },
+          {
+            "path": "$.LogType",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "None",
+              "Tail"
+            ],
+            "description": "Set to Tail to include the execution log in the response. Applies to synchronously invoked functions only."
+          },
+          {
+            "path": "$.ClientContext",
+            "type": "string",
+            "required": false,
+            "description": "Up to 3,583 bytes of base64-encoded data about the invoking client to pass to the function in the context object. Lambda passes the ClientContext object to your function for synchronous invocations on"
+          },
+          {
+            "path": "$.Payload",
+            "type": "blob",
+            "required": false,
+            "description": "The JSON that you want to provide to your Lambda function as input. You can enter the JSON directly. For example, --payload '{ \"key\": \"value\" }'. You can also specify a file path. For example, --paylo"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version or alias to invoke a published version of the function."
+          }
+        ],
+        "param_count": 6
+      },
+      {
+        "operation": "InvokeAsync",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.InvokeArgs",
+            "type": "blob",
+            "required": true,
+            "description": "The JSON that you want to provide to your Lambda function as input."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "InvokeWithResponseStream",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.InvocationType",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "RequestResponse",
+              "DryRun"
+            ],
+            "description": "Use one of the following options: RequestResponse (default) \u2013 Invoke the function synchronously. Keep the connection open until the function returns a response or times out. The API operation response"
+          },
+          {
+            "path": "$.LogType",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "None",
+              "Tail"
+            ],
+            "description": "Set to Tail to include the execution log in the response. Applies to synchronously invoked functions only."
+          },
+          {
+            "path": "$.ClientContext",
+            "type": "string",
+            "required": false,
+            "description": "Up to 3,583 bytes of base64-encoded data about the invoking client to pass to the function in the context object."
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "The alias name."
+          },
+          {
+            "path": "$.Payload",
+            "type": "blob",
+            "required": false,
+            "description": "The JSON that you want to provide to your Lambda function as input. You can enter the JSON directly. For example, --payload '{ \"key\": \"value\" }'. You can also specify a file path. For example, --paylo"
+          }
+        ],
+        "param_count": 6
+      },
+      {
+        "operation": "ListAliases",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          },
+          {
+            "path": "$.FunctionVersion",
+            "type": "string",
+            "required": false,
+            "description": "Specify a function version to only list aliases that invoke that version."
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "Limit the number of aliases returned."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "ListCodeSigningConfigs",
+        "parameters": [
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "Maximum number of items to return."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "ListEventSourceMappings",
+        "parameters": [
+          {
+            "path": "$.EventSourceArn",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the event source. Amazon Kinesis \u2013 The ARN of the data stream or a stream consumer. Amazon DynamoDB Streams \u2013 The ARN of the stream. Amazon Simple Queue Service \u2013 The"
+          },
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": false,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 MyFunction. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Version or Alias ARN \u2013 arn:aws:lambda:us-west"
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "A pagination token returned by a previous call."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of event source mappings to return. Note that ListEventSourceMappings returns a maximum of 100 items in each response, even if you set the number higher."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "ListFunctionEventInvokeConfigs",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - my-function. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN - 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of configurations to return."
+          }
+        ],
+        "param_count": 3
+      },
+      {
+        "operation": "ListFunctionUrlConfigs",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of function URLs to return in the response. Note that ListFunctionUrlConfigs returns a maximum of 50 items in each response, even if you set the number higher."
+          }
+        ],
+        "param_count": 3
+      },
+      {
+        "operation": "ListFunctions",
+        "parameters": [
+          {
+            "path": "$.MasterRegion",
+            "type": "string",
+            "required": false,
+            "description": "For Lambda@Edge functions, the Amazon Web Services Region of the master function. For example, us-east-1 filters the list of functions to include only Lambda@Edge functions replicated from a master fu"
+          },
+          {
+            "path": "$.FunctionVersion",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "ALL"
+            ],
+            "description": "Set to ALL to include entries for all published versions of each function."
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of functions to return in the response. Note that ListFunctions returns a maximum of 50 items in each response, even if you set the number higher."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "ListFunctionsByCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.CodeSigningConfigArn",
+            "type": "string",
+            "required": true,
+            "description": "The The Amazon Resource Name (ARN) of the code signing configuration."
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "Maximum number of items to return."
+          }
+        ],
+        "param_count": 3
+      },
+      {
+        "operation": "ListLayerVersions",
+        "parameters": [
+          {
+            "path": "$.CompatibleRuntime",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "nodejs",
+              "nodejs4.3",
+              "nodejs6.10",
+              "nodejs8.10",
+              "nodejs10.x",
+              "nodejs12.x",
+              "nodejs14.x",
+              "nodejs16.x",
+              "java8",
+              "java8.al2",
+              "java11",
+              "python2.7",
+              "python3.6",
+              "python3.7",
+              "python3.8",
+              "python3.9",
+              "dotnetcore1.0",
+              "dotnetcore2.0",
+              "dotnetcore2.1",
+              "dotnetcore3.1",
+              "dotnet6",
+              "dotnet8",
+              "nodejs4.3-edge",
+              "go1.x",
+              "ruby2.5",
+              "ruby2.7",
+              "provided",
+              "provided.al2",
+              "nodejs18.x",
+              "python3.10",
+              "java17",
+              "ruby3.2",
+              "ruby3.3",
+              "ruby3.4",
+              "python3.11",
+              "nodejs20.x",
+              "provided.al2023",
+              "python3.12",
+              "java21",
+              "python3.13",
+              "nodejs22.x"
+            ],
+            "description": "A runtime identifier. The following list includes deprecated runtimes. For more information, see Runtime use after deprecation. For a list of all currently supported runtimes, see Supported runtimes."
+          },
+          {
+            "path": "$.LayerName",
+            "type": "string",
+            "required": true,
+            "description": "The name or Amazon Resource Name (ARN) of the layer."
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "A pagination token returned by a previous call."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of versions to return."
+          },
+          {
+            "path": "$.CompatibleArchitecture",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "x86_64",
+              "arm64"
+            ],
+            "description": "The compatible instruction set architecture."
+          }
+        ],
+        "param_count": 5
+      },
+      {
+        "operation": "ListLayers",
+        "parameters": [
+          {
+            "path": "$.CompatibleRuntime",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "nodejs",
+              "nodejs4.3",
+              "nodejs6.10",
+              "nodejs8.10",
+              "nodejs10.x",
+              "nodejs12.x",
+              "nodejs14.x",
+              "nodejs16.x",
+              "java8",
+              "java8.al2",
+              "java11",
+              "python2.7",
+              "python3.6",
+              "python3.7",
+              "python3.8",
+              "python3.9",
+              "dotnetcore1.0",
+              "dotnetcore2.0",
+              "dotnetcore2.1",
+              "dotnetcore3.1",
+              "dotnet6",
+              "dotnet8",
+              "nodejs4.3-edge",
+              "go1.x",
+              "ruby2.5",
+              "ruby2.7",
+              "provided",
+              "provided.al2",
+              "nodejs18.x",
+              "python3.10",
+              "java17",
+              "ruby3.2",
+              "ruby3.3",
+              "ruby3.4",
+              "python3.11",
+              "nodejs20.x",
+              "provided.al2023",
+              "python3.12",
+              "java21",
+              "python3.13",
+              "nodejs22.x"
+            ],
+            "description": "A runtime identifier. The following list includes deprecated runtimes. For more information, see Runtime use after deprecation. For a list of all currently supported runtimes, see Supported runtimes."
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "A pagination token returned by a previous call."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of layers to return."
+          },
+          {
+            "path": "$.CompatibleArchitecture",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "x86_64",
+              "arm64"
+            ],
+            "description": "The compatible instruction set architecture."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "ListProvisionedConcurrencyConfigs",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "Specify a number to limit the number of configurations returned."
+          }
+        ],
+        "param_count": 3
+      },
+      {
+        "operation": "ListTags",
+        "parameters": [
+          {
+            "path": "$.Resource",
+            "type": "string",
+            "required": true,
+            "description": "The resource's Amazon Resource Name (ARN). Note: Lambda does not support adding tags to function aliases or versions."
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "ListVersionsByFunction",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          },
+          {
+            "path": "$.Marker",
+            "type": "string",
+            "required": false,
+            "description": "Specify the pagination token that's returned by a previous request to retrieve the next page of results."
+          },
+          {
+            "path": "$.MaxItems",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of versions to return. Note that ListVersionsByFunction returns a maximum of 50 items in each response, even if you set the number higher."
+          }
+        ],
+        "param_count": 3
+      },
+      {
+        "operation": "PublishLayerVersion",
+        "parameters": [
+          {
+            "path": "$.LayerName",
+            "type": "string",
+            "required": true,
+            "description": "The name or Amazon Resource Name (ARN) of the layer."
+          },
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "The description of the version."
+          },
+          {
+            "path": "$.Content.S3Bucket",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon S3 bucket of the layer archive."
+          },
+          {
+            "path": "$.Content.S3Key",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon S3 key of the layer archive."
+          },
+          {
+            "path": "$.Content.S3ObjectVersion",
+            "type": "string",
+            "required": false,
+            "description": "For versioned objects, the version of the layer archive object to use."
+          },
+          {
+            "path": "$.Content.ZipFile",
+            "type": "blob",
+            "required": false,
+            "description": "The base64-encoded contents of the layer archive. Amazon Web Services SDK and Amazon Web Services CLI clients handle the encoding for you."
+          },
+          {
+            "path": "$.CompatibleRuntimes[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "nodejs",
+              "nodejs4.3",
+              "nodejs6.10",
+              "nodejs8.10",
+              "nodejs10.x",
+              "nodejs12.x",
+              "nodejs14.x",
+              "nodejs16.x",
+              "java8",
+              "java8.al2",
+              "java11",
+              "python2.7",
+              "python3.6",
+              "python3.7",
+              "python3.8",
+              "python3.9",
+              "dotnetcore1.0",
+              "dotnetcore2.0",
+              "dotnetcore2.1",
+              "dotnetcore3.1",
+              "dotnet6",
+              "dotnet8",
+              "nodejs4.3-edge",
+              "go1.x",
+              "ruby2.5",
+              "ruby2.7",
+              "provided",
+              "provided.al2",
+              "nodejs18.x",
+              "python3.10",
+              "java17",
+              "ruby3.2",
+              "ruby3.3",
+              "ruby3.4",
+              "python3.11",
+              "nodejs20.x",
+              "provided.al2023",
+              "python3.12",
+              "java21",
+              "python3.13",
+              "nodejs22.x"
+            ]
+          },
+          {
+            "path": "$.LicenseInfo",
+            "type": "string",
+            "required": false,
+            "description": "The layer's software license. It can be any of the following: An SPDX license identifier. For example, MIT. The URL of a license hosted on the internet. For example, https://opensource.org/licenses/MI"
+          },
+          {
+            "path": "$.CompatibleArchitectures[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "x86_64",
+              "arm64"
+            ]
+          }
+        ],
+        "param_count": 9
+      },
+      {
+        "operation": "PublishVersion",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          },
+          {
+            "path": "$.CodeSha256",
+            "type": "string",
+            "required": false,
+            "description": "Only publish a version if the hash value matches the value that's specified. Use this option to avoid publishing a version if the function code has changed since you last updated it. You can get the h"
+          },
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "A description for the version to override the description in the function configuration."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Only update the function if the revision ID matches the ID that's specified. Use this option to avoid publishing a version if the function configuration has changed since you last updated it."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "PutFunctionCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.CodeSigningConfigArn",
+            "type": "string",
+            "required": true,
+            "description": "The The Amazon Resource Name (ARN) of the code signing configuration."
+          },
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "PutFunctionConcurrency",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.ReservedConcurrentExecutions",
+            "type": "integer",
+            "required": true,
+            "description": "The number of simultaneous executions to reserve for the function."
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "PutFunctionEventInvokeConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name - my-function (name-only), my-function:v1 (with alias). Function ARN - arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "A version number or alias name."
+          },
+          {
+            "path": "$.MaximumRetryAttempts",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of times to retry when the function returns an error."
+          },
+          {
+            "path": "$.MaximumEventAgeInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum age of a request that Lambda sends to a function for processing."
+          },
+          {
+            "path": "$.DestinationConfig.OnSuccess.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource."
+          },
+          {
+            "path": "$.DestinationConfig.OnFailure.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource. To retain records of unsuccessful asynchronous invocations, you can configure an Amazon SNS topic, Amazon SQS queue, Amazon S3 bucket, Lambd"
+          }
+        ],
+        "param_count": 6
+      },
+      {
+        "operation": "PutFunctionRecursionConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.RecursiveLoop",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "Allow",
+              "Terminate"
+            ],
+            "description": "If you set your function's recursive loop detection configuration to Allow, Lambda doesn't take any action when it detects your function being invoked as part of a recursive loop. We recommend that yo"
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "PutProvisionedConcurrencyConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": true,
+            "description": "The version number or alias name."
+          },
+          {
+            "path": "$.ProvisionedConcurrentExecutions",
+            "type": "integer",
+            "required": true,
+            "description": "The amount of provisioned concurrency to allocate for the version or alias."
+          }
+        ],
+        "param_count": 3
+      },
+      {
+        "operation": "PutRuntimeManagementConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version of the function. This can be $LATEST or a published version number. If no value is specified, the configuration for the $LATEST version is returned."
+          },
+          {
+            "path": "$.UpdateRuntimeOn",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "Auto",
+              "Manual",
+              "FunctionUpdate"
+            ],
+            "description": "Specify the runtime update mode. Auto (default) - Automatically update to the most recent and secure runtime version using a Two-phase runtime version rollout. This is the best choice for most custome"
+          },
+          {
+            "path": "$.RuntimeVersionArn",
+            "type": "string",
+            "required": false,
+            "description": "The ARN of the runtime version you want the function to use. This is only required if you're using the Manual runtime update mode."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "RemoveLayerVersionPermission",
+        "parameters": [
+          {
+            "path": "$.LayerName",
+            "type": "string",
+            "required": true,
+            "description": "The name or Amazon Resource Name (ARN) of the layer."
+          },
+          {
+            "path": "$.VersionNumber",
+            "type": "long",
+            "required": true,
+            "description": "The version number."
+          },
+          {
+            "path": "$.StatementId",
+            "type": "string",
+            "required": true,
+            "description": "The identifier that was specified when the statement was added."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Only update the policy if the revision ID matches the ID specified. Use this option to avoid modifying a policy that has changed since you last read it."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "RemovePermission",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name \u2013 my-function (name-only), my-function:v1 (with alias). Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.StatementId",
+            "type": "string",
+            "required": true,
+            "description": "Statement ID of the permission to remove."
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "Specify a version or alias to remove permissions from a published version of the function."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Update the policy only if the revision ID matches the ID that's specified. Use this option to avoid modifying a policy that has changed since you last read it."
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "TagResource",
+        "parameters": [
+          {
+            "path": "$.Resource",
+            "type": "string",
+            "required": true,
+            "description": "The resource's Amazon Resource Name (ARN)."
+          }
+        ],
+        "param_count": 1
+      },
+      {
+        "operation": "UntagResource",
+        "parameters": [
+          {
+            "path": "$.Resource",
+            "type": "string",
+            "required": true,
+            "description": "The resource's Amazon Resource Name (ARN)."
+          },
+          {
+            "path": "$.TagKeys[*]",
+            "type": "list<string>",
+            "required": false
+          }
+        ],
+        "param_count": 2
+      },
+      {
+        "operation": "UpdateAlias",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name - MyFunction. Function ARN - arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Partial ARN - 123456789012:function:MyFunctio"
+          },
+          {
+            "path": "$.Name",
+            "type": "string",
+            "required": true,
+            "description": "The name of the alias."
+          },
+          {
+            "path": "$.FunctionVersion",
+            "type": "string",
+            "required": false,
+            "description": "The function version that the alias invokes."
+          },
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "A description of the alias."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Only update the alias if the revision ID matches the ID that's specified. Use this option to avoid modifying an alias that has changed since you last read it."
+          }
+        ],
+        "param_count": 5
+      },
+      {
+        "operation": "UpdateCodeSigningConfig",
+        "parameters": [
+          {
+            "path": "$.CodeSigningConfigArn",
+            "type": "string",
+            "required": true,
+            "description": "The The Amazon Resource Name (ARN) of the code signing configuration."
+          },
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "Descriptive name for this code signing configuration."
+          },
+          {
+            "path": "$.AllowedPublishers.SigningProfileVersionArns[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.CodeSigningPolicies.UntrustedArtifactOnDeployment",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "Warn",
+              "Enforce"
+            ],
+            "description": "Code signing configuration policy for deployment validation failure. If you set the policy to Enforce, Lambda blocks the deployment request if signature validation checks fail. If you set the policy t",
+            "security_category": "policy"
+          }
+        ],
+        "param_count": 4
+      },
+      {
+        "operation": "UpdateEventSourceMapping",
+        "parameters": [
+          {
+            "path": "$.UUID",
+            "type": "string",
+            "required": true,
+            "description": "The identifier of the event source mapping."
+          },
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": false,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 MyFunction. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:MyFunction. Version or Alias ARN \u2013 arn:aws:lambda:us-west"
+          },
+          {
+            "path": "$.Enabled",
+            "type": "boolean",
+            "required": false,
+            "description": "When true, the event source mapping is active. When false, Lambda pauses polling and invocation. Default: True"
+          },
+          {
+            "path": "$.BatchSize",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of records in each batch that Lambda pulls from your stream or queue and sends to your function. Lambda passes all of the records in the batch to the function in a single call, up t"
+          },
+          {
+            "path": "$.FilterCriteria.Filters[*].Pattern",
+            "type": "string",
+            "required": false,
+            "description": "A filter pattern. For more information on the syntax of a filter pattern, see Filter rule syntax."
+          },
+          {
+            "path": "$.MaximumBatchingWindowInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum amount of time, in seconds, that Lambda spends gathering records before invoking the function. You can configure MaximumBatchingWindowInSeconds to any value from 0 seconds to 300 seconds i"
+          },
+          {
+            "path": "$.DestinationConfig.OnSuccess.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource."
+          },
+          {
+            "path": "$.DestinationConfig.OnFailure.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource. To retain records of unsuccessful asynchronous invocations, you can configure an Amazon SNS topic, Amazon SQS queue, Amazon S3 bucket, Lambd"
+          },
+          {
+            "path": "$.MaximumRecordAgeInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) Discard records older than the specified age. The default value is infinite (-1)."
+          },
+          {
+            "path": "$.BisectBatchOnFunctionError",
+            "type": "boolean",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) If the function returns an error, split the batch in two and retry."
+          },
+          {
+            "path": "$.MaximumRetryAttempts",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) Discard records after the specified number of retries. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record ex"
+          },
+          {
+            "path": "$.ParallelizationFactor",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) The number of batches to process from each shard concurrently."
+          },
+          {
+            "path": "$.SourceAccessConfigurations[*].Type",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BASIC_AUTH",
+              "VPC_SUBNET",
+              "VPC_SECURITY_GROUP",
+              "SASL_SCRAM_512_AUTH",
+              "SASL_SCRAM_256_AUTH",
+              "VIRTUAL_HOST",
+              "CLIENT_CERTIFICATE_TLS_AUTH",
+              "SERVER_ROOT_CA_CERTIFICATE"
+            ],
+            "description": "The type of authentication protocol, VPC components, or virtual host for your event source. For example: \"Type\":\"SASL_SCRAM_512_AUTH\". BASIC_AUTH \u2013 (Amazon MQ) The Secrets Manager secret that stores y"
+          },
+          {
+            "path": "$.SourceAccessConfigurations[*].URI",
+            "type": "string",
+            "required": false,
+            "description": "The value for your chosen configuration in Type. For example: \"URI\": \"arn:aws:secretsmanager:us-east-1:01234567890:secret:MyBrokerSecretName\"."
+          },
+          {
+            "path": "$.TumblingWindowInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "(Kinesis and DynamoDB Streams only) The duration in seconds of a processing window for DynamoDB and Kinesis Streams event sources. A value of 0 seconds indicates no tumbling window."
+          },
+          {
+            "path": "$.FunctionResponseTypes[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "ReportBatchItemFailures"
+            ]
+          },
+          {
+            "path": "$.ScalingConfig.MaximumConcurrency",
+            "type": "integer",
+            "required": false,
+            "description": "Limits the number of concurrent instances that the Amazon SQS event source can invoke."
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.ConsumerGroupId",
+            "type": "string",
+            "required": false,
+            "description": "The identifier for the Kafka consumer group to join. The consumer group ID must be unique among all your Kafka event sources. After creating a Kafka event source mapping with the consumer group ID spe"
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaRegistryURI",
+            "type": "string",
+            "required": false,
+            "description": "The URI for your schema registry. The correct URI format depends on the type of schema registry you're using. For Glue schema registries, use the ARN of the registry. For Confluent schema registries, "
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.EventRecordFormat",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "JSON",
+              "SOURCE"
+            ],
+            "description": "The record format that Lambda delivers to your function after schema validation. Choose JSON to have Lambda deliver the record to your function as a standard JSON object. Choose SOURCE to have Lambda "
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].Type",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BASIC_AUTH",
+              "CLIENT_CERTIFICATE_TLS_AUTH",
+              "SERVER_ROOT_CA_CERTIFICATE"
+            ],
+            "description": "The type of authentication Lambda uses to access your schema registry."
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].URI",
+            "type": "string",
+            "required": false,
+            "description": "The URI of the secret (Secrets Manager secret ARN) to authenticate with your schema registry."
+          },
+          {
+            "path": "$.AmazonManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaValidationConfigs[*].Attribute",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "KEY",
+              "VALUE"
+            ],
+            "description": "The attributes you want your schema registry to validate and filter for. If you selected JSON as the EventRecordFormat, Lambda also deserializes the selected message attributes."
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.ConsumerGroupId",
+            "type": "string",
+            "required": false,
+            "description": "The identifier for the Kafka consumer group to join. The consumer group ID must be unique among all your Kafka event sources. After creating a Kafka event source mapping with the consumer group ID spe"
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaRegistryURI",
+            "type": "string",
+            "required": false,
+            "description": "The URI for your schema registry. The correct URI format depends on the type of schema registry you're using. For Glue schema registries, use the ARN of the registry. For Confluent schema registries, "
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.EventRecordFormat",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "JSON",
+              "SOURCE"
+            ],
+            "description": "The record format that Lambda delivers to your function after schema validation. Choose JSON to have Lambda deliver the record to your function as a standard JSON object. Choose SOURCE to have Lambda "
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].Type",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BASIC_AUTH",
+              "CLIENT_CERTIFICATE_TLS_AUTH",
+              "SERVER_ROOT_CA_CERTIFICATE"
+            ],
+            "description": "The type of authentication Lambda uses to access your schema registry."
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.AccessConfigs[*].URI",
+            "type": "string",
+            "required": false,
+            "description": "The URI of the secret (Secrets Manager secret ARN) to authenticate with your schema registry."
+          },
+          {
+            "path": "$.SelfManagedKafkaEventSourceConfig.SchemaRegistryConfig.SchemaValidationConfigs[*].Attribute",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "KEY",
+              "VALUE"
+            ],
+            "description": "The attributes you want your schema registry to validate and filter for. If you selected JSON as the EventRecordFormat, Lambda also deserializes the selected message attributes."
+          },
+          {
+            "path": "$.DocumentDBEventSourceConfig.DatabaseName",
+            "type": "string",
+            "required": false,
+            "description": "The name of the database to consume within the DocumentDB cluster."
+          },
+          {
+            "path": "$.DocumentDBEventSourceConfig.CollectionName",
+            "type": "string",
+            "required": false,
+            "description": "The name of the collection to consume within the database. If you do not specify a collection, Lambda consumes all collections."
+          },
+          {
+            "path": "$.DocumentDBEventSourceConfig.FullDocument",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "UpdateLookup",
+              "Default"
+            ],
+            "description": "Determines what DocumentDB sends to your event stream during document update operations. If set to UpdateLookup, DocumentDB sends a delta describing the changes, along with a copy of the entire docume"
+          },
+          {
+            "path": "$.KMSKeyArn",
+            "type": "string",
+            "required": false,
+            "description": "The ARN of the Key Management Service (KMS) customer managed key that Lambda uses to encrypt your function's filter criteria. By default, Lambda does not encrypt your filter criteria object. Specify t",
+            "security_category": "kms"
+          },
+          {
+            "path": "$.MetricsConfig.Metrics[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "EventCount"
+            ]
+          },
+          {
+            "path": "$.ProvisionedPollerConfig.MinimumPollers",
+            "type": "integer",
+            "required": false,
+            "description": "The minimum number of event pollers this event source can scale down to."
+          },
+          {
+            "path": "$.ProvisionedPollerConfig.MaximumPollers",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of event pollers this event source can scale up to."
+          }
+        ],
+        "param_count": 36
+      },
+      {
+        "operation": "UpdateFunctionCode",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.ZipFile",
+            "type": "blob",
+            "required": false,
+            "description": "The base64-encoded contents of the deployment package. Amazon Web Services SDK and CLI clients handle the encoding for you. Use only with a function defined with a .zip file archive deployment package"
+          },
+          {
+            "path": "$.S3Bucket",
+            "type": "string",
+            "required": false,
+            "description": "An Amazon S3 bucket in the same Amazon Web Services Region as your function. The bucket can be in a different Amazon Web Services account. Use only with a function defined with a .zip file archive dep"
+          },
+          {
+            "path": "$.S3Key",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon S3 key of the deployment package. Use only with a function defined with a .zip file archive deployment package."
+          },
+          {
+            "path": "$.S3ObjectVersion",
+            "type": "string",
+            "required": false,
+            "description": "For versioned objects, the version of the deployment package object to use."
+          },
+          {
+            "path": "$.ImageUri",
+            "type": "string",
+            "required": false,
+            "description": "URI of a container image in the Amazon ECR registry. Do not use for a function defined with a .zip file archive."
+          },
+          {
+            "path": "$.Publish",
+            "type": "boolean",
+            "required": false,
+            "description": "Set to true to publish a new version of the function after updating the code. This has the same effect as calling PublishVersion separately."
+          },
+          {
+            "path": "$.DryRun",
+            "type": "boolean",
+            "required": false,
+            "description": "Set to true to validate the request parameters and access permissions without modifying the function code."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Update the function only if the revision ID matches the ID that's specified. Use this option to avoid modifying a function that has changed since you last read it."
+          },
+          {
+            "path": "$.Architectures[*]",
+            "type": "list<string>",
+            "required": false,
+            "enum": [
+              "x86_64",
+              "arm64"
+            ]
+          },
+          {
+            "path": "$.SourceKMSKeyArn",
+            "type": "string",
+            "required": false,
+            "description": "The ARN of the Key Management Service (KMS) customer managed key that's used to encrypt your function's .zip deployment package. If you don't provide a customer managed key, Lambda uses an Amazon Web "
+          }
+        ],
+        "param_count": 11
+      },
+      {
+        "operation": "UpdateFunctionConfiguration",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Role",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the function's execution role."
+          },
+          {
+            "path": "$.Handler",
+            "type": "string",
+            "required": false,
+            "description": "The name of the method within your code that Lambda calls to run your function. Handler is required if the deployment package is a .zip file archive. The format includes the file name. It can also inc"
+          },
+          {
+            "path": "$.Description",
+            "type": "string",
+            "required": false,
+            "description": "A description of the function."
+          },
+          {
+            "path": "$.Timeout",
+            "type": "integer",
+            "required": false,
+            "description": "The amount of time (in seconds) that Lambda allows a function to run before stopping it. The default is 3 seconds. The maximum allowed value is 900 seconds. For more information, see Lambda execution "
+          },
+          {
+            "path": "$.MemorySize",
+            "type": "integer",
+            "required": false,
+            "description": "The amount of memory available to the function at runtime. Increasing the function memory also increases its CPU allocation. The default value is 128 MB. The value can be any multiple of 1 MB."
+          },
+          {
+            "path": "$.VpcConfig.SubnetIds[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.VpcConfig.SecurityGroupIds[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.VpcConfig.Ipv6AllowedForDualStack",
+            "type": "boolean",
+            "required": false,
+            "description": "Allows outbound IPv6 traffic on VPC functions that are connected to dual-stack subnets.",
+            "security_category": "network"
+          },
+          {
+            "path": "$.Runtime",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "nodejs",
+              "nodejs4.3",
+              "nodejs6.10",
+              "nodejs8.10",
+              "nodejs10.x",
+              "nodejs12.x",
+              "nodejs14.x",
+              "nodejs16.x",
+              "java8",
+              "java8.al2",
+              "java11",
+              "python2.7",
+              "python3.6",
+              "python3.7",
+              "python3.8",
+              "python3.9",
+              "dotnetcore1.0",
+              "dotnetcore2.0",
+              "dotnetcore2.1",
+              "dotnetcore3.1",
+              "dotnet6",
+              "dotnet8",
+              "nodejs4.3-edge",
+              "go1.x",
+              "ruby2.5",
+              "ruby2.7",
+              "provided",
+              "provided.al2",
+              "nodejs18.x",
+              "python3.10",
+              "java17",
+              "ruby3.2",
+              "ruby3.3",
+              "ruby3.4",
+              "python3.11",
+              "nodejs20.x",
+              "provided.al2023",
+              "python3.12",
+              "java21",
+              "python3.13",
+              "nodejs22.x"
+            ],
+            "description": "The identifier of the function's runtime. Runtime is required if the deployment package is a .zip file archive. Specifying a runtime results in an error if you're deploying a function using a containe"
+          },
+          {
+            "path": "$.DeadLetterConfig.TargetArn",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of an Amazon SQS queue or Amazon SNS topic."
+          },
+          {
+            "path": "$.KMSKeyArn",
+            "type": "string",
+            "required": false,
+            "description": "The ARN of the Key Management Service (KMS) customer managed key that's used to encrypt the following resources: The function's environment variables. The function's Lambda SnapStart snapshots. When u",
+            "security_category": "kms"
+          },
+          {
+            "path": "$.TracingConfig.Mode",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "Active",
+              "PassThrough"
+            ],
+            "description": "The tracing mode."
+          },
+          {
+            "path": "$.RevisionId",
+            "type": "string",
+            "required": false,
+            "description": "Update the function only if the revision ID matches the ID that's specified. Use this option to avoid modifying a function that has changed since you last read it."
+          },
+          {
+            "path": "$.Layers[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.FileSystemConfigs[*].Arn",
+            "type": "string",
+            "required": true,
+            "description": "The Amazon Resource Name (ARN) of the Amazon EFS access point that provides access to the file system."
+          },
+          {
+            "path": "$.FileSystemConfigs[*].LocalMountPath",
+            "type": "string",
+            "required": true,
+            "description": "The path where the function can access the file system, starting with /mnt/."
+          },
+          {
+            "path": "$.ImageConfig.EntryPoint[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.ImageConfig.Command[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.ImageConfig.WorkingDirectory",
+            "type": "string",
+            "required": false,
+            "description": "Specifies the working directory."
+          },
+          {
+            "path": "$.EphemeralStorage.Size",
+            "type": "integer",
+            "required": true,
+            "description": "The size of the function's /tmp directory."
+          },
+          {
+            "path": "$.SnapStart.ApplyOn",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "PublishedVersions",
+              "None"
+            ],
+            "description": "Set to PublishedVersions to create a snapshot of the initialized execution environment when you publish a function version."
+          },
+          {
+            "path": "$.LoggingConfig.LogFormat",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "JSON",
+              "Text"
+            ],
+            "description": "The format in which Lambda sends your function's application and system logs to CloudWatch. Select between plain text and structured JSON."
+          },
+          {
+            "path": "$.LoggingConfig.ApplicationLogLevel",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "TRACE",
+              "DEBUG",
+              "INFO",
+              "WARN",
+              "ERROR",
+              "FATAL"
+            ],
+            "description": "Set this property to filter the application logs for your function that Lambda sends to CloudWatch. Lambda only sends application logs at the selected level of detail and lower, where TRACE is the hig"
+          },
+          {
+            "path": "$.LoggingConfig.SystemLogLevel",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "DEBUG",
+              "INFO",
+              "WARN"
+            ],
+            "description": "Set this property to filter the system logs for your function that Lambda sends to CloudWatch. Lambda only sends system logs at the selected level of detail and lower, where DEBUG is the highest level"
+          },
+          {
+            "path": "$.LoggingConfig.LogGroup",
+            "type": "string",
+            "required": false,
+            "description": "The name of the Amazon CloudWatch log group the function sends logs to. By default, Lambda functions send logs to a default log group named /aws/lambda/&lt;function name&gt;. To use a different log gr",
+            "security_category": "log"
+          }
+        ],
+        "param_count": 26
+      },
+      {
+        "operation": "UpdateFunctionEventInvokeConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function, version, or alias. Name formats Function name - my-function (name-only), my-function:v1 (with alias). Function ARN - arn:aws:lambda:us-west-2:123456789012:funct"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "A version number or alias name."
+          },
+          {
+            "path": "$.MaximumRetryAttempts",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum number of times to retry when the function returns an error."
+          },
+          {
+            "path": "$.MaximumEventAgeInSeconds",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum age of a request that Lambda sends to a function for processing."
+          },
+          {
+            "path": "$.DestinationConfig.OnSuccess.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource."
+          },
+          {
+            "path": "$.DestinationConfig.OnFailure.Destination",
+            "type": "string",
+            "required": false,
+            "description": "The Amazon Resource Name (ARN) of the destination resource. To retain records of unsuccessful asynchronous invocations, you can configure an Amazon SNS topic, Amazon SQS queue, Amazon S3 bucket, Lambd"
+          }
+        ],
+        "param_count": 6
+      },
+      {
+        "operation": "UpdateFunctionUrlConfig",
+        "parameters": [
+          {
+            "path": "$.FunctionName",
+            "type": "string",
+            "required": true,
+            "description": "The name or ARN of the Lambda function. Name formats Function name \u2013 my-function. Function ARN \u2013 arn:aws:lambda:us-west-2:123456789012:function:my-function. Partial ARN \u2013 123456789012:function:my-func"
+          },
+          {
+            "path": "$.Qualifier",
+            "type": "string",
+            "required": false,
+            "description": "The alias name."
+          },
+          {
+            "path": "$.AuthType",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "NONE",
+              "AWS_IAM"
+            ],
+            "description": "The type of authentication that your function URL uses. Set to AWS_IAM if you want to restrict access to authenticated users only. Set to NONE if you want to bypass IAM authentication to create a publ",
+            "security_category": "auth"
+          },
+          {
+            "path": "$.Cors.AllowCredentials",
+            "type": "boolean",
+            "required": false,
+            "description": "Whether to allow cookies or other credentials in requests to your function URL. The default is false.",
+            "security_category": "auth"
+          },
+          {
+            "path": "$.Cors.AllowHeaders[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.AllowMethods[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.AllowOrigins[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.ExposeHeaders[*]",
+            "type": "list<string>",
+            "required": false
+          },
+          {
+            "path": "$.Cors.MaxAge",
+            "type": "integer",
+            "required": false,
+            "description": "The maximum amount of time, in seconds, that web browsers can cache results of a preflight request. By default, this is set to 0, which means that the browser doesn't cache results."
+          },
+          {
+            "path": "$.InvokeMode",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "BUFFERED",
+              "RESPONSE_STREAM"
+            ],
+            "description": "Use one of the following options: BUFFERED \u2013 This is the default option. Lambda invokes your function using the Invoke API operation. Invocation results are available when the payload is complete. The"
+          }
+        ],
+        "param_count": 10
+      }
+    ]
+  }
+}

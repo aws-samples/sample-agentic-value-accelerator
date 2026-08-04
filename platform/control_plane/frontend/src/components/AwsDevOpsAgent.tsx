@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { deploymentsApi, frontierAgentsApi, type FrontierAgentCatalogEntry, type FrontierAgentParameter } from '../api/client';
 import type { Deployment } from '../types';
-import { useUser } from '../contexts/UserContext';
 import LoadingSpinner from './LoadingSpinner';
+import { openOperatorApp } from '../lib/operatorAppLauncher';
 
 const AGENT_ID = 'aws-devops';
 const TEMPLATE_ID = `frontier-agents-${AGENT_ID}`;
@@ -24,7 +24,6 @@ const REGIONS: { value: string; label: string }[] = [
 
 export default function AwsDevOpsAgent() {
   const navigate = useNavigate();
-  const { user } = useUser();
   const [agent, setAgent] = useState<FrontierAgentCatalogEntry | null>(null);
   const [loadingAgent, setLoadingAgent] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -70,7 +69,11 @@ export default function AwsDevOpsAgent() {
 
   const supported = agent?.supported_iac_types || [];
   const comingSoon = agent?.coming_soon_iac_types || [];
-  const canDeploy = !!user?.can_deploy && !!deployName && !!agent && supported.includes(iacType);
+  // Viewers can fill out the form and click Deploy; the backend returns 403
+  // and the error surfaces inline via deployError. Letting them click through
+  // means they can explore the IaC options and parameters before they're
+  // promoted to operator/admin.
+  const canDeploy = !!deployName && !!agent && supported.includes(iacType);
 
   const handleDeploy = async () => {
     if (!agent || !canDeploy) return;
@@ -264,7 +267,7 @@ export default function AwsDevOpsAgent() {
                   {operatorUrl && (
                     <button
                       type="button"
-                      onClick={() => window.open(operatorUrl, '_blank')}
+                      onClick={() => openOperatorApp(AGENT_ID, operatorUrl)}
                       className="text-sm py-2 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors inline-flex items-center justify-center gap-1.5"
                     >
                       Open Operator App
@@ -281,7 +284,6 @@ export default function AwsDevOpsAgent() {
           <button
             onClick={handleDeploy}
             disabled={!canDeploy || deploying}
-            title={!user?.can_deploy ? 'You do not have permission to deploy' : ''}
             className="w-full btn-primary py-3.5 text-base disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {deploying ? (

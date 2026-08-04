@@ -1,0 +1,392 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  AVA Govern IAM Role - Read-only access for the Agentic Value Accelerator
+  governance platform. Deploy this stack before launching AVA Govern.
+
+  This role follows AWS security best practices:
+  - Least privilege (read-only, scoped to specific services)
+  - No long-lived credentials (uses IAM roles with auto-rotating tokens)
+  - Supports ECS, EKS, EC2, Lambda, and App Runner deployments
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Deployment Configuration
+        Parameters:
+          - ComputeType
+          - EnableCostExplorer
+          - EnableBedrock
+          - EnableCloudWatch
+          - EnableCloudTrail
+    ParameterLabels:
+      ComputeType:
+        default: Where will AVA Govern run?
+      EnableCostExplorer:
+        default: Enable FinOps (Cost Explorer)?
+      EnableBedrock:
+        default: Enable Bedrock governance?
+      EnableCloudWatch:
+        default: Enable observability (CloudWatch)?
+      EnableCloudTrail:
+        default: Enable audit trail (CloudTrail)?
+
+Parameters:
+  ComputeType:
+    Type: String
+    Default: ecs
+    AllowedValues:
+      - ecs
+      - eks
+      - ec2
+      - lambda
+      - apprunner
+    Description: The compute service where AVA Govern will run
+
+  EnableCostExplorer:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Allow AVA Govern to read Cost Explorer data for FinOps dashboards
+
+  EnableBedrock:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Allow AVA Govern to read Bedrock agents, models, guardrails, and knowledge bases
+
+  EnableCloudWatch:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Allow AVA Govern to read CloudWatch metrics and logs
+
+  EnableCloudTrail:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Allow AVA Govern to read CloudTrail events for audit
+
+Conditions:
+  IsECS: !Equals [!Ref ComputeType, 'ecs']
+  IsEKS: !Equals [!Ref ComputeType, 'eks']
+  IsEC2: !Equals [!Ref ComputeType, 'ec2']
+  IsLambda: !Equals [!Ref ComputeType, 'lambda']
+  IsAppRunner: !Equals [!Ref ComputeType, 'apprunner']
+  NeedsInstanceProfile: !Or [!Condition IsEC2, !Condition IsECS]
+
+  UseCostExplorer: !Equals [!Ref EnableCostExplorer, 'true']
+  UseBedrock: !Equals [!Ref EnableBedrock, 'true']
+  UseCloudWatch: !Equals [!Ref EnableCloudWatch, 'true']
+  UseCloudTrail: !Equals [!Ref EnableCloudTrail, 'true']
+
+Resources:
+  AVAGovernRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AVAGovernRole
+      Description: Read-only role for AVA Govern platform
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # ECS Tasks
+          - !If
+            - IsECS
+            - Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+              Action: sts:AssumeRole
+            - !Ref AWS::NoValue
+          # EC2 Instances
+          - !If
+            - IsEC2
+            - Effect: Allow
+              Principal:
+                Service: ec2.amazonaws.com
+              Action: sts:AssumeRole
+            - !Ref AWS::NoValue
+          # Lambda Functions
+          - !If
+            - IsLambda
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+            - !Ref AWS::NoValue
+          # App Runner
+          - !If
+            - IsAppRunner
+            - Effect: Allow
+              Principal:
+                Service: tasks.apprunner.amazonaws.com
+              Action: sts:AssumeRole
+            - !Ref AWS::NoValue
+      Tags:
+        - Key: Application
+          Value: AVA-Govern
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Cost Explorer Policy
+  CostExplorerPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseCostExplorer
+    Properties:
+      PolicyName: AVAGovernCostExplorer
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CostExplorerRead
+            Effect: Allow
+            Action:
+              - ce:GetCostAndUsage
+              - ce:GetCostAndUsageWithResources
+              - ce:GetCostForecast
+              - ce:GetDimensionValues
+              - ce:GetReservationCoverage
+              - ce:GetReservationPurchaseRecommendation
+              - ce:GetReservationUtilization
+              - ce:GetSavingsPlansCoverage
+              - ce:GetSavingsPlansUtilization
+              - ce:GetTags
+              - ce:GetUsageForecast
+              - ce:ListCostAllocationTags
+              - ce:ListCostCategoryDefinitions
+            Resource: '*'
+
+  # Bedrock Policy
+  BedrockPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseBedrock
+    Properties:
+      PolicyName: AVAGovernBedrock
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Bedrock Agents
+          - Sid: BedrockAgentsRead
+            Effect: Allow
+            Action:
+              - bedrock:ListAgents
+              - bedrock:GetAgent
+              - bedrock:ListAgentVersions
+              - bedrock:GetAgentVersion
+              - bedrock:ListAgentAliases
+              - bedrock:GetAgentAlias
+              - bedrock:ListAgentActionGroups
+              - bedrock:GetAgentActionGroup
+              - bedrock:ListAgentKnowledgeBases
+              - bedrock:GetAgentKnowledgeBase
+            Resource: '*'
+
+          # Bedrock Models
+          - Sid: BedrockModelsRead
+            Effect: Allow
+            Action:
+              - bedrock:ListFoundationModels
+              - bedrock:GetFoundationModel
+              - bedrock:ListCustomModels
+              - bedrock:GetCustomModel
+              - bedrock:ListModelCustomizationJobs
+              - bedrock:GetModelCustomizationJob
+              - bedrock:ListProvisionedModelThroughputs
+              - bedrock:GetProvisionedModelThroughput
+              - bedrock:ListInferenceProfiles
+              - bedrock:GetInferenceProfile
+            Resource: '*'
+
+          # Bedrock Guardrails
+          - Sid: BedrockGuardrailsRead
+            Effect: Allow
+            Action:
+              - bedrock:ListGuardrails
+              - bedrock:GetGuardrail
+              - bedrock:GetGuardrailPolicy
+            Resource: '*'
+
+          # Bedrock Knowledge Bases
+          - Sid: BedrockKnowledgeBasesRead
+            Effect: Allow
+            Action:
+              - bedrock:ListKnowledgeBases
+              - bedrock:GetKnowledgeBase
+              - bedrock:ListDataSources
+              - bedrock:GetDataSource
+            Resource: '*'
+
+          # Bedrock Flows (agent workflows)
+          - Sid: BedrockFlowsRead
+            Effect: Allow
+            Action:
+              - bedrock:ListFlows
+              - bedrock:GetFlow
+              - bedrock:ListFlowVersions
+              - bedrock:GetFlowVersion
+              - bedrock:ListFlowAliases
+              - bedrock:GetFlowAlias
+            Resource: '*'
+
+          # Bedrock Model Invocation Logging
+          - Sid: BedrockLoggingRead
+            Effect: Allow
+            Action:
+              - bedrock:GetModelInvocationLoggingConfiguration
+            Resource: '*'
+
+  # CloudWatch Policy
+  CloudWatchPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseCloudWatch
+    Properties:
+      PolicyName: AVAGovernCloudWatch
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # CloudWatch Metrics
+          - Sid: CloudWatchMetricsRead
+            Effect: Allow
+            Action:
+              - cloudwatch:GetMetricData
+              - cloudwatch:GetMetricStatistics
+              - cloudwatch:ListMetrics
+              - cloudwatch:DescribeAlarms
+              - cloudwatch:DescribeAlarmsForMetric
+              - cloudwatch:GetDashboard
+              - cloudwatch:ListDashboards
+            Resource: '*'
+
+          # CloudWatch Logs
+          - Sid: CloudWatchLogsRead
+            Effect: Allow
+            Action:
+              - logs:DescribeLogGroups
+              - logs:DescribeLogStreams
+              - logs:FilterLogEvents
+              - logs:GetLogEvents
+              - logs:GetLogGroupFields
+              - logs:GetQueryResults
+              - logs:StartQuery
+              - logs:StopQuery
+            Resource: '*'
+
+          # X-Ray (distributed tracing)
+          - Sid: XRayRead
+            Effect: Allow
+            Action:
+              - xray:GetTraceSummaries
+              - xray:BatchGetTraces
+              - xray:GetServiceGraph
+              - xray:GetTraceGraph
+            Resource: '*'
+
+  # CloudTrail Policy
+  CloudTrailPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseCloudTrail
+    Properties:
+      PolicyName: AVAGovernCloudTrail
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudTrailRead
+            Effect: Allow
+            Action:
+              - cloudtrail:LookupEvents
+              - cloudtrail:DescribeTrails
+              - cloudtrail:GetTrail
+              - cloudtrail:GetTrailStatus
+              - cloudtrail:ListTrails
+              - cloudtrail:GetEventSelectors
+            Resource: '*'
+
+  # IAM Read Policy (for policy analysis in governance)
+  IAMReadPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AVAGovernIAMRead
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: IAMReadOnly
+            Effect: Allow
+            Action:
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListAttachedRolePolicies
+              - iam:ListRolePolicies
+              - iam:ListRoles
+              - iam:ListPolicies
+              - iam:SimulatePrincipalPolicy
+            Resource: '*'
+
+  # Instance Profile (for EC2 and some ECS configurations)
+  AVAGovernInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Condition: NeedsInstanceProfile
+    Properties:
+      InstanceProfileName: AVAGovernInstanceProfile
+      Roles:
+        - !Ref AVAGovernRole
+
+  # EKS OIDC Provider Trust (placeholder - requires OIDC URL input)
+  # For EKS, customers should use eksctl or Terraform to set up IRSA
+
+Outputs:
+  RoleArn:
+    Description: IAM Role ARN - use this when configuring your compute service
+    Value: !GetAtt AVAGovernRole.Arn
+    Export:
+      Name: AVAGovernRoleArn
+
+  RoleName:
+    Description: IAM Role Name
+    Value: !Ref AVAGovernRole
+    Export:
+      Name: AVAGovernRoleName
+
+  InstanceProfileArn:
+    Condition: NeedsInstanceProfile
+    Description: Instance Profile ARN - use this for EC2 or ECS EC2 launch type
+    Value: !GetAtt AVAGovernInstanceProfile.Arn
+    Export:
+      Name: AVAGovernInstanceProfileArn
+
+  InstanceProfileName:
+    Condition: NeedsInstanceProfile
+    Description: Instance Profile Name
+    Value: !Ref AVAGovernInstanceProfile
+    Export:
+      Name: AVAGovernInstanceProfileName
+
+  EnabledCapabilities:
+    Description: Enabled AVA Govern capabilities based on parameters
+    Value: !Sub |
+      Cost Explorer: ${EnableCostExplorer}
+      Bedrock: ${EnableBedrock}
+      CloudWatch: ${EnableCloudWatch}
+      CloudTrail: ${EnableCloudTrail}
+
+  NextSteps:
+    Description: Instructions for using this role
+    Value: !Sub |
+      1. Note the RoleArn above
+      2. Configure your ${ComputeType} deployment to use this role:
+         - ECS: Set taskRoleArn in task definition
+         - EC2: Attach instance profile to instance
+         - Lambda: Set execution role
+         - EKS: Configure IRSA with this role
+         - App Runner: Set instance role ARN
+      3. Deploy AVA Govern - it will automatically use this role

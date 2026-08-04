@@ -1,0 +1,982 @@
+@import 'tailwindcss';
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Meridian Asset Management — Portfolio Intelligence
+   Executive "data-dense technical" design system (Tailwind v4).
+   Tokens + dark/light theming ported from the CC_Dashboard reference UI; the
+   dark theme is the default (institutional Bloomberg-terminal feel).
+   ────────────────────────────────────────────────────────────────────────── */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-elevated: var(--elevated);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-axis: var(--chart-axis);
+  --color-chart-grid: var(--chart-grid);
+
+  /* Swarm agent identity colors (used by the hand-off graph + chips). */
+  --color-agent-orchestrator: var(--agent-orchestrator);
+  --color-agent-universe: var(--agent-universe);
+  --color-agent-research: var(--agent-research);
+  --color-agent-analytics: var(--agent-analytics);
+  --color-agent-trading: var(--agent-trading);
+  --color-agent-compliance: var(--agent-compliance);
+  --color-agent-macro: var(--agent-macro);
+  --color-agent-esg: var(--agent-esg);
+  --color-agent-attribution: var(--agent-attribution);
+  --color-agent-liquidity: var(--agent-liquidity);
+  --color-agent-committee: var(--agent-committee);
+  /* NOTE: per-vertical agent keys (insurance: intake/pricing/binding/catmodel/reinsurance/
+     profitability/fraud; banking: borrower/underwriting/controls/relationship/portfolio/
+     monitoring) are NOT registered as Tailwind theme colors here — components read them as
+     raw `var(--agent-<key>)` in inline styles (FlowNode, quick-prompt accents), never as
+     `bg-agent-*`/`text-agent-*` utilities. Registering them in this `inline` block would
+     force build-time resolution of tokens that only exist under the :root.persona-* blocks,
+     which errors. Their values live in the persona palette blocks below. */
+
+  --radius-sm: calc(var(--radius) - 3px);
+  --radius-md: calc(var(--radius) - 1px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 3px);
+
+  /* Archivo — an editorial grotesk with newsprint DNA; carries the masthead + UI.
+     IBM Plex Mono — every figure, ticker and field-key, so data reads as data. */
+  --font-sans: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+/* ── Paper theme (DEFAULT) ──
+   A printed institutional desk: warm engraving-paper stock, ink-black text, deep
+   claret accent used with restraint, and hairline rules instead of glowing cards.
+   Depth is quiet — a hair-fine border + a soft ambient drop so a sheet lifts off the
+   paper rather than floating in a lit room. All values are tokens so the four personas
+   + the dark companion inherit the same treatment for free. */
+:root {
+  --radius: 0.5rem;
+
+  /* Warm engraving stock — not blown-out white, not the AI-default cream. */
+  --background: #f1eee7;
+  --foreground: #1a1c22;
+
+  /* Cards are the pressed sheet: a touch brighter than the stock. */
+  --card: #fbfaf6;
+  --card-foreground: #1a1c22;
+  --elevated: #ffffff;
+
+  --popover: #ffffff;
+  --popover-foreground: #1a1c22;
+
+  --primary: #8c2f39; /* claret — an engraved-certificate red-ink, used sparingly */
+  --primary-foreground: #fbfaf6;
+
+  --secondary: #e7e2d8; /* warm paper-shadow fill */
+  --secondary-foreground: #3a3b40;
+
+  --muted: #e7e2d8;
+  --muted-foreground: #726c60; /* warm graphite */
+
+  --accent: #e2ddd1;
+  --accent-foreground: #1a1c22;
+
+  --destructive: #a3352b;
+  --ok: #2f6f4f;
+  --warn: #9a6a1c;
+
+  /* Warm ink hairlines — the register rules of a ledger. */
+  --border: rgba(60, 50, 35, 0.16);
+  --input: rgba(60, 50, 35, 0.24);
+  --ring: #8c2f39;
+
+  /* Elevation kit — quiet on paper: a hair inset highlight + a soft warm ambient drop. */
+  --panel-ring: rgba(120, 90, 50, 0.03);
+  --surface-highlight: rgba(255, 255, 255, 0.7); /* top-edge catch on the sheet */
+  --panel-shadow: 0 1px 0 0 var(--surface-highlight) inset,
+    0 1px 1px rgba(50, 40, 25, 0.04), 0 10px 26px -18px rgba(50, 40, 25, 0.32);
+  --chart-grid: rgba(60, 50, 35, 0.12);
+  --grid: rgba(60, 50, 35, 0.05);
+  /* No neon: the "focus" tell on paper is a hairline ink ring, not a glow. */
+  --glow: 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent);
+  /* Ambient wash — a faint vertical toning on the paper, like uneven printing. */
+  --atmosphere:
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--primary) 4%, transparent) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(255, 253, 248, 0.5) 0%, transparent 30%);
+
+  /* Ink-friendly chart palette: claret lead + supporting engraving inks. */
+  --chart-1: #8c2f39;
+  --chart-2: #385d8a;
+  --chart-3: #6a5acd;
+  --chart-4: #b07514;
+  --chart-5: #2f6f4f;
+  --chart-axis: #8a8172;
+
+  --agent-orchestrator: #8c2f39;
+  --agent-universe: #385d8a;
+  --agent-research: #2f5e8a;
+  --agent-analytics: #5a4a9e;
+  --agent-trading: #a85d18;
+  --agent-compliance: #7a6a1e;
+  --agent-macro: #9a3b6a;
+  --agent-esg: #2f6f4f;
+  --agent-attribution: #6a4a9e;
+  --agent-liquidity: #1f6f7a;
+  --agent-committee: #5a564c;
+
+  color-scheme: light;
+}
+
+/* ── Dark companion (opt-in via .dark) ──
+   Not a neon terminal — the same printed desk after hours: warm night-ink stock,
+   paper-white text, the claret warmed to a legible rose. Retuned token-for-token so
+   the paper composition holds up in the dark without turning into the old glow. */
+:root.dark {
+  --background: #16151a;
+  --foreground: #ece7dd;
+
+  --card: #201e24;
+  --card-foreground: #ece7dd;
+  --elevated: #262329;
+
+  --popover: #2b282f;
+  --popover-foreground: #ece7dd;
+
+  --primary: #d98a94; /* warmed claret — reads on night-ink */
+  --primary-foreground: #1a1216;
+
+  --secondary: #2b2830;
+  --secondary-foreground: #d6cfc4;
+
+  --muted: #26232b;
+  --muted-foreground: #9a9184;
+
+  --accent: #322e37;
+  --accent-foreground: #ece7dd;
+
+  --destructive: #e08078;
+  --ok: #7fb894;
+  --warn: #d3aa63;
+
+  --border: rgba(220, 205, 180, 0.14);
+  --input: rgba(220, 205, 180, 0.2);
+  --ring: #d98a94;
+
+  --panel-ring: rgba(255, 250, 240, 0.015);
+  --surface-highlight: rgba(255, 245, 230, 0.05);
+  --panel-shadow: 0 1px 0 0 var(--surface-highlight) inset,
+    0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -18px rgba(0, 0, 0, 0.6);
+  --chart-grid: rgba(220, 205, 180, 0.1);
+  --grid: rgba(220, 205, 180, 0.04);
+  --glow: 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent);
+  --atmosphere:
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--primary) 6%, transparent) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(255, 245, 230, 0.02) 0%, transparent 30%);
+
+  --chart-1: #d98a94;
+  --chart-2: #7fa3d1;
+  --chart-3: #a99cdf;
+  --chart-4: #d3a862;
+  --chart-5: #7fb894;
+  --chart-axis: #9a9184;
+
+  --agent-orchestrator: #d98a94;
+  --agent-universe: #7fa3d1;
+  --agent-research: #86b0e0;
+  --agent-analytics: #a99cdf;
+  --agent-trading: #d8a262;
+  --agent-compliance: #cbb56a;
+  --agent-macro: #d386ac;
+  --agent-esg: #7fb894;
+  --agent-attribution: #b39ce0;
+  --agent-liquidity: #6fc0cc;
+  --agent-committee: #a49e92;
+
+  color-scheme: dark;
+}
+
+/* PER-PERSONA ACCENT PALETTES (see personaContext.tsx; capital_markets = base :root).
+   Each desk gets ONE deep engraving-ink accent on paper (azure / indigo / violet), warmed
+   for the .dark companion. Semantic ok/warn/destructive stay put — only the desk lead ink,
+   ring, chart + agent colors move. */
+
+:root.persona-insurance {
+  --primary: #1f5aa8; /* azure ink */
+  --primary-foreground: #fbfaf6;
+  --ring: #1f5aa8;
+  --chart-1: #1f5aa8;
+  --chart-2: #2f7db0;
+  --chart-3: #5a4a9e;
+  --chart-4: #b07514;
+  --chart-5: #9a3b6a;
+  --agent-orchestrator: #1f5aa8;
+  --agent-intake: #2f7db0;
+  --agent-research: #2f5e8a;
+  --agent-pricing: #5a4a9e;
+  --agent-compliance: #7a6a1e;
+  --agent-binding: #a85d18;
+  --agent-catmodel: #9a3b6a;
+  --agent-reinsurance: #1f6f7a;
+  --agent-profitability: #6a4a9e;
+  --agent-fraud: #a3352b;
+  --agent-committee: #5a564c;
+}
+
+:root.persona-insurance.dark {
+  --primary: #8fb2df;
+  --primary-foreground: #10161f;
+  --ring: #8fb2df;
+  --chart-1: #8fb2df;
+  --chart-2: #7fc0d8;
+  --chart-3: #a99cdf;
+  --chart-4: #d3a862;
+  --chart-5: #d386ac;
+  --agent-orchestrator: #8fb2df;
+  --agent-intake: #7fc0d8;
+  --agent-research: #86b0e0;
+  --agent-pricing: #a99cdf;
+  --agent-compliance: #cbb56a;
+  --agent-binding: #d8a262;
+  --agent-catmodel: #d386ac;
+  --agent-reinsurance: #6fc0cc;
+  --agent-profitability: #b39ce0;
+  --agent-fraud: #e08078;
+  --agent-committee: #a49e92;
+}
+
+:root.persona-banking {
+  --primary: #2e3a7a; /* indigo ink */
+  --primary-foreground: #fbfaf6;
+  --ring: #2e3a7a;
+  --chart-1: #2e3a7a;
+  --chart-2: #1f6f7a;
+  --chart-3: #5a4a9e;
+  --chart-4: #a85d18;
+  --chart-5: #9a3b6a;
+  --agent-orchestrator: #2e3a7a;
+  --agent-borrower: #2f7db0;
+  --agent-underwriting: #4a4a9e;
+  --agent-pricing: #a85d18;
+  --agent-controls: #7a6a1e;
+  --agent-relationship: #1f6f6a;
+  --agent-macro: #1f6f7a;
+  --agent-portfolio: #5a4a9e;
+  --agent-monitoring: #2f6f4f;
+  --agent-fraud: #a3352b;
+  --agent-committee: #5a564c;
+}
+
+:root.persona-banking.dark {
+  --primary: #9aa4e0;
+  --primary-foreground: #12141f;
+  --ring: #9aa4e0;
+  --chart-1: #9aa4e0;
+  --chart-2: #6fc0cc;
+  --chart-3: #a99cdf;
+  --chart-4: #d8a262;
+  --chart-5: #d386ac;
+  --agent-orchestrator: #9aa4e0;
+  --agent-borrower: #7fc0d8;
+  --agent-underwriting: #a9a2e0;
+  --agent-pricing: #d8a262;
+  --agent-controls: #cbb56a;
+  --agent-relationship: #7fc4b0;
+  --agent-macro: #6fc0cc;
+  --agent-portfolio: #b39ce0;
+  --agent-monitoring: #7fb894;
+  --agent-fraud: #e08078;
+  --agent-committee: #a49e92;
+}
+
+:root.persona-fintech {
+  --primary: #5a3a9e; /* violet ink */
+  --primary-foreground: #fbfaf6;
+  --ring: #5a3a9e;
+  --chart-1: #5a3a9e;
+  --chart-2: #385d8a;
+  --chart-3: #1f6f7a;
+  --chart-4: #6a8a1e;
+  --chart-5: #9a3b6a;
+  --agent-orchestrator: #5a3a9e;
+  --agent-universe: #385d8a;
+  --agent-research: #4a4a9e;
+  --agent-analytics: #7a3a9e;
+  --agent-compliance: #7a6a1e;
+  --agent-trading: #1f6f7a;
+  --agent-macro: #9a3b6a;
+  --agent-esg: #a3352b;
+  --agent-attribution: #6a8a1e;
+  --agent-liquidity: #1f6f7a;
+  --agent-committee: #5a564c;
+}
+
+:root.persona-fintech.dark {
+  --primary: #b49ce0;
+  --primary-foreground: #16101f;
+  --ring: #b49ce0;
+  --chart-1: #b49ce0;
+  --chart-2: #7fa3d1;
+  --chart-3: #6fc0cc;
+  --chart-4: #b4c96a;
+  --chart-5: #d386ac;
+  --agent-orchestrator: #b49ce0;
+  --agent-universe: #7fa3d1;
+  --agent-research: #a9a2e0;
+  --agent-analytics: #c29ce0;
+  --agent-compliance: #cbb56a;
+  --agent-trading: #6fc0cc;
+  --agent-macro: #d386ac;
+  --agent-esg: #e08078;
+  --agent-attribution: #b4c96a;
+  --agent-liquidity: #6fc0cc;
+  --agent-committee: #a49e92;
+}
+* {
+  border-color: var(--border);
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.004em; /* Archivo sits comfortably with a whisper of tightening */
+}
+
+/* Ambient wash + a faint print-grain, so the paper reads as pressed stock rather than a
+   flat fill. Fixed so it never scrolls; pointer-events:none so it's purely decorative. The
+   grain is a tiled SVG fractal noise at very low opacity — the "tooth" of the paper. */
+#root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--atmosphere);
+}
+#root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+:root.dark #root::after {
+  mix-blend-mode: screen;
+  opacity: 0.35;
+}
+#root > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Thin scrollbars for the dense data panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* ── Sheet chrome: a pressed sheet on the paper — bright fill, a hair-fine ink border,
+   a top catch-light and a soft warm ambient drop. Quiet by design; depth comes from the
+   rule + shadow, not a glow. Theme-aware via the elevation-kit tokens. ── */
+.panel-elevated {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--panel-ring);
+}
+
+/* A stronger sheet for hero moments (login cover, the answer note): brighter stock,
+   a crisper edge, and a deeper ambient lift. */
+.surface-hero {
+  position: relative;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 1px 0 0 var(--surface-highlight) inset,
+    0 2px 6px rgba(50, 40, 25, 0.05), 0 26px 60px -30px rgba(50, 40, 25, 0.3);
+}
+:root.dark .surface-hero {
+  box-shadow: 0 1px 0 0 var(--surface-highlight) inset,
+    0 2px 6px rgba(0, 0, 0, 0.35), 0 26px 60px -28px rgba(0, 0, 0, 0.6);
+}
+
+/* Interactive sheets (quick prompts, session rows): a gentle lift + an ink-ring edge on
+   hover — no colored glow. Combine with .panel-elevated. */
+.tile-interactive {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.tile-interactive:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  box-shadow: var(--panel-shadow), 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+/* Field-key label — the ledger's column head: uppercase mono, let-spaced, warm graphite.
+   The recurring "printed form" tell. */
+.field-key {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* A hairline rule that fades to nothing — the register line under a label. */
+.rule-fade {
+  height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+/* A full-strength hairline rule, both ends (masthead / section separators). */
+.rule {
+  height: 1px;
+  background: var(--border);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* ── Animations ── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animate-pulse-dot { animation: pulse-dot 1.1s ease-in-out infinite; }
+
+@keyframes flow-dash {
+  to { stroke-dashoffset: -16; }
+}
+.animate-flow { stroke-dasharray: 4 4; animation: flow-dash 0.6s linear infinite; }
+
+@keyframes fade-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-rise { animation: fade-rise 0.28s ease-out both; }
+
+/* Orchestrated entrance: children reveal in sequence. Set --i on each child (its
+   index) and the delay staggers automatically. Used by the login hero + thread. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stagger > * {
+  opacity: 0;
+  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* Retained for compat: on paper a glossy sheen reads wrong, so .sheen-once is now inert
+   (the button gets its lift from hover, not a swipe). Kept as a no-op wrapper so callers
+   don't need to change. */
+.sheen-once { position: relative; overflow: hidden; }
+
+/* Ink draw-on: the engraving strokes ink themselves in, like a plate being printed.
+   Applied to SVG paths via stroke-dashoffset; each path sets its own --len + delay. */
+@keyframes ink-draw {
+  from { stroke-dashoffset: var(--len, 1000); }
+  to { stroke-dashoffset: 0; }
+}
+.ink-draw {
+  stroke-dasharray: var(--len, 1000);
+  animation: ink-draw 2.4s cubic-bezier(0.4, 0, 0.1, 1) both;
+}
+
+/* A quiet "alive" pulse for status dots — an ink dot gaining/losing weight, no glow. */
+@keyframes breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.95; }
+}
+.animate-breathe { animation: breathe 3s ease-in-out infinite; }
+
+/* Respect the OS reduced-motion setting: kill decorative motion, keep opacity reveals
+   snappy. A quality-floor requirement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stagger > * { opacity: 1; }
+}
+
+/* Rendered-markdown typography inside assistant bubbles. */
+.prose-exec h3 { font-size: 14px; font-weight: 700; margin: 14px 0 6px; letter-spacing: -0.01em; }
+.prose-exec h4 { font-size: 12.5px; font-weight: 700; margin: 12px 0 4px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.04em; }
+.prose-exec ul { margin: 6px 0; padding-left: 18px; list-style: disc; }
+.prose-exec ol { margin: 6px 0; padding-left: 20px; list-style: decimal; }
+.prose-exec li { margin: 3px 0; }
+.prose-exec hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.prose-exec blockquote { margin: 8px 0; padding: 4px 0 4px 12px; border-left: 2px solid color-mix(in srgb, var(--primary) 45%, var(--border)); color: var(--muted-foreground); }
+.prose-exec blockquote p { margin: 0; }
+.prose-exec code { background: var(--secondary); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); font-size: 90%; }
+.prose-exec strong { font-weight: 700; }
+.prose-exec em { color: var(--muted-foreground); font-style: italic; font-size: 92%; }
+.prose-exec { overflow-wrap: anywhere; word-break: break-word; }
+.prose-exec table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 12.5px; table-layout: auto; }
+.prose-exec code { overflow-wrap: anywhere; }
+.prose-exec th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); padding: 5px 10px; border-bottom: 1px solid var(--border); }
+.prose-exec td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.prose-exec tr:last-child td { border-bottom: none; }
+/* Semantic signed deltas inside rendered answers (+green / −red). */
+.prose-exec .delta-pos { color: var(--ok); font-variant-numeric: tabular-nums; font-weight: 600; }
+.prose-exec .delta-neg { color: var(--destructive); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* Evaluator-card reasoning: the executive prose renderer, tightened for the small detail
+   cards. Kills the leading/trailing margin, indents the enumerated criteria as a proper
+   hanging list, and bolds the criterion label so each point reads as a scannable line item
+   instead of a run-on wall. */
+.prose-eval > :first-child { margin-top: 0; }
+.prose-eval > :last-child { margin-bottom: 0; }
+.prose-eval ol { margin: 4px 0; padding-left: 16px; }
+.prose-eval ul { margin: 4px 0; padding-left: 16px; }
+.prose-eval li { margin: 4px 0; padding-left: 2px; }
+.prose-eval li::marker { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.prose-eval strong { color: var(--foreground); font-weight: 600; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Swarm-trace timeline + command-console chrome (uses existing tokens only).
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Ledger-grid background, center canvas only. A faint ruled lattice — the columnar paper
+   of a trading blotter — instead of dots. Very low-contrast so it sits under the content. */
+.dot-grid {
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 26px 26px;
+  background-position: -1px -1px;
+}
+
+/* Connected assistant thread: a 30px node gutter with a 2px hairline spine, one
+   node per step. The spine is drawn by the gutter's ::before; nodes sit on top. */
+.thread-step {
+  position: relative;
+  padding-left: 30px;
+}
+.thread-step::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  /* A printed margin rule: a hair-fine ink line down the trace, tinted at its head where
+     the run begins and settling to a plain register rule below. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 55%, var(--border)) 0%,
+    var(--border) 40%
+  );
+}
+/* First step rounds the spine's head; last step fades its tail so the thread
+   doesn't look clipped. */
+.thread-step.is-first::before { top: 11px; }
+.thread-step.is-last::before { bottom: auto; height: 11px; }
+
+/* The node marker centered on the spine. */
+.thread-node {
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--elevated);
+  border: 2px solid var(--border-node, var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.thread-node.is-done { border-color: var(--primary); }
+.thread-node.is-done::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--primary);
+}
+/* Running node: filled ink dot + one quiet expanding ink ring (no glow). */
+.thread-node.is-running {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+.thread-node.is-running::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  animation: node-ring 1.6s ease-out infinite;
+}
+@keyframes node-ring {
+  0% { transform: scale(0.7); opacity: 0.8; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+/* Live stamp — a printed "as of / live" mark rather than a glowing pill: a hairline-ruled
+   tag with a small ink dot. Sits on the masthead + cover. */
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.live-pill .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--primary);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* ── AWS Agent Stack as a vertical register ──────────────────────────────────
+   A hairline rule runs down a node gutter; each service is a marker on the rule + a
+   ruled row. Active services get a filled ink marker and a plain row; idle services
+   get a hollow marker + a faded row. No glow — this is a printed manifest. */
+.pipe-row {
+  position: relative;
+  padding-left: 26px;
+}
+.pipe-row::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: -10px; /* bridge the gap to the next row */
+  width: 1px;
+  background: var(--border);
+}
+.pipe-row.is-first::before { top: 12px; }
+.pipe-row.is-last::before { bottom: auto; height: 12px; }
+/* Active rule segment inks in at full strength. */
+.pipe-row.is-active::before { background: color-mix(in srgb, var(--primary) 60%, var(--border)); }
+
+.pipe-node {
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: var(--card);
+  border: 1px solid var(--muted-foreground);
+  z-index: 1;
+}
+.pipe-node.idle {
+  border-color: var(--muted-foreground);
+  opacity: 0.45;
+}
+.pipe-node.active {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+/* Active + currently-running → soft ink pulse. */
+.pipe-node.busy { animation: breathe 2.4s ease-in-out infinite; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The Gateway checkpoint — a request descending the governed wire.
+   One vertical spine; each gate (identity → authorization → rate → firewall →
+   tool) is a numbered checkpoint on the wire. This extends the .pipe-row
+   register device: a heavier spine (the "wire"), square inked gate markers with
+   a hand-stamped number, and an engraved verdict stamp that presses onto the
+   wire once a gate is exercised. No glow — a printed manifest that reacts.
+   ────────────────────────────────────────────────────────────────────────── */
+.gate {
+  position: relative;
+  padding-left: 46px;
+}
+/* The wire: a 2px hairline running the full height of the gate, bridging to the
+   next gate so the descent reads as one continuous conduit. */
+.gate::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 0;
+  bottom: -18px;
+  width: 2px;
+  background: var(--border);
+}
+.gate.is-first::before { top: 20px; }
+.gate.is-last::before { bottom: auto; height: 20px; }
+/* A gate the request has cleared inks its wire segment to the "allowed" green —
+   matching green=allowed everywhere else in the governance UI. */
+.gate.is-cleared::before { background: color-mix(in srgb, var(--ok) 60%, var(--border)); }
+/* A hard block (secrets/SSN) stains the downstream wire in alarm ink — path is dead. */
+.gate.is-stopped::before { background: color-mix(in srgb, var(--destructive) 60%, var(--border)); }
+/* A soft throttle (rate cap) stains it amber — the request is held, not killed. */
+.gate.is-throttled::before { background: color-mix(in srgb, var(--warn) 60%, var(--border)); }
+
+/* The gate marker — a square inked plate on the wire (a checkpoint, not a bead),
+   carrying the gate's ordinal in mono. Idle = hollow ink; cleared = filled
+   accent; stopped = filled alarm. */
+.gate-mark {
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--card);
+  border: 1.5px solid var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  z-index: 1;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+.gate-mark.is-cleared {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--primary-foreground);
+}
+.gate-mark.is-stopped {
+  border-color: var(--destructive);
+  background: var(--destructive);
+  color: var(--primary-foreground);
+}
+.gate-mark.is-throttled {
+  border-color: var(--warn);
+  background: var(--warn);
+  color: var(--primary-foreground);
+}
+.gate-mark.is-busy { animation: breathe 1.6s ease-in-out infinite; }
+
+/* The engraved verdict stamp — pressed onto the wire when a gate resolves.
+   A mono, letter-spaced, ruled tag rotated a hair off-true, like a rubber stamp
+   struck onto the sheet. Tone flows from the gate's outcome. */
+@keyframes stamp-press {
+  0% { opacity: 0; transform: rotate(-3deg) scale(1.35); }
+  55% { opacity: 1; transform: rotate(-3deg) scale(0.97); }
+  100% { opacity: 1; transform: rotate(-3deg) scale(1); }
+}
+.verdict-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  animation: stamp-press 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.verdict-stamp.tone-ok { color: var(--ok); }
+.verdict-stamp.tone-warn { color: var(--warn); }
+.verdict-stamp.tone-block { color: var(--destructive); }
+.verdict-stamp.tone-primary { color: var(--primary); }
+
+/* The burst read-out: one cell per fired call, allowed → accent, throttled →
+   alarm. Cells drop in left-to-right so the throttle "engaging" is visible. */
+@keyframes cell-drop {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.burst-cell {
+  animation: cell-drop 0.18s ease-out both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GATEWAY STAGE — "Send it through."
+   A governed boundary you can operate: a request descends one inked wire through
+   four checkpoints (identity → authorization → rate → firewall) and each gate
+   presses a verdict stamp before it lands in the tool vault. The checkpoint
+   device itself is the shared .gate/.gate-mark/.verdict-stamp register (above);
+   this block is only the scoped stage chrome + the descending carriage. Scoped
+   under .gw-stage so nothing leaks, and theme-aware — paper in light, warm
+   night-ink in dark, halos gated behind --gw-glow.
+   ══════════════════════════════════════════════════════════════════════════ */
+.gw-stage {
+  /* Theme-aware: the stage speaks the app's OWN design tokens, so it's the printed
+     desk in light and the warm night-ink companion in dark — never an island. Only
+     the packet/rail/portal MOTION is bespoke. One switch, --gw-glow, turns the neon
+     halos on in the dark and off on paper (where depth comes from ink + rules). */
+  --gw-void: var(--secondary);                    /* deepest recess — transcript / code inset */
+  --gw-bg: var(--background);
+  --gw-panel: var(--card);
+  --gw-panel-2: color-mix(in srgb, var(--secondary) 55%, var(--card));
+  --gw-line: var(--border);
+  --gw-line-2: var(--input);
+  --gw-ink: var(--foreground);
+  --gw-dim: var(--muted-foreground);
+  --gw-faint: color-mix(in srgb, var(--muted-foreground) 72%, transparent);
+  --gw-accent: var(--ok);                          /* allowed / live — semantic, theme-aware */
+  --gw-accent-dim: color-mix(in srgb, var(--ok) 55%, var(--background));
+  --gw-warn: var(--warn);                          /* held / masked */
+  --gw-block: var(--destructive);                  /* turned back */
+  --gw-cyan: var(--primary);                       /* in-flight — the desk's own accent ink */
+  --gw-glow: 0;                                    /* neon-halo budget: 0 on paper, 1 in the dark */
+
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* In the dark the SAME tokens hold (they alias the app's dark companion, so the stage
+   stays warm night-ink like the shell) — but the halos + a faint deep-space wash come
+   alive. This is the "mission-control" drama, now cohesive rather than an island. */
+:root.dark .gw-stage {
+  --gw-glow: 1;
+  background:
+    radial-gradient(120% 80% at 50% -8%, color-mix(in srgb, var(--gw-cyan) 10%, transparent) 0%, transparent 44%),
+    radial-gradient(90% 60% at 88% 4%, color-mix(in srgb, var(--gw-accent) 7%, transparent) 0%, transparent 46%),
+    var(--background);
+}
+
+/* A whisper-fine star/grid dust so the void has depth without noise. */
+.gw-stage-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--gw-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--gw-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(120% 80% at 50% 30%, black 0%, transparent 72%);
+  mask-image: radial-gradient(120% 80% at 50% 30%, black 0%, transparent 72%);
+  opacity: 0.5;
+}
+
+/* A stage panel — layered, faint top catch-light, deep drop. */
+.gw-card {
+  position: relative;
+  background: var(--gw-panel);
+  border: 1px solid var(--gw-line);
+  border-radius: 14px;
+  /* The app's own elevation kit — a hair top-catch + a soft theme-aware drop, so a
+     stage panel lifts off its surface exactly like every .panel-elevated sheet. */
+  box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--panel-ring);
+}
+
+/* ── The descending carriage ──────────────────────────────────────────────
+   The request itself, riding DOWN the checkpoint wire. The .gate device draws
+   the wire at x=17px (see .gate::before); the carriage is a small inked bead
+   centered on that wire, whose `top` is sprung from gate to gate by motion/react.
+   Quiet ink on paper; a faint bloom only in the dark (× --gw-glow). */
+.gw-carriage {
+  position: absolute;
+  left: 17px;
+  top: 0;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  z-index: 2;
+  opacity: 0;
+  background: var(--gw-cyan);
+  box-shadow:
+    0 0 0 2px var(--gw-bg),
+    0 0 0 3px color-mix(in srgb, var(--gw-cyan) 45%, transparent),
+    0 0 14px 2px color-mix(in srgb, var(--gw-cyan) calc(65% * var(--gw-glow)), transparent);
+  transition: opacity 0.25s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.gw-carriage.is-live { opacity: 1; }
+.gw-carriage[data-tone='ok'] { background: var(--gw-accent); box-shadow: 0 0 0 2px var(--gw-bg), 0 0 0 3px color-mix(in srgb, var(--gw-accent) 45%, transparent), 0 0 14px 2px color-mix(in srgb, var(--gw-accent) calc(65% * var(--gw-glow)), transparent); }
+.gw-carriage[data-tone='warn'] { background: var(--gw-warn); box-shadow: 0 0 0 2px var(--gw-bg), 0 0 0 3px color-mix(in srgb, var(--gw-warn) 45%, transparent), 0 0 14px 2px color-mix(in srgb, var(--gw-warn) calc(65% * var(--gw-glow)), transparent); }
+.gw-carriage[data-tone='block'] { background: var(--gw-block); box-shadow: 0 0 0 2px var(--gw-bg), 0 0 0 3px color-mix(in srgb, var(--gw-block) 45%, transparent), 0 0 16px 3px color-mix(in srgb, var(--gw-block) calc(70% * var(--gw-glow)), transparent); }
+/* A soft comet tail above the bead while it descends. */
+.gw-carriage::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 3px;
+  height: 34px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, currentColor 30%, transparent));
+  color: var(--gw-cyan);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.gw-carriage.is-moving::after { opacity: 0.5; }
+
+/* ── Launch CTA — the desk's own accent ink, guaranteed-contrast label, halo only
+   in the dark. Matches the app's primary buttons instead of a bespoke neon slab. ── */
+.gw-launch {
+  color: var(--primary-foreground);
+  background: var(--gw-cyan);
+  box-shadow: 0 0 24px -6px color-mix(in srgb, var(--gw-cyan) calc(100% * var(--gw-glow)), transparent);
+}
+.gw-launch:not(:disabled):hover {
+  background: color-mix(in srgb, var(--gw-cyan) 88%, var(--gw-ink));
+}
+
+/* ── Sender chips in the launch dock ─────────────────────────────────────── */
+/* ── Sender chips — a segmented control in the launch bar ────────────────── */
+.gw-sender {
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.gw-sender:hover { background: color-mix(in srgb, var(--gw-ink) 4%, transparent); }
+.gw-sender[data-active='true'] {
+  background: var(--gw-panel);
+  box-shadow: var(--panel-shadow);
+}
+
+/* Reduced motion: the carriage descent + the plate breathe collapse to static
+   states; the story still reads through the wire inking + verdict stamps + transcript. */
+@media (prefers-reduced-motion: reduce) {
+  .gw-carriage,
+  .gw-carriage::after,
+  .gate-mark.is-busy { animation: none !important; }
+}

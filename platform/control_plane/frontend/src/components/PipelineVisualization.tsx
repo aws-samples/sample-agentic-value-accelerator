@@ -44,12 +44,12 @@ function getDuration(from: string, to: string): string {
 
 export default function PipelineVisualization({ status, statusHistory, failedStage, buildId }: Props) {
   const [pulse, setPulse] = useState(true);
-  const isDestroy = status === 'destroying' || status === 'destroyed';
+  const isDestroy = status === 'destroying' || status === 'destroyed' || (status === 'failed' && [...statusHistory].reverse().find(e => e.status !== 'failed')?.status === 'destroying');
   const isFailed = status === 'failed';
   const isTerminal = ['deployed', 'destroyed', 'failed', 'rolled_back', 'delivered'].includes(status);
 
   useEffect(() => {
-    if (isTerminal) { setPulse(false); return; }
+    if (isTerminal) return;
     const t = setInterval(() => setPulse(p => !p), 800);
     return () => clearInterval(t);
   }, [isTerminal]);
@@ -64,23 +64,28 @@ export default function PipelineVisualization({ status, statusHistory, failedSta
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3 mb-2">
-          <span className="text-sm font-semibold text-orange-700 bg-orange-50 px-3 py-1 rounded-xl border border-orange-200">
-            Destroy Pipeline
+          <span className={`text-sm font-semibold px-3 py-1 rounded-xl border ${
+            isFailed ? 'text-red-700 bg-red-50 border-red-200' : 'text-orange-700 bg-orange-50 border-orange-200'
+          }`}>
+            {isFailed ? 'Destroy Failed' : 'Destroy Pipeline'}
           </span>
         </div>
         {DESTROY_STAGES.map((stage, idx) => {
           const isActive = stage.key === status;
           const isDone = status === 'destroyed' && idx === 0;
+          const isFailedStage = isFailed && idx === 0;
           return (
             <div key={stage.key} className={`flex items-center gap-4 p-3 rounded-xl transition-all duration-500 ${
+              isFailedStage ? 'bg-red-50 border border-red-200' :
               isActive ? 'bg-orange-50 border border-orange-200' : isDone ? 'bg-slate-50' : 'opacity-40'
             }`}>
               <div className={`text-2xl ${isActive && !isTerminal ? 'animate-bounce' : ''}`}>{stage.icon}</div>
               <div>
                 <div className="font-semibold text-slate-900">{stage.label}</div>
-                <div className="text-xs text-slate-500">{stage.detail}</div>
+                <div className="text-xs text-slate-500">{isFailedStage ? 'Terraform destroy failed' : stage.detail}</div>
               </div>
               {isDone && <span className="ml-auto text-emerald-600 text-sm font-semibold">Done</span>}
+              {isFailedStage && <span className="ml-auto text-red-600 text-sm font-semibold">Failed</span>}
               {isActive && !isTerminal && <span className="ml-auto"><Spinner /></span>}
             </div>
           );

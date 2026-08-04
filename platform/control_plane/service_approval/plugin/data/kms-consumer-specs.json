@@ -1,0 +1,92 @@
+{
+  "_metadata": {
+    "description": "AWS services that consume a KMS CMK and the key-policy Statement requirements AWS enforces for each. Only services explicitly verified via deploy+teardown testing are included. Unknown consumer types emit KMS-CONSUMER-UNKNOWN warnings at hook time with a pointer to this file. Add new entries only after verifying the principal + required actions against the service's own \"Encrypting data with KMS for <service>\" developer guide page.",
+    "schema_version": "1.0",
+    "sources": [
+      "Each entry: the specific service's \"Encrypting data with KMS for <service>\" page",
+      "Example: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/encrypt-log-data-kms.html",
+      "Example: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-create-storage-key.html"
+    ],
+    "verification": "Every consumer below has been validated in at least one smoke-test deploy+teardown cycle",
+    "curation": "This file is hand-curated. New entries require a deploy-verified principal + required_actions per service. No automated scraper \u2014 AWS docs for KMS consumer permissions are per-service prose."
+  },
+  "cfn_key_pointing_properties": [
+    "KmsKeyId",
+    "KmsMasterKeyId",
+    "KmsKeyArn",
+    "KMSKeyId",
+    "FargateEphemeralStorageKmsKeyId"
+  ],
+  "tf_key_pointing_args": [
+    "kms_key_id",
+    "kms_master_key_id",
+    "kms_key_arn",
+    "fargateEphemeralStorageKmsKeyId"
+  ],
+  "consumers": {
+    "AWS::Logs::LogGroup": {
+      "terraform": "aws_cloudwatch_log_group",
+      "principal": "logs.{region}.amazonaws.com",
+      "required_actions": [
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKey*"
+      ],
+      "conditions_hint": "ArnLike kms:EncryptionContext:aws:logs:arn"
+    },
+    "AWS::SQS::Queue": {
+      "terraform": "aws_sqs_queue",
+      "principal": "sqs.amazonaws.com",
+      "required_actions": [
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKey*"
+      ],
+      "conditions_hint": "StringEquals aws:SourceAccount"
+    },
+    "AWS::SNS::Topic": {
+      "terraform": "aws_sns_topic",
+      "principal": "sns.amazonaws.com",
+      "required_actions": [
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKey*"
+      ],
+      "conditions_hint": "StringEquals aws:SourceAccount"
+    },
+    "AWS::Lambda::Function": {
+      "terraform": "aws_lambda_function",
+      "principal": "lambda.amazonaws.com",
+      "required_actions": [
+        "kms:Decrypt"
+      ],
+      "conditions_hint": "StringEquals aws:SourceAccount"
+    },
+    "AWS::ECS::Cluster": {
+      "terraform": "aws_ecs_cluster",
+      "principal": "ecs.amazonaws.com",
+      "required_actions": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKey*"
+      ],
+      "conditions_hint": "StringEquals aws:SourceAccount; Fargate ephemeral storage uses fargate.amazonaws.com with kms:GenerateDataKeyWithoutPlaintext + kms:CreateGrant and aws:ecs:clusterAccount/clusterName encryption-context keys"
+    },
+    "AWS::Events::Rule": {
+      "terraform": "aws_cloudwatch_event_rule",
+      "principal": "events.amazonaws.com",
+      "required_actions": [
+        "kms:Decrypt"
+      ],
+      "conditions_hint": "StringEquals aws:SourceAccount"
+    },
+    "AWS::StepFunctions::StateMachine": {
+      "terraform": "aws_sfn_state_machine",
+      "principal": "states.{region}.amazonaws.com",
+      "required_actions": [
+        "kms:Decrypt"
+      ],
+      "conditions_hint": "StringEquals aws:SourceAccount"
+    }
+  }
+}

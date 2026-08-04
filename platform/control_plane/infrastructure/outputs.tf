@@ -45,6 +45,11 @@ output "frontend_bucket_name" {
   value       = module.s3.frontend_bucket_name
 }
 
+output "advpo_bucket_name" {
+  description = "Advanced Prompt Optimization S3 bucket name"
+  value       = module.advanced_prompt_optimization.prompt_optimization_bucket_name
+}
+
 # ============================================================================
 # ECR Outputs
 # ============================================================================
@@ -53,6 +58,10 @@ output "ecr_repository_url" {
   description = "ECR repository URL"
   value       = module.ecr.repository_url
 }
+
+# Phase B decommission: service_approval_runner_ecr_repository_url removed.
+# The Fargate runner ECR no longer exists — the v2 module owns the AgentCore
+# runtime image at platform/control_plane/service_approval/runtime/ outputs.
 
 # ============================================================================
 # ECS Outputs
@@ -143,6 +152,16 @@ output "cognito_identity_pool_id" {
 output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID"
   value       = module.cloudfront.distribution_id
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront distribution domain (e.g. d1v3ehii7cdiog.cloudfront.net). Feeds bootstrap/hosted_zone as the apex alias target so the demo zone points at the same distribution this terraform creates."
+  value       = module.cloudfront.distribution_domain_name
+}
+
+output "cloudfront_hosted_zone_id" {
+  description = "Hosted zone ID of the CloudFront distribution created here (aws_cloudfront_distribution.main.hosted_zone_id). Feeds bootstrap/hosted_zone's alias record so the alias resolves to this exact distribution rather than relying on a hardcoded CloudFront zone ID."
+  value       = module.cloudfront.distribution_hosted_zone_id
 }
 
 output "frontend_url" {
@@ -287,4 +306,19 @@ output "deployment_summary" {
     state_backend_bucket = module.state_backend.bucket_name
     codecommit_repo      = var.enable_codecommit ? module.codecommit[0].repository_name : "disabled"
   }
+}
+
+output "sample_datalake_glue_job_name" {
+  description = "Glue job name for seeding sample data lake"
+  value       = var.enable_sample_datalake ? module.sample_datalake[0].glue_job_name : ""
+}
+
+output "datalake_mcp_repository_url" {
+  description = "ECR repository URL for data lake MCP server"
+  value       = module.ecr.datalake_mcp_repository_url
+}
+
+output "kb_mcp_repository_url" {
+  description = "ECR repository URL for knowledge base MCP server"
+  value       = module.ecr.kb_mcp_repository_url
 }

@@ -153,6 +153,33 @@ class PipelineService:
             logger.warning(f"Log stream not found for build {build_id}")
             return f"No logs available for build {build_id}"
 
+    def get_runtime_logs(self, log_group: str, limit: int = 500) -> str:
+        """Tail the most recent N events from an AgentCore runtime log group.
+
+        Returns events newest-last, formatted as 'ISO_TS  message'. Returns a
+        placeholder string if the log group does not exist (runtime hasn't
+        emitted logs yet).
+        """
+        try:
+            response = self.logs_client.filter_log_events(
+                logGroupName=log_group,
+                limit=limit,
+            )
+        except self.logs_client.exceptions.ResourceNotFoundException:
+            return f"No logs yet in {log_group} — runtime may not have started."
+
+        events = sorted(response.get("events", []), key=lambda e: e.get("timestamp", 0))
+        if not events:
+            return f"No log events in {log_group} yet."
+
+        from datetime import datetime, timezone
+        lines = []
+        for e in events:
+            ts_ms = e.get("timestamp", 0)
+            ts = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).isoformat(timespec="seconds")
+            lines.append(f"{ts}  {e.get('message', '').rstrip()}")
+        return "\n".join(lines)
+
     # --- Private helpers ---
 
     def _extract_job(self, template: Template, job_name: str) -> Optional[dict]:
@@ -161,11 +188,11 @@ class PipelineService:
         Returns a dict with name, incoming_event, outgoing_event or None.
         """
         for job in template.metadata.jobs:
-            if job.name == job_name:
+            if job.get("name") == job_name:
                 return {
-                    "name": job.name,
-                    "incoming_event": job.incoming_event,
-                    "outgoing_event": job.outgoing_event,
+                    "name": job.get("name"),
+                    "incoming_event": job.get("incoming_event"),
+                    "outgoing_event": job.get("outgoing_event"),
                 }
         return None
 

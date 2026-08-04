@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { deploymentsApi } from '../api/client';
 import type { Deployment } from '../types';
 import LoadingSpinner from './LoadingSpinner';
+import { openFsiApp } from '../lib/fsiAppLink';
 
 /**
  * My Apps — a business-user-facing view of app-factory deployments only.
@@ -144,8 +145,11 @@ export default function MyApps() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {uiUrl && (
+                      // FSI app link — routed through openFsiApp so the
+                      // AVA Cognito id_token is passed to the app's CloudFront
+                      // edge for SSO bootstrap.
                       <button
-                        onClick={() => window.open(uiUrl, '_blank')}
+                        onClick={() => openFsiApp(uiUrl)}
                         className="inline-flex items-center gap-1.5 text-sm py-2 px-4 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors"
                       >
                         Open App

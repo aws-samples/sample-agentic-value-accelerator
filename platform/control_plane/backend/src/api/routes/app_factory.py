@@ -10,7 +10,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from core.rbac import require_role, Role
 from pydantic import BaseModel
 from typing import Optional
 
@@ -126,7 +128,7 @@ class AppFactorySubmission(BaseModel):
 
 
 @router.post("/submissions", status_code=201)
-async def create_submission(body: AppFactorySubmission):
+async def create_submission(body: AppFactorySubmission, _=Depends(require_role(Role.OPERATOR))):
     submission_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
 
@@ -174,7 +176,7 @@ async def create_submission(body: AppFactorySubmission):
 
 
 @router.post("/submissions/{submission_id}/deploy", status_code=201)
-async def deploy_submission(submission_id: str):
+async def deploy_submission(submission_id: str, _=Depends(require_role(Role.OPERATOR))):
     """Trigger code generation + deployment for an App Factory submission.
 
     Creates a deployment record (same as other deployments), packages the
@@ -339,7 +341,7 @@ async def deploy_submission(submission_id: str):
 
 
 @router.get("/submissions")
-async def list_submissions():
+async def list_submissions(_=Depends(require_role(Role.VIEWER))):
     try:
         response = get_table().scan(
             FilterExpression="sk = :sk",
@@ -357,7 +359,7 @@ async def list_submissions():
 
 
 @router.get("/submissions/{submission_id}")
-async def get_submission(submission_id: str):
+async def get_submission(submission_id: str, _=Depends(require_role(Role.VIEWER))):
     try:
         response = get_table().get_item(
             Key={"pk": f"SUBMISSION#{submission_id}", "sk": "META"}

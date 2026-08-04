@@ -1,0 +1,233 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  AWS Security Agent — Agent Space with Application, Penetration Test Service,
+  and Actor IAM roles. Deployed by the AVA CI/CD pipeline.
+
+Parameters:
+  AgentSpaceName:
+    Type: String
+    Default: FSIAgentKitSecurityAgentSpace-CFN
+    Description: Name for the Security Agent Space.
+
+  AgentSpaceDescription:
+    Type: String
+    Default: Security Agent Space provisioned by AVA - CloudFormation
+    Description: Description for the Security Agent Space.
+
+  NamePostfix:
+    Type: String
+    Default: ''
+    Description: >-
+      Fixed suffix appended to IAM role names. Leave empty to use the stack's
+      unique suffix. Useful for re-deploys that need stable role names.
+
+  ExternalId:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: >-
+      External ID required when assuming the Penetration Test Service Role and
+      Actor Role. Leave empty to use the stack ID slug as a deterministic
+      derived value (recommended only for non-production demos — pin a real
+      external ID for production).
+
+  CreateApplication:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Create AWS::SecurityAgent::Application as part of this stack. AWS allows
+      only ONE Application per account, so set this to 'true' on the FIRST
+      deployment in an account; subsequent deployments must set 'false' and
+      pass ExistingApplicationDomain instead.
+
+  ExistingApplicationDomain:
+    Type: String
+    Default: ''
+    Description: >-
+      Domain of the pre-existing Security Agent Application
+      (e.g. app-xxxxx.securityagent.global.app.aws). Required when
+      CreateApplication = 'false'. Used to compose the operator app URL.
+
+Conditions:
+  HasPostfix:        !Not [!Equals [!Ref NamePostfix, '']]
+  HasExternalId:     !Not [!Equals [!Ref ExternalId, '']]
+  ShouldCreateApp:   !Equals [!Ref CreateApplication, 'true']
+
+Resources:
+
+  # ─── Application Role ──────────────────────────────────────────────────
+  ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub
+        - 'SecurityAgentRole-Application-cfn${Suffix}'
+        - Suffix: !If [HasPostfix, !Ref NamePostfix, !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: securityagent.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: SecurityAgentApplicationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                # Full securityagent:* — the Application Role is only assumed
+                # by securityagent.amazonaws.com on behalf of WebApp users.
+                # Narrower scopes cause 'Failed to load agent instance'.
+                Action: 'securityagent:*'
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: ava
+        - Key: Component
+          Value: frontier-agents/security
+
+  # ─── Penetration Test Service Role ─────────────────────────────────────
+  PenTestServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub
+        - 'SecurityAgentRole-PenTestService-cfn${Suffix}'
+        - Suffix: !If [HasPostfix, !Ref NamePostfix, !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: securityagent.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !If
+                  - HasExternalId
+                  - !Ref ExternalId
+                  - !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/SecurityAudit
+        - arn:aws:iam::aws:policy/job-function/ViewOnlyAccess
+      Tags:
+        - Key: Project
+          Value: ava
+        - Key: Component
+          Value: frontier-agents/security
+
+  # ─── Actor Role ────────────────────────────────────────────────────────
+  ActorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub
+        - 'SecurityAgentRole-Actor-cfn${Suffix}'
+        - Suffix: !If [HasPostfix, !Ref NamePostfix, !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: securityagent.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !If
+                  - HasExternalId
+                  - !Ref ExternalId
+                  - !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+      Policies:
+        - PolicyName: SecurityAgentActorAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: InvokeApplicationEndpoints
+                Effect: Allow
+                Action:
+                  - execute-api:Invoke
+                  - lambda:InvokeFunctionUrl
+                  - lambda:InvokeFunction
+                # Default to wildcard so the agent can target any user-owned
+                # API/Lambda. Tighten Resource to your specific app post-deploy.
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: ava
+        - Key: Component
+          Value: frontier-agents/security
+
+  # ─── Security Agent Application ────────────────────────────────────────
+  # Top-level app shell that the Security Agent console looks up to surface
+  # Agent Spaces in the WebApp. IAM-only access via RoleArn = Application
+  # Role. SINGLETON per AWS account — only one Application is allowed across
+  # the entire account, so this is gated by CreateApplication. The first
+  # deployment in an account creates it; subsequent deployments must set
+  # CreateApplication=false and pass ExistingApplicationDomain.
+  Application:
+    Type: AWS::SecurityAgent::Application
+    Condition: ShouldCreateApp
+    DependsOn:
+      - ApplicationRole
+    Properties:
+      RoleArn: !GetAtt ApplicationRole.Arn
+      Tags:
+        - Key: Project
+          Value: ava
+        - Key: Component
+          Value: frontier-agents/security
+
+  # ─── Agent Space (native CFN type) ─────────────────────────────────────
+  AgentSpace:
+    Type: AWS::SecurityAgent::AgentSpace
+    DependsOn:
+      - PenTestServiceRole
+      - ActorRole
+    Properties:
+      Name: !Ref AgentSpaceName
+      Description: !Ref AgentSpaceDescription
+      Tags:
+        - Key: Project
+          Value: ava
+        - Key: Component
+          Value: frontier-agents/security
+
+Outputs:
+  applicationid:
+    Description: ID of the Security Agent Application (the top-level app shell). Empty when reusing an existing Application.
+    Value: !If [ShouldCreateApp, !GetAtt Application.ApplicationId, '']
+  applicationdomain:
+    Description: Domain of the Security Agent Application. Echoes ExistingApplicationDomain when reusing an existing Application.
+    Value: !If [ShouldCreateApp, !GetAtt Application.Domain, !Ref ExistingApplicationDomain]
+  agentspaceid:
+    Description: ID of the created Security Agent Space.
+    Value: !GetAtt AgentSpace.AgentSpaceId
+  operatorappurl:
+    Description: URL of the Security Agent operator webapp for this Agent Space. Mirrors the DevOps Agent pattern (direct app domain). Requires an authenticated AWS console session in the browser.
+    Value: !Sub
+      - 'https://${ApplicationDomain}/${AgentSpaceId}'
+      - ApplicationDomain: !If [ShouldCreateApp, !GetAtt Application.Domain, !Ref ExistingApplicationDomain]
+        AgentSpaceId: !GetAtt AgentSpace.AgentSpaceId
+  agentspacearn:
+    Description: Reference (logical ID -> AgentSpaceId) of the created Security Agent Space.
+    Value: !Ref AgentSpace
+  agentspacename:
+    Description: Name of the created Security Agent Space.
+    Value: !Ref AgentSpaceName
+  applicationrolearn:
+    Description: ARN of the Application Role used by the Security Agent WebApp.
+    Value: !GetAtt ApplicationRole.Arn
+  pentestservicerolearn:
+    Description: ARN of the PenTest Service Role. Selectable from the WebApp when launching a pentest.
+    Value: !GetAtt PenTestServiceRole.Arn
+  actorrolearn:
+    Description: ARN of the Actor Role used to authenticate against the target application.
+    Value: !GetAtt ActorRole.Arn
+  primaryaccountid:
+    Description: Account ID where the Security Agent Space was created.
+    Value: !Ref AWS::AccountId
+  awsregion:
+    Description: AWS region the stack deployed into.
+    Value: !Ref AWS::Region

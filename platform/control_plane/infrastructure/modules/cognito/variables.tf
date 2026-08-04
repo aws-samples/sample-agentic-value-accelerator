@@ -34,3 +34,23 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "seed_demo_users" {
+  description = "Create admin@example.com (admin) and demo@example.com (viewer) on apply. Convenience for fresh stamps; turn off in production."
+  type        = bool
+  default     = false
+}
+
+variable "demo_admin_password" {
+  description = "Permanent password for the seeded admin@example.com user. Required when seed_demo_users=true."
+  type        = string
+  default     = "AdminPass123!@"
+  sensitive   = true
+}
+
+variable "demo_viewer_password" {
+  description = "Permanent password for the seeded demo@example.com user. Required when seed_demo_users=true."
+  type        = string
+  default     = "DemoViewer123!@#"
+  sensitive   = true
+}

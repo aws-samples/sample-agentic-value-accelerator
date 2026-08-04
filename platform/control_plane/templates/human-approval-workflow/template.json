@@ -1,0 +1,101 @@
+{
+  "id": "human-approval-workflow",
+  "name": "Human-Approval Workflow",
+  "description": "Human-in-the-loop approval pattern where an agent drafts actions (emails, database changes, API calls) but pauses for human approval before execution. Demonstrates safe agent autonomy with explicit human oversight gates.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "human-in-the-loop",
+    "approval",
+    "workflow",
+    "safety",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the approval workflow agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for invoking the agent"
+    },
+    {
+      "name": "IAM Role + 5 Policies",
+      "description": "Bedrock invoke, ECR pull, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "Human-in-the-loop approval pattern. The agent drafts actions but pauses for human review before execution. Approved actions proceed; rejected actions return feedback. Use this for high-stakes operations where human oversight is required.",
+  "learn_more": [
+    {
+      "title": "Strands: Human-in-the-Loop Example",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/13-human-in-the-loop"
+    },
+    {
+      "title": "LangGraph: Human-in-the-Loop Examples",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/human_in_the_loop"
+    },
+    {
+      "title": "LangGraph Docs: Interrupts",
+      "url": "https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID"
+    }
+  ]
+}

@@ -305,6 +305,8 @@ resource "aws_cloudfront_origin_access_control" "s3_oac" {
 }
 
 # SPA rewrite — only for S3 default behavior, not /api/*
+# Used when Cognito SSO is disabled (auth_enabled = false). When SSO is
+# enabled, jwt_auth below handles SPA rewrite too and this stays unused.
 resource "aws_cloudfront_function" "spa_rewrite" {
   name    = "${local.short_prefix}-spa-rw-${local.region_suffix}"
   runtime = "cloudfront-js-2.0"
@@ -320,6 +322,32 @@ resource "aws_cloudfront_function" "spa_rewrite" {
       return request;
     }
   EOF
+}
+
+# =============================================================================
+# FSI Foundry SSO edge auth (opt-in via fsi_app_signing_secret)
+# =============================================================================
+# AVA backend HMAC-signs handoff tokens after RS256-verifying the caller's
+# Cognito id_token. This CloudFront Function re-computes the HMAC at the
+# edge (natively supported by CF Functions crypto module) and compares.
+# The template file is jwt_auth.js.tftpl; ${signing_secret} and ${login_url}
+# are substituted at plan time.
+
+locals {
+  auth_enabled = var.fsi_app_signing_secret != ""
+}
+
+resource "aws_cloudfront_function" "jwt_auth" {
+  count   = local.auth_enabled ? 1 : 0
+  name    = "${local.short_prefix}-jwt-${local.region_suffix}"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  comment = "AVA FSI SSO — HMAC-verifies handoff tokens minted by the AVA backend"
+
+  code = templatefile("${path.module}/cloudfront/jwt_auth.js.tftpl", {
+    signing_secret = var.fsi_app_signing_secret
+    login_url      = var.ava_ui_login_url
+  })
 }
 
 locals {
@@ -357,20 +385,23 @@ resource "aws_cloudfront_distribution" "ui" {
     }
   }
 
-  # Default: serve static UI from S3 with SPA rewrite
+  # Default: serve static UI from S3 with SPA rewrite (+ JWT auth if enabled).
+  # jwt_auth handles the SPA rewrite itself, so it replaces spa_rewrite when
+  # auth_enabled — CloudFront allows only one function per event per behavior.
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "s3-ui"
 
     forwarded_values {
-      query_string = false
-      cookies { forward = "none" }
+      query_string = true
+      # Cookies must be forwarded so ava_session reaches the CF Function.
+      cookies { forward = "all" }
     }
 
     function_association {
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.spa_rewrite.arn
+      function_arn = local.auth_enabled ? aws_cloudfront_function.jwt_auth[0].arn : aws_cloudfront_function.spa_rewrite.arn
     }
 
     viewer_protocol_policy = "redirect-to-https"
@@ -379,7 +410,7 @@ resource "aws_cloudfront_distribution" "ui" {
     max_ttl                = 86400
   }
 
-  # /api/*: proxy to API Gateway, no caching
+  # /api/*: proxy to API Gateway, no caching. Same JWT auth applies when enabled.
   ordered_cache_behavior {
     path_pattern     = "/api/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
@@ -389,7 +420,19 @@ resource "aws_cloudfront_distribution" "ui" {
     forwarded_values {
       query_string = true
       headers      = ["Content-Type", "Accept", "Origin"]
-      cookies { forward = "none" }
+      cookies { forward = local.auth_enabled ? "all" : "none" }
+    }
+
+    dynamic "function_association" {
+      # Terraform 1.9's ternary can't unify `toset(["..."]) : toset([])` — it
+      # complains "Cannot use a set of string value in for_each" because the
+      # empty branch has no type info. Slicing an ordered list with a
+      # count-style bool sidesteps the type-inference issue entirely.
+      for_each = slice(["viewer-request"], 0, local.auth_enabled ? 1 : 0)
+      content {
+        event_type   = function_association.value
+        function_arn = aws_cloudfront_function.jwt_auth[0].arn
+      }
     }
 
     viewer_protocol_policy = "redirect-to-https"

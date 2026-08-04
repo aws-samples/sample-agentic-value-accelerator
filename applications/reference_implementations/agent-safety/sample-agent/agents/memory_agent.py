@@ -55,7 +55,7 @@ except Exception as e:
 
 AGENT_NAME = os.environ.get("AGENT_NAME", "my_agent")
 MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID", "")
-MODEL_ID = os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0")
+MODEL_ID = os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT",
     "You are a helpful assistant for financial services with memory. "
     "You can remember previous conversations and provide personalized advice. "

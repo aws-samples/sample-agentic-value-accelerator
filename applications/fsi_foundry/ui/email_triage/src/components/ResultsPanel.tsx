@@ -3,6 +3,14 @@ import { useState } from 'react';
 import type { RuntimeConfig } from '../config';
 import type { TriageResponse } from '../types';
 
+
+function normLevel(lvl: string | null | undefined): string {
+  if (!lvl) return 'MEDIUM';
+  const upper = lvl.toUpperCase();
+  const map: Record<string, string> = { INFO: 'LOW', WARNING: 'MEDIUM' };
+  return map[upper] || upper;
+}
+
 /* ---- Urgency Badge ---- */
 
 function UrgencyBadge({ urgency }: { urgency: string }) {
@@ -386,6 +394,25 @@ function ResultsPanelInternal({
 }
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+
+function MarkdownBlock({ content }: { content: string }) {
+  if (!content) return null;
+  return (
+    <div className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-secondary)' }}>
+      {content.split('\n').map((line, i) => {
+        if (line.startsWith('###')) return <p key={i} className="font-bold mt-3 mb-1 text-xs uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>{line.replace(/^\#{1,3}\s*/, '')}</p>;
+        if (line.startsWith('##')) return <p key={i} className="font-bold mt-3 mb-1" style={{ color: 'var(--text-primary)' }}>{line.replace(/^\#{1,2}\s*/, '')}</p>;
+        if (line.startsWith('- **')) {
+          const parts = line.replace(/^- /, '').split('**');
+          return <p key={i} className="ml-4 mb-0.5"><span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{parts[1]}</span>{parts[2]}</p>;
+        }
+        if (line.startsWith('- ')) return <p key={i} className="ml-4 mb-0.5">&bull; {line.slice(2)}</p>;
+        if (line.trim() === '') return <br key={i} />;
+        return <p key={i} className="mb-0.5">{line.replace(/\*\*(.*?)\*\*/g, '$1')}</p>;
+      })}
+    </div>
+  );
+}
 class ResultsErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean}> {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }

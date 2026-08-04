@@ -3,7 +3,7 @@
 # ============================================================================
 
 resource "aws_cloudwatch_event_bus" "deployment" {
-  name = var.bus_name
+  name = "${var.name_prefix}-${var.bus_name}"
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-${var.bus_name}"

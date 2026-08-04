@@ -1,0 +1,151 @@
+{
+  "id": "auth-cognito",
+  "name": "Auth \u2014 Cognito",
+  "description": "Cognito User Pool with two app clients (web for browser auth, service for machine-to-machine), resource server with custom scopes, hosted UI domain, and user groups. Supports MFA, OAuth 2.0 authorization code and client_credentials flows.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "auth",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "cognito",
+    "auth",
+    "oauth",
+    "jwt",
+    "mfa",
+    "terraform"
+  ],
+  "aws_services": [
+    "cognito"
+  ],
+  "frameworks_list": [],
+  "built_with": [],
+  "resources": [
+    {
+      "name": "Cognito User Pool",
+      "description": "User directory with email sign-in, password policy, MFA, and account recovery"
+    },
+    {
+      "name": "Web App Client",
+      "description": "Browser/SPA client with OAuth2 authorization code flow (no secret)"
+    },
+    {
+      "name": "Service App Client",
+      "description": "Machine-to-machine client with client_credentials flow (with secret)"
+    },
+    {
+      "name": "Resource Server",
+      "description": "OAuth2 resource server defining custom API scopes (invoke, manage, read)"
+    },
+    {
+      "name": "Hosted UI Domain",
+      "description": "Cognito hosted sign-in UI (prefix or custom domain)"
+    },
+    {
+      "name": "Admin Group",
+      "description": "Admin user group (precedence 1)"
+    },
+    {
+      "name": "User Group",
+      "description": "Standard user group (precedence 10)"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name used for resource naming"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "mfa_configuration",
+      "type": "string",
+      "required": false,
+      "default": "OFF",
+      "description": "MFA configuration: OFF, OPTIONAL, or ON"
+    },
+    {
+      "name": "password_min_length",
+      "type": "number",
+      "required": false,
+      "default": "12",
+      "description": "Minimum password length"
+    },
+    {
+      "name": "allow_self_signup",
+      "type": "boolean",
+      "required": false,
+      "default": "false",
+      "description": "Whether users can self-register"
+    },
+    {
+      "name": "callback_urls",
+      "type": "list(string)",
+      "required": false,
+      "default": "[\"http://localhost:3000/callback\"]",
+      "description": "OAuth callback URLs for the web client"
+    },
+    {
+      "name": "logout_urls",
+      "type": "list(string)",
+      "required": false,
+      "default": "[\"http://localhost:3000\"]",
+      "description": "OAuth logout URLs for the web client"
+    },
+    {
+      "name": "domain_prefix",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Cognito hosted UI domain prefix"
+    },
+    {
+      "name": "resource_server_identifier",
+      "type": "string",
+      "required": false,
+      "default": "api",
+      "description": "Identifier for the OAuth2 resource server"
+    },
+    {
+      "name": "deletion_protection",
+      "type": "string",
+      "required": false,
+      "default": "INACTIVE",
+      "description": "Deletion protection: ACTIVE or INACTIVE"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "Amazon Cognito Developer Guide",
+      "url": "https://docs.aws.amazon.com/cognito/latest/developerguide/"
+    },
+    {
+      "title": "Terraform: aws_cognito_user_pool",
+      "url": "https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cognito_user_pool"
+    },
+    {
+      "title": "AWS: OAuth 2.0 Grants in Cognito",
+      "url": "https://docs.aws.amazon.com/cognito/latest/developerguide/federation-endpoints-oauth-grants.html"
+    }
+  ]
+}

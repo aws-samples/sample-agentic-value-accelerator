@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/checkpoint-results.schema.json",
+  "title": "checkpoint-results.json",
+  "description": "Phase 0 Assess output: 9-checkpoint factual verification (RCP, declarative policies, RAM, FIPS, etc.). Produced by assess skill. Consumed by validate/map phases to short-circuit infeasible control paths. Accepts both list-of-checkpoints (iter-14+) and dict-of-checkpoint-objects (iter-11/12/13) shapes to match archive reality — a structured diff of the two forms happens downstream.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["service", "checkpoints"],
+  "properties": {
+    "service": {"type": "string", "minLength": 1},
+    "service_prefix": {"type": "string"},
+    "cfn_prefix": {"type": "string"},
+    "phase": {"type": "string", "description": "Optional phase marker. Iter-14+ may emit 'checkpoint-results' or 'assess'; pre-iter-14 archives omit it. Not load-bearing — dispatcher uses filename."},
+    "schema_version": {"type": "string"},
+    "extraction_date": {"type": "string"},
+    "generated": {"type": "string"},
+    "checkpoints": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {"$ref": "#/$defs/checkpointEntry"},
+          "description": "iter-14+ list form — each entry has {id, type, url, domain, question, answer}."
+        },
+        {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/checkpointResult"},
+          "description": "iter-11/12/13 dict form — keyed by checkpoint name (vpce_network_events, rcp_support, etc.) with {supported, url, detail, definitive} values."
+        }
+      ]
+    },
+    "_metadata": {"type": "object", "additionalProperties": true}
+  },
+
+  "$defs": {
+    "checkpointEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "domain"],
+      "properties": {
+        "id": {"type": "string"},
+        "type": {"type": "string"},
+        "url": {"type": "string"},
+        "domain": {"type": "string"},
+        "question": {"type": "string"},
+        "answer": {"type": "string"},
+        "definitive": {"type": "boolean"}
+      }
+    },
+    "checkpointResult": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "supported": {"type": "boolean"},
+        "definitive": {"type": "boolean"},
+        "url": {"type": "string"},
+        "detail": {"type": "string"},
+        "resource_types": {"type": "array"},
+        "programs": {"type": "array"},
+        "not_in_scope": {"type": "array"},
+        "status": {"type": "string"}
+      }
+    }
+  }
+}

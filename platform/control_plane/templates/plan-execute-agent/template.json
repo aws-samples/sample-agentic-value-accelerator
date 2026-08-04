@@ -1,0 +1,101 @@
+{
+  "id": "plan-execute-agent",
+  "name": "Plan-and-Execute Agent",
+  "description": "A plan-and-execute agent pattern that decomposes complex goals into multi-step plans, executes each step with tools, evaluates results, and replans if needed. Demonstrates structured planning with tool use on Amazon Bedrock AgentCore.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "plan-and-execute",
+    "multi-step",
+    "planning",
+    "tools",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the plan-execute agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for invoking the agent"
+    },
+    {
+      "name": "IAM Role + 5 Policies",
+      "description": "Bedrock invoke, ECR pull, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "Plan-and-execute pattern. Given a complex goal, the agent creates a multi-step plan, executes each step with tools, and synthesizes results. Use this for tasks that require breaking down into subtasks with sequential dependencies.",
+  "learn_more": [
+    {
+      "title": "LangGraph: Plan-and-Execute Example",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/plan-and-execute"
+    },
+    {
+      "title": "Strands: Graph Builder (Workflows)",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/12-graph"
+    },
+    {
+      "title": "LangChain Blog: Planning Agents",
+      "url": "https://blog.langchain.com/planning-agents/"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID"
+    }
+  ]
+}

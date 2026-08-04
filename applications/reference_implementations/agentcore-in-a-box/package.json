@@ -1,0 +1,23 @@
+{
+  "name": "agent_core",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/jest": "30.0.0",
+    "@types/node": "24.12.4",
+    "jest": "30.4.2",
+    "ts-jest": "29.4.11",
+    "aws-cdk": "2.1124.1",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.257.0",
+    "constructs": "10.6.0"
+  }
+}

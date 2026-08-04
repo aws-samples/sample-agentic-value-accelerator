@@ -1,0 +1,14 @@
+project_name         = "ava"
+aws_region           = "us-east-1"
+environment          = "dev"
+vpc_id               = "vpc-xxxxxxxxxxxxxxxxx"
+private_subnet_ids   = ["subnet-aaaa", "subnet-bbbb"]
+public_subnet_ids    = ["subnet-cccc", "subnet-dddd"]
+langfuse_admin_email = "admin@example.com"
+langfuse_image_tag   = "2"
+db_min_capacity      = 0.5
+db_max_capacity      = 4
+
+tags = {
+  Team = "platform"
+}

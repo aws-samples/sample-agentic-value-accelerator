@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/cli-commands.schema.json",
+  "title": "cli-commands.json",
+  "description": "Phase 7 Evidence output: Authoritative mapping of control → generated CLI command. Produced FIRST (before execution) by /evidence skill so reviewers can audit commands before they run. Every control from mapping-results.json.controls[] must appear either in commands[] or not_cli_validatable[]. Commands are stored as argv arrays (never shell strings) to eliminate shell-injection risk.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "service",
+    "service_slug",
+    "generated_at",
+    "stack_id",
+    "commands",
+    "not_cli_validatable"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Full service name (e.g., 'AWS Lambda')"
+    },
+    "service_slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "Canonical service slug (e.g., 'awslambda', 'bedrock-agentcore')"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when cli-commands.json was generated"
+    },
+    "stack_id": {
+      "type": "string",
+      "pattern": "^arn:aws:cloudformation:",
+      "description": "CloudFormation stack ARN from Phase 5 deploy (06-test/deployed-resources.json)"
+    },
+    "deployed_resources_ref": {
+      "type": "string",
+      "description": "Relative path to deployed-resources.json (typically '../06-test/deployed-resources.json')"
+    },
+    "commands": {
+      "type": "array",
+      "description": "CLI commands to execute for runtime evidence collection",
+      "items": {
+        "$ref": "#/$defs/cliCommand"
+      }
+    },
+    "not_cli_validatable": {
+      "type": "array",
+      "description": "Controls that cannot be validated via runtime CLI probes (template-time only, policy-only, etc.)",
+      "items": {
+        "$ref": "#/$defs/notCliValidatable"
+      }
+    },
+    "_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional metadata for traceability (git commit, operator, etc.)"
+    }
+  },
+  "$defs": {
+    "cliCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_id",
+        "family",
+        "command_argv",
+        "predicate",
+        "output_log"
+      ],
+      "properties": {
+        "control_id": {
+          "type": "string",
+          "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$",
+          "description": "Control identifier from mapping-results.json"
+        },
+        "family": {
+          "type": "string",
+          "enum": [
+            "F1-resource-get",
+            "F2-iam-simulate",
+            "F3-config-compliance",
+            "F4-ssm-doc",
+            "F5-cw-alarm",
+            "F6-iac-time"
+          ],
+          "description": "CLI synthesis family (see §4 of evidence-attestation.md)"
+        },
+        "synthesis_source": {
+          "type": "string",
+          "description": "Traceability: what control metadata drove this synthesis (e.g., 'parameters_controlled[0]=$.lambda/CreateFunction.KMSKeyArn')"
+        },
+        "command_argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Argv array passed directly to subprocess.run with shell=False. NEVER serialized through a shell — eliminates injection risk from physical_id/role-arn/property values flowing in from upstream phases."
+        },
+        "command_str": {
+          "type": "string",
+          "description": "Humanized shlex.join(command_argv) of the argv. For human-readable display in reports only. Programmatic consumers MUST use command_argv."
+        },
+        "predicate": {
+          "type": "object",
+          "required": [
+            "type",
+            "expression"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "jmespath",
+                "regex",
+                "exit_code",
+                "jsonpath"
+              ],
+              "description": "Predicate evaluation type"
+            },
+            "expression": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Predicate expression (JMESPath query, regex pattern, or 'exit_code == 0'). Empty string is rejected — every predicate must have a body the executor can evaluate."
+            }
+          },
+          "additionalProperties": false
+        },
+        "expected_pass": {
+          "type": "string",
+          "description": "Human-readable description of what a PASS verdict means"
+        },
+        "expected_fail": {
+          "type": "string",
+          "description": "Human-readable description of what a FAIL verdict means"
+        },
+        "output_log": {
+          "type": "string",
+          "description": "Relative path to raw stdout/stderr log file (e.g., 'cli-outputs/CTRL-ACC-PRO-010--lambda-get-function-configuration.log')"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Per-command timeout (default 30s)"
+        },
+        "expected_account": {
+          "type": "string",
+          "pattern": "^\\d{12}$",
+          "description": "12-digit AWS account ID extracted from stack_id. Execute layer asserts response ARN matches this account before recording PASS — prevents cross-account contamination."
+        }
+      }
+    },
+    "notCliValidatable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_id",
+        "reason_code",
+        "reason"
+      ],
+      "properties": {
+        "control_id": {
+          "type": "string",
+          "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$",
+          "description": "Control identifier from mapping-results.json"
+        },
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "iac-time-only",
+            "policy-only-no-describe-api",
+            "requires-org-trail-correlation",
+            "missing-metadata",
+            "missing-principal-arn",
+            "no-deployed-resource",
+            "unknown-mechanism"
+          ],
+          "description": "Machine-readable category for why this control cannot be CLI-validated. Programmatic consumers (validators, dashboards) key off this enum; the 'reason' field is for humans."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Free-text human explanation; must be ≥20 chars and SHOULD reference what metadata is missing or which Phase 4/5 evidence file substantiates the control."
+        },
+        "supplemental_evidence": {
+          "type": "string",
+          "description": "Relative path to IaC-time or deploy-time evidence file (e.g., 'iac-time-evidence/cfn-guard.log'). Required when reason_code is 'iac-time-only' or 'policy-only-no-describe-api'."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "reason_code": {
+                "enum": [
+                  "iac-time-only",
+                  "policy-only-no-describe-api"
+                ]
+              }
+            },
+            "required": ["reason_code"]
+          },
+          "then": {
+            "required": ["supplemental_evidence"],
+            "properties": {
+              "supplemental_evidence": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

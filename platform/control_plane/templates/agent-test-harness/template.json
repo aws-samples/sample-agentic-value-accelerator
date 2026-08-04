@@ -1,0 +1,41 @@
+{
+  "id": "agent-test-harness",
+  "name": "Agent Test Harness",
+  "description": "Pytest framework for testing AI agents: LLM-as-judge evaluation, latency benchmarks, cost tracking, and mock fixtures.",
+  "tier": "code",
+  "category": "tools",
+  "iac_options": [],
+  "includes": {
+    "infra": false,
+    "agent_code": true,
+    "ui": false,
+    "tests": true
+  },
+  "frameworks_list": [],
+  "aws_services": [
+    "bedrock"
+  ],
+  "version": "1.0.0",
+  "tags": [
+    "testing",
+    "pytest",
+    "llm-judge",
+    "benchmarks",
+    "evaluation"
+  ],
+  "built_with": [],
+  "learn_more": [
+    {
+      "title": "Strands: Evaluation Tutorials",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/06-evaluate"
+    },
+    {
+      "title": "AgentCore: Evaluation Documentation",
+      "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/evaluations.html"
+    },
+    {
+      "title": "LangGraph: Chatbot Simulation Evaluation",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/chatbot-simulation-evaluation"
+    }
+  ]
+}

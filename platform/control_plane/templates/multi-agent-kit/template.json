@@ -1,0 +1,46 @@
+{
+  "id": "multi-agent-kit",
+  "name": "Multi-Agent Orchestration Kit",
+  "description": "Four reusable multi-agent composition patterns: agent-as-tool, supervisor, pipeline, and fan-out. Available in both Strands and LangGraph implementations.",
+  "tier": "code",
+  "category": "tools",
+  "iac_options": [],
+  "includes": {
+    "infra": false,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "aws_services": [
+    "bedrock"
+  ],
+  "resources": [],
+  "parameters": [],
+  "version": "1.0.0",
+  "tags": [
+    "multi-agent",
+    "orchestration",
+    "supervisor",
+    "pipeline",
+    "fan-out"
+  ],
+  "built_with": [],
+  "learn_more": [
+    {
+      "title": "Strands: Agents-as-Tools",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/01-learn/10-agents-as-tools"
+    },
+    {
+      "title": "LangGraph: Multi-Agent Examples",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/multi_agent"
+    },
+    {
+      "title": "LangGraph Supervisor Package",
+      "url": "https://github.com/langchain-ai/langgraph-supervisor-py"
+    }
+  ]
+}

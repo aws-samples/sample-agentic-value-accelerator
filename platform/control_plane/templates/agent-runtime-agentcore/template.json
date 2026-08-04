@@ -1,0 +1,132 @@
+{
+  "id": "agent-runtime-agentcore",
+  "name": "Agent Runtime \u2014 AgentCore",
+  "description": "Deploys a Bedrock AgentCore runtime with an invocable endpoint, IAM roles, X-Ray tracing, and CloudWatch log delivery. The managed runtime runs your agent container with auto-scaling and built-in Bedrock model access.",
+  "version": "1.0.0",
+  "tier": "infrastructure",
+  "category": "compute",
+  "iac_options": [
+    "terraform",
+    "cdk"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": false,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "agentcore",
+    "bedrock",
+    "runtime",
+    "compute",
+    "terraform",
+    "cdk"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [],
+  "built_with": [],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for your agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Invocable URL for the runtime"
+    },
+    {
+      "name": "IAM Role + Policies",
+      "description": "Least-privilege role with Bedrock, ECR, CloudWatch, X-Ray permissions"
+    },
+    {
+      "name": "CloudWatch Log Group",
+      "description": "Vended log delivery for application logs"
+    },
+    {
+      "name": "CloudWatch Log Delivery",
+      "description": "APPLICATION_LOGS and TRACES delivery pipelines"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name used in resource naming (lowercase, hyphens)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID for IAM policy scoping"
+    },
+    {
+      "name": "network_mode",
+      "type": "string",
+      "required": false,
+      "default": "PUBLIC",
+      "description": "Network mode: PUBLIC or VPC"
+    },
+    {
+      "name": "environment_variables",
+      "type": "map(string)",
+      "required": false,
+      "default": "{}",
+      "description": "Environment variables passed to the agent container"
+    },
+    {
+      "name": "log_retention_days",
+      "type": "number",
+      "required": false,
+      "default": "30",
+      "description": "CloudWatch log retention in days"
+    },
+    {
+      "name": "enable_cross_region_inference",
+      "type": "boolean",
+      "required": false,
+      "default": "false",
+      "description": "Allow cross-region model inference via inference profiles"
+    }
+  ],
+  "learn_more": [
+    {
+      "title": "AgentCore: Deploy Strands Agent (Tutorial)",
+      "url": "https://github.com/awslabs/agentcore-samples/tree/main/01-tutorials/01-AgentCore-runtime/01-hosting-agent/01-strands-with-bedrock-model"
+    },
+    {
+      "title": "AgentCore IaC Samples (Terraform/CDK)",
+      "url": "https://github.com/awslabs/agentcore-samples/tree/main/04-infrastructure-as-code"
+    },
+    {
+      "title": "Terraform: aws_bedrockagentcore_agent_runtime",
+      "url": "https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bedrockagentcore_agent_runtime"
+    }
+  ]
+}

@@ -34,7 +34,7 @@ const AWS_AGENTS: Item = {
   ],
   subItems: [
     { name: 'AWS DevOps Agent', badge: 'Available', logo: '/logos/aws-devops-agent.svg' },
-    { name: 'AWS Security Agent', badge: 'Soon', logo: '/logos/aws-security-agent.svg' },
+    { name: 'AWS Security Agent', badge: 'Available', logo: '/logos/aws-security-agent.svg' },
     { name: 'Kiro', badge: 'Soon', logo: '/logos/kiro.svg' },
   ],
 };
@@ -77,7 +77,7 @@ export default function AaaSLanding() {
 
         {/* Hero */}
         <div className="mb-8 animate-fade-in stagger-1">
-          <h1 className="text-5xl font-semibold tracking-tight leading-tight" style={{ backgroundImage: 'linear-gradient(135deg, #c2410c 0%, #ea580c 40%, #f97316 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', color: 'transparent' }}>
+          <h1 className="text-5xl font-semibold tracking-tight leading-tight" style={{ backgroundImage: 'linear-gradient(135deg, #b91c1c 0%, #ea580c 50%, #f59e0b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', color: 'transparent' }}>
             Agents that watch, reason, and act.
           </h1>
           <p className="text-slate-500 mt-4 max-w-2xl">

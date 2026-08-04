@@ -1,0 +1,86 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Market Data (EKS)",
+    "description": "Realtime market quotes served by an internal service running on Amazon EKS, exposed to the agent platform as a governed MCP tool through the AgentCore Gateway. Reachable only through the Gateway (which injects the API key); never anonymously.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "MARKET_DATA_API_URL_PLACEHOLDER" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "gatewayApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-agentcore-api-key",
+        "description": "Shared API key injected by the AgentCore Gateway API_KEY credential provider (never supplied by the model/caller). The EKS service validates it before returning any quote."
+      }
+    }
+  },
+  "security": [
+    { "gatewayApiKey": [] }
+  ],
+  "paths": {
+    "/quote": {
+      "post": {
+        "operationId": "market_quote",
+        "summary": "Get realtime quotes for one or more tickers",
+        "description": "Returns live bid/ask/last quotes for the requested symbols from the internal EKS market-data service. Provide a list of tickers (e.g. ['SPY','AGG','TLT']); defaults to a core basket if none given.",
+        "security": [
+          { "gatewayApiKey": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "symbols": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Tickers to quote, e.g. ['AAPL','MSFT','SPY']. Max 25; defaults to ['SPY','AGG','TLT']."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Realtime quotes for the requested symbols.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "quotes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "symbol": { "type": "string" },
+                          "bid": { "type": "number" },
+                          "ask": { "type": "number" },
+                          "last": { "type": "number" },
+                          "currency": { "type": "string" },
+                          "as_of": { "type": "string" },
+                          "venue": { "type": "string" }
+                        }
+                      }
+                    },
+                    "count": { "type": "integer" },
+                    "served_by": { "type": "string" },
+                    "source": { "type": "string" },
+                    "disclaimer": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

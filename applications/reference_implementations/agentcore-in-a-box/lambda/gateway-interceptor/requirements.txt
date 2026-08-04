@@ -1,0 +1,15 @@
+# DynamoDB Query uses boto3 (the Lambda built-in supports it, but pin exact for a reproducible
+# Lambda bundle — the CDK bundling installs from this file).
+boto3==1.43.42
+# The interceptor VERIFIES the RS256 signature of any inbound Cognito JWT before trusting its
+# `sub` (defense in depth — an unverified sub was a spoofing hole). PyJWT needs `cryptography`
+# for RS256. Pinned exact for reproducible builds. NOTE: these are imported LAZILY (inside the
+# JWT-verify functions, under try/except), and the PRIMARY identity channel is the runtime-
+# asserted `__principal` in the tool body (no crypto needed). So if a native `cryptography` wheel
+# ever mismatches the Lambda arch (e.g. bundled locally on a different platform), the JWT-header
+# fallback simply declines to trust a sub — it never crashes the interceptor. A Docker/Linux
+# bundle installs the correct wheels and full JWT verification is active.
+PyJWT==2.10.1
+# 46.0.5 fixes CVE-2026-26007 (GHSA-r6ph-v2qm-q3c2, subgroup attack on SECT curves; <=46.0.4).
+# Only the RSA/RS256 path is used here, not SECT curves, but bump anyway to clear the advisory.
+cryptography==46.0.5

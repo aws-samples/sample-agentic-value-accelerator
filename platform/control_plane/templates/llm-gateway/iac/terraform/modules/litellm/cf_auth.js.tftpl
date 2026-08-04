@@ -1,0 +1,189 @@
+// AVA LLM Gateway SSO — CloudFront Function (viewer-request).
+//
+// Mirrors the FSI Foundry pattern (applications/fsi_foundry/.../jwt_auth.js.tftpl):
+// the AVA backend RS256-verifies the caller's Cognito id_token, then mints a
+// short-lived HMAC-signed handoff token. This function re-computes the HMAC
+// and, on success, ALSO mints the LiteLLM admin UI session cookie so the
+// browser lands on /ui/ already authenticated.
+//
+// Direct-mint of the LiteLLM cookie is possible because empirical inspection
+// of POST /login showed LiteLLM emits a plain HS256 JWT signed with the
+// master key — no server-side session state, no DB lookup required.
+//
+// Template placeholders substituted at terraform plan time:
+//   ${signing_secret}, ${login_url}, ${litellm_master_key}
+
+import crypto from 'crypto';
+
+var SIGNING_SECRET = "${signing_secret}";
+var LOGIN_URL = "${login_url}";
+var LITELLM_MASTER_KEY = "${litellm_master_key}";
+
+// LiteLLM admin UI cookie payload. Critical: `key` MUST be a real key
+// LiteLLM's own auth accepts as a Bearer token — the admin UI JS decodes
+// the JWT, extracts `key`, and sends it as `Authorization: Bearer` on
+// every XHR. A fake key here makes every UI XHR 401 and the UI bounces to
+// the login page. Using the master key gives the admin console
+// proxy_admin-level access, which matches the intent of "admin UI in AVA".
+//
+// Static header keeps the encoded string identical across requests so
+// the mint is deterministic and cheap.
+var LITELLM_JWT_HEADER_B64 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';  // {"alg":"HS256","typ":"JWT"}
+var LITELLM_JWT_PAYLOAD = {
+    user_id: 'default_user_id',
+    key: LITELLM_MASTER_KEY,
+    user_email: null,
+    user_role: 'proxy_admin',
+    login_method: 'ava_sso',
+    premium_user: false,
+    auth_header_name: 'Authorization',
+    disabled_non_admin_personal_key_creation: false,
+    server_root_path: '',
+};
+
+// Path prefixes that MUST bypass the SSO gate. These are the API surfaces
+// the 34 FSI Foundry apps + AgentCore Runtimes hit with Bearer virtual keys
+// — LiteLLM's own auth (Bearer/master-key) protects them and adding a
+// browser gate here would break every use case.
+function isBypassPath(uri) {
+    return uri.startsWith('/v1/') ||
+           uri.startsWith('/chat/') ||
+           uri.startsWith('/completions') ||
+           uri.startsWith('/embeddings') ||
+           uri.startsWith('/images/') ||
+           uri.startsWith('/audio/') ||
+           uri.startsWith('/health') ||
+           uri.startsWith('/metrics') ||
+           uri.startsWith('/models') ||
+           uri.startsWith('/model/') ||
+           uri.startsWith('/model_group/') ||
+           uri.startsWith('/key/') ||
+           uri.startsWith('/user/') ||
+           uri.startsWith('/team/') ||
+           uri.startsWith('/customer/') ||
+           uri.startsWith('/spend/') ||
+           uri.startsWith('/global/') ||
+           uri.startsWith('/organization/') ||
+           uri.startsWith('/routes') ||
+           uri.startsWith('/cache/') ||
+           uri.startsWith('/config/') ||
+           uri.startsWith('/openapi.json');
+}
+
+// Response helper — 302s to AVA UI login with a debug header explaining why.
+function unauthorized(reason) {
+    return {
+        statusCode: 302,
+        statusDescription: 'Found',
+        headers: {
+            'location': { value: LOGIN_URL || '/' },
+            'x-ava-auth-fail': { value: reason },
+        }
+    };
+}
+
+function constantTimeEquals(a, b) {
+    if (a.length !== b.length) return false;
+    var xor = 0;
+    for (var i = 0; i < a.length; i++) {
+        xor |= (a.charCodeAt(i) ^ b.charCodeAt(i));
+    }
+    return xor === 0;
+}
+
+// Verify the AVA HMAC and standard claims. Throws on any failure.
+function verifyAvaToken(token) {
+    var parts = token.split('.');
+    if (parts.length !== 3) throw new Error('malformed');
+
+    var signingInput = parts[0] + '.' + parts[1];
+    var expectedSig = crypto
+        .createHmac('sha256', SIGNING_SECRET)
+        .update(signingInput)
+        .digest('base64url');
+    if (!constantTimeEquals(expectedSig, parts[2])) {
+        throw new Error('bad_sig');
+    }
+
+    var payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    var now = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp < now) throw new Error('expired');
+}
+
+// Mint the LiteLLM admin UI session JWT. LiteLLM verifies the HMAC using
+// LITELLM_MASTER_KEY; no db lookup, no other server-side state. The token
+// stays valid until the master key rotates.
+function mintLitellmToken() {
+    var payloadB64 = Buffer.from(JSON.stringify(LITELLM_JWT_PAYLOAD)).toString('base64url');
+    var signingInput = LITELLM_JWT_HEADER_B64 + '.' + payloadB64;
+    var sig = crypto
+        .createHmac('sha256', LITELLM_MASTER_KEY)
+        .update(signingInput)
+        .digest('base64url');
+    return signingInput + '.' + sig;
+}
+
+function readCookies(request) {
+    var out = {};
+    var c = request.cookies || {};
+    for (var k in c) out[k] = c[k].value;
+    return out;
+}
+
+function handler(event) {
+    var request = event.request;
+    var uri = request.uri;
+    var qs = request.querystring || {};
+
+    // ---- 0. API paths — always bypass. ----
+    if (isBypassPath(uri)) return request;
+
+    // ---- 1. Bootstrap via ?ava_token= (first click from AVA UI) ----
+    if (qs.ava_token && qs.ava_token.value) {
+        try {
+            verifyAvaToken(qs.ava_token.value);
+        } catch (e) {
+            return unauthorized('bootstrap_' + e.message);
+        }
+        // Strip ava_token, preserve any other query params.
+        var keep = [];
+        for (var k in qs) {
+            if (k === 'ava_token') continue;
+            keep.push(k + '=' + qs[k].value);
+        }
+        var cleanUrl = uri + (keep.length ? '?' + keep.join('&') : '');
+        var litellmToken = mintLitellmToken();
+        // Two cookies:
+        //   ava_session → this gate's own auth (verified on every request)
+        //   token       → LiteLLM's admin UI auth (verified by LiteLLM itself)
+        // SameSite=None is required for the iframe embed in the AVA console.
+        return {
+            statusCode: 302,
+            statusDescription: 'Found',
+            headers: {
+                'location': { value: cleanUrl },
+            },
+            cookies: {
+                'ava_session': {
+                    value: qs.ava_token.value,
+                    attributes: 'Path=/; Secure; HttpOnly; SameSite=None; Max-Age=3600',
+                },
+                'token': {
+                    value: litellmToken,
+                    attributes: 'Path=/; Secure; SameSite=None',
+                },
+            },
+        };
+    }
+
+    // ---- 2. Normal request — ava_session cookie must be present and valid ----
+    var cookies = readCookies(request);
+    if (!cookies.ava_session) return unauthorized('no_cookie');
+    try {
+        verifyAvaToken(cookies.ava_session);
+    } catch (e) {
+        return unauthorized(e.message);
+    }
+
+    return request;
+}

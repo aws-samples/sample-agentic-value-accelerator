@@ -75,8 +75,6 @@ const SECONDARY: Option[] = [
     name: 'App Factory',
     tagline: 'Describe it. We build and deploy it.',
     description: 'Five-step wizard captures your problem, users, workflow, data, and constraints. AI generates the agent code and Terraform, then the pipeline deploys it to Bedrock AgentCore on AWS — no coding required.',
-    badge: 'New',
-    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
     iconBg: 'from-blue-600 to-indigo-700',
     iconPath: 'M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 001.591 1.591L19 14.5m-9.25 0v5.25m4.5-5.25v5.25M3 21h18',
     accentFrom: 'from-blue-500',

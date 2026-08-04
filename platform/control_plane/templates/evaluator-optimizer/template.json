@@ -1,0 +1,101 @@
+{
+  "id": "evaluator-optimizer",
+  "name": "Evaluator-Optimizer (Critique Loop)",
+  "description": "Generator/evaluator critique loop for self-improving content quality. One agent generates, another critiques with specific feedback, loop continues until quality threshold is met.",
+  "version": "1.0.0",
+  "tier": "starter",
+  "category": "agent_pattern",
+  "iac_options": [
+    "terraform"
+  ],
+  "includes": {
+    "infra": true,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "tags": [
+    "evaluator-optimizer",
+    "critique-loop",
+    "self-improving",
+    "content-generation",
+    "agentcore"
+  ],
+  "aws_services": [
+    "bedrock-agentcore",
+    "bedrock",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "built_with": [
+    "agent-runtime-agentcore"
+  ],
+  "resources": [
+    {
+      "name": "AgentCore Runtime",
+      "description": "Managed container runtime for the evaluator-optimizer agent"
+    },
+    {
+      "name": "AgentCore Endpoint",
+      "description": "Public endpoint for invoking the agent"
+    },
+    {
+      "name": "IAM Role + 5 Policies",
+      "description": "Bedrock invoke, ECR pull, CloudWatch logs, CloudWatch metrics, X-Ray tracing"
+    }
+  ],
+  "pattern_description": "Generator-evaluator critique loop. One agent generates content, another evaluates it with specific feedback and a score. The generator revises based on feedback. Loop continues until quality threshold is met. Use this for high-quality content generation where first-draft quality isn't sufficient.",
+  "learn_more": [
+    {
+      "title": "LangGraph: Reflection Example",
+      "url": "https://github.com/langchain-ai/langgraph/tree/main/examples/reflection"
+    },
+    {
+      "title": "Strands: Evaluation Tutorials",
+      "url": "https://github.com/strands-agents/samples/tree/main/python/06-evaluate"
+    },
+    {
+      "title": "AgentCore: Evaluation Documentation",
+      "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/evaluations.html"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "required": true,
+      "description": "Project name (lowercase, hyphens allowed)"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "required": true,
+      "description": "AWS region for deployment"
+    },
+    {
+      "name": "container_image_uri",
+      "type": "string",
+      "required": true,
+      "description": "ECR image URI for the agent container"
+    },
+    {
+      "name": "environment",
+      "type": "string",
+      "required": false,
+      "default": "dev",
+      "description": "Deployment environment (dev, staging, prod)"
+    },
+    {
+      "name": "model_id",
+      "type": "string",
+      "required": false,
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "description": "Bedrock model ID"
+    }
+  ]
+}

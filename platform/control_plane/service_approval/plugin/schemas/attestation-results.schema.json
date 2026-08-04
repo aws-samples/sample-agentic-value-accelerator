@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas/attestation-results.schema.json",
+  "title": "attestation-results.json",
+  "description": "Phase 7 Evidence output: Machine-readable verdict per control after CLI execution. Produced AFTER command execution. Each result includes verdict, command, exit code, stdout/stderr size, predicate evaluation, and elapsed time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "service",
+    "service_slug",
+    "evidence_run_id",
+    "stack_id",
+    "overall_verdict",
+    "counts",
+    "results"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Full service name (e.g., 'AWS Lambda')"
+    },
+    "service_slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "Canonical service slug"
+    },
+    "evidence_run_id": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when evidence collection started"
+    },
+    "stack_id": {
+      "type": "string",
+      "pattern": "^arn:aws:cloudformation:",
+      "description": "CloudFormation stack ARN targeted by probes"
+    },
+    "overall_verdict": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "ERROR",
+        "PARTIAL"
+      ],
+      "description": "Aggregate verdict: PASS if all CLI-validatable controls passed, FAIL if any failed, ERROR if execution failed, PARTIAL if some controls errored"
+    },
+    "counts": {
+      "type": "object",
+      "required": [
+        "total_controls",
+        "pass",
+        "fail",
+        "not_cli_validatable",
+        "error"
+      ],
+      "properties": {
+        "total_controls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total controls from mapping-results.json"
+        },
+        "pass": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Controls that passed CLI validation"
+        },
+        "fail": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Controls that failed CLI validation (predicate did not match expected)"
+        },
+        "not_cli_validatable": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Controls that cannot be CLI-validated (template-time, policy-only, etc.)"
+        },
+        "error": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Controls where CLI execution errored (timeout, AWS API error, etc.)"
+        },
+        "pass_with_negative": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Controls that passed both positive and negative tests (optional --with-negative-tests mode)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "results": {
+      "type": "array",
+      "description": "Per-control verdict with execution details",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/cliResult"
+          },
+          {
+            "$ref": "#/$defs/notCliValidatableResult"
+          }
+        ]
+      }
+    },
+    "teardown_status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "skipped_keep_true",
+        "failed",
+        "not_attempted"
+      ],
+      "description": "Phase 7 Step 11 teardown outcome. 'completed' = stack deleted successfully after evidence collection (default). 'skipped_keep_true' = intake.testing.keep was true, stack left alive for manual debugging. 'failed' = delete-stack returned non-zero; resources may remain (operator must clean up manually). 'not_attempted' = teardown step skipped (e.g., --replay mode reusing existing evidence)."
+    },
+    "_metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional metadata (environment, operator, git commit, etc.)"
+    }
+  },
+  "$defs": {
+    "cliResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_id",
+        "verdict",
+        "family",
+        "command_argv",
+        "exit_code",
+        "output_log",
+        "timestamp"
+      ],
+      "properties": {
+        "control_id": {
+          "type": "string",
+          "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "ERROR",
+            "PASS_WITH_NEGATIVE"
+          ],
+          "description": "PASS if predicate matched expected, FAIL if mismatched, ERROR if execution failed, PASS_WITH_NEGATIVE if both positive and negative tests passed"
+        },
+        "family": {
+          "type": "string",
+          "enum": [
+            "F1-resource-get",
+            "F2-iam-simulate",
+            "F3-config-compliance",
+            "F4-ssm-doc",
+            "F5-cw-alarm",
+            "F6-iac-time"
+          ]
+        },
+        "command_argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Argv array of the executed command (verbatim from cli-commands.json); programmatic consumers MUST read this rather than command_str."
+        },
+        "command_str": {
+          "type": "string",
+          "description": "shlex.join(command_argv) for human display only — used by render layer to populate the report tables."
+        },
+        "exit_code": {
+          "type": "integer",
+          "description": "Process exit code (0 = success, non-zero = failure)"
+        },
+        "stdout_size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Size of stdout in bytes"
+        },
+        "stderr_size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Size of stderr in bytes"
+        },
+        "output_log": {
+          "type": "string",
+          "description": "Relative path to raw stdout/stderr log file"
+        },
+        "predicate_result": {
+          "type": "boolean",
+          "description": "True if predicate matched, False otherwise (only if verdict is PASS or FAIL)"
+        },
+        "predicate_evaluation": {
+          "type": "string",
+          "description": "Human-readable description of predicate evaluation (e.g., 'result=arn:aws:kms:... matches not_null(@)')"
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Elapsed time in milliseconds"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when command was executed"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "Error details if verdict is ERROR"
+        }
+      }
+    },
+    "notCliValidatableResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_id",
+        "verdict",
+        "reason_code",
+        "reason"
+      ],
+      "properties": {
+        "control_id": {
+          "type": "string",
+          "pattern": "^CTRL-(ORG|ACC|RES)-(PRO|PRV|DET|COR)-\\d{3}$"
+        },
+        "verdict": {
+          "type": "string",
+          "const": "NOT_CLI_VALIDATABLE"
+        },
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "iac-time-only",
+            "policy-only-no-describe-api",
+            "requires-org-trail-correlation",
+            "missing-metadata",
+            "missing-principal-arn",
+            "no-deployed-resource",
+            "unknown-mechanism"
+          ],
+          "description": "Machine-readable category for why this control cannot be CLI-validated."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Explanation of why this control cannot be CLI-validated"
+        },
+        "supplemental_evidence": {
+          "type": "string",
+          "description": "Relative path to IaC-time or deploy-time evidence file. Required when reason_code is 'iac-time-only' or 'policy-only-no-describe-api'."
+        },
+        "iac_time_exit_code": {
+          "type": "integer",
+          "description": "Exit code from IaC-time validation (cfn-guard, opa, checkov) if applicable"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "reason_code": {
+                "enum": [
+                  "iac-time-only",
+                  "policy-only-no-describe-api"
+                ]
+              }
+            },
+            "required": ["reason_code"]
+          },
+          "then": {
+            "required": ["supplemental_evidence"],
+            "properties": {
+              "supplemental_evidence": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

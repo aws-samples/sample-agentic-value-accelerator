@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { deploymentsApi } from '../api/client';
+import { openFsiApp, withAvaToken } from '../lib/fsiAppLink';
 import type { Deployment } from '../types';
 
 type TabId = 'langfuse';
 
 export default function Observability() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<TabId>('langfuse');
@@ -13,7 +15,13 @@ export default function Observability() {
   const [loadingFoundation, setLoadingFoundation] = useState(true);
   const [serverReachable, setServerReachable] = useState<boolean | null>(null);
   const [iframeError, setIframeError] = useState(false);
-  const navigate = useNavigate();
+  // Langfuse iframe src with AVA SSO handoff token appended. Null until minted
+  // (or when auth is disabled → falls back to the raw langfuse_host URL).
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
+  const [showDeployForm, setShowDeployForm] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [deployError, setDeployError] = useState('');
+  const [deployForm, setDeployForm] = useState({ email: '', password: '', region: 'us-east-1' });
 
   useEffect(() => {
     if (tabParam === 'langfuse') setActiveTab('langfuse');
@@ -35,6 +43,21 @@ export default function Observability() {
     };
     fetchFoundation();
   }, []);
+
+  // Mint an AVA SSO handoff token and append it to the Langfuse URL, so the
+  // Lambda@Edge on Langfuse's CloudFront accepts the iframe/page load. Falls
+  // back to the raw URL when auth isn't configured (dev) or minting fails.
+  useEffect(() => {
+    const host = foundationDeployment?.outputs?.langfuse_host;
+    if (!host) { setIframeUrl(null); return; }
+    let cancelled = false;
+    withAvaToken(host).then((url) => {
+      if (!cancelled) setIframeUrl(url ?? host);
+    }).catch(() => {
+      if (!cancelled) setIframeUrl(host);
+    });
+    return () => { cancelled = true; };
+  }, [foundationDeployment?.outputs?.langfuse_host]);
 
   // Probe Langfuse URL: if unreachable, treat server as not deployed even if
   // the deployment record still exists (handles the case where ECS was torn
@@ -154,6 +177,7 @@ export default function Observability() {
                     </div>
                     <a
                       href={foundationDeployment.outputs.langfuse_host}
+                      onClick={(e) => { e.preventDefault(); openFsiApp(foundationDeployment.outputs.langfuse_host); }}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
@@ -170,7 +194,7 @@ export default function Observability() {
                 {!iframeError ? (
                   <div className="rounded-xl border border-violet-200 overflow-hidden bg-white" style={{ height: 'calc(100vh - 20rem)' }}>
                     <iframe
-                      src={foundationDeployment.outputs.langfuse_host}
+                      src={iframeUrl ?? foundationDeployment.outputs.langfuse_host}
                       className="w-full h-full border-0"
                       title="Langfuse Dashboard"
                       onError={() => setIframeError(true)}
@@ -217,15 +241,72 @@ export default function Observability() {
                     <p className="text-sm text-slate-500">
                       Deploy Langfuse to get tracing, evaluation, and analytics for all your AI agents. Once deployed, the dashboard will appear here.
                     </p>
-                    <button
-                      onClick={() => navigate('/deployments/create', { state: { templateId: 'foundation-stack' } })}
-                      className="inline-flex items-center gap-2 mt-3 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                      Deploy Langfuse
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.841m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                      </svg>
-                    </button>
+                    {!showDeployForm ? (
+                      <button
+                        onClick={() => setShowDeployForm(true)}
+                        className="inline-flex items-center gap-2 mt-3 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Deploy Langfuse
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.841m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <div className="mt-4 p-4 bg-white border border-slate-200 rounded-xl max-w-md space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Admin Email *</label>
+                          <input type="email" value={deployForm.email} onChange={e => setDeployForm({...deployForm, email: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="admin@example.com" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Admin Password *</label>
+                          <input type="password" value={deployForm.password} onChange={e => setDeployForm({...deployForm, password: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="Strong password" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">AWS Region</label>
+                          <select value={deployForm.region} onChange={e => setDeployForm({...deployForm, region: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                            <option value="us-east-1">us-east-1</option>
+                            <option value="us-west-2">us-west-2</option>
+                            <option value="eu-west-1">eu-west-1</option>
+                            <option value="ap-southeast-1">ap-southeast-1</option>
+                          </select>
+                        </div>
+                        {deployError && <p className="text-xs text-red-600">{deployError}</p>}
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            disabled={deploying || !deployForm.email || !deployForm.password}
+                            onClick={async () => {
+                              setDeploying(true);
+                              setDeployError('');
+                              try {
+                                const created = await deploymentsApi.create({
+                                  deployment_name: 'langfuse',
+                                  template_id: 'foundation-stack',
+                                  iac_type: 'terraform',
+                                  aws_region: deployForm.region,
+                                  parameters: {
+                                    project_name: 'foundation',
+                                    langfuse_admin_email: deployForm.email,
+                                    langfuse_admin_password: deployForm.password,
+                                    environment: 'dev',
+                                    aws_region: deployForm.region,
+                                  },
+                                });
+                                setShowDeployForm(false);
+                                navigate(`/deployments/${created.deployment_id}`);
+                              } catch (e: any) {
+                                setDeployError(e?.response?.data?.detail || e?.message || 'Deployment failed');
+                              } finally {
+                                setDeploying(false);
+                              }
+                            }}
+                            className="px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-300 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            {deploying ? 'Deploying...' : 'Deploy'}
+                          </button>
+                          <button onClick={() => setShowDeployForm(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

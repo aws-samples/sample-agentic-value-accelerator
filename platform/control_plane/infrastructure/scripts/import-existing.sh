@@ -51,6 +51,17 @@ safe_import "module.api_gateway.aws_cloudwatch_log_group.api_gateway" "/aws/apig
 safe_import "module.codebuild.aws_cloudwatch_log_group.codebuild" "/aws/codebuild/${NAME_PREFIX}-deployment"
 safe_import "module.ecs.aws_cloudwatch_log_group.ecs" "/ecs/$NAME_PREFIX"
 safe_import "module.step_functions.aws_cloudwatch_log_group.step_functions" "/aws/vendedlogs/states/${NAME_PREFIX}-deployment"
+# X-Ray Transaction Search prereq — aws/spans is shared account-wide and may
+# already exist (auto-created by AWS, prior partial apply, or another stack).
+SPANS_LG=$(aws logs describe-log-groups --log-group-name-prefix "aws/spans" --region "$AWS_REGION" --query "logGroups[?logGroupName=='aws/spans'].logGroupName" --output text 2>/dev/null || echo "")
+if [ -n "$SPANS_LG" ]; then
+    safe_import "aws_cloudwatch_log_group.aws_spans" "aws/spans"
+fi
+# Resource policy is named-keyed and may also pre-exist.
+SPANS_POLICY=$(aws logs describe-resource-policies --region "$AWS_REGION" --query "resourcePolicies[?policyName=='AWSServiceRoleForXRayLogs'].policyName" --output text 2>/dev/null || echo "")
+if [ -n "$SPANS_POLICY" ]; then
+    safe_import "aws_cloudwatch_log_resource_policy.xray_to_cwlogs" "AWSServiceRoleForXRayLogs"
+fi
 echo
 
 # =============================================================================

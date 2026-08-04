@@ -1,0 +1,43 @@
+{
+  "id": "structured-output",
+  "name": "Structured Output",
+  "description": "Utilities for getting reliable JSON/structured output from LLMs with parsing, validation, and retry logic.",
+  "tier": "code",
+  "category": "tools",
+  "iac_options": [],
+  "includes": {
+    "infra": false,
+    "agent_code": true,
+    "ui": false,
+    "tests": false
+  },
+  "frameworks_list": [
+    "strands",
+    "langgraph"
+  ],
+  "version": "1.0.0",
+  "tags": [
+    "structured-output",
+    "json",
+    "pydantic",
+    "parsing"
+  ],
+  "aws_services": [
+    "bedrock"
+  ],
+  "built_with": [],
+  "learn_more": [
+    {
+      "title": "LangChain: Structured Output How-To",
+      "url": "https://python.langchain.com/docs/how_to/structured_output/"
+    },
+    {
+      "title": "LangGraph: Structured Output Notebook",
+      "url": "https://github.com/langchain-ai/langgraph/blob/main/examples/react-agent-structured-output.ipynb"
+    },
+    {
+      "title": "Pydantic Documentation",
+      "url": "https://docs.pydantic.dev/latest/"
+    }
+  ]
+}

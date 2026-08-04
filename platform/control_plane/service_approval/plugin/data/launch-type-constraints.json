@@ -1,0 +1,32 @@
+{
+  "_metadata": {
+    "description": "Container runtime and launch-type constraints that AWS enforces when validating IaC artifacts. Used by generate-iac and generate-preventive skills to avoid emitting templates AWS will reject at deploy time. Hand-curated; only deploy-verified entries are included. Unknown launch types should fail loudly in generators, not silently skip.",
+    "schema_version": "1.0",
+    "sources": [
+      "Each entry: the specific service's launch-type documentation page",
+      "Example: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html"
+    ],
+    "verification": "Every constraint below has been validated at deploy time in at least one smoke-test cycle"
+  },
+  "constraints": {
+    "ecs_fargate": {
+      "cfn_type": "AWS::ECS::TaskDefinition",
+      "terraform": "aws_ecs_task_definition",
+      "match_property": "RequiresCompatibilities",
+      "match_value": "FARGATE",
+      "forbidden_properties": [
+        {
+          "path": "ContainerDefinitions[*].LinuxParameters.Capabilities.Add",
+          "reason": "AWS Fargate does not support adding Linux capabilities. Only Drop is accepted.",
+          "aws_error": "ClientException: Fargate launch type does not support privileged settings"
+        },
+        {
+          "path": "ContainerDefinitions[*].Privileged",
+          "reason": "AWS Fargate does not support privileged containers.",
+          "aws_error": "ClientException: Fargate launch type does not support privileged settings"
+        }
+      ],
+      "notes": "EC2 launch type supports all of these. Check RequiresCompatibilities BEFORE emitting any of the forbidden properties."
+    }
+  }
+}

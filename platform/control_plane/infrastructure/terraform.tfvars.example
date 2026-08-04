@@ -53,3 +53,17 @@ tags = {
 
 owner       = "platform-team"
 cost_center = "ai-platform"
+
+# Docker Hub credentials (optional)
+#
+# Required for langfuse foundation-stack deploys against any account that runs
+# the demo more than ~once per 6 hours — the langfuse module pulls 3 images
+# from docker.io and the anonymous pull cap (100/6hr per source IP) gets
+# exhausted by ~the third deploy. Setting these creates a Secrets Manager
+# secret named `dockerhub-credentials` that the buildspec auto-detects.
+#
+# Use a read-only "Public Repos" PAT — that's all the langfuse pulls need.
+# Leave both empty to skip; the buildspec falls back to anonymous pulls.
+#
+# dockerhub_username = "your-dh-username"
+# dockerhub_token    = "dckr_pat_xxxxxxxxxxxxxxxxxxxxxxxx"

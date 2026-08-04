@@ -1,0 +1,437 @@
+{
+  "schema_version": "1.0",
+  "attack_version": "16.1",
+  "matrix": "enterprise-attack",
+  "platforms": ["IaaS", "SaaS", "Identity Provider"],
+  "description": "MITRE ATT&CK techniques applicable to cloud/AWS environments. Filtered from the full Enterprise matrix to cloud-relevant entries. Source: MITRE ATT&CK (attack.mitre.org).",
+  "tactics": [
+    {
+      "id": "TA0001",
+      "name": "Initial Access",
+      "description": "Techniques to gain an initial foothold in the cloud environment",
+      "techniques": [
+        {
+          "id": "T1078",
+          "name": "Valid Accounts",
+          "sub_techniques": [
+            {
+              "id": "T1078.004",
+              "name": "Cloud Accounts",
+              "description": "Adversaries may use compromised cloud account credentials to gain access",
+              "data_sources": ["Logon Session", "User Account"],
+              "mitigations_mitre": ["M1032", "M1027", "M1026", "M1017"],
+              "aws_relevance": ["IAM user/role abuse", "federated identity compromise", "SSO token theft"]
+            }
+          ]
+        },
+        {
+          "id": "T1190",
+          "name": "Exploit Public-Facing Application",
+          "sub_techniques": [],
+          "description": "Adversaries may exploit vulnerabilities in internet-facing applications",
+          "data_sources": ["Application Log", "Network Traffic"],
+          "mitigations_mitre": ["M1048", "M1050", "M1030", "M1016"],
+          "aws_relevance": ["API Gateway exploitation", "public endpoints without WAF", "missing authentication"]
+        },
+        {
+          "id": "T1199",
+          "name": "Trusted Relationship",
+          "sub_techniques": [],
+          "description": "Adversaries may exploit trusted third-party relationships to gain access",
+          "data_sources": ["Application Log", "Network Traffic", "Logon Session"],
+          "mitigations_mitre": ["M1032", "M1030"],
+          "aws_relevance": ["cross-account role trust", "service-linked role chains", "confused deputy"]
+        },
+        {
+          "id": "T1133",
+          "name": "External Remote Services",
+          "sub_techniques": [],
+          "description": "Adversaries may use external remote services as initial access vector",
+          "data_sources": ["Logon Session", "Network Traffic"],
+          "mitigations_mitre": ["M1035", "M1032", "M1030"],
+          "aws_relevance": ["VPC endpoints without restriction", "public API endpoints"]
+        }
+      ]
+    },
+    {
+      "id": "TA0002",
+      "name": "Execution",
+      "description": "Techniques to run adversary-controlled code",
+      "techniques": [
+        {
+          "id": "T1204",
+          "name": "User Execution",
+          "sub_techniques": [
+            {
+              "id": "T1204.003",
+              "name": "Malicious Image",
+              "description": "Adversaries may rely on users running malicious container images or AMIs",
+              "data_sources": ["Command", "Container", "Image"],
+              "mitigations_mitre": ["M1017", "M1038"],
+              "aws_relevance": ["container image compromise", "malicious Lambda layers"]
+            }
+          ]
+        },
+        {
+          "id": "T1059",
+          "name": "Command and Scripting Interpreter",
+          "sub_techniques": [],
+          "description": "Adversaries may abuse command and scripting interpreters to execute commands",
+          "data_sources": ["Command", "Process"],
+          "mitigations_mitre": ["M1049", "M1038", "M1026"],
+          "aws_relevance": ["Lambda function code injection", "SSM command execution", "agent runtime code execution"]
+        }
+      ]
+    },
+    {
+      "id": "TA0003",
+      "name": "Persistence",
+      "description": "Techniques to maintain foothold across restarts or credential changes",
+      "techniques": [
+        {
+          "id": "T1098",
+          "name": "Account Manipulation",
+          "sub_techniques": [
+            {
+              "id": "T1098.001",
+              "name": "Additional Cloud Credentials",
+              "description": "Adversaries may add credentials to cloud accounts to maintain access",
+              "data_sources": ["User Account"],
+              "mitigations_mitre": ["M1032", "M1026", "M1018"],
+              "aws_relevance": ["IAM access key creation", "new IAM user/role", "trust policy modification"]
+            },
+            {
+              "id": "T1098.003",
+              "name": "Additional Cloud Roles",
+              "description": "Adversaries may add additional roles or permissions to maintain access",
+              "data_sources": ["User Account"],
+              "mitigations_mitre": ["M1032", "M1026"],
+              "aws_relevance": ["role policy attachment", "permission boundary modification", "SCP bypass"]
+            }
+          ]
+        },
+        {
+          "id": "T1525",
+          "name": "Implant Internal Image",
+          "sub_techniques": [],
+          "description": "Adversaries may implant cloud images with malicious code",
+          "data_sources": ["Image"],
+          "mitigations_mitre": ["M1045", "M1047"],
+          "aws_relevance": ["compromised AMIs", "container image tampering"]
+        },
+        {
+          "id": "T1556",
+          "name": "Modify Authentication Process",
+          "sub_techniques": [
+            {
+              "id": "T1556.006",
+              "name": "Multi-Factor Authentication",
+              "description": "Adversaries may modify MFA settings to weaken authentication",
+              "data_sources": ["User Account", "Logon Session"],
+              "mitigations_mitre": ["M1032", "M1027"],
+              "aws_relevance": ["MFA device deregistration", "virtual MFA substitution"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TA0004",
+      "name": "Privilege Escalation",
+      "description": "Techniques to gain higher-level permissions",
+      "techniques": [
+        {
+          "id": "T1078",
+          "name": "Valid Accounts",
+          "sub_techniques": [
+            {
+              "id": "T1078.004",
+              "name": "Cloud Accounts",
+              "description": "Using valid cloud accounts for privilege escalation through role assumption",
+              "data_sources": ["Logon Session", "User Account"],
+              "mitigations_mitre": ["M1032", "M1027", "M1026"],
+              "aws_relevance": ["sts:AssumeRole to privileged role", "role chaining", "service role impersonation"]
+            }
+          ]
+        },
+        {
+          "id": "T1548",
+          "name": "Abuse Elevation Control Mechanism",
+          "sub_techniques": [],
+          "description": "Adversaries may circumvent access control mechanisms to gain elevated access",
+          "data_sources": ["Command", "Process"],
+          "mitigations_mitre": ["M1026", "M1038", "M1047"],
+          "aws_relevance": ["iam:PassRole exploitation", "permission boundary bypass", "SCP gap exploitation"]
+        }
+      ]
+    },
+    {
+      "id": "TA0005",
+      "name": "Defense Evasion",
+      "description": "Techniques to avoid detection",
+      "techniques": [
+        {
+          "id": "T1562",
+          "name": "Impair Defenses",
+          "sub_techniques": [
+            {
+              "id": "T1562.008",
+              "name": "Disable or Modify Cloud Logs",
+              "description": "Adversaries may disable or modify cloud logging to avoid detection",
+              "data_sources": ["Cloud Service"],
+              "mitigations_mitre": ["M1018", "M1047"],
+              "aws_relevance": ["CloudTrail stop/delete", "Config rule disabling", "VPC flow log removal", "CloudWatch alarm deletion"]
+            },
+            {
+              "id": "T1562.001",
+              "name": "Disable or Modify Tools",
+              "description": "Adversaries may disable security monitoring tools",
+              "data_sources": ["Command", "Process", "Cloud Service"],
+              "mitigations_mitre": ["M1022", "M1024"],
+              "aws_relevance": ["GuardDuty suspension", "Security Hub disabling", "Config recorder stop"]
+            }
+          ]
+        },
+        {
+          "id": "T1550",
+          "name": "Use Alternate Authentication Material",
+          "sub_techniques": [
+            {
+              "id": "T1550.001",
+              "name": "Application Access Token",
+              "description": "Adversaries may use stolen application access tokens to bypass authentication",
+              "data_sources": ["Web Credential"],
+              "mitigations_mitre": ["M1047", "M1021"],
+              "aws_relevance": ["stolen STS tokens", "leaked API keys", "OAuth token theft"]
+            }
+          ]
+        },
+        {
+          "id": "T1070",
+          "name": "Indicator Removal",
+          "sub_techniques": [
+            {
+              "id": "T1070.004",
+              "name": "File Deletion",
+              "description": "Adversaries may delete files to cover tracks",
+              "data_sources": ["Command", "File"],
+              "mitigations_mitre": ["M1029"],
+              "aws_relevance": ["S3 log object deletion", "CloudWatch log group deletion"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TA0006",
+      "name": "Credential Access",
+      "description": "Techniques to steal credentials",
+      "techniques": [
+        {
+          "id": "T1528",
+          "name": "Steal Application Access Token",
+          "sub_techniques": [],
+          "description": "Adversaries may steal application access tokens for credential access",
+          "data_sources": ["Web Credential"],
+          "mitigations_mitre": ["M1047", "M1021", "M1041"],
+          "aws_relevance": ["Lambda environment variable secrets", "instance metadata credential theft", "IMDS v1 exploitation"]
+        },
+        {
+          "id": "T1552",
+          "name": "Unsecured Credentials",
+          "sub_techniques": [
+            {
+              "id": "T1552.005",
+              "name": "Cloud Instance Metadata API",
+              "description": "Adversaries may use the cloud instance metadata API to collect credentials",
+              "data_sources": ["Cloud Service"],
+              "mitigations_mitre": ["M1042", "M1037"],
+              "aws_relevance": ["IMDS credential theft", "EC2 role credential extraction"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TA0007",
+      "name": "Discovery",
+      "description": "Techniques to gain knowledge about the environment",
+      "techniques": [
+        {
+          "id": "T1580",
+          "name": "Cloud Infrastructure Discovery",
+          "sub_techniques": [],
+          "description": "Adversaries may discover cloud infrastructure components",
+          "data_sources": ["Cloud Service", "Instance"],
+          "mitigations_mitre": ["M1018"],
+          "aws_relevance": ["Describe/List API enumeration", "resource discovery via Config", "service endpoint scanning"]
+        },
+        {
+          "id": "T1619",
+          "name": "Cloud Storage Object Discovery",
+          "sub_techniques": [],
+          "description": "Adversaries may enumerate cloud storage objects",
+          "data_sources": ["Cloud Storage"],
+          "mitigations_mitre": ["M1018"],
+          "aws_relevance": ["S3 bucket listing", "data lake enumeration", "knowledge base content discovery"]
+        },
+        {
+          "id": "T1538",
+          "name": "Cloud Service Dashboard",
+          "sub_techniques": [],
+          "description": "Adversaries may use cloud service dashboards for reconnaissance",
+          "data_sources": ["Logon Session"],
+          "mitigations_mitre": ["M1018"],
+          "aws_relevance": ["AWS Console access", "CloudWatch dashboard viewing", "resource group enumeration"]
+        }
+      ]
+    },
+    {
+      "id": "TA0008",
+      "name": "Lateral Movement",
+      "description": "Techniques to move through the environment",
+      "techniques": [
+        {
+          "id": "T1021",
+          "name": "Remote Services",
+          "sub_techniques": [
+            {
+              "id": "T1021.007",
+              "name": "Cloud Services",
+              "description": "Adversaries may use cloud services to move laterally",
+              "data_sources": ["Logon Session", "Network Traffic"],
+              "mitigations_mitre": ["M1032", "M1026"],
+              "aws_relevance": ["cross-account role assumption", "VPC peering traversal", "service endpoint pivoting"]
+            }
+          ]
+        },
+        {
+          "id": "T1550",
+          "name": "Use Alternate Authentication Material",
+          "sub_techniques": [
+            {
+              "id": "T1550.001",
+              "name": "Application Access Token",
+              "description": "Using stolen tokens for lateral movement",
+              "data_sources": ["Web Credential"],
+              "mitigations_mitre": ["M1047"],
+              "aws_relevance": ["STS token reuse across services", "cross-service credential forwarding"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TA0009",
+      "name": "Collection",
+      "description": "Techniques to gather data of interest",
+      "techniques": [
+        {
+          "id": "T1530",
+          "name": "Data from Cloud Storage",
+          "sub_techniques": [],
+          "description": "Adversaries may access data from cloud storage without proper authorization",
+          "data_sources": ["Cloud Storage"],
+          "mitigations_mitre": ["M1018", "M1041", "M1032"],
+          "aws_relevance": ["S3 object access", "knowledge base data extraction", "memory store data access", "unencrypted data exposure"]
+        },
+        {
+          "id": "T1213",
+          "name": "Data from Information Repositories",
+          "sub_techniques": [
+            {
+              "id": "T1213.003",
+              "name": "Code Repositories",
+              "description": "Adversaries may access data from code repositories",
+              "data_sources": ["Application Log", "Logon Session"],
+              "mitigations_mitre": ["M1017", "M1018", "M1032"],
+              "aws_relevance": ["CodeCommit data access", "agent source code exposure"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TA0010",
+      "name": "Exfiltration",
+      "description": "Techniques to steal data from the environment",
+      "techniques": [
+        {
+          "id": "T1537",
+          "name": "Transfer Data to Cloud Account",
+          "sub_techniques": [],
+          "description": "Adversaries may transfer data to an adversary-controlled cloud account",
+          "data_sources": ["Cloud Storage", "Network Traffic"],
+          "mitigations_mitre": ["M1018", "M1037"],
+          "aws_relevance": ["cross-account S3 copy", "snapshot sharing to external account", "resource policy granting external access"]
+        },
+        {
+          "id": "T1567",
+          "name": "Exfiltration Over Web Service",
+          "sub_techniques": [
+            {
+              "id": "T1567.002",
+              "name": "Exfiltration to Cloud Storage",
+              "description": "Adversaries may exfiltrate data to cloud storage services",
+              "data_sources": ["Cloud Storage", "Network Traffic"],
+              "mitigations_mitre": ["M1021"],
+              "aws_relevance": ["data exfil via S3 to external bucket", "VPC endpoint bypass for data transfer"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TA0040",
+      "name": "Impact",
+      "description": "Techniques to disrupt availability or integrity",
+      "techniques": [
+        {
+          "id": "T1485",
+          "name": "Data Destruction",
+          "sub_techniques": [],
+          "description": "Adversaries may destroy data and files on cloud resources",
+          "data_sources": ["Cloud Storage", "Instance"],
+          "mitigations_mitre": ["M1053", "M1029"],
+          "aws_relevance": ["resource deletion (Delete* APIs)", "S3 object deletion", "KMS key scheduling for deletion"]
+        },
+        {
+          "id": "T1486",
+          "name": "Data Encrypted for Impact",
+          "sub_techniques": [],
+          "description": "Adversaries may encrypt data to disrupt availability (ransomware)",
+          "data_sources": ["Cloud Storage", "File"],
+          "mitigations_mitre": ["M1053", "M1040"],
+          "aws_relevance": ["KMS key policy modification to deny decryption", "re-encryption with adversary-controlled key"]
+        },
+        {
+          "id": "T1489",
+          "name": "Service Stop",
+          "sub_techniques": [],
+          "description": "Adversaries may stop cloud services to disrupt availability",
+          "data_sources": ["Cloud Service"],
+          "mitigations_mitre": ["M1024", "M1018"],
+          "aws_relevance": ["service resource deletion", "configuration removal", "agent runtime stop"]
+        },
+        {
+          "id": "T1496",
+          "name": "Resource Hijacking",
+          "sub_techniques": [],
+          "description": "Adversaries may use cloud resources for their own purposes (cryptomining)",
+          "data_sources": ["Cloud Service", "Network Traffic"],
+          "mitigations_mitre": ["M1018"],
+          "aws_relevance": ["compute hijacking", "unauthorized resource creation", "quota exhaustion"]
+        },
+        {
+          "id": "T1498",
+          "name": "Network Denial of Service",
+          "sub_techniques": [],
+          "description": "Adversaries may perform network DoS against cloud endpoints",
+          "data_sources": ["Network Traffic"],
+          "mitigations_mitre": ["M1037"],
+          "aws_relevance": ["API throttling abuse", "public endpoint flooding", "VPC endpoint saturation"]
+        }
+      ]
+    }
+  ]
+}

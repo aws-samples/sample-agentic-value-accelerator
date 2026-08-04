@@ -1,0 +1,21 @@
+[project]
+name = "conversational-assistant"
+version = "1.0.0"
+description = "Conversational assistant agent with tools and memory"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.10.0,<3.0",
+    "bedrock-agentcore>=1.9.0,<2.0",
+]
+
+[project.optional-dependencies]
+strands = ["strands-agents>=1.38.0,<2.0"]
+langgraph = [
+    "langgraph>=1.1.10,<2.0",
+    "langchain-core>=0.3.0,<1.0",
+    "langchain-aws>=0.2.0,<1.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"

@@ -1,0 +1,99 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Service Approval — Intake Template
+# ─────────────────────────────────────────────────────────────────────────────
+# THIS IS A TEMPLATE. DO NOT EDIT IN PLACE.
+#
+# This file lives inside the installed plugin and is shared across all users.
+# Editing it here will not affect pipeline runs — the plugin guards against
+# auto-loading files from its own directory.
+#
+# To use:
+#   1. Copy this file to your project root as ./service-approval-intake.yaml
+#         cp <plugin>/skills/intake/intake-template.yaml ./service-approval-intake.yaml
+#   2. Fill in the fields for your service.
+#   3. Run the pipeline from that project root:
+#         service-approval
+#      The intake skill auto-discovers ./service-approval-intake.yaml and shows
+#      a summary with [U]se as-is / [E]dit before continuing.
+#
+# Or pass an explicit path:
+#   service-approval --from-intake=path/to/my-service.yaml
+#
+# Only `service.name` is required. Everything else has sensible defaults.
+# IaC output formats are NOT configured here — they are auto-detected in
+# Phase 0 (Assess) based on actual provider support for your service.
+# ─────────────────────────────────────────────────────────────────────────────
+
+service:
+  # (required) AWS service identifier — lowercase, hyphenated
+  # Examples: s3, kms, lambda, bedrock-agentcore-control, ecs, dynamodb
+  name: ""
+
+input:
+  # Path to folder containing input files (.md, .json, .xlsx, .pdf, .docx)
+  # Set to null for MCP-only mode (pipeline researches everything from scratch)
+  folder: null
+
+  # What types of input are you providing?
+  threat_model: false       # Custom threat model in the input folder?
+  mitigation_report: false  # Existing mitigation report?
+
+  # Control framework to map against
+  # Options: ccmv4 | nist | cis | iso
+  # If a framework file is in the input folder, this is auto-detected
+  framework: "ccmv4"
+
+  # Explicit path to framework file (optional — auto-detected from folder if null)
+  framework_file: null
+
+  # Bootstrap behavior when ./input/ does not exist in the user's cwd.
+  # In interactive mode the intake skill prompts for these. For file-driven
+  # runs (--from-intake=...), set them here to skip the prompt.
+  bootstrap:
+    # Copy the bundled CCMv4 framework xlsx from the plugin's input/ into ./input/
+    seed_from_plugin: false
+    # Try downloading the latest CCMv4 from CSA (falls back to opening browser
+    # if CSA returns a login wall instead of an xlsx)
+    auto_download_ccmv4: false
+
+testing:
+  # How should Phase 5 (Test) run?
+  #   full-deploy  Deploy compliant resource template, wait for Config, tear down
+  #                (requires aws_profile)
+  #   dry-run      Static checks only — terraform validate, cfn-lint, CDK tsc,
+  #                CFN Guard syntax, py_compile. Optional Tier 2 (CFN validate-
+  #                template, IAM Access Analyzer) if aws_profile is provided.
+  #   skip         Do not run Phase 5. Stop after generation.
+  #   manual-cli   Skip Phase 5; Summarize appends per-format deploy commands to
+  #                the approval report so you can run them yourself.
+  mode: "skip"
+
+  # AWS CLI profile name (required for full-deploy; optional for dry-run; unused otherwise)
+  aws_profile: null
+
+  # Target region for test deployment
+  region: "us-east-1"
+
+  # Keep deployed resources alive after Phase 7 Evidence completes (full-deploy only).
+  # Phase 5 ALWAYS leaves the stack alive when Phase 7 is in scope so Phase 7
+  # can probe the deployed resources via CLI. This flag controls whether
+  # Phase 7 tears down at the end:
+  #   false (default): Phase 7 tears down the stack after evidence collection
+  #   true:            Phase 7 skips teardown — stack remains for manual debugging
+  keep: false
+
+  # Config rule evaluation timeout in minutes (full-deploy only)
+  timeout_minutes: 30
+
+options:
+  # Include MITRE ATT&CK threat mapping (adds ~15 min)
+  include_attack_surface: true
+
+  # Generate ARTIFACT-FLOW-MATRIX.md (per-artifact dependency graph)
+  include_artifact_matrix: true
+
+  # Include unverified findings in generation (not recommended)
+  include_unverified: false
+
+  # Delete existing .service-approval/ state before run
+  clean: false
