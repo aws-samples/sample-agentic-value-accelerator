@@ -25,14 +25,13 @@ Feature release building on v3.0.1. Adds fine-grained agent access control (Poli
 #### 🧩 Capabilities & Agent-as-a-Service
 
 - **Advanced Prompt Optimization (Bedrock AdvPO)** — _Rafael Mosca_ — available under Capabilities → Prompts.
-- **Knowledge** (Data Lake: Glue + Athena + S3/Iceberg) available; **Custom Agents** catalog + create flow; **role-based access control (RBAC)** — _Hemal Gadhiya_.
+- **Knowledge** (Data Lake: Glue + Athena + S3/Iceberg) available. **Role-based access control (RBAC)** is in progress (coming soon) — _Hemal Gadhiya_.
 
-#### 📦 New reference implementations (5 → 8)
+#### 📦 New reference implementations (5 → 7)
 
 - **Payments Fraud** — _Michael Sidler_ — agent-native fraud scoring, NL investigation, FinCEN-structured SAR drafting (Strands supervisor + 3 specialists).
 - **Merchant Onboarding** — _Sudhir Kalidindi_ — document processing, OFAC screening, fraud detection, HITL approvals.
-- **Sales Recommend (AWS Solutions Advisor)** — _Ronny Lloro_ — solution recommendation for non-technical business leaders.
-- **AgentCore-in-a-Box** — _Bikash Behera_ — grab-and-go field demo wiring every AgentCore primitive.
+- **AgentCore-in-a-Box** — _Charles Meruwoma & Adeleke Coker_ (integration by _Bikash Behera_) — grab-and-go field demo wiring every AgentCore primitive.
 
 #### 📖 Documentation
 
