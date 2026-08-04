@@ -1,0 +1,99 @@
+{
+  "account_id": "A150",
+  "customer_name": "Tom Becker",
+  "account_type": "personal_checking",
+  "risk_profile": "low",
+  "opened_date": "2020-02-14",
+  "home_country": "US",
+  "home_city": "Seattle",
+  "baseline": {
+    "typical_transaction_amount": 70.0,
+    "typical_weekly_count": 8,
+    "typical_networks": [
+      "card",
+      "ach"
+    ]
+  },
+  "scenario": "clean",
+  "scenario_note": "Normal everyday spending \u2014 groceries, subscription, rent. Control account expected to score low (approve).",
+  "expected_assessment": {
+    "fraud_score": 0.08,
+    "risk_level": "low",
+    "decision": "approve",
+    "reason_tags": []
+  },
+  "flagged_patterns": [],
+  "transactions": [
+    {
+      "transaction_id": "TXN_OK_1",
+      "account_id": "A150",
+      "timestamp": "2026-06-10T08:30:00Z",
+      "amount": 42.5,
+      "currency": "USD",
+      "network": "card",
+      "counterparty": {
+        "counterparty_id": "M001",
+        "name": "Corner Grocery",
+        "account_number_masked": "****1001",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-1212",
+      "ip_address": "203.0.113.9",
+      "geo": {
+        "country": "US",
+        "city": "Seattle",
+        "lat": 47.61,
+        "lon": -122.33
+      },
+      "merchant_category_code": "5411"
+    },
+    {
+      "transaction_id": "TXN_OK_2",
+      "account_id": "A150",
+      "timestamp": "2026-06-11T19:05:00Z",
+      "amount": 18.99,
+      "currency": "USD",
+      "network": "card",
+      "counterparty": {
+        "counterparty_id": "M002",
+        "name": "Streamflix",
+        "account_number_masked": "****1002",
+        "country": "US"
+      },
+      "channel": "mobile",
+      "device_id": "mobile-ios-1212",
+      "ip_address": "203.0.113.9",
+      "geo": {
+        "country": "US",
+        "city": "Seattle",
+        "lat": 47.61,
+        "lon": -122.33
+      },
+      "merchant_category_code": "5815"
+    },
+    {
+      "transaction_id": "TXN_OK_3",
+      "account_id": "A150",
+      "timestamp": "2026-06-13T12:40:00Z",
+      "amount": 250.0,
+      "currency": "USD",
+      "network": "ach",
+      "counterparty": {
+        "counterparty_id": "A150R",
+        "name": "Rent Co",
+        "account_number_masked": "****1500",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-1212",
+      "ip_address": "203.0.113.9",
+      "geo": {
+        "country": "US",
+        "city": "Seattle",
+        "lat": 47.61,
+        "lon": -122.33
+      }
+    }
+  ]
+}

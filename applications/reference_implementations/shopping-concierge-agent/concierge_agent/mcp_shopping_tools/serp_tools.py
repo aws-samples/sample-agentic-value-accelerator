@@ -32,11 +32,20 @@ def get_serpapi_key() -> str:
     """
     Get SerpAPI key from AWS SSM Parameter Store.
 
+    The SSM parameter name is injected by the CDK stack as SERP_API_KEY_PARAM
+    so the code stays agnostic to the deployment ID.
+
     Returns:
         SerpAPI key
     """
     region = os.getenv("AWS_REGION", "us-east-1")
-    return get_ssm_parameter("/concierge-agent/shopping/serp-api-key", region)
+    parameter_name = os.getenv("SERP_API_KEY_PARAM")
+    if not parameter_name:
+        raise ValueError(
+            "SERP_API_KEY_PARAM environment variable is not set; "
+            "the ShoppingStack must inject it."
+        )
+    return get_ssm_parameter(parameter_name, region)
 
 
 def search_google_shopping_products(query: str, max_results: int = 10) -> Dict[str, Any]:

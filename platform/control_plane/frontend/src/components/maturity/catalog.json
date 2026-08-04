@@ -1763,7 +1763,7 @@
         "anchors": {
           "L1": "No agent-specific failure handling",
           "L2": "Basic agent error logging; manual rollback",
-          "L3": "Formal failure taxonomy (OWASP ASI01-ASI10); circuit breakers",
+          "L3": "Formal failure taxonomy (OWASP Agentic AI Threats); circuit breakers",
           "L4": "Automated failure detection; predictive prevention",
           "L5": "Self-healing agents; zero-downtime rollback"
         }
@@ -1815,7 +1815,7 @@
         "anchors": {
           "L1": "No agent-specific security testing",
           "L2": "Basic prompt injection testing",
-          "L3": "Structured agent red-teaming (OWASP ASI01-ASI10)",
+          "L3": "Structured agent red-teaming (OWASP Agentic AI Threats)",
           "L4": "Continuous automated red-teaming; purple team exercises",
           "L5": "Proactive agent security research; zero-day discovery"
         }

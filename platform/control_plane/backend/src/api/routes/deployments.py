@@ -350,38 +350,111 @@ async def destroy_deployment(deployment_id: str, _=RBACDepends(require_role(Role
             detail=f"Cannot destroy deployment in '{current_status.value}' status. Only DEPLOYED or FAILED deployments can be destroyed.",
         )
 
-    # Get the template to extract the offboarding job
-    catalog = get_catalog()
-    template = catalog.get_template(deployment.template_id)
-    if not template:
-        raise HTTPException(status_code=404, detail=f"Template not found: {deployment.template_id}")
+    # Foundry use cases use a synthetic template_id (foundry-<use_case>) that
+    # doesn't resolve via the standard template catalog. Their deploys also
+    # build the SFN input by hand (see applications.py). Match that here so
+    # the UI Destroy button works for all 34 Foundry use cases — without this
+    # branch, destroy silently fails at catalog.get_template() below.
+    is_foundry = deployment.template_id and deployment.template_id.startswith("foundry-")
 
-    # Re-package template so destroy.sh is included in the zip
-    try:
-        s3_svc = get_s3_svc()
-        pattern = template.get_deployment_pattern(deployment.iac_type)
-        s3_key = s3_svc.deliver_template(
-            template_path=template.path,
-            template_id=deployment.template_id,
-            deployment_id=deployment.deployment_id,
-            iac_path=pattern.get("path") if pattern else "iac/terraform",
-            parameters=deployment.parameters,
-            s3_bucket=deployment.s3_bucket,
-        )
-        deployment.s3_key = s3_key
-    except Exception as e:
-        logger.error(f"Destroy repackaging failed: {e}")
+    if is_foundry:
+        try:
+            import json
+            pipeline_svc = get_pipeline_svc()
+            use_case_name = deployment.template_id.replace("foundry-", "")
+            from services.pipeline_inputs import FoundryPipelineInput
+            sf_input = {
+                "deployment_id": deployment.deployment_id,
+                "template_id": deployment.template_id,
+                "deployment_name": deployment.deployment_name,
+                "iac_type": deployment.iac_type or "terraform",
+                "framework_id": deployment.framework_id,
+                "aws_region": deployment.aws_region,
+                "s3_bucket": deployment.s3_bucket,
+                "s3_key": deployment.s3_key,
+                "parameters": FoundryPipelineInput.from_dict(deployment.parameters or {}).to_sfn_parameters(),
+                "target_account_id": None,
+                "target_role_arn": None,
+                "action": "destroy",
+                "job": {
+                    "name": "offboarding",
+                    "incoming_event": f"{use_case_name}_offboarding_request",
+                    "outgoing_event": f"{use_case_name}_offboarding_success",
+                },
+            }
+            import time
+            execution_name = f"destroy-{deployment.deployment_id}-{int(time.time())}"
+            response = pipeline_svc.sfn_client.start_execution(
+                stateMachineArn=pipeline_svc.state_machine_arn,
+                name=execution_name,
+                input=json.dumps(sf_input),
+            )
+            deployment = svc.update_status(deployment.deployment_id, DeploymentStatus.DESTROYING, "Destroy pipeline started")
+            deployment.execution_arn = response["executionArn"]
+            svc.table.put_item(Item=svc._to_item(deployment))
+        except Exception as e:
+            logger.error(f"Foundry destroy pipeline start failed: {e}")
+            svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
+            raise HTTPException(status_code=500, detail=f"Destroy pipeline failed: {e}")
+    else:
+        # Standard template — look up via catalog, repackage, then run the
+        # offboarding job via PipelineService.
+        catalog = get_catalog()
+        template = catalog.get_template(deployment.template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail=f"Template not found: {deployment.template_id}")
 
-    try:
-        pipeline_svc = get_pipeline_svc()
-        execution_arn = pipeline_svc.start_destroy_pipeline(deployment, template)
-        deployment = svc.update_status(deployment.deployment_id, DeploymentStatus.DESTROYING, "Destroy pipeline started")
-        deployment.execution_arn = execution_arn
-        svc.table.put_item(Item=svc._to_item(deployment))
-    except Exception as e:
-        logger.error(f"Destroy pipeline start failed: {e}")
-        svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
-        raise HTTPException(status_code=500, detail=f"Destroy pipeline failed: {e}")
+        # Re-package template so destroy.sh is included in the zip
+        try:
+            s3_svc = get_s3_svc()
+            pattern = template.get_deployment_pattern(deployment.iac_type)
+            s3_key = s3_svc.deliver_template(
+                template_path=template.path,
+                template_id=deployment.template_id,
+                deployment_id=deployment.deployment_id,
+                iac_path=pattern.get("path") if pattern else "iac/terraform",
+                parameters=deployment.parameters,
+                s3_bucket=deployment.s3_bucket,
+            )
+            deployment.s3_key = s3_key
+        except Exception as e:
+            logger.error(f"Destroy repackaging failed: {e}")
+
+        try:
+            pipeline_svc = get_pipeline_svc()
+            execution_arn = pipeline_svc.start_destroy_pipeline(deployment, template)
+            deployment = svc.update_status(deployment.deployment_id, DeploymentStatus.DESTROYING, "Destroy pipeline started")
+            deployment.execution_arn = execution_arn
+            svc.table.put_item(Item=svc._to_item(deployment))
+        except Exception as e:
+            logger.error(f"Destroy pipeline start failed: {e}")
+            svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
+            raise HTTPException(status_code=500, detail=f"Destroy pipeline failed: {e}")
+
+    # Best-effort: revoke the LLM Gateway virtual key + delete its Secrets
+    # Manager secret. Only applies to Foundry deployments where Round 2 of
+    # the gateway integration provisioned a per-deployment key. Failures
+    # here never block destroy — the IaC teardown is what matters.
+    if deployment.template_id and deployment.template_id.startswith("foundry-"):
+        try:
+            from services.llm_gateway_provisioning import LLMGatewayProvisioningService
+
+            use_case_name = deployment.template_id.replace("foundry-", "")
+            framework = (deployment.parameters or {}).get("FRAMEWORK") or deployment.framework_id or "strands"
+            # Mirror the synthetic id used at deploy time so we hit the
+            # same Secrets Manager name.
+            synthetic_deployment_id = f"{use_case_name}-{framework}-{deployment.deployment_name}"
+            gw_provisioner = LLMGatewayProvisioningService(
+                region=deployment.aws_region or settings.AWS_REGION,
+                deployments_table_name=settings.DEPLOYMENTS_TABLE_NAME,
+            )
+            gw_provisioner.revoke_virtual_key(
+                use_case_name=use_case_name,
+                framework=framework,
+                deployment_id=synthetic_deployment_id,
+            )
+        except Exception as exc:
+            logger.warning(f"LLM Gateway revoke failed (non-fatal): {exc}")
 
     return DeploymentResponse(**deployment.dict())
 
@@ -730,6 +803,31 @@ async def get_sample_data(deployment_id: str, _=RBACDepends(require_role(Role.VI
     except Exception as e:
         logger.error(f"Failed to read sample data: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to read sample data: {e}")
+
+
+@router.post("/{deployment_id}/provision-gateway", status_code=200)
+async def provision_gateway(deployment_id: str, _=RBACDepends(require_role(Role.OPERATOR))):
+    """Provision a dedicated gateway for a deployed use case and attach to its runtime."""
+    svc = get_deploy_svc()
+    deployment = svc.get_deployment(deployment_id)
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+    # Allow both "deployed" and "deploying" — CodeBuild post_build calls this while
+    # status is still DEPLOYING (Step Function sets DEPLOYED after build completes)
+    if deployment.status not in ("deployed", "deploying"):
+        return {"status": "skipped", "reason": f"Not deployed (status={deployment.status})"}
+
+    svc._provision_gateway(deployment)
+
+    # Re-read to get updated outputs
+    deployment = svc.get_deployment(deployment_id)
+    outputs = deployment.outputs or {}
+    return {
+        "status": "ok",
+        "gateway_id": outputs.get("gateway_id"),
+        "gateway_url": outputs.get("gateway_url"),
+        "gateway_name": outputs.get("gateway_name"),
+    }
 
 
 @router.get("/{deployment_id}", response_model=DeploymentResponse)

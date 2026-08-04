@@ -7,7 +7,7 @@
 
 import { Link } from 'react-router-dom';
 import TrustStack3Layer from './TrustStack3Layer';
-import { TrustStackGuide } from './ModuleGuide';
+import UnifiedGuide, { TRUST_STACK_GUIDE } from './UnifiedGuide';
 
 export default function TrustStackPage() {
   return (
@@ -21,7 +21,7 @@ export default function TrustStackPage() {
           <div>
             <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Trust Stack</h1>
             <p className="text-slate-500 mt-1 max-w-2xl">
-              Three Lines of Defense — Application, Platform, and Enterprise layer controls. Track coverage, maturity, and gaps at each level.
+              Classify every AI system on two AWS scoping matrices — GenAI sourcing scope (1–5, buy → build) and agentic agency (L1–L4) — then trace the build-side controls, AWS services, and Three Lines of Defense at each layer.
             </p>
           </div>
           <Link
@@ -33,7 +33,7 @@ export default function TrustStackPage() {
         </div>
 
         {/* How to Use Guide */}
-        <TrustStackGuide />
+        <UnifiedGuide {...TRUST_STACK_GUIDE} />
 
         <TrustStack3Layer />
       </div>

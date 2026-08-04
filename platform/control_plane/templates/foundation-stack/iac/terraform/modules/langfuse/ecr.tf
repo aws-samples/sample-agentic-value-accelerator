@@ -7,11 +7,11 @@ variable "langfuse_version" {
 variable "clickhouse_version" {
   description = "ClickHouse image version to pull and push"
   type        = string
-  default     = "25.8.23.13"
+  default     = "25.8.28.1"
 }
 
 locals {
-  ecr_base = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.id}.amazonaws.com"
+  ecr_base = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.region}.amazonaws.com"
 
   ecr_repos = {
     langfuse        = { source = "langfuse/langfuse", tag = var.langfuse_version }
@@ -47,11 +47,11 @@ resource "null_resource" "push_images" {
   provisioner "local-exec" {
     command = <<-EOT
       set -e
-      aws ecr get-login-password --region ${data.aws_region.current.id} | \
+      aws ecr get-login-password --region ${data.aws_region.current.region} | \
         docker login --username AWS --password-stdin ${local.ecr_base}
 
       TARGET_REPO="${aws_ecr_repository.images[each.key].repository_url}"
-      if aws ecr describe-images --repository-name "${var.name}-${each.key}" --image-ids imageTag="${each.value.tag}" --region ${data.aws_region.current.id} >/dev/null 2>&1; then
+      if aws ecr describe-images --repository-name "${var.name}-${each.key}" --image-ids imageTag="${each.value.tag}" --region ${data.aws_region.current.region} >/dev/null 2>&1; then
         echo "Image already exists in ECR: $TARGET_REPO:${each.value.tag} — skipping pull"
         exit 0
       fi
@@ -59,7 +59,7 @@ resource "null_resource" "push_images" {
       # Optional Docker Hub auth (doubles rate limit from 100 to 200 pulls/6hrs)
       # Reads from Secrets Manager secret "dockerhub-credentials" if it exists
       # Secret format: {"username":"...","token":"..."}
-      DOCKERHUB_SECRET=$(aws secretsmanager get-secret-value --secret-id dockerhub-credentials --region ${data.aws_region.current.id} --query SecretString --output text 2>/dev/null || true)
+      DOCKERHUB_SECRET=$(aws secretsmanager get-secret-value --secret-id dockerhub-credentials --region ${data.aws_region.current.region} --query SecretString --output text 2>/dev/null || true)
       if [ -n "$DOCKERHUB_SECRET" ]; then
         DH_USER=$(echo "$DOCKERHUB_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin).get('username',''))" 2>/dev/null)
         DH_TOKEN=$(echo "$DOCKERHUB_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null)

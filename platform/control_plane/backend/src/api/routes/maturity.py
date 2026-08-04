@@ -3,7 +3,9 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from core.rbac import require_role, Role
 
 from core.config import settings
 from models.maturity import (
@@ -37,7 +39,7 @@ def get_service() -> MaturityService:
 # --- Reference / framework metadata ---
 
 @router.get("/framework")
-async def get_framework():
+async def get_framework(_=Depends(require_role(Role.VIEWER))):
     return {
         "dimensions": [
             {"key": k, "label": DIMENSION_LABELS[k], "weight": DIMENSION_WEIGHTS_DEFAULT[k], "param_count": DIMENSION_PARAM_COUNTS[k]}
@@ -50,7 +52,7 @@ async def get_framework():
 # --- CRUD ---
 
 @router.post("", response_model=Assessment, status_code=201)
-async def create_assessment(req: AssessmentCreate):
+async def create_assessment(req: AssessmentCreate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     try:
         return svc.create(req, created_by="user")
@@ -59,14 +61,14 @@ async def create_assessment(req: AssessmentCreate):
 
 
 @router.get("", response_model=List[Assessment])
-async def list_assessments(status: Optional[str] = Query(default=None)):
+async def list_assessments(status: Optional[str] = Query(default=None), _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     status_filter = AssessmentStatus(status) if status else None
     return svc.list(status=status_filter)
 
 
 @router.get("/{assessment_id}", response_model=Assessment)
-async def get_assessment(assessment_id: str):
+async def get_assessment(assessment_id: str, _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     a = svc.get(assessment_id)
     if not a:
@@ -75,7 +77,7 @@ async def get_assessment(assessment_id: str):
 
 
 @router.put("/{assessment_id}", response_model=Assessment)
-async def update_assessment(assessment_id: str, req: AssessmentUpdate):
+async def update_assessment(assessment_id: str, req: AssessmentUpdate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     try:
         a = svc.update(assessment_id, req)
@@ -87,7 +89,7 @@ async def update_assessment(assessment_id: str, req: AssessmentUpdate):
 
 
 @router.delete("/{assessment_id}", response_model=Assessment)
-async def delete_assessment(assessment_id: str):
+async def delete_assessment(assessment_id: str, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     a = svc.delete(assessment_id)
     if not a:

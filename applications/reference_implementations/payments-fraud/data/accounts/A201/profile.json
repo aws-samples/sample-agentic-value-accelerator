@@ -1,0 +1,60 @@
+{
+  "account_id": "A201",
+  "customer_name": "Helena Brandt",
+  "account_type": "personal_savings",
+  "risk_profile": "low",
+  "opened_date": "2021-07-19",
+  "home_country": "US",
+  "home_city": "Miami",
+  "baseline": {
+    "typical_transaction_amount": 600.0,
+    "typical_weekly_count": 3,
+    "typical_networks": [
+      "ach",
+      "wire"
+    ]
+  },
+  "scenario": "large_amount",
+  "scenario_note": "A single wire of $48,000 to a first-time beneficiary \u2014 ~80x the account's typical transaction size.",
+  "expected_assessment": {
+    "fraud_score": 0.87,
+    "risk_level": "high",
+    "decision": "step_up_review",
+    "reason_tags": [
+      "LARGE_AMOUNT",
+      "NEW_BENEFICIARY"
+    ]
+  },
+  "flagged_patterns": [
+    {
+      "pattern": "LARGE_AMOUNT",
+      "confidence": 0.8,
+      "description": "Single transaction ~80x baseline"
+    }
+  ],
+  "transactions": [
+    {
+      "transaction_id": "TXN_LARGE_1",
+      "account_id": "A201",
+      "timestamp": "2026-06-15T11:20:00Z",
+      "amount": 48000.0,
+      "currency": "USD",
+      "network": "wire",
+      "counterparty": {
+        "counterparty_id": "A601",
+        "name": "Pinnacle Imports",
+        "account_number_masked": "****0601",
+        "country": "US"
+      },
+      "channel": "web",
+      "device_id": "web-8888",
+      "ip_address": "198.51.100.90",
+      "geo": {
+        "country": "US",
+        "city": "Miami",
+        "lat": 25.76,
+        "lon": -80.19
+      }
+    }
+  ]
+}

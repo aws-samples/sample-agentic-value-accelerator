@@ -442,6 +442,8 @@ resource "aws_sfn_state_machine" "deployment" {
             { Name = "ENABLE_AGENTCORE_OBSERVABILITY", "Value.$" = "$.parameters.ENABLE_AGENTCORE_OBSERVABILITY", Type = "PLAINTEXT" },
             { Name = "ENABLE_XRAY_TRANSACTION_SEARCH", "Value.$" = "$.parameters.ENABLE_XRAY_TRANSACTION_SEARCH", Type = "PLAINTEXT" },
             { Name = "CREATE_FLEET_DASHBOARD", "Value.$" = "$.parameters.CREATE_FLEET_DASHBOARD", Type = "PLAINTEXT" },
+            { Name = "LLM_GATEWAY_BASE_URL", "Value.$" = "$.parameters.LLM_GATEWAY_BASE_URL", Type = "PLAINTEXT" },
+            { Name = "LLM_GATEWAY_API_KEY_SECRET_ARN", "Value.$" = "$.parameters.LLM_GATEWAY_API_KEY_SECRET_ARN", Type = "PLAINTEXT" },
             { Name = "ACTION", "Value.$" = "$.action", Type = "PLAINTEXT" }
           ]
         }

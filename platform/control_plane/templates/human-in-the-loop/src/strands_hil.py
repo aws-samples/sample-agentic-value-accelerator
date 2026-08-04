@@ -33,7 +33,7 @@ def send_email(tool_context: ToolContext, to: str, subject: str, body: str) -> s
 
 
 agent = Agent(
-    model=BedrockModel(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0"),
+    model=BedrockModel(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
     system_prompt="You are an assistant that can send emails on behalf of the user.",
     tools=[send_email],
 )

@@ -5,10 +5,13 @@
  */
 
 import { useState } from 'react';
+import { Icon } from './icons';
 
 interface DataSource {
   name: string;
-  status: 'live' | 'mock';
+  // 'partial' = a live AWS slice exists, but some of the surface is still illustrative
+  // (e.g. live model catalog + runtime, but governance tiers/attestation are mock).
+  status: 'live' | 'partial' | 'mock';
   description: string;
   integration?: string;
 }
@@ -24,20 +27,27 @@ const DATA_SOURCES: DataSource[] = [
   { name: 'Guardrails', status: 'live', description: 'From Secure module guardrails API' },
   { name: 'Guardrail Metrics', status: 'live', description: 'From Amazon Bedrock Guardrails CloudWatch' },
   { name: 'Service Approvals', status: 'live', description: 'From Secure module service approval API' },
+  { name: 'Model Runtime Metrics', status: 'live', description: 'Invocations, latency, tokens & errors from CloudWatch AWS/Bedrock' },
+  { name: 'Config Compliance', status: 'live', description: 'AWS Config rule compliance (config:DescribeComplianceByConfigRule)' },
+  { name: 'Security Findings', status: 'live', description: 'Active findings from AWS Security Hub (risk posture)' },
+  { name: 'AI Activity Trail', status: 'live', description: 'Bedrock/SageMaker API activity from AWS CloudTrail' },
 
-  // Mock data needing integration
-  { name: 'Model Inventory', status: 'mock', description: 'Foundation model registry with risk tiers', integration: 'Amazon Bedrock ListFoundationModels + custom metadata DB' },
-  { name: 'Model Evaluations', status: 'mock', description: 'Safety, quality, latency scores', integration: 'Amazon Bedrock Model Evaluation + Langfuse' },
-  { name: 'Cost & FinOps', status: 'mock', description: 'AI spend, budgets, forecasts', integration: 'AWS Cost Explorer API + Cost Allocation Tags' },
-  { name: 'Audit Trail', status: 'mock', description: 'Governance events and incidents', integration: 'AWS CloudTrail + Amazon EventBridge' },
-  { name: 'Risk Register', status: 'mock', description: 'Risk inventory with controls', integration: 'Custom PostgreSQL/DynamoDB backend' },
-  { name: 'Compliance Status', status: 'mock', description: 'Framework control assessments', integration: 'AWS Audit Manager + custom compliance DB' },
+  // Partially live — a real AWS slice exists; the rest of the surface stays illustrative
+  { name: 'Model Inventory', status: 'partial', description: 'Live Bedrock catalog + runtime + cost; risk tiers/attestation illustrative', integration: 'Live: ListFoundationModels/CloudWatch/CE · Mock: governance metadata DB' },
+  { name: 'Model Evaluations', status: 'partial', description: 'Live Bedrock eval-job list; per-metric scores & published benchmarks illustrative', integration: 'Live: ListEvaluationJobs · Next: parse eval-job S3 results' },
+  { name: 'Cost & FinOps', status: 'partial', description: 'Live spend/forecast/anomalies/by-model/budgets; chargeback & TCO models illustrative', integration: 'Live: Cost Explorer + Budgets · Mock: cost-allocation tags not activated' },
+  { name: 'Audit Trail', status: 'partial', description: 'Live CloudTrail AI-activity + guardrail events; incident lifecycle illustrative', integration: 'Live: CloudTrail + ApplyGuardrail · Mock: incident register DB' },
+  { name: 'Compliance Status', status: 'partial', description: 'Live Config rule compliance; framework control attestations illustrative', integration: 'Live: AWS Config · Mock: framework attestation DB' },
+
+  // Partially live — real AWS slice plus illustrative controls/issues
+  { name: 'Risk Register', status: 'partial', description: 'Live Security Hub findings + use case risks; controls/issues illustrative', integration: 'Live: Security Hub + Plan use cases · Mock: controls/issues backend' },
 ];
 
 export function DataSourceIndicator({ compact = false }: { compact?: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   const liveCount = DATA_SOURCES.filter(d => d.status === 'live').length;
+  const partialCount = DATA_SOURCES.filter(d => d.status === 'partial').length;
   const mockCount = DATA_SOURCES.filter(d => d.status === 'mock').length;
 
   if (compact) {
@@ -46,6 +56,10 @@ export function DataSourceIndicator({ compact = false }: { compact?: boolean }) 
         <span className="flex items-center gap-1 text-emerald-600">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           {liveCount} live
+        </span>
+        <span className="flex items-center gap-1 text-sky-600">
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+          {partialCount} partial
         </span>
         <span className="flex items-center gap-1 text-amber-600">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 border border-dashed border-amber-500" />
@@ -70,9 +84,11 @@ export function DataSourceIndicator({ compact = false }: { compact?: boolean }) 
           <div className="text-left">
             <div className="text-xs font-semibold text-slate-700">Data Sources</div>
             <div className="text-[10px] text-slate-500">
-              <span className="text-emerald-600">{liveCount} live from AVA</span>
+              <span className="text-emerald-600">{liveCount} live</span>
               {' · '}
-              <span className="text-amber-600">{mockCount} demo data</span>
+              <span className="text-sky-600">{partialCount} partial</span>
+              {' · '}
+              <span className="text-amber-600">{mockCount} demo</span>
             </div>
           </div>
         </div>
@@ -91,21 +107,47 @@ export function DataSourceIndicator({ compact = false }: { compact?: boolean }) 
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-slate-200/60">
-          <div className="grid grid-cols-2 gap-4 mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
             {/* Live Data */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-semibold text-emerald-700">Live Data from AVA Platform</span>
+                <span className="text-[11px] font-semibold text-emerald-700">Live (real AWS / AVA data)</span>
               </div>
               <div className="space-y-1.5">
                 {DATA_SOURCES.filter(d => d.status === 'live').map(d => (
                   <div key={d.name} className="flex items-start gap-2 text-[10px]">
-                    <span className="text-emerald-500 mt-0.5">✓</span>
+                    <Icon name="check" className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <span className="font-medium text-slate-700">{d.name}</span>
                       <span className="text-slate-400 ml-1">— {d.description}</span>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Partially Live */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-sky-400" />
+                <span className="text-[11px] font-semibold text-sky-700">Partially Live (real slice + illustrative)</span>
+              </div>
+              <div className="space-y-2">
+                {DATA_SOURCES.filter(d => d.status === 'partial').map(d => (
+                  <div key={d.name} className="text-[10px]">
+                    <div className="flex items-start gap-2">
+                      <Icon name="check" className="w-3 h-3 text-sky-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <span className="font-medium text-slate-700">{d.name}</span>
+                        <span className="text-slate-400 ml-1">— {d.description}</span>
+                      </div>
+                    </div>
+                    {d.integration && (
+                      <div className="ml-4 mt-0.5 text-[9px] text-sky-700 bg-sky-50 px-2 py-0.5 rounded inline-block">
+                        {d.integration}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -121,7 +163,7 @@ export function DataSourceIndicator({ compact = false }: { compact?: boolean }) 
                 {DATA_SOURCES.filter(d => d.status === 'mock').map(d => (
                   <div key={d.name} className="text-[10px]">
                     <div className="flex items-start gap-2">
-                      <span className="text-amber-500 mt-0.5">○</span>
+                      <Icon name="circle" className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
                       <div>
                         <span className="font-medium text-slate-700">{d.name}</span>
                         <span className="text-slate-400 ml-1">— {d.description}</span>
@@ -166,11 +208,14 @@ export function MockDataBadge({ integration }: { integration?: string }) {
 }
 
 /** Small badge to mark live data sections */
-export function LiveDataBadge() {
+export function LiveDataBadge({ source, detail }: { source?: string; detail?: string } = {}) {
   return (
-    <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
+    <span
+      className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-help"
+      title={detail || (source ? `Live data from ${source}` : 'Live AWS data')}
+    >
       <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-      Live
+      Live{source ? ` (${source})` : ''}
     </span>
   );
 }

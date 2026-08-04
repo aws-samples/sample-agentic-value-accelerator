@@ -8,7 +8,7 @@ import boto3
 
 
 class LLMJudge:
-    def __init__(self, model_id="us.anthropic.claude-sonnet-4-20250514-v1:0", region="us-east-1"):
+    def __init__(self, model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0", region="us-east-1"):
         self.client = boto3.client("bedrock-runtime", region_name=region)
         self.model_id = model_id
 

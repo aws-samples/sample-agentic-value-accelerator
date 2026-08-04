@@ -1,5 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 
+type Availability = 'available' | 'coming_soon';
+
 interface Item {
   id: string;
   path: string;
@@ -10,6 +12,7 @@ interface Item {
   iconPath: string;
   image: string;
   tags: string[];
+  status: Availability;
   stats?: { label: string; value: string }[];
   subItems?: { name: string; badge?: string; note?: string }[];
 }
@@ -24,6 +27,7 @@ const TOOLS: Item = {
   iconPath: 'M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085',
   image: '/images/capabilities-hero.png',
   tags: ['Lambda', 'OpenAPI', 'MCP', 'Code Interpreter', 'Browser'],
+  status: 'coming_soon',
   stats: [
     { label: 'Pre-built', value: '12+' },
     { label: 'Categories', value: '5' },
@@ -38,19 +42,20 @@ const KNOWLEDGE: Item = {
   id: 'knowledge',
   path: '/capabilities/knowledge',
   name: 'Knowledge',
-  tagline: 'Everything agents read from.',
-  description: 'Raw data sources and indexed knowledge bases. Connect S3 buckets, databases, and APIs, or stand up Bedrock Knowledge Bases for retrieval-augmented responses — both catalogued and governed in one place.',
+  tagline: 'Expose your data as MCP servers.',
+  description: 'Register data lakes, databases, and knowledge bases as MCP endpoints. Agents connect to discover schemas and query data — governed by Lake Formation and scoped to what you choose to expose.',
   iconBg: 'from-indigo-500 to-purple-600',
   iconPath: 'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25',
   image: '/images/knowledge-hero.png',
-  tags: ['S3', 'Bedrock KB', 'OpenSearch', 'RDS', 'APIs'],
+  tags: ['Data Lake', 'Glue', 'Athena', 'Iceberg', 'MCP', 'AgentCore'],
+  status: 'available',
   stats: [
-    { label: 'Backends', value: '6+' },
-    { label: 'Modes',    value: '2' },
+    { label: 'Types', value: '1' },
+    { label: 'Tools/endpoint', value: '4' },
   ],
   subItems: [
-    { name: 'Data Sources',      badge: 'Connect',  note: 'S3 · RDS · APIs' },
-    { name: 'Knowledge Bases',    badge: 'Index',    note: 'Vector + hybrid retrieval' },
+    { name: 'Data Lake',         badge: 'Available', note: 'Glue + Athena + S3/Iceberg' },
+    { name: 'Knowledge Base',    badge: 'Soon',      note: 'Bedrock KB + Vector Search' },
   ],
 };
 
@@ -64,13 +69,14 @@ const PROMPTS: Item = {
   iconPath: 'M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.068.157 2.148.279 3.238.364.466.037.893.281 1.153.671L12 21l2.652-3.978c.26-.39.687-.634 1.153-.67 1.09-.086 2.17-.208 3.238-.365 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z',
   image: '/images/prompts-hero.png',
   tags: ['Bedrock Prompts', 'Versioning', 'A/B', 'Variables', 'Audit'],
+  status: 'coming_soon',
   stats: [
     { label: 'Patterns', value: '8+' },
     { label: 'Tracked',  value: '100%' },
   ],
   subItems: [
-    { name: 'Prompt Library',     badge: 'Browse',   note: 'FSI-tuned starters' },
-    { name: 'Version History',    badge: 'Audit',    note: 'Every change tracked' },
+    { name: 'Prompt Library',       badge: 'Soon',      note: 'Versioned templates' },
+    { name: 'Prompt Optimization',  badge: 'Available', note: 'Bedrock AdvPO' },
   ],
 };
 
@@ -155,7 +161,16 @@ function FeaturedCard({ item, onClick }: { item: Item; onClick: () => void }) {
       </div>
 
       <div className="relative p-5 flex flex-col flex-1">
-        <h2 className="text-xl font-bold text-indigo-700 mb-1 group-hover:text-indigo-800 transition-colors">{item.name}</h2>
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-xl font-bold text-indigo-700 group-hover:text-indigo-800 transition-colors">{item.name}</h2>
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+            item.status === 'available'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-slate-50 text-slate-500 border-slate-200'
+          }`}>
+            {item.status === 'available' ? 'Available' : 'Coming Soon'}
+          </span>
+        </div>
         <p className="text-sm font-medium text-slate-500 mb-2">{item.tagline}</p>
         <p className="text-sm text-slate-600 leading-relaxed mb-4">{item.description}</p>
 

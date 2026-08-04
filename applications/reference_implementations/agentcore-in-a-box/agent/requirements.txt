@@ -1,0 +1,24 @@
+# PINNED EXACT (==) for reproducible container builds (supply-chain hardening). To bump: change
+# the pin here and rebuild; the previous ranged pins are preserved in git history. Versions below
+# are current known-good as of 2026-07 and match what the ranged pins resolved to.
+boto3==1.43.42
+playwright==1.49.1
+bedrock-agentcore==1.11.0
+aws-opentelemetry-distro==0.10.1
+PyJWT==2.10.1
+# RS256 verification of the in-band Cognito token (the runtime's identity trust boundary in
+# _identity_from_context). PyJWT needs `cryptography` for asymmetric (RS256) algorithms.
+# 46.0.5 fixes CVE-2026-26007 (GHSA-r6ph-v2qm-q3c2, subgroup attack on SECT curves; <=46.0.4).
+# We only use RSA here, not SECT curves, but bump anyway to clear the advisory.
+cryptography==46.0.5
+# AG-UI protocol event types (ag_ui.core). The runtime SSE-frames each yielded dict,
+# so we emit event.model_dump(by_alias=True) directly (no ag_ui.encoder needed).
+ag-ui-protocol==0.1.19
+# Strands Agents SDK — drives the autonomous multi-agent swarm (Agent + multiagent.Swarm).
+# PINNED EXACT: the API is version-sensitive (hooks were renamed *Invocation→*Call, and the
+# multiagent stream-event dict shapes are what our AG-UI translation layer binds to). 1.45.0
+# verified: Swarm(nodes=, entry_point=, max_handoffs=...), swarm.stream_async() yields
+# multiagent_node_start/stream/handoff/stop dicts, AfterToolCallEvent hook carries tool_use+result.
+# We deliberately do NOT install strands-agents-tools — we keep our own proven AgentCore tool
+# implementations (SigV4 gateway, Playwright-over-CDP browser, 3LO identity) wrapped as @tool.
+strands-agents==1.45.0

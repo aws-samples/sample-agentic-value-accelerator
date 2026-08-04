@@ -17,33 +17,7 @@ When you deploy this toolkit in your AWS account, you get:
 
 ## Architecture
 
-```
-                         ┌──────────────┐
-                         │  CloudFront  │
-                         └──────┬───────┘
-                                │ (origin verify header)
-┌───────────────────────────────┴─────────────────────────────────┐
-│                   Dashboard (ECS Express Mode)                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
-│  │  Cost     │  │  Eval    │  │  Obs     │  │ Kill Switch  │   │
-│  │  Signals  │  │  Signals │  │  Signals │  │ (IAM Deny)   │   │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘   │
-│       └──────────────┴─────────────┴────────────────┘           │
-│                              │                                  │
-│                     DynamoDB (6 tables)                         │
-└─────────────────────────────────────────────────────────────────┘
-                               ▲
-                               │ writes
-     ┌─────────────────────────┼──────────────────────────┐
-     │              │          │           │               │
-┌────┴─────┐ ┌─────┴────┐ ┌───┴───┐ ┌────┴─────┐ ┌──────┴──────┐
-│Auto      │ │Auto Eval │ │Auto   │ │ Session  │ │Kill Switch  │
-│Budget    │ │Lambda    │ │Obs    │ │ Reporter │ │Lambda       │
-│Lambda    │ │          │ │Lambda │ │(in agent)│ │(IAM policy) │
-└────┬─────┘ └────┬─────┘ └───┬───┘ └────┬────┘ └─────────────┘
-     │            │            │          │
-  EventBridge  EventBridge  EventBridge  AgentCore Runtime
-```
+![AI Agent Safety Controls Architecture](architecture-diagram.jpg)
 
 ## Prerequisites
 

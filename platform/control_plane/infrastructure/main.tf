@@ -88,6 +88,21 @@ module "s3" {
 }
 
 # ============================================================================
+# Advanced Prompt Optimization Module
+# ============================================================================
+# S3 bucket for AdvPO eval datasets + results. Bucket name is surfaced to the
+# backend container as ADVPO_BUCKET via the ECS module.
+
+module "advanced_prompt_optimization" {
+  source = "./modules/advanced_prompt_optimization"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+
+  tags = var.tags
+}
+
+# ============================================================================
 # ECR Repository Module
 # ============================================================================
 
@@ -98,6 +113,19 @@ module "ecr" {
   environment = var.environment
 
   tags = var.tags
+}
+
+# ============================================================================
+# AgentCore Policy Engine + Platform Gateway
+# ============================================================================
+# Backend's /policies API targets this engine for CRUD; Cedar statements
+# in each policy bake in the gateway ARN as the protected resource.
+
+module "agentcore_policy" {
+  source = "./modules/agentcore_policy"
+
+  name_prefix = local.name_prefix
+  tags        = var.tags
 }
 
 # ============================================================================
@@ -133,6 +161,9 @@ module "ecs" {
   frontend_bucket_name         = module.s3.frontend_bucket_name
   frontend_bucket_arn          = module.s3.frontend_bucket_arn
 
+  # Advanced Prompt Optimization bucket (surfaced as ADVPO_BUCKET env var)
+  advpo_bucket_name = module.advanced_prompt_optimization.prompt_optimization_bucket_name
+
   # Deployments
   deployments_table_name = module.dynamodb.deployments_table_name
   deployments_table_arn  = module.dynamodb.deployments_table_arn
@@ -144,14 +175,24 @@ module "ecs" {
   app_factory_table_arn  = module.dynamodb.app_factory_table_arn
   guardrails_table_name     = module.dynamodb.guardrails_table_name
   guardrails_table_arn      = module.dynamodb.guardrails_table_arn
+  policies_table_name       = module.dynamodb.policies_table_name
+  policies_table_arn        = module.dynamodb.policies_table_arn
+  policy_engine_id          = module.agentcore_policy.policy_engine_id
+  policy_gateway_arn        = module.agentcore_policy.gateway_arn
   prioritization_table_name = module.dynamodb.prioritization_table_name
   prioritization_table_arn  = module.dynamodb.prioritization_table_arn
   maturity_table_name       = module.dynamodb.maturity_table_name
   maturity_table_arn        = module.dynamodb.maturity_table_arn
   business_cases_table_name = module.dynamodb.business_cases_table_name
+  knowledge_table_name      = module.dynamodb.knowledge_table_name
+  knowledge_table_arn       = module.dynamodb.knowledge_table_arn
+  datalake_mcp_image_uri    = "${module.ecr.datalake_mcp_repository_url}:latest"
+  kb_mcp_image_uri          = "${module.ecr.kb_mcp_repository_url}:latest"
   business_cases_table_arn  = module.dynamodb.business_cases_table_arn
   operating_model_table_name = module.dynamodb.operating_model_table_name
   operating_model_table_arn  = module.dynamodb.operating_model_table_arn
+  organization_design_table_name = module.dynamodb.organization_design_table_name
+  organization_design_table_arn  = module.dynamodb.organization_design_table_arn
   service_approval_table_name        = module.service_approval.table_name
   service_approval_table_arn         = module.service_approval.table_arn
   service_approval_bucket            = module.service_approval.bucket_name
@@ -167,6 +208,10 @@ module "ecs" {
   # dev-mode bypass that returns Role.ADMIN for every JWT. See modules/ecs/main.tf.
   cognito_user_pool_id        = module.cognito.user_pool_id
   cognito_user_pool_client_id = module.cognito.user_pool_client_id
+
+  # FSI Foundry SSO signing secret — backend HMAC-signs handoff tokens
+  # after RS256-verifying Cognito id_tokens. See random_password below.
+  fsi_app_signing_secret = random_password.fsi_app_signing_secret.result
 
   tags = var.tags
 }
@@ -212,8 +257,10 @@ module "api_gateway" {
   ecs_listener_arn      = module.ecs.listener_arn
 
   # Domain
-  domain_name    = var.domain_name
-  hosted_zone_id = var.hosted_zone_id
+  domain_name         = var.domain_name
+  api_prefix          = var.api_prefix
+  hosted_zone_id      = var.hosted_zone_id
+  acm_certificate_arn = var.api_acm_certificate_arn
 
   tags = var.tags
 }
@@ -283,7 +330,28 @@ module "codebuild" {
   # Agent registry (publish targets for generated agents)
   agent_registry_arn = module.agent_registry.registry_arn
 
+  # FSI Foundry SSO — the shared HMAC secret + AVA login URL are forwarded
+  # into per-use-case ui_iac. Real Cognito RS256 verification happens in
+  # the AVA backend before it mints handoff tokens signed with this secret.
+  fsi_app_signing_secret = random_password.fsi_app_signing_secret.result
+  ava_ui_login_url       = module.cloudfront.frontend_url
+
   tags = var.tags
+}
+
+# =============================================================================
+# FSI Foundry SSO — shared HMAC signing secret
+# =============================================================================
+# Random string minted once by CP terraform. Two consumers:
+#   1) AVA backend (via ECS env var) uses it to HMAC-sign short-lived handoff
+#      tokens, AFTER verifying the caller's Cognito id_token (real RS256).
+#   2) Each FSI app's CloudFront Function uses it to HMAC-verify the same
+#      token at the edge (natively supported by CF Functions crypto module).
+# Rotation: taint this resource + terraform apply + redeploy all FSI apps.
+
+resource "random_password" "fsi_app_signing_secret" {
+  length  = 64
+  special = false
 }
 
 # ============================================================================
@@ -410,6 +478,12 @@ module "cloudfront" {
   frontend_bucket_arn = module.s3.frontend_bucket_arn
   domain_name         = var.domain_name
   hosted_zone_id      = var.hosted_zone_id
+  acm_certificate_arn = var.cloudfront_acm_certificate_arn
+
+  # Extra CloudFront distribution ARNs (e.g. the public alias dist that
+  # lives outside this state) that also need OAC access to the frontend
+  # bucket. Without this, terraform's bucket policy would lock them out.
+  extra_distribution_arns = var.frontend_extra_cloudfront_arns
 
   tags = var.tags
 }
@@ -468,6 +542,31 @@ module "codecommit" {
 }
 
 # ============================================================================
+# Sample Data Lake
+# ============================================================================
+
+module "sample_datalake" {
+  source = "./modules/sample_datalake"
+  count  = var.enable_sample_datalake ? 1 : 0
+
+  name_prefix       = local.name_prefix
+  region            = var.aws_region
+  account_id        = data.aws_caller_identity.current.account_id
+  lf_admin_role_arn = var.lf_admin_role_arn
+  ecs_task_role_arn = module.ecs.task_role_arn
+}
+
+# ============================================================================
+# Sample Knowledge Base (Optional — demo Bedrock KB for Knowledge feature)
+# ============================================================================
+
+module "sample_knowledgebase" {
+  source = "./modules/sample_knowledgebase"
+
+  name_prefix = local.name_prefix
+  region      = var.aws_region
+  account_id  = data.aws_caller_identity.current.account_id
+}
 # Frontier Agents — Operator App Federation Role
 # ============================================================================
 # AVA backend assumes this role to mint a console federation URL via
@@ -597,6 +696,8 @@ data "aws_caller_identity" "xray_prereq" {}
 # Reference: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Transaction-Search-Cloudformation.html
 
 resource "aws_cloudwatch_log_resource_policy" "xray_to_cwlogs" {
+  count = var.enable_xray_transaction_search ? 1 : 0
+
   policy_name = "AWSServiceRoleForXRayLogs"
   policy_document = jsonencode({
     Version = "2012-10-17"
@@ -622,6 +723,8 @@ resource "aws_cloudwatch_log_resource_policy" "xray_to_cwlogs" {
 }
 
 resource "aws_cloudformation_stack" "xray_transaction_search" {
+  count = var.enable_xray_transaction_search ? 1 : 0
+
   name = "${local.name_prefix}-xray-transaction-search"
 
   # Single resource: AWS::XRay::TransactionSearchConfig.

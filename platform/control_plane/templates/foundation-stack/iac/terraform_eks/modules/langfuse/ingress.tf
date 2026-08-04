@@ -304,7 +304,7 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   values = [yamlencode({
     clusterName = aws_eks_cluster.langfuse.name
-    region      = data.aws_region.current.id
+    region      = data.aws_region.current.region
     vpcId       = var.vpc_id
     serviceAccount = {
       create = false

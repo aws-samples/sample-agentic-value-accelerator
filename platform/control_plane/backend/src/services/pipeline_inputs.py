@@ -40,6 +40,11 @@ class PipelineInput:
     enable_agentcore_observability: str = "false"
     enable_xray_transaction_search: str = "false"
     create_fleet_dashboard: str = "false"
+    # LLM Gateway routing — auto-injected by the deploy handler when a
+    # gateway is present in the same account. When empty, foundations
+    # falls back to direct Bedrock SDK.
+    llm_gateway_base_url: str = ""
+    llm_gateway_api_key_secret_arn: str = ""
 
     def to_sfn_parameters(self) -> Dict[str, str]:
         """Return the UPPERCASE dict consumed by $.parameters in the SFN."""
@@ -58,6 +63,8 @@ class PipelineInput:
             "ENABLE_AGENTCORE_OBSERVABILITY": d["enable_agentcore_observability"],
             "ENABLE_XRAY_TRANSACTION_SEARCH": d["enable_xray_transaction_search"],
             "CREATE_FLEET_DASHBOARD":         d["create_fleet_dashboard"],
+            "LLM_GATEWAY_BASE_URL":           d["llm_gateway_base_url"],
+            "LLM_GATEWAY_API_KEY_SECRET_ARN": d["llm_gateway_api_key_secret_arn"],
         }
         return {k: ("" if v is None else str(v)) for k, v in out.items()}
 
@@ -84,6 +91,8 @@ class PipelineInput:
             "enable_agentcore_observability": p.get("ENABLE_AGENTCORE_OBSERVABILITY", "false"),
             "enable_xray_transaction_search": p.get("ENABLE_XRAY_TRANSACTION_SEARCH", "false"),
             "create_fleet_dashboard":         p.get("CREATE_FLEET_DASHBOARD", "false"),
+            "llm_gateway_base_url":           p.get("LLM_GATEWAY_BASE_URL", ""),
+            "llm_gateway_api_key_secret_arn": p.get("LLM_GATEWAY_API_KEY_SECRET_ARN", ""),
         }
         known.update(overrides)
         return cls(**known)

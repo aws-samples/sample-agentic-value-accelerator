@@ -12,18 +12,23 @@
 
 import { useState, useMemo } from 'react';
 import { MODELS, MODEL_DETAILS } from './mockData';
+import { Icon, type IconName } from './icons';
+import { usePersistedState } from './usePersistedState';
+import ModelMetricsPanel from './metrics/ModelMetricsPanel';
+import { useGovernModels } from './useGovernModels';
+import { LiveDataBadge } from './DataSourceIndicator';
 
 // ─────────────────────────── Risk Categories ───────────────────────────
 
 const RISK_CATEGORIES = [
-  { id: 'bias', name: 'Algorithmic Bias', icon: '⚖️', desc: 'Disparate treatment or outcomes across protected groups' },
-  { id: 'privacy', name: 'Privacy & Data', icon: '🔒', desc: 'PII exposure, unauthorized access, data rights' },
-  { id: 'accuracy', name: 'Accuracy & Hallucination', icon: '🎯', desc: 'False outputs, hallucinations, incorrect decisions' },
-  { id: 'security', name: 'Cybersecurity', icon: '🛡️', desc: 'Prompt injection, adversarial attacks, exploitation' },
-  { id: 'autonomy', name: 'Excessive Autonomy', icon: '🤖', desc: 'Over-reliance on automation, loss of human control' },
-  { id: 'transparency', name: 'Transparency', icon: '👁️', desc: 'Lack of explainability, insufficient audit trail' },
-  { id: 'compliance', name: 'Regulatory', icon: '📋', desc: 'ECOA, Fair Lending, SR 26-2, EU AI Act violations' },
-  { id: 'operational', name: 'Operational', icon: '⚙️', desc: 'System failures, cascading errors, availability' },
+  { id: 'bias', name: 'Algorithmic Bias', icon: 'scale' as const, desc: 'Disparate treatment or outcomes across protected groups' },
+  { id: 'privacy', name: 'Privacy & Data', icon: 'lock-closed' as const, desc: 'PII exposure, unauthorized access, data rights' },
+  { id: 'accuracy', name: 'Accuracy & Hallucination', icon: 'viewfinder-circle' as const, desc: 'False outputs, hallucinations, incorrect decisions' },
+  { id: 'security', name: 'Cybersecurity', icon: 'shield-check' as const, desc: 'Prompt injection, adversarial attacks, exploitation' },
+  { id: 'autonomy', name: 'Excessive Autonomy', icon: 'cpu-chip' as const, desc: 'Over-reliance on automation, loss of human control' },
+  { id: 'transparency', name: 'Transparency', icon: 'eye' as const, desc: 'Lack of explainability, insufficient audit trail' },
+  { id: 'compliance', name: 'Regulatory', icon: 'clipboard' as const, desc: 'ECOA, Fair Lending, SR 26-2, EU AI Act violations' },
+  { id: 'operational', name: 'Operational', icon: 'cog' as const, desc: 'System failures, cascading errors, availability' },
 ];
 
 const MITIGATION_TYPES = [
@@ -104,7 +109,7 @@ const DEFAULT_RISKS: RiskItem[] = [
   { id: 'R05', name: 'Lack of Explainability', category: 'transparency', description: 'Cannot explain reasoning for decisions', severity: 3, likelihood: 4, mitigations: [{ text: 'Chain-of-thought prompting', type: 'reduce' }], residualSeverity: 2, residualLikelihood: 3 },
 ];
 
-const MODEL_ASSESSMENTS: ModelRiskAssessment[] = MODELS.map(m => ({
+const INITIAL_ASSESSMENTS: ModelRiskAssessment[] = MODELS.map(m => ({
   modelId: m.id,
   modelName: m.name,
   provider: m.provider,
@@ -130,14 +135,79 @@ export default function ModelGovernance() {
   const [editingRisk, setEditingRisk] = useState<string | null>(null);
   const [newMitigation, setNewMitigation] = useState('');
   const [newMitigationType, setNewMitigationType] = useState('control');
+  const [assessments, setAssessments] = usePersistedState<ModelRiskAssessment[]>('model_assessments', INITIAL_ASSESSMENTS);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Live Bedrock model catalog
+  const { catalog, catalogLive } = useGovernModels(7, 3);
+
+  // Build unified model list: live catalog when available, mock fallback
+  const unifiedModels = useMemo(() => {
+    if (catalog?.live && catalog.models.length > 0) {
+      const mockById = new Map(MODELS.map(m => [m.id, m]));
+      const mockByNameNorm = new Map(MODELS.map(m => [m.name.toLowerCase().replace(/[^a-z0-9]/g, ''), m]));
+
+      return catalog.models.slice(0, 20).map((liveModel) => {
+        const normName = liveModel.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const mockMatch = mockById.get(liveModel.model_id) ?? mockByNameNorm.get(normName);
+        return {
+          id: liveModel.model_id,
+          name: liveModel.name,
+          provider: liveModel.provider,
+          owner: mockMatch?.owner ?? 'Unassigned',
+          tier: mockMatch?.tier ?? 'Tier 3' as const,
+          status: mockMatch?.status ?? 'Production' as const,
+          evalScore: mockMatch?.evalScore ?? 75,
+          useCases: mockMatch?.useCases ?? 0,
+          monthlyCost: mockMatch?.monthlyCost ?? 0,
+          lastValidated: mockMatch?.lastValidated ?? 'N/A',
+          isLive: true,
+        };
+      });
+    }
+    return MODELS.map(m => ({ ...m, isLive: false }));
+  }, [catalog]);
+
+  const showingLiveData = catalogLive && unifiedModels.some(m => m.isLive);
+
+  const flashToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2800);
+  };
 
   const selectedAssessment = selectedModelId
-    ? MODEL_ASSESSMENTS.find(a => a.modelId === selectedModelId)
+    ? assessments.find(a => a.modelId === selectedModelId)
     : null;
+
+  const addMitigation = (riskId: string) => {
+    const text = newMitigation.trim();
+    if (!text || !selectedModelId) return;
+    setAssessments(prev => prev.map(a =>
+      a.modelId === selectedModelId
+        ? { ...a, risks: a.risks.map(r => r.id === riskId ? { ...r, mitigations: [...r.mitigations, { text, type: newMitigationType }] } : r) }
+        : a,
+    ));
+    setNewMitigation('');
+    flashToast('Mitigation added');
+  };
+
+  const addRisk = () => {
+    if (!selectedModelId) return;
+    const newId = `R${String(Date.now()).slice(-4)}`;
+    const starter: RiskItem = {
+      id: newId, name: 'New Risk', category: 'accuracy', description: 'Describe the risk…',
+      severity: 3, likelihood: 3, mitigations: [], residualSeverity: 3, residualLikelihood: 3,
+    };
+    setAssessments(prev => prev.map(a =>
+      a.modelId === selectedModelId ? { ...a, risks: [...a.risks, starter] } : a,
+    ));
+    setEditingRisk(newId);
+    flashToast('Risk added — edit to refine');
+  };
 
   // Aggregate stats
   const stats = useMemo(() => {
-    const all = MODEL_ASSESSMENTS.flatMap(a => a.risks);
+    const all = assessments.flatMap(a => a.risks);
     const byClass: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0, 'Very Low': 0 };
     all.forEach(r => {
       const cls = getRiskClass(r.residualSeverity, r.residualLikelihood);
@@ -149,7 +219,7 @@ export default function ModelGovernance() {
       byClass,
       criticalHigh: byClass.Critical + byClass.High,
     };
-  }, []);
+  }, [assessments]);
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'risk-assessment', label: 'Risk Assessment' },
@@ -160,11 +230,17 @@ export default function ModelGovernance() {
 
   return (
     <div className="space-y-6">
+      {/* Shared metric contract: Model Management's contribution to the scorecard */}
+      <ModelMetricsPanel />
+
       {/* Tab Navigation */}
-      <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl w-fit">
+      <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl w-fit" role="tablist" aria-label="Model Governance sections">
         {TABS.map(tab => (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`tabpanel-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === tab.id
@@ -210,9 +286,12 @@ export default function ModelGovernance() {
           <div className="grid grid-cols-3 gap-6">
             {/* Model List */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
-              <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">Select Model</h4>
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Select Model</h4>
+                {showingLiveData && <LiveDataBadge source="Bedrock" detail={`${unifiedModels.length} models from live catalog`} />}
+              </div>
               <div className="space-y-2">
-                {MODEL_ASSESSMENTS.map(assessment => {
+                {assessments.map(assessment => {
                   const worstRisk = assessment.risks.reduce((worst, r) => {
                     const cls = getRiskClass(r.residualSeverity, r.residualLikelihood);
                     const order = ['Very Low', 'Low', 'Medium', 'High', 'Critical'];
@@ -340,7 +419,7 @@ export default function ModelGovernance() {
                   <span className="text-[10px] text-slate-500">
                     Assessed: {selectedAssessment.lastAssessment} by {selectedAssessment.assessor}
                   </span>
-                  <button className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  <button onClick={addRisk} className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                     + Add Risk
                   </button>
                 </div>
@@ -364,7 +443,7 @@ export default function ModelGovernance() {
                       {/* Risk Header */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          <span className="text-lg">{category?.icon}</span>
+                          {category?.icon && <Icon name={category.icon as IconName} className="w-5 h-5 flex-shrink-0" />}
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-mono text-slate-400">{risk.id}</span>
@@ -437,6 +516,7 @@ export default function ModelGovernance() {
                           <select
                             value={newMitigationType}
                             onChange={e => setNewMitigationType(e.target.value)}
+                            aria-label={`Mitigation type for ${risk.name}`}
                             className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
                           >
                             {MITIGATION_TYPES.map(t => (
@@ -447,17 +527,14 @@ export default function ModelGovernance() {
                             type="text"
                             value={newMitigation}
                             onChange={e => setNewMitigation(e.target.value)}
+                            aria-label={`Mitigation measure for ${risk.name}`}
                             placeholder="Describe mitigation measure..."
                             className="flex-1 px-3 py-1.5 text-xs border border-slate-200 rounded-lg"
                           />
                           <button
-                            onClick={() => {
-                              if (newMitigation.trim()) {
-                                // Would update state in real app
-                                setNewMitigation('');
-                              }
-                            }}
-                            className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                            onClick={() => addMitigation(risk.id)}
+                            disabled={!newMitigation.trim()}
+                            className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Add
                           </button>
@@ -533,13 +610,13 @@ export default function ModelGovernance() {
                       </div>
                       <div className="flex items-center gap-3">
                         {detail.attestation.sr26_2.attested && (
-                          <span className="text-[10px] font-medium text-violet-600 bg-violet-50 px-2 py-0.5 rounded">
-                            🇺🇸 SR Attested
+                          <span className="text-[10px] font-medium text-violet-600 bg-violet-50 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                            <span className="font-bold">US</span> SR Attested
                           </span>
                         )}
                         {detail.attestation.euAiAct.documented && (
-                          <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                            🇪🇺 EU Documented
+                          <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                            <span className="font-bold">EU</span> Documented
                           </span>
                         )}
                       </div>
@@ -549,11 +626,11 @@ export default function ModelGovernance() {
                     <div className="grid grid-cols-4 gap-3 mb-4">
                       {frameworks.map((fw: { framework: string; compliance: number; controlsMet: number; totalControls: number }, idx: number) => {
                         const c = frameworkColors[fw.framework] || { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700', bar: 'bg-slate-500' };
-                        const flag = fw.framework.includes('Canada') ? '🇨🇦' : fw.framework.includes('EU') ? '🇪🇺' : '🇺🇸';
+                        const region = fw.framework.includes('Canada') ? 'CA' : fw.framework.includes('EU') ? 'EU' : 'US';
                         return (
                           <div key={idx} className={`${c.bg} ${c.border} border rounded-lg p-2.5`}>
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-medium text-slate-600">{flag} {fw.framework.split(' ')[0]}</span>
+                              <span className="text-[10px] font-medium text-slate-600"><span className="font-bold">{region}</span> {fw.framework.split(' ')[0]}</span>
                               <span className={`text-[11px] font-bold ${c.text}`}>{fw.compliance}%</span>
                             </div>
                             <div className="w-full h-1.5 bg-white/60 rounded-full overflow-hidden">
@@ -599,7 +676,10 @@ export default function ModelGovernance() {
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-900">Model Card Documentation</h3>
-            <button className="px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            <button
+              onClick={() => flashToast('Model card generation wizard coming soon')}
+              className="px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
               + Generate New Card
             </button>
           </div>
@@ -639,7 +719,9 @@ export default function ModelGovernance() {
                       <div key={section.name} className="flex items-center justify-between text-xs">
                         <span className="text-slate-600">{section.name}</span>
                         <span className={section.complete ? 'text-emerald-600' : 'text-slate-300'}>
-                          {section.complete ? '✓' : '○'}
+                          {section.complete
+                            ? <Icon name="check" className="w-3.5 h-3.5" />
+                            : <Icon name="circle" className="w-3.5 h-3.5" />}
                         </span>
                       </div>
                     ))}
@@ -653,7 +735,10 @@ export default function ModelGovernance() {
                     <a href={detail.attestation.modelCard.url} className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg text-center hover:bg-blue-50">
                       View Card
                     </a>
-                    <button className="flex-1 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <button
+                      onClick={() => flashToast(`Editing model card for ${model.name}`)}
+                      className="flex-1 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+                    >
                       Edit
                     </button>
                   </div>
@@ -670,7 +755,10 @@ export default function ModelGovernance() {
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-slate-900">Validation & Review Schedule</h3>
-              <button className="px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button
+                onClick={() => flashToast('Review scheduling wizard coming soon')}
+                className="px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
                 + Schedule Review
               </button>
             </div>
@@ -678,16 +766,16 @@ export default function ModelGovernance() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[11px] text-slate-400 uppercase tracking-wide border-b border-slate-200">
-                  <th className="text-left py-3 font-medium">Model</th>
-                  <th className="text-left py-3 font-medium">Tier</th>
-                  <th className="text-left py-3 font-medium">Last Validation</th>
-                  <th className="text-left py-3 font-medium">Next Review</th>
-                  <th className="text-left py-3 font-medium">Frequency</th>
-                  <th className="text-left py-3 font-medium">Status</th>
+                  <th scope="col" className="text-left py-3 font-medium">Model</th>
+                  <th scope="col" className="text-left py-3 font-medium">Tier</th>
+                  <th scope="col" className="text-left py-3 font-medium">Last Validation</th>
+                  <th scope="col" className="text-left py-3 font-medium">Next Review</th>
+                  <th scope="col" className="text-left py-3 font-medium">Frequency</th>
+                  <th scope="col" className="text-left py-3 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {MODEL_ASSESSMENTS.map(assessment => {
+                {assessments.map(assessment => {
                   const reviewDate = new Date(assessment.nextReview).getTime();
                   const now = new Date().getTime();
                   const daysUntil = Math.floor((reviewDate - now) / (1000 * 60 * 60 * 24));
@@ -722,6 +810,12 @@ export default function ModelGovernance() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium z-50 bg-slate-800 text-white">
+          {toast}
         </div>
       )}
     </div>

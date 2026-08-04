@@ -56,3 +56,24 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# =============================================================================
+# AVA FSI SSO edge auth (opt-in; both defaults empty → gate disabled)
+# =============================================================================
+# CodeBuild exports these as TF_VAR_fsi_app_signing_secret and
+# TF_VAR_ava_ui_login_url at the top of the terraform stage, sourced from
+# CP's random_password.fsi_app_signing_secret + module.cloudfront.frontend_url.
+# See platform/control_plane/infrastructure/modules/codebuild/buildspec.yml.
+
+variable "fsi_app_signing_secret" {
+  description = "Shared HMAC secret with AVA backend. Empty disables SSO gating on Langfuse."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ava_ui_login_url" {
+  description = "AVA UI login URL. Browsers without a valid AVA session are 302'd here."
+  type        = string
+  default     = ""
+}

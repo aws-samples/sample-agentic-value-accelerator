@@ -467,12 +467,12 @@ export default function ModelLifecycle() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-[10px] text-slate-400 uppercase tracking-wide bg-slate-50">
-                    <th className="text-left py-2 px-3 font-medium">Use Case</th>
-                    <th className="text-left py-2 px-3 font-medium">Owner</th>
-                    <th className="text-left py-2 px-3 font-medium">Business Unit</th>
-                    <th className="text-right py-2 px-3 font-medium">Invocations</th>
-                    <th className="text-center py-2 px-3 font-medium">Status</th>
-                    <th className="text-left py-2 px-3 font-medium">Target / Blocker</th>
+                    <th scope="col" className="text-left py-2 px-3 font-medium">Use Case</th>
+                    <th scope="col" className="text-left py-2 px-3 font-medium">Owner</th>
+                    <th scope="col" className="text-left py-2 px-3 font-medium">Business Unit</th>
+                    <th scope="col" className="text-right py-2 px-3 font-medium">Invocations</th>
+                    <th scope="col" className="text-center py-2 px-3 font-medium">Status</th>
+                    <th scope="col" className="text-left py-2 px-3 font-medium">Target / Blocker</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -592,12 +592,12 @@ export default function ModelLifecycle() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[11px] text-slate-400 uppercase tracking-wide bg-slate-50/50">
-                <th className="text-left py-2 px-3 font-medium">Model</th>
-                <th className="text-left py-2 px-3 font-medium">Sunset Date</th>
-                <th className="text-center py-2 px-3 font-medium">Days Left</th>
-                <th className="text-left py-2 px-3 font-medium">Successor</th>
-                <th className="text-center py-2 px-3 font-medium">Use Cases</th>
-                <th className="text-center py-2 px-3 font-medium">Status</th>
+                <th scope="col" className="text-left py-2 px-3 font-medium">Model</th>
+                <th scope="col" className="text-left py-2 px-3 font-medium">Sunset Date</th>
+                <th scope="col" className="text-center py-2 px-3 font-medium">Days Left</th>
+                <th scope="col" className="text-left py-2 px-3 font-medium">Successor</th>
+                <th scope="col" className="text-center py-2 px-3 font-medium">Use Cases</th>
+                <th scope="col" className="text-center py-2 px-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>

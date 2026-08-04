@@ -61,7 +61,7 @@ docker push $ECR_URL:v1.0.0
 | `idle_session_timeout` | No | `300` | Idle session timeout (seconds) |
 | `max_session_lifetime` | No | `3600` | Max session lifetime (seconds) |
 | `network_mode` | No | `PUBLIC` | `PUBLIC` or `VPC` |
-| `model_id` | No | `anthropic.claude-sonnet-4-20250514` | Bedrock model for IAM scoping |
+| `model_id` | No | `anthropic.claude-sonnet-4-5-20250929` | Bedrock model for IAM scoping |
 | `log_retention_days` | No | `30` | CloudWatch log retention |
 
 ## Outputs

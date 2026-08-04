@@ -54,7 +54,7 @@ terraform init && terraform apply
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | Bedrock model |
+| `MODEL_ID` | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` | Bedrock model |
 | `AWS_REGION` | `us-east-1` | AWS region |
 | `TEMPERATURE` | `0.3` | Model temperature |
 | `MAX_TOKENS` | `4096` | Max response tokens |

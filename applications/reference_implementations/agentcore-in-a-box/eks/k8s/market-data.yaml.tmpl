@@ -1,0 +1,82 @@
+# Kubernetes manifests for the EKS market-data service. deploy.sh (STEP EKS) substitutes the
+# __IMAGE__ and __API_KEY_B64__ placeholders and applies this with `kubectl apply -f -`.
+#
+#   • Namespace           agentcore-demo
+#   • Secret              the Gateway-injected shared API key (validated by the app)
+#   • Deployment          2 replicas of the stdlib service, non-root, probes on /healthz
+#   • Service (LB)        an internet-facing AWS ELB → the pods (gives a public host the fronting
+#                         API Gateway HTTP proxy targets; the Gateway OpenAPI target needs HTTPS,
+#                         which the API Gateway layer provides with a valid cert)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentcore-demo
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: market-data-apikey
+  namespace: agentcore-demo
+type: Opaque
+data:
+  api-key: __API_KEY_B64__
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: market-data
+  namespace: agentcore-demo
+  labels: { app: market-data }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: market-data }
+  template:
+    metadata:
+      labels: { app: market-data }
+    spec:
+      containers:
+        - name: market-data
+          image: __IMAGE__
+          ports:
+            - containerPort: 8080
+          env:
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef: { name: market-data-apikey, key: api-key }
+            - name: API_KEY_HEADER
+              value: "x-agentcore-api-key"
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits:   { cpu: "250m", memory: "128Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: market-data
+  namespace: agentcore-demo
+  # A plain type=LoadBalancer with NO annotations: the in-tree AWS cloud provider provisions a
+  # Classic ELB automatically (no AWS Load Balancer Controller install needed). The CLB serves HTTP
+  # on :80; a fronting API Gateway HTTP API adds the HTTPS + valid cert the AgentCore Gateway target
+  # requires (deploy.sh wires that proxy). internet-facing is the CLB default for a public subnet.
+spec:
+  type: LoadBalancer
+  selector: { app: market-data }
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP

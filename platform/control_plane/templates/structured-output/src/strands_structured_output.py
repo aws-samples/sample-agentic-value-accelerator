@@ -20,7 +20,7 @@ class Analysis(BaseModel):
 
 
 agent = Agent(
-    model=BedrockModel(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0"),
+    model=BedrockModel(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
     system_prompt="You are an analyst. Analyze the given topic thoroughly.",
 )
 

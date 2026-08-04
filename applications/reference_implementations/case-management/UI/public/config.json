@@ -1,6 +1,6 @@
 {
-  "API_BASE_URL": "https://<api-id>.execute-api.<region>.amazonaws.com/prod/api/transactions",
-  "SAR_API_URL": "https://<api-id>.execute-api.<region>.amazonaws.com/prod",
+  "API_BASE_URL": "",
+  "SAR_API_URL": "",
   "ENABLE_API_CALLS": true,
   "DEV_SETTINGS": { "LOG_API_CALLS": true, "TIMEOUT": 30000, "USE_CORS_PROXY": false },
   "UI_SETTINGS": { "THEME": "amazon", "SIDEBAR_WIDTH": 200, "HEADER_HEIGHT": 80, "ENABLE_REFRESH": true }

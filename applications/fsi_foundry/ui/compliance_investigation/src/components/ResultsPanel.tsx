@@ -25,7 +25,10 @@ function RadialProgress({ value, size = 72, stroke = 6, color = '#D97706' }: { v
 }
 
 /* ── Helper: Severity badge ── */
-function SeverityBadge({ severity }: { severity: string }) {
+// Defensive: agent responses have occasionally left severity as null. Renders
+// nothing when unavailable rather than crashing the whole ResultsPanel.
+function SeverityBadge({ severity }: { severity?: string | null }) {
+  if (!severity) return null;
   const sev = severity.toLowerCase();
   return (
     <span className={`severity-badge ${sev}`}>
@@ -38,7 +41,12 @@ function SeverityBadge({ severity }: { severity: string }) {
 }
 
 /* ── Helper: Status badge ── */
-function StatusBadge({ status }: { status: string }) {
+// Defensive: findings.status is null when the langgraph orchestrator's
+// synthesize node stores the actual status inside summary.investigation_status
+// instead of promoting it to the top-level findings object. Render nothing
+// rather than throw on null.toLowerCase().
+function StatusBadge({ status }: { status?: string | null }) {
+  if (!status) return null;
   const cls = status.toLowerCase().replace(/_/g, '-');
   return (
     <span className={`status-badge ${cls}`}>
@@ -48,8 +56,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 /* ── Helper: Severity color ── */
-function severityColor(severity: string): string {
-  switch (severity.toUpperCase()) {
+function severityColor(severity?: string | null): string {
+  switch ((severity || '').toUpperCase()) {
     case 'CRITICAL': return '#DC2626';
     case 'HIGH': return '#B45309';
     case 'MEDIUM': return '#D97706';
@@ -59,8 +67,8 @@ function severityColor(severity: string): string {
 }
 
 /* ── Helper: Severity dot class ── */
-function severityDotClass(severity: string): string {
-  return severity.toLowerCase();
+function severityDotClass(severity?: string | null): string {
+  return (severity || 'unknown').toLowerCase();
 }
 
 /* ── Regulatory Mapping Table ── */
@@ -92,7 +100,7 @@ function RegulatoryTable({ mappings }: { mappings: RegulatoryMapping[] }) {
               <td><SeverityBadge severity={m.severity} /></td>
               <td>
                 <div className="flex flex-wrap gap-1">
-                  {m.evidence_references.map((ref, j) => (
+                  {(m.evidence_references ?? []).map((ref, j) => (
                     <span key={j} className="inline-block px-1.5 py-0.5 rounded text-xs font-mono"
                       style={{ background: '#F1F5F9', color: '#475569', fontSize: '0.6rem' }}>
                       {ref}
@@ -110,12 +118,16 @@ function RegulatoryTable({ mappings }: { mappings: RegulatoryMapping[] }) {
 
 function ResultsPanelInternal({ result }: Props) {
   const [rawExpanded, setRawExpanded] = useState(false);
-  const { findings, regulatory_mappings } = result;
+  const { findings } = result;
+  // Coerce potentially-missing arrays/objects to empty defaults so every
+  // .forEach / .map / .length below is safe regardless of backend field drift.
+  const regulatory_mappings = result.regulatory_mappings ?? [];
+  const raw_analysis = result.raw_analysis ?? {};
 
   /* Compute severity distribution for the mini chart */
   const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
   regulatory_mappings.forEach((m) => {
-    if (m.severity in severityCounts) {
+    if (m.severity && m.severity in severityCounts) {
       severityCounts[m.severity as keyof typeof severityCounts]++;
     }
   });
@@ -137,7 +149,7 @@ function ResultsPanelInternal({ result }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {findings && <StatusBadge status={findings.status} />}
+          {findings?.status && <StatusBadge status={findings.status} />}
           <div className="text-xs font-bold px-3 py-1.5 rounded"
             style={{ background: '#FFFBEB', color: '#D97706', border: '1px solid #FEF3C7' }}>
             {result.entity_id}
@@ -146,22 +158,28 @@ function ResultsPanelInternal({ result }: Props) {
       </div>
 
       {/* ── Key Metrics Row ── */}
+      {/* Defensive: langgraph orchestrator's InvestigationFindings doesn't set
+          `violations_found` or `recommendations` fields at all — only
+          evidence_items, patterns_identified, risk_indicators, confidence_score,
+          and notes. Direct `.length` access on the missing fields threw
+          "Cannot read property 'length' of undefined" and the error boundary
+          swallowed the whole panel. Null-coalesce every optional field. */}
       {findings && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeSlideUp stagger-1">
           <div className="card text-center py-4" style={{ borderLeft: '4px solid #DC2626' }}>
-            <div className="text-2xl font-extrabold" style={{ color: '#DC2626' }}>{findings.violations_found}</div>
+            <div className="text-2xl font-extrabold" style={{ color: '#DC2626' }}>{findings.violations_found ?? 0}</div>
             <div className="text-xs font-semibold uppercase tracking-wider mt-1" style={{ color: 'var(--text-muted)' }}>Violations Found</div>
           </div>
           <div className="card text-center py-4" style={{ borderLeft: '4px solid #D97706' }}>
-            <div className="text-2xl font-extrabold" style={{ color: '#D97706' }}>{findings.evidence_items.length}</div>
+            <div className="text-2xl font-extrabold" style={{ color: '#D97706' }}>{findings.evidence_items?.length ?? 0}</div>
             <div className="text-xs font-semibold uppercase tracking-wider mt-1" style={{ color: 'var(--text-muted)' }}>Evidence Items</div>
           </div>
           <div className="card text-center py-4" style={{ borderLeft: '4px solid #0D9488' }}>
-            <div className="text-2xl font-extrabold" style={{ color: '#0D9488' }}>{findings.patterns_identified.length}</div>
+            <div className="text-2xl font-extrabold" style={{ color: '#0D9488' }}>{findings.patterns_identified?.length ?? 0}</div>
             <div className="text-xs font-semibold uppercase tracking-wider mt-1" style={{ color: 'var(--text-muted)' }}>Patterns Identified</div>
           </div>
           <div className="card text-center py-4" style={{ borderLeft: '4px solid #1E293B' }}>
-            <div className="text-2xl font-extrabold" style={{ color: '#1E293B' }}>{regulatory_mappings.length}</div>
+            <div className="text-2xl font-extrabold" style={{ color: '#1E293B' }}>{regulatory_mappings?.length ?? 0}</div>
             <div className="text-xs font-semibold uppercase tracking-wider mt-1" style={{ color: 'var(--text-muted)' }}>Regulatory Mappings</div>
           </div>
         </div>
@@ -179,7 +197,7 @@ function ResultsPanelInternal({ result }: Props) {
               </svg>
               Evidence Items
             </h3>
-            {findings.evidence_items.length > 0 ? (
+            {(findings.evidence_items?.length ?? 0) > 0 ? (
               <div className="space-y-2">
                 {findings.evidence_items.map((item, i) => (
                   <div key={i} className="evidence-card animate-fadeSlideUp"
@@ -210,7 +228,7 @@ function ResultsPanelInternal({ result }: Props) {
                 </svg>
                 Patterns Identified
               </h3>
-              {findings.patterns_identified.length > 0 ? (
+              {(findings.patterns_identified?.length ?? 0) > 0 ? (
                 <div className="violation-timeline">
                   {findings.patterns_identified.map((pattern, i) => (
                     <div key={i} className="violation-timeline-item">
@@ -232,7 +250,7 @@ function ResultsPanelInternal({ result }: Props) {
                 </svg>
                 Risk Indicators
               </h3>
-              {findings.risk_indicators.length > 0 ? (
+              {(findings.risk_indicators?.length ?? 0) > 0 ? (
                 <div className="space-y-2">
                   {findings.risk_indicators.map((risk, i) => (
                     <div key={i} className="risk-indicator">
@@ -295,7 +313,7 @@ function ResultsPanelInternal({ result }: Props) {
       )}
 
       {/* ── Recommendations ── */}
-      {findings && findings.recommendations.length > 0 && (
+      {findings && (findings.recommendations?.length ?? 0) > 0 && (
         <div className="card animate-fadeSlideUp stagger-4" style={{ borderLeft: '4px solid #0D9488' }}>
           <h3 className="text-sm font-extrabold mb-3 flex items-center gap-2" style={{ color: '#0D9488' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -331,7 +349,7 @@ function ResultsPanelInternal({ result }: Props) {
       )}
 
       {/* ── Raw Analysis ── */}
-      {Object.keys(result.raw_analysis).length > 0 && (
+      {Object.keys(raw_analysis).length > 0 && (
         <div className="card animate-fadeSlideUp stagger-5">
           <button
             onClick={() => setRawExpanded(!rawExpanded)}
@@ -353,7 +371,7 @@ function ResultsPanelInternal({ result }: Props) {
           {rawExpanded && (
             <pre className="mt-4 p-4 rounded-lg text-xs overflow-x-auto"
               style={{ background: '#0F172A', color: '#94A3B8', fontFamily: 'ui-monospace, monospace' }}>
-              {JSON.stringify(result.raw_analysis, null, 2)}
+              {JSON.stringify(raw_analysis, null, 2)}
             </pre>
           )}
         </div>

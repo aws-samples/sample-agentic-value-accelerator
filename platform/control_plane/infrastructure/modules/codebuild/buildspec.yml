@@ -118,6 +118,13 @@ phases:
         else
         case "$IAC_TYPE" in
           terraform)
+            # AVA FSI SSO — export as TF_VAR_* so terraform picks them up
+            # uniformly for every terraform template (foundation-stack,
+            # FSI Foundry multi-stage, ref-impl single-dir, future templates).
+            # Empty values are opt-in — templates that don't declare these
+            # variables ignore them.
+            export TF_VAR_fsi_app_signing_secret="${AVA_FSI_APP_SIGNING_SECRET:-}"
+            export TF_VAR_ava_ui_login_url="${AVA_UI_LOGIN_URL:-}"
             if [ -d "/tmp/workspace/infra" ] && [ -d "/tmp/workspace/runtime" ]; then
               echo "Multi-stage TF"
               # Inject S3 backend config per TF dir
@@ -136,12 +143,17 @@ phases:
         framework="${FRAMEWORK:-strands}"
         data_path="/tmp/workspace/data/samples"
         TFVARS
+              # Unique, immutable image tag per build. AgentCore pulls by plain
+              # tag (it cannot pull "<tag>@sha256:<digest>"), so a fresh tag each
+              # deploy is what busts the runtime's image cache. The build/push
+              # (Stage 2) and this tfvar MUST use the same tag.
+              IMAGE_TAG="${FRAMEWORK:-strands}-$(date -u +%Y%m%d%H%M%S)"
               cat > /tmp/workspace/runtime/deploy.auto.tfvars << TFVARS
         aws_region="$AWS_TARGET_REGION"
         use_case_id="${USE_CASE_ID:-unknown}"
         use_case_name="${USE_CASE_ID:-unknown}"
         framework="${FRAMEWORK:-strands}"
-        image_tag="${FRAMEWORK:-strands}-latest"
+        image_tag="${IMAGE_TAG}"
         enable_tracing="${ENABLE_TRACING:-false}"
         langfuse_host="${LANGFUSE_HOST:-}"
         langfuse_secret_name="${LANGFUSE_SECRET_NAME:-}"
@@ -150,6 +162,8 @@ phases:
         enable_agentcore_observability=${ENABLE_AGENTCORE_OBSERVABILITY:-false}
         enable_xray_transaction_search=${ENABLE_XRAY_TRANSACTION_SEARCH:-false}
         create_fleet_dashboard=${CREATE_FLEET_DASHBOARD:-false}
+        llm_gateway_base_url="${LLM_GATEWAY_BASE_URL:-}"
+        llm_gateway_api_key_secret_arn="${LLM_GATEWAY_API_KEY_SECRET_ARN:-}"
         TFVARS
               echo "=== Stage 1: Infrastructure ==="
               cd /tmp/workspace/infra
@@ -190,7 +204,8 @@ phases:
                 echo "=== Stage 2: Docker Build + Push ==="
                 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
                 aws ecr get-login-password --region $AWS_TARGET_REGION | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_TARGET_REGION}.amazonaws.com
-                IMAGE_TAG="${FRAMEWORK}-latest"
+                # IMAGE_TAG was computed once above (unique per build); reuse it
+                # so the pushed tag matches the runtime image_tag tfvar exactly.
                 docker build \
                   --build-arg USE_CASE_ID="$USE_CASE_ID" \
                   --build-arg FRAMEWORK="$FRAMEWORK" \
@@ -238,6 +253,8 @@ phases:
         use_case_name="${USE_CASE_ID:-unknown}"
         framework="${FRAMEWORK:-strands}"
         agentcore_runtime_arn="$RUNTIME_ARN"
+        fsi_app_signing_secret="${AVA_FSI_APP_SIGNING_SECRET:-}"
+        ava_ui_login_url="${AVA_UI_LOGIN_URL:-}"
         TFVARS
                     cd /tmp/workspace/ui_iac
                     terraform init -input=false \
@@ -258,7 +275,7 @@ phases:
                     aws cloudfront list-functions --query "FunctionList.Items[?Name=='${P}-spa-rw-${R}'].Name" --output text 2>/dev/null | grep -q . && _imp aws_cloudfront_function.spa_rewrite "${P}-spa-rw-${R}"
                     OAC=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='${P}-s3-oac'].Id" --output text 2>/dev/null); [ -n "$OAC" ] && [ "$OAC" != "None" ] && _imp aws_cloudfront_origin_access_control.s3_oac "$OAC"
                     terraform plan -input=false -out=tfplan
-                    terraform apply -input=false -auto-approve tfplan || { echo "WARNING: UI terraform apply failed"; }
+                    terraform apply -input=false -auto-approve tfplan || { echo "ERROR: UI terraform apply failed"; exit 1; }
                     terraform output -json > /tmp/ui_outputs.json 2>/dev/null || echo '{}' > /tmp/ui_outputs.json
                     UI_BUCKET=$(terraform output -raw ui_bucket_name 2>/dev/null || true)
                     CF_DIST_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || true)

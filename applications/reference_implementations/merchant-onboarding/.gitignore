@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv
+venv/
+node_modules/
+dist/
+build/
+cdk.out/
+*.zip
+.DS_Store
+terraform.tfstate*
+.terraform/

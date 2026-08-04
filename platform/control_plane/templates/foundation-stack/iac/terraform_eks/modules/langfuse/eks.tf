@@ -158,7 +158,7 @@ resource "null_resource" "coredns_restart" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      aws eks update-kubeconfig --name ${aws_eks_cluster.langfuse.name} --region ${data.aws_region.current.id} --kubeconfig /tmp/kubeconfig-${aws_eks_cluster.langfuse.name}
+      aws eks update-kubeconfig --name ${aws_eks_cluster.langfuse.name} --region ${data.aws_region.current.region} --kubeconfig /tmp/kubeconfig-${aws_eks_cluster.langfuse.name}
       kubectl --kubeconfig /tmp/kubeconfig-${aws_eks_cluster.langfuse.name} rollout restart deployment coredns -n kube-system
       kubectl --kubeconfig /tmp/kubeconfig-${aws_eks_cluster.langfuse.name} rollout status deployment coredns -n kube-system --timeout=300s
       rm -f /tmp/kubeconfig-${aws_eks_cluster.langfuse.name}

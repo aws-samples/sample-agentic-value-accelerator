@@ -66,8 +66,26 @@ variable "domain_name" {
   default     = "ava-platform.example.com"
 }
 
+variable "api_prefix" {
+  description = "Subdomain prefix for the API Gateway custom domain (<api_prefix>.<domain_name>). Defaults to \"api\"; override to sidestep global API GW domain-name conflicts. Set via -var or TF_VAR_api_prefix; deploy-full.sh reads API_PREFIX from repo-root .env."
+  type        = string
+  default     = "api"
+}
+
 variable "hosted_zone_id" {
   description = "Route53 hosted zone ID (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "cloudfront_acm_certificate_arn" {
+  description = "ACM certificate ARN for the apex domain used by CloudFront. Must be in us-east-1. Provisioned externally by scripts/acm.sh; leave empty to keep CloudFront on its default *.cloudfront.net certificate."
+  type        = string
+  default     = ""
+}
+
+variable "api_acm_certificate_arn" {
+  description = "ACM certificate ARN for api.<domain_name> used by API Gateway. Must be in the CP's own region. Provisioned externally by scripts/acm.sh; leave empty to skip the API Gateway custom domain."
   type        = string
   default     = ""
 }
@@ -228,6 +246,46 @@ variable "codecommit_enable_notifications" {
   default     = false
 }
 
+# --- Sample Data Lake ---
+
+variable "enable_sample_datalake" {
+  description = "Deploy sample FSI data lake (Glue + Iceberg + Athena) for Knowledge feature demo"
+  type        = bool
+  default     = true
+}
+
+variable "lf_admin_role_arn" {
+  description = "IAM role ARN to register as Lake Formation admin (required when enable_sample_datalake = true)"
+  type        = string
+  default     = ""
+}
+
+variable "enable_sample_knowledgebase" {
+  description = "Deploy sample Bedrock Knowledge Base for Knowledge feature demo"
+  type        = bool
+  default     = false
+}
+
+# X-Ray TransactionSearchConfig is a singleton per account+region. Some
+# accounts already have it enabled outside
+# Terraform via the prereq script. Setting this to false skips creating
+# the wrapper CFN stack + log resource policy on those accounts so the
+# apply doesn't fail with AlreadyExists.
+variable "enable_xray_transaction_search" {
+  description = "Create the X-Ray TransactionSearch CFN stack + log resource policy. Set false on accounts where TS is already configured."
+  type        = bool
+  default     = true
+}
+
+# Optional: extra CloudFront distribution ARNs that should also be allowed
+# OAC read access to the frontend S3 bucket. Used when a separate public
+# alias CloudFront distribution (mapped to a custom demo domain) is
+# managed outside this terraform state.
+variable "frontend_extra_cloudfront_arns" {
+  description = "Additional CloudFront distribution ARNs to grant s3:GetObject on the frontend bucket."
+  type        = list(string)
+  default     = []
+}
 # ============================================================================
 # Docker Hub credentials (optional, used by langfuse foundation-stack deploys)
 # ============================================================================

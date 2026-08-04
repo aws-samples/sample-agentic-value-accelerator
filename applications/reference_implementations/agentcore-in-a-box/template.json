@@ -1,0 +1,82 @@
+{
+  "id": "agentcore-in-a-box",
+  "name": "AgentCore in a Box",
+  "description": "Grab-and-go Amazon Bedrock AgentCore demo. One command deploys four verticalized 11-agent desks (Capital Markets, Insurance, Banking, FinTech) on one shared platform, wiring 12 of the 13 AgentCore primitives live (Gateway, Policy, Identity, Browser, Code Interpreter, Memory, Runtime, Evaluations, Registry, Harness, Optimization, Observability). Includes a live admin RBAC governance layer enforced at four independent layers (Runtime pre-check, Gateway interceptor, Cedar policy, IAM Deny backstop).",
+  "version": "1.0.0",
+  "pattern_type": "multi-agent-demo",
+  "type": "reference",
+  "frameworks": [
+    {
+      "id": "strands",
+      "name": "Strands Agents SDK",
+      "path": "agent",
+      "description": "11-specialist multi-agent desk (Swarm + Graph topologies) per vertical, one shared arm64 container"
+    }
+  ],
+  "deployment_patterns": [
+    {
+      "id": "cdk",
+      "name": "AWS CDK",
+      "description": "CDK (TypeScript) + AgentCore control-plane CLI orchestrated by deploy.sh; ARM64 agent container pushed to ECR",
+      "path": "."
+    }
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "Project name prefix for all AWS resources",
+      "required": false,
+      "default": "agentcore-in-a-box"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "description": "AWS region to deploy into (must be an AgentCore-available region)",
+      "required": true,
+      "enum": ["us-east-1", "us-east-2", "us-west-2"]
+    }
+  ],
+  "example_use_cases": [
+    "Capital Markets fixed-income desk (Meridian Asset Management) with Investment Committee verdict",
+    "Insurance P&C + Life underwriting desk (Ridgeline Mutual) with Underwriting Committee bind",
+    "Banking commercial-credit desk (Rampart Financial) with Credit Committee approve/decline",
+    "FinTech payments/risk desk (Kairo) with Risk & Growth Council ship/hold",
+    "Live admin RBAC + Cedar policy governance demo with four-layer defense-in-depth enforcement"
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": [
+    "agentcore",
+    "multi-agent",
+    "governance",
+    "rbac",
+    "cedar",
+    "strands",
+    "cdk",
+    "cognito",
+    "demo",
+    "capital-markets",
+    "insurance",
+    "banking",
+    "fintech"
+  ],
+  "outputs": {
+    "ui_url": "CloudFront URL for the Meridian desk UI",
+    "cognito_user_pool_id": "Cognito User Pool ID (demo users seeded automatically)",
+    "agentcore_runtime_arn": "AgentCore Runtime ARN"
+  },
+  "jobs": [
+    {
+      "name": "onboarding",
+      "incoming_event": "agentcore_in_a_box_onboarding_request",
+      "outgoing_event": "agentcore_in_a_box_onboarding_complete"
+    },
+    {
+      "name": "offboarding",
+      "incoming_event": "agentcore_in_a_box_offboarding_request",
+      "outgoing_event": "agentcore_in_a_box_offboarding_complete"
+    }
+  ],
+  "dependencies": []
+}

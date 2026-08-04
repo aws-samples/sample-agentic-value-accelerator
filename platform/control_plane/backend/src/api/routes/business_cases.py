@@ -3,7 +3,9 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from core.rbac import require_role, Role
 
 from core.config import settings
 from models.business_case import (
@@ -33,7 +35,7 @@ def get_service() -> BusinessCaseService:
 
 
 @router.get("/framework")
-async def get_framework():
+async def get_framework(_=Depends(require_role(Role.VIEWER))):
     return {
         "risk_categories": [
             {"key": k, "label": RISK_LABELS[k], "weight": RISK_WEIGHTS_DEFAULT[k]}
@@ -53,7 +55,7 @@ async def get_framework():
 
 
 @router.post("", response_model=BusinessCase, status_code=201)
-async def create_business_case(req: BusinessCaseCreate):
+async def create_business_case(req: BusinessCaseCreate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     try:
         return svc.create(req, created_by="user")
@@ -62,14 +64,14 @@ async def create_business_case(req: BusinessCaseCreate):
 
 
 @router.get("", response_model=List[BusinessCase])
-async def list_business_cases(status: Optional[str] = Query(default=None)):
+async def list_business_cases(status: Optional[str] = Query(default=None), _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     status_filter = BusinessCaseStatus(status) if status else None
     return svc.list(status=status_filter)
 
 
 @router.get("/{business_case_id}", response_model=BusinessCase)
-async def get_business_case(business_case_id: str):
+async def get_business_case(business_case_id: str, _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     bc = svc.get(business_case_id)
     if not bc:
@@ -78,7 +80,7 @@ async def get_business_case(business_case_id: str):
 
 
 @router.put("/{business_case_id}", response_model=BusinessCase)
-async def update_business_case(business_case_id: str, req: BusinessCaseUpdate):
+async def update_business_case(business_case_id: str, req: BusinessCaseUpdate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     try:
         bc = svc.update(business_case_id, req)
@@ -90,7 +92,7 @@ async def update_business_case(business_case_id: str, req: BusinessCaseUpdate):
 
 
 @router.delete("/{business_case_id}", response_model=BusinessCase)
-async def delete_business_case(business_case_id: str):
+async def delete_business_case(business_case_id: str, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     bc = svc.delete(business_case_id)
     if not bc:

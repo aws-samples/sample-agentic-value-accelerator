@@ -9,6 +9,14 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
 
+/* ── Auth Gate — hide dashboard until authenticated ── */
+.app-container{display:none}
+.app-container.authenticated{display:block}
+.auth-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px}
+.auth-loading .shield{font-size:64px;animation:pulse 2s infinite}
+.auth-loading .auth-text{font-size:16px;color:var(--text2);font-weight:500}
+.auth-loading .auth-sub{font-size:13px;color:var(--text3)}
+
 /* ── Header ── */
 .header{background:var(--surface);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
 .header-left{display:flex;align-items:center;gap:14px}
@@ -252,6 +260,16 @@ tbody tr:last-child td{border-bottom:none}
 </head>
 <body>
 
+<!-- ═══ AUTH LOADING SCREEN — shown while checking credentials ═══ -->
+<div class="auth-loading" id="auth-loading">
+  <div class="shield">🛡️</div>
+  <div class="auth-text">AI Agent Safety Dashboard</div>
+  <div class="auth-sub">Verifying credentials...</div>
+</div>
+
+<!-- ═══ APP CONTAINER — hidden until authenticated ═══ -->
+<div class="app-container" id="app-container">
+
 <!-- ═══ HEADER ═══ -->
 <div class="header">
   <div class="header-left">
@@ -259,7 +277,7 @@ tbody tr:last-child td{border-bottom:none}
     <div><h1>AI Agent Safety Dashboard</h1><div class="sub">Control Panel</div></div>
   </div>
   <div class="header-right">
-    <button class="sync-header-btn" id="sync-btn" onclick="triggerSync()">🔄 Sync from AWS</button>
+    <button class="sync-header-btn" id="sync-btn" onclick="triggerSync()">🔄 Sync</button>
     <div class="alert-badge" onclick="switchTab('dashboard')">🔔<span class="count" id="alertCount">0</span></div>
     <div class="user-info" id="auth-info"><strong>Loading...</strong><span style="font-size:12px">Connecting</span></div>
   </div>
@@ -279,12 +297,7 @@ tbody tr:last-child td{border-bottom:none}
 <!-- ═══ DASHBOARD TAB ═══ -->
 <div class="tab-content active" id="tab-dashboard">
   <div id="kill-bar-slot"></div>
-  <div id="dash-sub-nav" style="display:flex;gap:6px;margin-bottom:14px">
-    <button class="filter-btn active" onclick="setDashView('overview',this)">📊 Overview</button>
-    <button class="filter-btn" onclick="setDashView('cost',this)">💰 Cost</button>
-    <button class="filter-btn" onclick="setDashView('eval',this)">🧪 Evaluation</button>
-    <button class="filter-btn" onclick="setDashView('obs',this)">📡 Observability</button>
-  </div>
+  <div id="dash-sub-nav" style="display:none"></div>
   <div id="dashboard-signals"></div>
   <div id="dashboard-feed"></div>
   <div id="dashboard-cost-view" style="display:none"></div>
@@ -452,6 +465,8 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div></div>
 
+</div><!-- /app-container -->
+
 <div class="conn-status conn-err" id="conn-status">● Connecting...</div>
 <div class="toast-container" id="toast-container"></div>
 <div class="timeline-tooltip" id="timeline-tooltip"></div>
@@ -462,7 +477,9 @@ tbody tr:last-child td{border-bottom:none}
    ═══════════════════════════════════════════════════════════════ */
 var API_BASE=window.location.origin, REFRESH_MS=90000;
 var REGISTRY=[],SESSIONS=[],INTERVENTIONS=[],COST_SIGNALS=[],OBS_SIGNALS=[],EVAL_SIGNALS=[];
-var KILL_STATUS={kill_switch_active:false,agents:[],revoked_agents:0,total_agents:0};
+var EVAL_ENDPOINTS=[];
+var EVAL_ENDPOINT_FILTER='ALL';
+var KILL_STATUS=(function(){try{var s=localStorage.getItem('kill_switch_state');if(s)return JSON.parse(s)}catch(e){}return{kill_switch_active:false,agents:[],revoked_agents:0,total_agents:0}})();
 var _killSwitchOptimisticUntil=0;
 var AWS_REGISTRY={records:[],registries:[],total_records:0};
 var currentTab='dashboard',currentAlert=null,currentTier=null,currentKillAction=null,apiConnected=false;
@@ -508,8 +525,8 @@ async function api(p,o){
 }
 
 async function initAuth(){
-  try{AUTH_CONFIG=await(await fetch(API_BASE+'/api/auth/config')).json()}catch(e){AUTH_CONFIG={enabled:false};return}
-  if(!AUTH_CONFIG.enabled)return;
+  try{AUTH_CONFIG=await(await fetch(API_BASE+'/api/auth/config')).json()}catch(e){AUTH_CONFIG={enabled:false};_showApp();return}
+  if(!AUTH_CONFIG.enabled){_showApp();return}
   var params=new URLSearchParams(window.location.search);
   var code=params.get('code');
   if(code){
@@ -529,7 +546,15 @@ async function initAuth(){
     window.location.href='https://'+AUTH_CONFIG.domain+'/login?client_id='+AUTH_CONFIG.clientId+'&response_type=code&scope=openid+email+profile&redirect_uri='+encodeURIComponent(redirect_uri);
     return;
   }
+  _showApp();
   updateAuthUI();
+}
+
+function _showApp(){
+  var loading=document.getElementById('auth-loading');
+  var app=document.getElementById('app-container');
+  if(loading)loading.style.display='none';
+  if(app)app.classList.add('authenticated');
 }
 
 function handleAuthExpired(){
@@ -568,10 +593,10 @@ async function triggerSync(){
   btn.textContent='⏳ Syncing...';btn.disabled=true;
   try{
     var res=await api('/api/sync',{method:'POST'});var r=res.results||{};
-    showToast('success','Sync Complete','Registry:'+(r.registry?.synced||0)+' Cost:'+(r.cost_signals?.signals_written||0)+' Obs:'+(r.obs_signals?.signals_written||0)+' Eval:'+(r.eval_signals?.signals_written||0));
+    showToast('success','Sync Complete','Registry:'+(r.registry?.synced||0)+' Sessions:'+(r.memory_sessions?.sessions_synced||0));
     await loadData();
   }catch(e){showToast('error','Sync Failed',e.message)}
-  btn.textContent='🔄 Sync from AWS';btn.disabled=false;
+  btn.textContent='🔄 Sync';btn.disabled=false;
 }
 
 async function loadData(){
@@ -587,6 +612,7 @@ async function loadData(){
     ]);
     REGISTRY=r[0].agents||[];SESSIONS=r[1].sessions||[];INTERVENTIONS=r[2].interventions||[];
     COST_SIGNALS=r[3].signals||[];OBS_SIGNALS=r[4].signals||[];EVAL_SIGNALS=r[5].signals||[];
+    EVAL_ENDPOINTS=r[5].endpoints||[];
     AWS_REGISTRY=r[6]||{records:[],registries:[],total_records:0};
     // Kill switch status — fetch in background (Lambda call, can be slow)
     // Skip if we just did an optimistic update (avoid overwriting with stale Lambda response)
@@ -654,6 +680,7 @@ function renderKillBar(){
   var slot=document.getElementById('kill-bar-slot');
   if(!slot)return;
   var active=KILL_STATUS.kill_switch_active;
+  try{localStorage.setItem('kill_switch_state',JSON.stringify(KILL_STATUS))}catch(e){}
   if(active){
     slot.innerHTML='<div class="kill-bar active"><div class="kill-bar-left"><span class="kill-dot on"></span><span style="color:var(--red)">⚠️ ALL AGENTS STOPPED</span><span style="font-size:12px;color:var(--text2);font-weight:400;margin-left:8px">'+KILL_STATUS.revoked_agents+'/'+KILL_STATUS.total_agents+' agents blocked</span></div><button class="btn-restore" onclick="openKillModal(\'restore\')">RESUME ALL AGENTS</button></div>';
   }else{
@@ -693,21 +720,21 @@ function renderDashboard(){
 
   var el=document.getElementById('dashboard-signals');
   el.innerHTML='<div class="signal-cards">'+
-    '<div class="signal-card"><h3>💰 Cost Signals</h3>'+
+    '<div class="signal-card" style="cursor:pointer" onclick="setDashView(\'cost\')"><h3>💰 Cost Signals</h3>'+
       '<div class="metric"><span class="label">Active Alerts</span><span class="value '+(costCrit>0?'sev-critical':costWarn>0?'sev-warning':'sev-ok')+'">'+(costCrit+costWarn)+'</span></div>'+
       '<div class="metric"><span class="label">Avg Budget Used</span><span class="value">'+costPct+'%</span></div>'+
       '<div class="metric"><span class="label">Agents Tracked</span><span class="value">'+costTotal+'</span></div>'+
       '<div class="progress-bar"><div class="progress-fill '+fillClass(costStatus)+'" style="width:'+Math.min(costPct,100)+'%"></div></div>'+
       statusLabel(costStatus)+
     '</div>'+
-    '<div class="signal-card"><h3>📡 Observability Signals</h3>'+
+    '<div class="signal-card" style="cursor:pointer" onclick="setDashView(\'obs\')"><h3>📡 Observability Signals</h3>'+
       '<div class="metric"><span class="label">Active Alerts</span><span class="value '+(obsCrit>0?'sev-critical':obsWarn>0?'sev-warning':'sev-ok')+'">'+(obsCrit+obsWarn)+'</span></div>'+
       '<div class="metric"><span class="label">Alarms Monitored</span><span class="value">'+obsTotal+'</span></div>'+
       '<div class="metric"><span class="label">Active Sessions</span><span class="value">'+activeSessions+'</span></div>'+
       '<div class="progress-bar"><div class="progress-fill '+fillClass(obsStatus)+'" style="width:'+fillPct(obsStatus)+'%"></div></div>'+
       statusLabel(obsStatus)+
     '</div>'+
-    '<div class="signal-card"><h3>🧪 Evaluation Signals</h3>'+
+    '<div class="signal-card" style="cursor:pointer" onclick="setDashView(\'eval\')"><h3>🧪 Evaluation Signals</h3>'+
       '<div class="metric"><span class="label">Active Alerts</span><span class="value '+(evalAlarm>0?'sev-critical':evalWarn>0?'sev-warning':'sev-ok')+'">'+(evalAlarm+evalWarn)+'</span></div>'+
       '<div class="metric"><span class="label">Agents Evaluated</span><span class="value">'+evalSummaries.length+'</span></div>'+
       '<div class="metric"><span class="label">Evaluators</span><span class="value">7 built-in</span></div>'+
@@ -742,13 +769,13 @@ function renderDashboard(){
     '<button class="filter-btn" onclick="filterAlerts(\'critical\',this)">Critical</button>'+
     '<button class="filter-btn" onclick="filterAlerts(\'warning\',this)">Warning</button>'+
     '</div></div>'+
-    (alerts.length===0?'<div style="padding:40px;text-align:center;color:var(--text2);font-size:14px;background:var(--surface2);border-radius:0 0 8px 8px"><div style="font-size:40px;margin-bottom:12px">🟢</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">No Active Alerts</div>All systems healthy. Signals will appear here when thresholds are breached.<br><button class="btn btn-primary" style="margin-top:14px" onclick="triggerSync()">🔄 Sync from AWS</button></div>':
+    (alerts.length===0?'<div style="padding:40px;text-align:center;color:var(--text2);font-size:14px;background:var(--surface2);border-radius:0 0 8px 8px"><div style="font-size:40px;margin-bottom:12px">🟢</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">No Active Alerts</div>All systems healthy. Signals will appear here when thresholds are breached.<br><button class="btn btn-primary" style="margin-top:14px" onclick="triggerSync()">🔄 Sync</button></div>':
     '<table><thead><tr><th>AGENT</th><th>DESCRIPTION</th><th>TYPE</th><th>SEVERITY</th><th>TIME</th><th>ACTION</th></tr></thead><tbody id="alertBody">'+
     alerts.map(function(a,i){
       var sevBadge=a.sev==='critical'?'<span class="badge badge-stopped">CRITICAL</span>':'<span class="badge badge-warning">WARNING</span>';
       var typeHtml='<span class="type-badge type-'+a.type+'">'+a.type.toUpperCase()+'</span>';
       var timeStr=a.time?fmtTimeAgo(a.time):'—';
-      return'<tr data-type="'+a.type+'" data-sev="'+a.sev+'"'+(a.acted?' style="opacity:.5"':'')+' style="cursor:pointer" onclick="openAgentDetailFromDashboard(\''+escHtml(a.agent)+'\')">'+
+      return'<tr data-type="'+a.type+'" data-sev="'+a.sev+'" style="cursor:pointer" onclick="openAgentDetailFromDashboard(\''+escHtml(a.agent)+'\')">'+
         '<td style="font-weight:700">'+escHtml(a.agent)+'</td>'+
         '<td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)">'+escHtml(a.desc)+'</td>'+
         '<td>'+typeHtml+'</td><td>'+sevBadge+'</td>'+
@@ -763,8 +790,6 @@ function renderDashboard(){
 var currentDashView='overview';
 function setDashView(v,btn){
   currentDashView=v;
-  document.querySelectorAll('#dash-sub-nav .filter-btn').forEach(function(b){b.classList.remove('active')});
-  if(btn)btn.classList.add('active');
   document.getElementById('dashboard-signals').style.display=v==='overview'?'block':'none';
   document.getElementById('dashboard-feed').style.display=v==='overview'?'block':'none';
   document.getElementById('dashboard-cost-view').style.display=v==='cost'?'block':'none';
@@ -785,14 +810,15 @@ function renderCostView(){
   function sevBadge(v){return v==='critical'?'<span class="badge badge-stopped">CRITICAL</span>':v==='medium'?'<span class="badge badge-warning">MEDIUM</span>':'<span class="badge badge-ready">LOW</span>'}
   function pctBar(p,v){var c=v==='critical'?'var(--red)':v==='medium'?'var(--yellow)':'var(--green)';return'<div class="metric-bar" style="width:80px"><div class="metric-bar-fill" style="width:'+Math.min(Number(p),100)+'%;background:'+c+'"></div></div>'}
 
-  var html='<div class="section-title">💰 Cost Signals ('+s.length+' agents)</div>'+
+  var html='<button class="btn btn-secondary btn-sm" style="margin-bottom:12px" onclick="setDashView(\'overview\')">← Back to Overview</button>'+
+    '<div class="section-title">💰 Cost Signals ('+s.length+' agents)</div>'+
     '<div class="section-desc">Budget data from AWS Budgets. Click an agent to view details and adjust budget.</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">'+
       '<div class="summary-card sc-green"><div class="sc-label">Low</div><div class="sc-value">'+lo.length+'</div><div class="sc-sub">&lt; 80% used</div></div>'+
       '<div class="summary-card sc-yellow"><div class="sc-label">Medium</div><div class="sc-value">'+md.length+'</div><div class="sc-sub">80–100%</div></div>'+
       '<div class="summary-card sc-red"><div class="sc-label">Critical</div><div class="sc-value">'+cr.length+'</div><div class="sc-sub">&gt; 100%</div></div></div>';
   if(s.length===0){
-    html+='<div style="padding:30px;text-align:center;color:var(--text2)">No cost signals. Click "Sync from AWS" to populate.</div>';
+    html+='<div style="padding:30px;text-align:center;color:var(--text2)">No cost signals yet. Signals update automatically.</div>';
   }else{
     html+='<div class="table-wrap"><table><thead><tr><th>AGENT</th><th>BUDGET</th><th>ACTUAL</th><th>FORECAST</th><th>% USED</th><th>SEVERITY</th><th>ACTION</th></tr></thead><tbody>'+
       s.map(function(x){
@@ -812,35 +838,58 @@ function renderCostView(){
 }
 
 function renderEvalView(){
-  var summaries=EVAL_SIGNALS.filter(function(x){return x.signal_key==='alarm_summary'});
-  var evals=EVAL_SIGNALS.filter(function(x){return x.signal_key!=='alarm_summary'});
-  var ok=summaries.filter(function(x){return(x.alarm_state||'')==='OK'});
-  var insuf=summaries.filter(function(x){return(x.alarm_state||'')==='INSUFFICIENT_DATA'});
-  var alarm=summaries.filter(function(x){return(x.alarm_state||'')==='ALARM'});
+  // Group summaries by agent — show ONE row per agent (worst severity across endpoints)
+  var allSummaries=EVAL_SIGNALS.filter(function(x){
+    var sk=x.signal_key||'';
+    return sk==='alarm_summary'||sk.startsWith('alarm_summary#');
+  });
+  // Group by agent_name, pick worst severity
+  var agentMap={};
+  allSummaries.forEach(function(x){
+    var an=x.agent_name;
+    if(!agentMap[an]){agentMap[an]={agent_name:an,endpoints:[],worst_state:'OK',evaluator_count:x.evaluator_count||7,sampling_pct:x.sampling_pct||'100'}}
+    agentMap[an].endpoints.push(x.endpoint||'DEFAULT');
+    var st=x.alarm_state||'INSUFFICIENT_DATA';
+    // Rank: ALARM > INSUFFICIENT_DATA > OK
+    var rank={'ALARM':3,'INSUFFICIENT_DATA':2,'OK':1};
+    if((rank[st]||0)>(rank[agentMap[an].worst_state]||0)){agentMap[an].worst_state=st;agentMap[an].worst_reason=x.alarm_reason||''}
+  });
+  var agents=Object.values(agentMap);
+  var ok=agents.filter(function(x){return x.worst_state==='OK'});
+  var insuf=agents.filter(function(x){return x.worst_state==='INSUFFICIENT_DATA'});
+  var alarm=agents.filter(function(x){return x.worst_state==='ALARM'});
   function ab(st){return st==='ALARM'?'<span class="badge badge-stopped">ALARM</span>':st==='INSUFFICIENT_DATA'?'<span class="badge badge-warning">NO DATA</span>':'<span class="badge badge-ready">OK</span>'}
 
-  var html='<div class="section-title">🧪 Evaluation Signals ('+summaries.length+' agents)</div>'+
-    '<div class="section-desc">AgentCore Online Evaluations with 7 built-in evaluators. Click an agent for evaluator breakdown.</div>'+
+  var html='<button class="btn btn-secondary btn-sm" style="margin-bottom:12px" onclick="setDashView(\'overview\')">← Back to Overview</button>'+
+    '<div class="section-title">🧪 Evaluation Signals ('+agents.length+' agents)</div>'+
+    '<div class="section-desc">AgentCore Online Evaluations with 7 built-in evaluators per endpoint. Click an agent to view per-endpoint breakdown.</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">'+
       '<div class="summary-card sc-green"><div class="sc-label">OK</div><div class="sc-value">'+ok.length+'</div><div class="sc-sub">all passing</div></div>'+
       '<div class="summary-card sc-yellow"><div class="sc-label">No Data</div><div class="sc-value">'+insuf.length+'</div><div class="sc-sub">waiting</div></div>'+
       '<div class="summary-card sc-red"><div class="sc-label">ALARM</div><div class="sc-value">'+alarm.length+'</div><div class="sc-sub">quality issues</div></div></div>';
-  if(summaries.length===0){
+  if(agents.length===0){
     html+='<div style="padding:30px;text-align:center;color:var(--text2)">No evaluation signals. Deploy an agent with evaluation controls.</div>';
   }else{
-    html+='<div class="table-wrap"><table><thead><tr><th>AGENT</th><th>ALARM STATE</th><th>EVALUATORS</th><th>SAMPLING</th><th>DESCRIPTION</th><th>ACTION</th></tr></thead><tbody>'+
-      summaries.map(function(x){
-        var acted=x.last_action==='session_stopped';
-        return'<tr onclick="openEvalDetail(\''+escHtml(x.agent_name)+'\')" style="cursor:pointer;'+(acted?'opacity:.5':'')+'">'+
+    html+='<div class="table-wrap"><table><thead><tr><th>AGENT</th><th>ALARM STATE</th><th>ENDPOINTS</th><th>EVALUATORS</th><th>SAMPLING</th><th>DESCRIPTION</th><th>ACTION</th></tr></thead><tbody>'+
+      agents.map(function(x){
+        var epCount=x.endpoints.length;
+        var epLabel=epCount===1?x.endpoints[0]:epCount+' endpoints';
+        return'<tr onclick="openEvalDetail(\''+escHtml(x.agent_name)+'\')" style="cursor:pointer">'+
           '<td style="font-weight:700">'+escHtml(x.agent_name)+'</td>'+
-          '<td>'+ab(x.alarm_state||'INSUFFICIENT_DATA')+'</td>'+
+          '<td>'+ab(x.worst_state)+'</td>'+
+          '<td><span class="type-badge type-obs">'+escHtml(epLabel)+'</span></td>'+
           '<td>'+(x.evaluator_count||7)+' built-in</td>'+
           '<td>'+(x.sampling_pct||'100')+'%</td>'+
-          '<td style="color:var(--text2);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(x.alarm_state==='ALARM'?escHtml(x.alarm_reason||'Quality issue detected'):'Monitoring: harmfulness, correctness, helpfulness, goal success, tool accuracy, faithfulness')+'</td>'+
+          '<td style="color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(x.worst_state==='ALARM'?escHtml(x.worst_reason||'Quality issue detected'):'Monitoring active')+'</td>'+
           '<td><button class="intervene-btn" style="padding:4px 12px;font-size:11px" onclick="event.stopPropagation();currentAlert={agent:\''+escHtml(x.agent_name)+'\',session:\'(all)\'};openModal(\'tier1\')">Stop</button></td></tr>';
       }).join('')+'</tbody></table></div>';
   }
   document.getElementById('dashboard-eval-view').innerHTML=html;
+}
+
+function setEvalEndpoint(ep,btn){
+  EVAL_ENDPOINT_FILTER=ep;
+  renderEvalView();
 }
 
 function renderObsView(){
@@ -850,7 +899,8 @@ function renderObsView(){
   var lo=s.filter(function(x){return x.severity==='low'});
   function ob(v){return v==='critical'?'<span class="badge badge-stopped">ALARM</span>':v==='medium'?'<span class="badge badge-warning">NO DATA</span>':'<span class="badge badge-ready">OK</span>'}
 
-  var html='<div class="section-title">📡 Observability Signals ('+s.length+' signals)</div>'+
+  var html='<button class="btn btn-secondary btn-sm" style="margin-bottom:12px" onclick="setDashView(\'overview\')">← Back to Overview</button>'+
+    '<div class="section-title">📡 Observability Signals ('+s.length+' signals)</div>'+
     '<div class="section-desc">CloudWatch alarms for registered agents. Click an agent for child alarm details.</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">'+
       '<div class="summary-card sc-green"><div class="sc-label">OK</div><div class="sc-value">'+lo.length+'</div><div class="sc-sub">healthy</div></div>'+
@@ -892,12 +942,22 @@ function buildTierCards(targetId){
   var agentName=currentAlert?currentAlert.agent:'';
   var agentReg=REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(agentName)});
   var isRevoked=agentReg&&agentReg.status==='revoked';
+  // Check if agent has active sessions
+  var hasActiveSessions=SESSIONS.some(function(s){
+    return normalize(s.agent_name||'')===normalize(agentName)&&(s.computed_status==='active'||s.computed_status==='idle');
+  });
+  var tier1Disabled=!hasActiveSessions;
+  var tier1BtnClass=tier1Disabled?'tier-btn monitor-btn':'tier-btn tier1-btn';
+  var tier1Onclick=tier1Disabled?'':'onclick="event.stopPropagation();openModal(\'tier1\')"';
+  var tier1CardClick=tier1Disabled?'':'onclick="openModal(\'tier1\')"';
+  var tier1Opacity=tier1Disabled?'opacity:.5;cursor:not-allowed':'';
+  var tier1Hint=tier1Disabled?' (no active sessions)':'';
   var tier2Label=isRevoked?'🟢 TIER 2 — Restore IAM':'🟠 TIER 2 — Revoke IAM';
   var tier2Desc=isRevoked?'Removes Deny policy from agent execution role.':'Attaches Deny policy to agent execution role.';
   var tier2Color=isRevoked?'color:var(--green)':'color:var(--orange)';
   var tier2BtnClass=isRevoked?'tier-btn btn-restore':'tier-btn tier2-btn';
   var tier2Border=isRevoked?'border-left:3px solid var(--green)':'';
-  return'<div class="tier-card tier1-color" onclick="openModal(\'tier1\')"><div class="tier-info"><h4 style="color:var(--yellow)">🟡 TIER 1 — Stop Session</h4><p>Terminates active sessions for this agent.</p><div class="blast">Blast: Agent sessions | Reversible: No</div></div><button class="tier-btn tier1-btn" onclick="event.stopPropagation();openModal(\'tier1\')">Execute</button></div>'+
+  return'<div class="tier-card tier1-color" style="'+tier1Opacity+'" '+tier1CardClick+'><div class="tier-info"><h4 style="color:var(--yellow)">🟡 TIER 1 — Stop Session'+tier1Hint+'</h4><p>Terminates active sessions for this agent.</p><div class="blast">Blast: Agent sessions | Reversible: No</div></div><button class="'+tier1BtnClass+'" '+(tier1Disabled?'disabled':'')+' '+tier1Onclick+'>Execute</button></div>'+
     '<div class="tier-card tier2-color" style="'+(isRevoked?'border-left-color:var(--green)':'')+'" onclick="openModal(\'tier2\')"><div class="tier-info"><h4 style="'+tier2Color+'">'+tier2Label+'</h4><p>'+tier2Desc+'</p><div class="blast">Blast: This agent only | Reversible: Yes</div></div><button class="'+tier2BtnClass+'" onclick="event.stopPropagation();openModal(\'tier2\')">'+(isRevoked?'Restore':'Execute')+'</button></div>'
 }
 
@@ -979,8 +1039,9 @@ async function execIntervention(){
   var admin=AUTH_USER||'dashboard-user';
   try{
     if(currentTier==='tier1'){
-      await api('/api/interventions/stop-all-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agent,reason:reason,admin_user:admin})});
-      showToast('success','Sessions Stopped','All active sessions terminated for '+agent);
+      var sessionId=currentAlert&&currentAlert.session&&currentAlert.session!=='(all)'?currentAlert.session:'';
+      await api('/api/interventions/stop-all-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({agent_name:agent,reason:reason,admin_user:admin,session_id:sessionId||null})});
+      showToast('success','Session'+(sessionId?'':'s')+' Stopped',sessionId?('Session '+sessionId+' terminated'):('All active sessions terminated for '+agent));
     }else if(currentTier==='tier2'){
       if(!agent){showToast('error','No Agent','Cannot revoke — no agent selected');btn.disabled=false;btn.textContent='✅ Confirm';return}
       var agentReg=REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(agent)});
@@ -1041,7 +1102,7 @@ function renderSessionsTable(){
   var terminated=SESSIONS.filter(function(s){var st=s.computed_status||s.status||'';return st!=='active'&&st!=='idle'});
 
   var el=document.getElementById('sessions-table');
-  if(SESSIONS.length===0){el.innerHTML='<div class="table-wrap" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">📋</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">No Sessions</div><div style="color:var(--text2)">Deploy an agent and invoke it to see sessions here.</div><button class="btn btn-primary" style="margin-top:14px" onclick="triggerSync()">🔄 Sync from AWS</button></div>';return}
+  if(SESSIONS.length===0){el.innerHTML='<div class="table-wrap" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">📋</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">No Sessions</div><div style="color:var(--text2)">Deploy an agent and invoke it to see sessions here.</div><button class="btn btn-primary" style="margin-top:14px" onclick="triggerSync()">🔄 Sync</button></div>';return}
 
   function renderRow(s,i,isLive){
     var st=s.computed_status||s.status||'unknown';
@@ -1228,7 +1289,7 @@ function renderRegistryTab(){
   // AgentCore Runtimes
   html+='<div class="section-title" style="font-size:16px;margin-top:8px">🤖 AgentCore Runtimes ('+a.length+')</div>';
   if(a.length===0){
-    html+='<div style="padding:20px;color:var(--text2)">No runtimes found. Click "Sync from AWS" to populate.</div>';
+    html+='<div style="padding:20px;color:var(--text2)">No runtimes found. Click "Sync" to populate.</div>';
   }else{
     html+='<div style="margin-bottom:12px"><input type="text" placeholder="Search agents..." style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:6px;font-size:14px;width:280px" oninput="filterRegistryTable(this.value)"></div>';
     html+='<div class="table-wrap"><table><thead><tr><th>NAME</th><th>STATUS</th><th>TEAM</th><th>TAGS</th><th>LAST SYNCED</th><th>ACTION</th></tr></thead><tbody id="registryBody">'+
@@ -1279,7 +1340,7 @@ async function openAgentDetailFromDashboard(agentName){
   await openAgentDetailFull(agentName,'all');
 }
 
-async function openAgentDetailFull(agentName,mode){
+async function openAgentDetailFull(agentName,mode, detailEndpoint){
   var a=REGISTRY.find(function(r){return r.agent_name===agentName})||REGISTRY.find(function(r){return normalize(r.agent_name)===normalize(agentName)});
   if(!a){a={agent_name:agentName}}
   var panel=document.getElementById('detail-panel');
@@ -1329,31 +1390,72 @@ async function openAgentDetailFull(agentName,mode){
   }
   // EVALUATION
   if(mode==='all'||mode==='eval'){
-    var evalItems=EVAL_SIGNALS.filter(function(x){return normalize(x.agent_name)===normalize(agentName)&&x.signal_key!=='alarm_summary'});
-    var evalSummary=EVAL_SIGNALS.find(function(x){return normalize(x.agent_name)===normalize(agentName)&&x.signal_key==='alarm_summary'});
-    html+='<div class="detail-section"><h3>🧪 Evaluation</h3>';
-    if(evalSummary){
-      var as2=evalSummary.alarm_state||'INSUFFICIENT_DATA';
-      var ab2=as2==='ALARM'?'<span class="badge badge-stopped">ALARM</span>':as2==='OK'?'<span class="badge badge-ready">OK</span>':'<span class="badge badge-warning">NO DATA</span>';
-      html+='<div class="detail-grid" style="margin-bottom:10px">';
-      html+='<div class="detail-item"><div class="detail-item-label">Alarm Name</div><div class="detail-item-value" style="font-size:11px;font-family:monospace">'+escHtml(evalSummary.alarm_name||'—')+'</div></div>';
-      html+='<div class="detail-item"><div class="detail-item-label">Alarm State</div><div class="detail-item-value">'+ab2+'</div></div>';
-      if(evalSummary.eval_config_name){html+='<div class="detail-item"><div class="detail-item-label">Config Name</div><div class="detail-item-value" style="font-size:11px">'+escHtml(evalSummary.eval_config_name)+'</div></div>'}
-      if(evalSummary.eval_config_id){html+='<div class="detail-item"><div class="detail-item-label">Config ID</div><div class="detail-item-value" style="font-size:10px;font-family:monospace">'+escHtml(evalSummary.eval_config_id)+'</div></div>'}
-      html+='<div class="detail-item"><div class="detail-item-label">Evaluators</div><div class="detail-item-value">'+(evalSummary.evaluator_count||7)+' built-in</div></div>';
-      html+='<div class="detail-item"><div class="detail-item-label">Sampling</div><div class="detail-item-value">'+(evalSummary.sampling_pct||'100')+'%</div></div>';
-      html+='</div>';
-      if(as2==='ALARM'&&evalSummary.alarm_reason){html+='<div style="padding:10px;background:rgba(231,76,60,.1);border:1px solid var(--red);border-radius:6px;font-size:12px;color:var(--red);margin-bottom:10px">⚠️ '+escHtml(evalSummary.alarm_reason)+'</div>'}
-    }else{html+='<div style="color:var(--text2);padding:10px;background:var(--surface2);border-radius:6px;margin-bottom:10px">No evaluation config found.</div>'}
-    if(evalItems.length>0){
-      html+='<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Evaluator Scores</div>';
-      html+='<div class="table-wrap"><table style="font-size:12px"><thead><tr><th>Evaluator</th><th>Bad</th><th>Good</th><th>Total</th><th>Bad %</th><th>Status</th></tr></thead><tbody>';
-      evalItems.forEach(function(e){
-        var eb=e.severity==='critical'?'<span class="badge badge-stopped" style="font-size:10px">FAIL</span>':e.severity==='medium'?'<span class="badge badge-warning" style="font-size:10px">WARN</span>':'<span class="badge badge-ready" style="font-size:10px">PASS</span>';
-        html+='<tr><td style="font-weight:600">'+(e.evaluator_name||e.signal_key)+'</td><td style="color:var(--red);font-weight:700">'+(e.bad_count||0)+'</td><td style="color:var(--green);font-weight:700">'+(e.good_count||0)+'</td><td>'+(e.total_count||0)+'</td><td style="font-weight:700">'+(e.bad_pct||'0')+'%</td><td>'+eb+'</td></tr>';
+    // Get all endpoints for this agent from eval signals
+    var agentEvalSignals=EVAL_SIGNALS.filter(function(x){return normalize(x.agent_name)===normalize(agentName)});
+    var agentEndpoints=[];
+    agentEvalSignals.forEach(function(x){
+      var ep=x.endpoint||'DEFAULT';
+      if(agentEndpoints.indexOf(ep)===-1)agentEndpoints.push(ep);
+    });
+    if(agentEndpoints.length===0)agentEndpoints=['DEFAULT'];
+
+    html+='<div class="detail-section"><h3>🧪 Evaluation ('+agentEndpoints.length+' endpoint'+(agentEndpoints.length>1?'s':'')+')</h3>';
+
+    // Render each endpoint as a collapsible accordion section
+    agentEndpoints.forEach(function(ep, idx){
+      // Get summary for this endpoint
+      var epSummary=agentEvalSignals.find(function(x){
+        var sk=x.signal_key||'';
+        if(ep==='DEFAULT')return sk==='alarm_summary';
+        return sk==='alarm_summary#'+ep;
       });
-      html+='</tbody></table></div>';
-    }
+      // Get evaluator items for this endpoint
+      var epItems=agentEvalSignals.filter(function(x){
+        var sk=x.signal_key||'';
+        if(sk==='alarm_summary'||sk.startsWith('alarm_summary#'))return false;
+        if(ep==='DEFAULT')return !sk.includes('#');
+        return sk.endsWith('#'+ep);
+      });
+
+      var alarmState=epSummary?(epSummary.alarm_state||'INSUFFICIENT_DATA'):'INSUFFICIENT_DATA';
+      var stateBadge=alarmState==='ALARM'?'<span class="badge badge-stopped" style="font-size:10px">ALARM</span>':alarmState==='OK'?'<span class="badge badge-ready" style="font-size:10px">OK</span>':'<span class="badge badge-warning" style="font-size:10px">NO DATA</span>';
+      var borderColor=alarmState==='ALARM'?'var(--red)':alarmState==='OK'?'var(--green)':'var(--yellow)';
+      var epId='eval-ep-'+idx;
+
+      // Accordion header — always visible, shows endpoint name + state badge
+      html+='<div style="border:1px solid var(--border);border-left:3px solid '+borderColor+';border-radius:6px;margin-bottom:8px;overflow:hidden">';
+      html+='<div onclick="var el=document.getElementById(\''+epId+'\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.ep-arrow\').textContent=el.style.display===\'none\'?\'▶\':\'▼\'" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:var(--surface2)">';
+      html+='<div style="display:flex;align-items:center;gap:10px"><span class="ep-arrow" style="font-size:11px;color:var(--text3)">▶</span><span style="font-weight:700;font-size:13px">'+escHtml(ep)+'</span>'+stateBadge+'</div>';
+      if(epSummary){html+='<div style="font-size:11px;color:var(--text3)">'+(epSummary.evaluator_count||7)+' evaluators · '+(epSummary.sampling_pct||'100')+'% sampling</div>'}
+      html+='</div>';
+
+      // Accordion body — hidden by default, shows full evaluator breakdown
+      html+='<div id="'+epId+'" style="display:none;padding:12px 14px">';
+
+      if(epSummary){
+        if(alarmState==='ALARM'&&epSummary.alarm_reason){
+          html+='<div style="padding:8px 10px;background:rgba(231,76,60,.1);border:1px solid var(--red);border-radius:6px;font-size:12px;color:var(--red);margin-bottom:10px">⚠️ '+escHtml(epSummary.alarm_reason)+'</div>';
+        }
+        html+='<div class="detail-grid" style="margin-bottom:10px">';
+        html+='<div class="detail-item"><div class="detail-item-label">Alarm</div><div class="detail-item-value" style="font-size:10px;font-family:monospace">'+escHtml(epSummary.alarm_name||'—')+'</div></div>';
+        html+='<div class="detail-item"><div class="detail-item-label">Config</div><div class="detail-item-value" style="font-size:10px;font-family:monospace">'+escHtml(epSummary.eval_config_name||'—')+'</div></div>';
+        html+='</div>';
+      }
+
+      if(epItems.length>0){
+        html+='<div class="table-wrap"><table style="font-size:12px"><thead><tr><th>Evaluator</th><th>Bad</th><th>Good</th><th>Total</th><th>Bad %</th><th>Status</th></tr></thead><tbody>';
+        epItems.forEach(function(e){
+          var eb=e.severity==='critical'?'<span class="badge badge-stopped" style="font-size:10px">FAIL</span>':e.severity==='medium'?'<span class="badge badge-warning" style="font-size:10px">WARN</span>':'<span class="badge badge-ready" style="font-size:10px">PASS</span>';
+          html+='<tr><td style="font-weight:600">'+(e.evaluator_name||e.signal_key)+'</td><td style="color:var(--red);font-weight:700">'+(e.bad_count||0)+'</td><td style="color:var(--green);font-weight:700">'+(e.good_count||0)+'</td><td>'+(e.total_count||0)+'</td><td style="font-weight:700">'+(e.bad_pct||'0')+'%</td><td>'+eb+'</td></tr>';
+        });
+        html+='</tbody></table></div>';
+      }else{
+        html+='<div style="color:var(--text2);font-size:12px">Waiting for evaluation data...</div>';
+      }
+
+      html+='</div></div>'; // close accordion body + container
+    });
+
     html+='</div>';
   }
   // OBSERVABILITY
@@ -1435,7 +1537,7 @@ async function openCostDetail(agentName){
 }
 
 async function openEvalDetail(agentName){
-  await openAgentDetailFull(agentName,'eval');
+  await openAgentDetailFull(agentName,'eval', null);
 }
 
 async function openObsDetail(agentName){
@@ -1464,21 +1566,18 @@ function renderAuditTab(){
 
   el.innerHTML='<div class="audit-header"><div class="section-title" style="margin-bottom:0">📝 Audit Log</div><div class="audit-actions"><select id="audit-filter" onchange="filterAudit()"><option value="all">All Actions</option><option value="stop_session">Stop Session</option><option value="revoke_access">Revoke Access</option><option value="restore_access">Restore Access</option></select><button onclick="showToast(\'info\',\'Export\',\'Audit log export coming soon\')">📥 Export CSV</button></div></div>'+
     (items.length===0?'<div style="padding:30px;text-align:center;color:var(--text2)">No interventions recorded yet.</div>':
-    '<div class="table-wrap"><table><thead><tr><th>TIMESTAMP</th><th>ACTION</th><th>AGENT</th><th>SESSION</th><th>ADMIN</th><th>REASON</th><th>ROLLBACK</th></tr></thead><tbody id="auditBody">'+
+    '<div class="table-wrap"><table><thead><tr><th>TIMESTAMP</th><th>ACTION</th><th>AGENT</th><th>SESSION</th><th>ADMIN</th><th>REASON</th></tr></thead><tbody id="auditBody">'+
     items.map(function(item){
       var action=item.action||'';
       var actionClass=action.includes('revoke')?'sev-critical':action.includes('restore')?'sev-ok':action==='stop_session'?'sev-warning':'';
       var actionLabel=action==='stop_session'?'STOP SESSION':action==='revoke_access'?'REVOKE ACCESS':action==='restore_access'?'RESTORE ACCESS':action.toUpperCase();
-      var canRollback=action==='revoke_access';
-      var rollbackLabel=canRollback?(item.agent_name&&item.agent_name!=='(all agents)'?'Restore Agent':'Restore All'):'';
       return'<tr data-action="'+escHtml(action)+'">'+
         '<td style="font-size:13px;color:var(--text2)">'+fmtDate(item.timestamp)+'</td>'+
         '<td><span class="'+actionClass+'" style="font-weight:700">'+actionLabel+'</span></td>'+
         '<td style="font-weight:700">'+escHtml(item.agent_name||'—')+'</td>'+
         '<td style="font-family:\'SF Mono\',Consolas,monospace;font-size:11px;color:var(--text2)">'+escHtml((item.session_id||'—').substring(0,20))+'</td>'+
         '<td>'+escHtml(item.admin_user||'—')+'</td>'+
-        '<td style="color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(item.reason||'')+'">'+escHtml(item.reason||'—')+'</td>'+
-        '<td>'+(canRollback?'<button class="rollback-btn" onclick="openRB(\''+escHtml(action)+'\',\''+escHtml(item.agent_name||'')+'\',\''+escHtml(item.admin_user||'')+'\',\''+escHtml(fmtDate(item.timestamp))+'\',\''+rollbackLabel+'\')">🔄 '+rollbackLabel+'</button>':'<span style="color:var(--text3);font-size:12px">N/A</span>')+'</td></tr>';
+        '<td style="color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(item.reason||'')+'">'+escHtml(item.reason||'—')+'</td></tr>';
     }).join('')+'</tbody></table></div>');
 }
 
@@ -1671,10 +1770,10 @@ function saveSettings(){
   // Load cached data FIRST (fast — reads from DynamoDB only)
   await loadData();
   updateAuthUI();
-  // Then sync from AWS in background (slow — calls Budgets, CloudWatch, AgentCore APIs)
+  // Then sync registry & sessions in background
   api('/api/sync',{method:'POST'}).then(function(){loadData()}).catch(function(e){console.warn('Background sync:',e)});
   setInterval(loadData,REFRESH_MS);
-  setInterval(function(){api('/api/sync',{method:'POST'}).then(function(){loadData()}).catch(function(){})},300000);
+  setInterval(function(){api('/api/sync',{method:'POST'}).then(function(){loadData()}).catch(function(){})},1800000);
 })();
 </script>
 </body>

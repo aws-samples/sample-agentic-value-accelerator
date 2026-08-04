@@ -81,9 +81,14 @@ variable "vpc_security_group_ids" {
 # -----------------------------------------------------------------------------
 
 variable "model_id" {
-  description = "Bedrock model ID for IAM policy scoping. Use '*' to allow all models."
+  description = <<-EOT
+    Informational default Bedrock model ID for this runtime. The IAM policy now
+    allows invoking any foundation model (arn:aws:bedrock:*::foundation-model/*) so
+    that cross-region inference profiles work, so this value is no longer used for
+    IAM scoping — pass the actual model to the container via environment_variables.
+  EOT
   type        = string
-  default     = "anthropic.claude-sonnet-4-20250514"
+  default     = "anthropic.claude-sonnet-4-5-20250929"
 }
 
 # -----------------------------------------------------------------------------

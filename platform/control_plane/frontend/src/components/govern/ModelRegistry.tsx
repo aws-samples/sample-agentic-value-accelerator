@@ -1,12 +1,21 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Icon } from './icons';
+import { rowButtonProps } from './a11y';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, Cell,
 } from 'recharts';
 import { MODELS, MODEL_DETAILS, tooltipStyle, generateNeedsAttentionAlerts, getPortfolioRiskSummary, MRM_FRAMEWORKS_META } from './mockData';
 import ModelDrawer from './ModelDrawer';
+import ModelComparison from './ModelComparison';
+import RiskScoringCalculator from './RiskScoringCalculator';
+import ModelDependencyGraph from './ModelDependencyGraph';
+import MRMFrameworkExplorer from './MRMFrameworkExplorer';
 import { useGovernanceAggregator } from './useGovernanceAggregator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
+import LiveModelInventory from './LiveModelInventory';
+import { useGovernModels } from './useGovernModels';
 
 const tierBg: Record<string, string> = {
   'Tier 1': 'bg-rose-50 text-rose-700 ring-rose-200',
@@ -27,7 +36,7 @@ const revalidationBg: Record<string, string> = {
 
 const alertSeverityStyle: Record<string, { bg: string; border: string; icon: string; iconBg: string }> = {
   'critical': { bg: 'bg-rose-50', border: 'border-rose-200', icon: '!', iconBg: 'bg-rose-100 text-rose-600' },
-  'high': { bg: 'bg-orange-50', border: 'border-orange-200', icon: '⚠', iconBg: 'bg-orange-100 text-orange-600' },
+  'high': { bg: 'bg-orange-50', border: 'border-orange-200', icon: '!', iconBg: 'bg-orange-100 text-orange-600' },
   'medium': { bg: 'bg-amber-50', border: 'border-amber-200', icon: '○', iconBg: 'bg-amber-100 text-amber-600' },
   'low': { bg: 'bg-slate-50', border: 'border-slate-200', icon: '·', iconBg: 'bg-slate-100 text-slate-600' },
 };
@@ -50,11 +59,63 @@ export default function ModelRegistry({ embedded = false }: Props) {
   const [statusFilter, setStatusFilter] = useState<'all' | 'Production' | 'Pending Review'>('all');
   const [search, setSearch] = useState('');
   const [openModel, setOpenModel] = useState<string | null>(null);
+  const [showComparison, setShowComparison] = useState(false);
+  const [showRiskCalculator, setShowRiskCalculator] = useState(false);
+  const [showDependencyGraph, setShowDependencyGraph] = useState(false);
+  const [showFrameworkExplorer, setShowFrameworkExplorer] = useState(false);
 
   // Pull real AVA data
   const { loading: avaLoading, useCases, deployments, guardrails, frontierAgents } = useGovernanceAggregator();
 
-  const filtered = useMemo(() => MODELS.filter(m => {
+  // Live Bedrock model catalog + CloudWatch runtime metrics + cost
+  const { catalog, metrics, cost, catalogLive } = useGovernModels(7, 3);
+
+  // Build unified model list: live catalog models merged with mock governance metadata.
+  // When live catalog is available, use it as the source of truth for model inventory;
+  // governance metadata (tier, attestation, eval, owner) still comes from mock data.
+  const unifiedModels = useMemo(() => {
+    // If we have a live catalog, merge its models with mock governance metadata
+    if (catalog?.live && catalog.models.length > 0) {
+      const mockById = new Map(MODELS.map(m => [m.id, m]));
+      const mockByNameNorm = new Map(MODELS.map(m => [m.name.toLowerCase().replace(/[^a-z0-9]/g, ''), m]));
+
+      // Get runtime metrics by model for invocation counts
+      const runtimeByModel = new Map((metrics?.by_model ?? []).map(m => [m.model_id, m]));
+      const costByModel = new Map((cost?.by_model ?? []).map(c => [c.model.toLowerCase(), c.amount]));
+
+      // Map live catalog models to our display format
+      return catalog.models.map((liveModel) => {
+        const normName = liveModel.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const mockMatch = mockById.get(liveModel.model_id) ?? mockByNameNorm.get(normName);
+        const runtime = runtimeByModel.get(liveModel.model_id);
+        const modelCost = costByModel.get(liveModel.model_id.toLowerCase());
+
+        // Merge: live catalog provides model identity, mock provides governance metadata
+        return {
+          id: liveModel.model_id,
+          name: liveModel.name,
+          provider: liveModel.provider,
+          owner: mockMatch?.owner ?? 'Unassigned',
+          tier: mockMatch?.tier ?? 'Tier 3' as const,
+          status: (runtime?.invocations ?? 0) > 0 ? 'Production' as const : 'Pending Review' as const,
+          evalScore: mockMatch?.evalScore ?? 75,
+          useCases: mockMatch?.useCases ?? 0,
+          monthlyCost: modelCost ?? mockMatch?.monthlyCost ?? 0,
+          lastValidated: mockMatch?.lastValidated ?? 'N/A',
+          invocations: runtime?.invocations ?? 0,
+          isLive: true,
+        };
+      }).slice(0, 50); // Limit to first 50 models for UI performance
+    }
+
+    // Fallback: use mock MODELS when no live catalog
+    return MODELS.map(m => ({ ...m, invocations: 0, isLive: false }));
+  }, [catalog, metrics, cost]);
+
+  // Determine if we're showing live or mock data
+  const showingLiveData = catalogLive && unifiedModels.some(m => m.isLive);
+
+  const filtered = useMemo(() => unifiedModels.filter(m => {
     const tierOk = filter === 'all' || m.tier === filter;
     const statusOk = statusFilter === 'all' || m.status === statusFilter;
     const q = search.toLowerCase();
@@ -63,12 +124,13 @@ export default function ModelRegistry({ embedded = false }: Props) {
       || m.provider.toLowerCase().includes(q)
       || m.owner.toLowerCase().includes(q);
     return tierOk && statusOk && searchOk;
-  }), [filter, statusFilter, search]);
+  }), [filter, statusFilter, search, unifiedModels]);
 
-  const totalCost = MODELS.reduce((s, m) => s + m.monthlyCost, 0);
-  const totalUseCases = MODELS.reduce((s, m) => s + m.useCases, 0);
+  const totalCost = unifiedModels.reduce((s, m) => s + m.monthlyCost, 0);
+  const totalUseCases = unifiedModels.reduce((s, m) => s + m.useCases, 0);
   const attested = Object.values(MODEL_DETAILS).filter(d => d.attestation.sr26_2.attested).length;
-  const pendingAttestation = MODELS.length - attested;
+  const pendingAttestation = unifiedModels.length - attested;
+
 
   const modelsWithComplianceGaps = MODELS.filter(m => {
     const detail = MODEL_DETAILS[m.id];
@@ -142,16 +204,93 @@ export default function ModelRegistry({ embedded = false }: Props) {
               ← Govern
             </Link>
 
-            <div className="flex items-end justify-between mt-3 mb-6">
-              <div>
-                <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Model Registry</h1>
-                <p className="text-slate-500 mt-1 max-w-2xl">
-                  Every foundation model in use, with owner, risk tier, eval score, cost, attestation state, and approval chain. Click any row for the full Model 360.
-                </p>
+            <div className="mt-3 mb-6">
+              <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Model Registry</h1>
+              <p className="text-slate-500 mt-1 max-w-2xl">
+                Every foundation model in use, with owner, risk tier, eval score, cost, attestation state, and approval chain. Click any row for the full Model 360.
+              </p>
+            </div>
+
+            {/* Analysis Tools Toolbar */}
+            <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-violet-50 rounded-xl border border-indigo-200/60 p-4 mb-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Analysis Tools</div>
+                    <div className="text-xs text-slate-500">Compare models, calculate risk, visualize dependencies</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowComparison(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm font-medium text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 transition-all shadow-sm hover:shadow"
+                  >
+                    <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold">Compare Models</div>
+                      <div className="text-[10px] text-indigo-500 font-normal">Side-by-side analysis</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setShowRiskCalculator(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50 hover:border-amber-300 transition-all shadow-sm hover:shadow"
+                  >
+                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold">Risk Calculator</div>
+                      <div className="text-[10px] text-amber-500 font-normal">Score new models</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setShowDependencyGraph(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-violet-200 rounded-xl text-sm font-medium text-violet-700 hover:bg-violet-50 hover:border-violet-300 transition-all shadow-sm hover:shadow"
+                  >
+                    <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold">Dependency Graph</div>
+                      <div className="text-[10px] text-violet-500 font-normal">Visualize relationships</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setShowFrameworkExplorer(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-emerald-200 rounded-xl text-sm font-medium text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 transition-all shadow-sm hover:shadow"
+                  >
+                    <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold">MRM Frameworks</div>
+                      <div className="text-[10px] text-emerald-500 font-normal">Explore regulations</div>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           </>
         )}
+
+        {/* Live AWS hero — real Bedrock catalog + CloudWatch runtime + Cost Explorer.
+            Rendered in both standalone and embedded (Model Management) modes. */}
+        <LiveModelInventory />
 
         {/* Consolidated Alerts Bar */}
         {(modelsWithComplianceGaps.length > 0 || modelsNeedingRevalidation.length > 0 || needsAttentionAlerts.length > 0) && (
@@ -234,8 +373,8 @@ export default function ModelRegistry({ embedded = false }: Props) {
                 {needsAttentionAlerts.map(alert => (
                   <div
                     key={alert.id}
-                    className={`px-2.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity ${alertSeverityStyle[alert.severity].bg} border ${alertSeverityStyle[alert.severity].border}`}
-                    onClick={() => alert.modelId && setOpenModel(alert.modelId)}
+                    {...rowButtonProps(() => alert.modelId && setOpenModel(alert.modelId), `View ${alert.title}`)}
+                    className={`px-2.5 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity focus-visible:ring-2 focus-visible:ring-blue-400 focus:outline-none ${alertSeverityStyle[alert.severity].bg} border ${alertSeverityStyle[alert.severity].border}`}
                   >
                     <span className={`w-4 h-4 rounded flex items-center justify-center text-[8px] font-bold ${alertSeverityStyle[alert.severity].iconBg}`}>
                       {alertSeverityStyle[alert.severity].icon}
@@ -249,17 +388,29 @@ export default function ModelRegistry({ embedded = false }: Props) {
           </div>
         )}
 
+        {/* Governance Catalog — curated model inventory with risk/attestation metadata */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm font-semibold text-slate-900">Governance Catalog</span>
+          {showingLiveData ? (
+            <LiveDataBadge source="Bedrock" detail={`Live model catalog (${unifiedModels.length} models) — governance metadata (tier, attestation, eval) is illustrative`} />
+          ) : (
+            <MockDataBadge integration="Illustrative governance metadata (tier, attestation, eval, approval) — live Bedrock catalog, runtime & cost are in the panel above" />
+          )}
+        </div>
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {[
-            { label: 'Models Registered', value: MODELS.length,                 sub: `${MODELS.filter(m => m.status === 'Production').length} in production` },
-            { label: 'Use Cases',          value: totalUseCases,                 sub: 'across the fleet' },
-            { label: 'Monthly Cost',       value: `$${totalCost.toLocaleString()}`, sub: `~$${(totalCost * 12 / 1000).toFixed(1)}k/yr` },
-            { label: 'SR 26-2 Attested',   value: `${attested}/${MODELS.length}`,   sub: `${pendingAttestation} pending` },
-            { label: 'Avg Eval Score',     value: Math.round(MODELS.reduce((s, m) => s + m.evalScore, 0) / MODELS.length), sub: 'quality/safety/latency' },
+            { label: 'Models Registered', value: unifiedModels.length,                 sub: `${unifiedModels.filter(m => m.status === 'Production').length} in production`, live: showingLiveData },
+            { label: 'Use Cases',          value: totalUseCases,                 sub: 'across the fleet', live: false },
+            { label: 'Monthly Cost',       value: `$${totalCost.toLocaleString()}`, sub: `~$${(totalCost * 12 / 1000).toFixed(1)}k/yr`, live: !!cost?.live },
+            { label: 'SR 26-2 Attested',   value: `${attested}/${unifiedModels.length}`,   sub: `${pendingAttestation} pending`, live: false },
+            { label: 'Avg Eval Score',     value: unifiedModels.length > 0 ? Math.round(unifiedModels.reduce((s, m) => s + m.evalScore, 0) / unifiedModels.length) : 0, sub: 'quality/safety/latency', live: false },
           ].map(k => (
             <div key={k.label} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
-              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{k.label}</div>
+              <div className="flex items-center gap-1.5">
+                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{k.label}</div>
+                {k.live && <LiveDataBadge />}
+              </div>
               <div className="text-2xl font-semibold text-slate-900 mt-1">{k.value}</div>
               <div className="text-[11px] text-slate-400 mt-0.5">{k.sub}</div>
             </div>
@@ -415,7 +566,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
               <div key={i} className="rounded-lg border p-2" style={{ borderColor: `${fw.meta?.color}40`, backgroundColor: `${fw.meta?.color}08` }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-xs">
-                    {fw.framework.includes('US') ? '🇺🇸' : fw.framework.includes('Canada') ? '🇨🇦' : fw.framework.includes('EU') ? '🇪🇺' : fw.framework.includes('AWS') ? '☁️' : '🌐'}
+                    {fw.framework.includes('US') ? '🇺🇸' : fw.framework.includes('Canada') ? '🇨🇦' : fw.framework.includes('EU') ? '🇪🇺' : fw.framework.includes('AWS') ? <Icon name="cloud" className="w-4 h-4" /> : <Icon name="globe-alt" className="w-4 h-4" />}
                   </span>
                   <span className="text-[10px] font-semibold text-slate-900">{fw.meta?.shortCode || fw.framework.split(' ')[0]}</span>
                   <span className={`text-xs font-bold ml-auto ${fw.fail > 0 ? 'text-rose-600' : fw.pct === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -426,8 +577,8 @@ export default function ModelRegistry({ embedded = false }: Props) {
                   <div className="h-full rounded-full" style={{ width: `${fw.pct}%`, backgroundColor: fw.meta?.color }} />
                 </div>
                 <div className="flex justify-between text-[9px] mt-1">
-                  <span className="text-emerald-600">✓{fw.pass}</span>
-                  {fw.fail > 0 && <span className="text-rose-600">✗{fw.fail}</span>}
+                  <span className="text-emerald-600 flex items-center gap-0.5"><Icon name="check" className="w-2.5 h-2.5" />{fw.pass}</span>
+                  {fw.fail > 0 && <span className="text-rose-600 flex items-center gap-0.5"><Icon name="x-mark" className="w-2.5 h-2.5" />{fw.fail}</span>}
                 </div>
               </div>
             ))}
@@ -437,13 +588,13 @@ export default function ModelRegistry({ embedded = false }: Props) {
             <table className="w-full text-xs">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium text-slate-600">Model</th>
-                  <th className="text-center px-2 py-2 font-medium text-slate-600">🇺🇸 SR 26-2</th>
-                  <th className="text-center px-2 py-2 font-medium text-slate-600">🇨🇦 OSFI</th>
-                  <th className="text-center px-2 py-2 font-medium text-slate-600">🇺🇸 NIST</th>
-                  <th className="text-center px-2 py-2 font-medium text-slate-600">🇪🇺 EU AI</th>
-                  <th className="text-center px-2 py-2 font-medium text-slate-600">☁️ AWS RAI</th>
-                  <th className="px-2 py-2"></th>
+                  <th scope="col" className="text-left px-3 py-2 font-medium text-slate-600">Model</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇺🇸 SR 26-2</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇨🇦 OSFI</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇺🇸 NIST</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇪🇺 EU AI</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600"><Icon name="cloud" className="w-3.5 h-3.5 inline-block mr-0.5" />AWS RAI</th>
+                  <th scope="col" className="px-2 py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -467,8 +618,13 @@ export default function ModelRegistry({ embedded = false }: Props) {
                         const pct = getCompliance(fw);
                         return (
                           <td key={idx} className="text-center px-2 py-2">
-                            <span className={`text-[10px] font-bold ${pct === 0 ? 'text-slate-300' : pct === 100 ? 'text-emerald-600' : pct >= 80 ? 'text-amber-600' : 'text-rose-600'}`}>
-                              {pct > 0 ? `${pct}%` : '—'}
+                            <span className={`inline-flex items-center justify-center gap-0.5 text-[10px] font-bold ${pct === 0 ? 'text-slate-300' : pct === 100 ? 'text-emerald-600' : pct >= 80 ? 'text-amber-600' : 'text-rose-600'}`}>
+                              {pct === 0 ? '—' : (
+                                <>
+                                  {pct === 100 ? <Icon name="check" className="w-2.5 h-2.5" /> : pct >= 80 ? '!' : <Icon name="x-mark" className="w-2.5 h-2.5" />}
+                                  {pct}%
+                                </>
+                              )}
                             </span>
                           </td>
                         );
@@ -513,6 +669,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <input
             type="text"
+            aria-label="Search models, providers, owners"
             placeholder="Search models, providers, owners..."
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -555,11 +712,11 @@ export default function ModelRegistry({ embedded = false }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[11px] text-slate-400 uppercase tracking-wide bg-slate-50/50">
-                <th className="text-left py-2.5 px-5 font-medium">Model</th>
-                <th className="text-left py-2.5 px-3 font-medium">Owner</th>
-                <th className="text-center py-2.5 px-3 font-medium">Tier</th>
-                <th className="text-center py-2.5 px-3 font-medium">Risk</th>
-                <th className="text-center py-2.5 px-3 font-medium">
+                <th scope="col" className="text-left py-2.5 px-5 font-medium">Model</th>
+                <th scope="col" className="text-left py-2.5 px-3 font-medium">Owner</th>
+                <th scope="col" className="text-center py-2.5 px-3 font-medium">Tier</th>
+                <th scope="col" className="text-center py-2.5 px-3 font-medium">Risk</th>
+                <th scope="col" className="text-center py-2.5 px-3 font-medium">
                   <div className="flex items-center justify-center gap-1">
                     <span>MRM Frameworks</span>
                   </div>
@@ -570,16 +727,16 @@ export default function ModelRegistry({ embedded = false }: Props) {
                     <span title="EU AI Act">🇪🇺EU</span>
                   </div>
                 </th>
-                <th className="text-right py-2.5 px-3 font-medium">Eval</th>
-                <th className="text-center py-2.5 px-3 font-medium">Revalidation</th>
-                <th className="text-left py-2.5 px-5 font-medium">Status</th>
+                <th scope="col" className="text-right py-2.5 px-3 font-medium">Eval</th>
+                <th scope="col" className="text-center py-2.5 px-3 font-medium">Revalidation</th>
+                <th scope="col" className="text-left py-2.5 px-5 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(m => {
                 const detail = MODEL_DETAILS[m.id];
                 return (
-                  <tr key={m.id} onClick={() => setOpenModel(m.id)} className="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer transition-colors">
+                  <tr key={m.id} {...rowButtonProps(() => setOpenModel(m.id), `View ${m.name} details`)} className="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer transition-colors focus:outline-none focus:bg-blue-50/50">
                     <td className="py-2.5 px-5">
                       <div className="font-semibold text-slate-900">{m.name}</div>
                       <div className="text-[11px] text-slate-400">{m.provider}</div>
@@ -648,7 +805,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
                       {detail?.revalidation ? (
                         <div className="flex flex-col items-center">
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${revalidationBg[detail.revalidation.status]}`}>
-                            {detail.revalidation.status === 'current' ? '✓ Current' :
+                            {detail.revalidation.status === 'current' ? <span className="flex items-center gap-0.5"><Icon name="check" className="w-2.5 h-2.5" />Current</span> :
                              detail.revalidation.status === 'due-soon' ? 'Due Soon' : 'Overdue'}
                           </span>
                           <span className="text-[10px] text-slate-400 mt-0.5">{detail.revalidation.nextDue}</span>
@@ -679,9 +836,9 @@ export default function ModelRegistry({ embedded = false }: Props) {
             </div>
             <div className="grid grid-cols-4 gap-4">
               {/* Use Cases from Plan */}
-              <div className="bg-white/80 rounded-lg p-3 border border-indigo-100">
+              <div className="bg-white/80 rounded-xl p-3 border border-indigo-100">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs">📋</span>
+                  <Icon name="clipboard-list" className="w-3.5 h-3.5 text-indigo-500" />
                   <span className="text-[10px] font-semibold text-indigo-600 uppercase">Plan: Use Cases</span>
                 </div>
                 <div className="text-2xl font-bold text-slate-900">{useCases.length}</div>
@@ -700,9 +857,9 @@ export default function ModelRegistry({ embedded = false }: Props) {
               </div>
 
               {/* Deployments from Build */}
-              <div className="bg-white/80 rounded-lg p-3 border border-emerald-100">
+              <div className="bg-white/80 rounded-xl p-3 border border-emerald-100">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs">🔧</span>
+                  <Icon name="wrench-screwdriver" className="w-3.5 h-3.5 text-emerald-500" />
                   <span className="text-[10px] font-semibold text-emerald-600 uppercase">Build: Deployments</span>
                 </div>
                 <div className="text-2xl font-bold text-slate-900">{deployments.length}</div>
@@ -721,9 +878,9 @@ export default function ModelRegistry({ embedded = false }: Props) {
               </div>
 
               {/* Guardrails from Secure */}
-              <div className="bg-white/80 rounded-lg p-3 border border-amber-100">
+              <div className="bg-white/80 rounded-xl p-3 border border-amber-100">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs">🛡️</span>
+                  <Icon name="shield-check" className="w-3.5 h-3.5 text-violet-500" />
                   <span className="text-[10px] font-semibold text-amber-600 uppercase">Secure: Guardrails</span>
                 </div>
                 <div className="text-2xl font-bold text-slate-900">{guardrails.length}</div>
@@ -742,9 +899,9 @@ export default function ModelRegistry({ embedded = false }: Props) {
               </div>
 
               {/* Frontier Agents */}
-              <div className="bg-white/80 rounded-lg p-3 border border-violet-100">
+              <div className="bg-white/80 rounded-xl p-3 border border-violet-100">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs">🤖</span>
+                  <Icon name="cpu-chip" className="w-3.5 h-3.5 text-rose-500" />
                   <span className="text-[10px] font-semibold text-violet-600 uppercase">Build: Agents</span>
                 </div>
                 <div className="text-2xl font-bold text-slate-900">{frontierAgents.length}</div>
@@ -810,6 +967,10 @@ export default function ModelRegistry({ embedded = false }: Props) {
         </div>
 
         <ModelDrawer modelId={openModel} onClose={() => setOpenModel(null)} />
+        <ModelComparison isOpen={showComparison} onClose={() => setShowComparison(false)} />
+        <RiskScoringCalculator isOpen={showRiskCalculator} onClose={() => setShowRiskCalculator(false)} />
+        <ModelDependencyGraph isOpen={showDependencyGraph} onClose={() => setShowDependencyGraph(false)} />
+        <MRMFrameworkExplorer isOpen={showFrameworkExplorer} onClose={() => setShowFrameworkExplorer(false)} />
       </div>
     </div>
   );

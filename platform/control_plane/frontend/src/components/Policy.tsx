@@ -1,49 +1,166 @@
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import PolicyAuditLog from './policies/PolicyAuditLog';
+import PolicyObservability from './policies/PolicyObservability';
+import PolicyPlayground from './policies/PolicyPlayground';
+import PolicyTools from './policies/PolicyTools';
+import PolicyEngineList from './policies/PolicyEngineList';
+import PolicyListForEngine from './policies/PolicyListForEngine';
+import CreateEngineModal from './policies/CreateEngineModal';
+import PolicyCreateFlow from './policies/PolicyCreateFlow';
+import { Icon } from './govern/icons';
 
-export default function Policy() {
+type Tab = 'engines' | 'observability' | 'playground' | 'tools' | 'audit';
+
+export default function Policy({ initialTab }: { initialTab?: Tab }) {
+  const navigate = useNavigate();
+  const activeTab: Tab = initialTab || 'engines';
+
+  // Engine-first navigation: engine list -> policies in engine -> create policy
+  const [selectedEngine, setSelectedEngine] = useState<{ id: string; name: string } | null>(null);
+  const [showCreateEngine, setShowCreateEngine] = useState(false);
+  const [creatingPolicyForEngine, setCreatingPolicyForEngine] = useState<{ id: string; name: string } | null>(null);
+
+  const tabs: { id: Tab; label: string; path: string; icon: React.ReactNode }[] = [
+    {
+      id: 'engines',
+      label: 'Policy Engines',
+      path: '/secure/policy',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+        </svg>
+      ),
+    },
+    {
+      id: 'observability',
+      label: 'Observability',
+      path: '/secure/policy/observability',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'playground',
+      label: 'Playground',
+      path: '/secure/policy/playground',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'tools',
+      label: 'Tools',
+      path: '/secure/policy/tools',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'audit',
+      label: 'Audit Trail',
+      path: '/secure/policy/audit',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.888L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
     <div className="min-h-[calc(100vh-4rem)] relative">
       <div className="relative max-w-7xl mx-auto px-6 py-10">
+        {/* Header */}
         <div className="mb-8 animate-fade-in">
-          <Link to="/" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">&larr; Back to Home</Link>
-          <h1 className="text-3xl font-semibold text-slate-900 tracking-tight mt-3">Policy</h1>
-          <p className="text-slate-500 mt-2 max-w-2xl">Governance frameworks, compliance policy management, and regulatory controls for AI agent deployments.</p>
+          <Link to="/secure" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">
+            &larr; Back to Secure
+          </Link>
+          <h1 className="text-3xl font-semibold text-slate-900 tracking-tight mt-3">AgentCore Policy</h1>
+          <p className="text-slate-500 mt-2 max-w-2xl">
+            Define resource-level operational policies for your agents — control what they can do, access, and execute.
+          </p>
         </div>
 
-        <div className="card bg-red-50/50 border-red-200/60 mb-6 animate-fade-in stagger-1">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-            </div>
-            <div>
-              <p className="text-sm text-red-900 font-semibold">Coming Soon</p>
-              <p className="text-sm text-red-700/80 mt-1">Policy management is under active development. This module will provide centralized governance for agent permissions, data access policies, regulatory compliance rules, and audit trails.</p>
-            </div>
-          </div>
+        {/* Governance Context Links */}
+        <div className="mb-6 flex items-center gap-4 text-sm animate-fade-in stagger-1">
+          <span className="text-slate-400">Governance:</span>
+          <Link
+            to="/govern/compliance"
+            className="inline-flex items-center gap-1.5 text-slate-600 hover:text-violet-600 transition-colors"
+          >
+            <Icon name="scale" className="w-4 h-4" />
+            Framework Mapping
+          </Link>
+          <Link
+            to="/govern/agents"
+            className="inline-flex items-center gap-1.5 text-slate-600 hover:text-violet-600 transition-colors"
+          >
+            <Icon name="user-group" className="w-4 h-4" />
+            Agent Authorization Matrix
+          </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 animate-fade-in stagger-2">
-          <div className="card">
-            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center mb-4">
-              <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" /></svg>
-            </div>
-            <h3 className="text-base font-semibold text-slate-900 mb-2">Governance Frameworks</h3>
-            <p className="text-sm text-slate-500">Define and enforce organizational standards for AI agent behavior, data handling, and decision-making boundaries.</p>
-          </div>
-          <div className="card">
-            <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center mb-4">
-              <svg className="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
-            </div>
-            <h3 className="text-base font-semibold text-slate-900 mb-2">Compliance Rules</h3>
-            <p className="text-sm text-slate-500">Configurable compliance policies aligned with FSI regulations (SOX, GDPR, CCPA, MiFID II, Basel III).</p>
-          </div>
-          <div className="card">
-            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center mb-4">
-              <svg className="w-5 h-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.888L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-            </div>
-            <h3 className="text-base font-semibold text-slate-900 mb-2">Audit Trail</h3>
-            <p className="text-sm text-slate-500">Complete audit logging of agent actions, policy decisions, and compliance events for regulatory reporting.</p>
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-1 mb-8 p-1 bg-slate-100/80 rounded-xl w-fit animate-fade-in stagger-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => navigate(tab.path)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.id
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <div className="animate-fade-in stagger-3">
+          {activeTab === 'observability' && <PolicyObservability />}
+          {activeTab === 'playground' && <PolicyPlayground />}
+          {activeTab === 'tools' && <PolicyTools />}
+          {activeTab === 'audit' && <PolicyAuditLog />}
+          {activeTab === 'engines' && (
+            <>
+              {creatingPolicyForEngine ? (
+                <PolicyCreateFlow
+                  engineId={creatingPolicyForEngine.id}
+                  engineName={creatingPolicyForEngine.name}
+                  onComplete={() => setCreatingPolicyForEngine(null)}
+                  onBack={() => setCreatingPolicyForEngine(null)}
+                />
+              ) : selectedEngine ? (
+                <PolicyListForEngine
+                  engineId={selectedEngine.id}
+                  engineName={selectedEngine.name}
+                  onCreatePolicy={() => setCreatingPolicyForEngine(selectedEngine)}
+                  onBack={() => setSelectedEngine(null)}
+                />
+              ) : (
+                <PolicyEngineList
+                  onSelectEngine={(id, name) => setSelectedEngine({ id, name })}
+                  onCreateEngine={() => setShowCreateEngine(true)}
+                />
+              )}
+              {showCreateEngine && (
+                <CreateEngineModal
+                  onClose={() => setShowCreateEngine(false)}
+                  onCreated={() => setShowCreateEngine(false)}
+                />
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

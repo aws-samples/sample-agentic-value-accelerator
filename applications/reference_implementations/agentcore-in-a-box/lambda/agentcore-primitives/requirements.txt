@@ -1,0 +1,9 @@
+# PINNED EXACT for reproducible bundles (matches every other control/read Lambda in this repo).
+# 1.43.42 is required: the newer AgentCore ops-plane operations we call —
+#   control plane: CreateHarness/CreateHarnessEndpoint, CreateEvaluator,
+#                  CreateOnlineEvaluationConfig, CreateRegistry/CreateRegistryRecord,
+#                  UpdateRegistryRecordStatus/SubmitRegistryRecordForApproval,
+#                  CreateConfigurationBundle
+#   data plane:    InvokeHarness, Evaluate, SearchRegistryRecords
+# only exist in boto3 1.43+. Lambda's built-in boto3 lags and LACKS these ops. Bump deliberately.
+boto3==1.43.42

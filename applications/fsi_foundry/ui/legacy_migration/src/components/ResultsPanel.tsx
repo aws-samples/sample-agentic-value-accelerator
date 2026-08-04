@@ -3,6 +3,14 @@ import { useState } from 'react';
 import type { RuntimeConfig } from '../config';
 import type { MigrationResponse } from '../types';
 
+
+function normLevel(lvl: string | null | undefined): string {
+  if (!lvl) return 'MEDIUM';
+  const upper = lvl.toUpperCase();
+  const map: Record<string, string> = { INFO: 'LOW', WARNING: 'MEDIUM' };
+  return map[upper] || upper;
+}
+
 /* ---- Complexity Badge ---- */
 
 function ComplexityBadge({ level }: { level: string }) {

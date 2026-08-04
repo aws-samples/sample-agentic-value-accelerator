@@ -12,6 +12,7 @@ pydantic-settings==2.6.0
 langchain==0.3.14
 langchain-aws==0.2.10
 langchain-core==0.3.29
+langchain-litellm==0.2.0
 langgraph==0.2.60
 
 # AWS SDK (compatible with langchain-aws 0.2.10)

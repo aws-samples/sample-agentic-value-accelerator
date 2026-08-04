@@ -1,7 +1,7 @@
 export interface ProjectCreate {
   project_name: string;
-  framework: 'langraph' | 'strands';
-  iac_type: 'terraform' | 'cdk' | 'cloudformation';
+  framework: "langraph" | "strands";
+  iac_type: "terraform" | "cdk" | "cloudformation";
   langfuse_server_id?: string;
   aws_region: string;
   tags?: Record<string, string>;
@@ -30,7 +30,7 @@ export interface LangfuseServer {
   public_key: string;
   secret_name?: string;
   secret_key_field?: string;
-  status: 'active' | 'inactive' | 'maintenance';
+  status: "active" | "inactive" | "maintenance";
   created_at: string;
   updated_at: string;
 }
@@ -42,7 +42,7 @@ export interface LangfuseServerCreate {
   public_key: string;
   secret_name?: string;
   secret_key_field?: string;
-  status?: 'active' | 'inactive' | 'maintenance';
+  status?: "active" | "inactive" | "maintenance";
 }
 
 export interface ApiError {
@@ -74,7 +74,7 @@ export interface Parameter {
   default?: any;
   minimum?: number;
   maximum?: number;
-  input_type?: 'text' | 'email' | 'password';
+  input_type?: "text" | "email" | "password";
 }
 
 export interface Template {
@@ -91,7 +91,13 @@ export interface Template {
   frameworks_list: string[];
   built_with: string[];
   resources?: { name: string; description: string }[];
-  parameters?: { name: string; type: string; required: boolean; description: string; default?: string }[];
+  parameters?: {
+    name: string;
+    type: string;
+    required: boolean;
+    description: string;
+    default?: string;
+  }[];
   pattern_description?: string;
   learn_more?: { title: string; url: string }[];
   // Legacy fields (used by BootstrapForm and DeploymentCreate)
@@ -119,7 +125,19 @@ export interface BootstrapRequest {
 }
 
 // Deployment Types
-export type DeploymentStatus = 'pending' | 'validating' | 'packaging' | 'deploying' | 'verifying' | 'deployed' | 'destroying' | 'destroyed' | 'packaged' | 'delivered' | 'failed' | 'rolled_back';
+export type DeploymentStatus =
+  | "pending"
+  | "validating"
+  | "packaging"
+  | "deploying"
+  | "verifying"
+  | "deployed"
+  | "destroying"
+  | "destroyed"
+  | "packaged"
+  | "delivered"
+  | "failed"
+  | "rolled_back";
 
 export interface StatusHistoryEntry {
   status: string;
@@ -224,7 +242,7 @@ export interface ScriptTestResponse {
   duration_ms: number;
 }
 
-export type AppDeploymentStatus = 'pending' | 'building' | 'deploying' | 'active' | 'failed';
+export type AppDeploymentStatus = "pending" | "building" | "deploying" | "active" | "failed";
 
 export interface AppDeployment {
   deployment_id: string;
@@ -241,10 +259,23 @@ export interface AppDeployment {
 
 // --- Guardrails ---
 
-export type GuardrailFilterStrength = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
-export type GuardrailFilterType = 'HATE' | 'INSULTS' | 'SEXUAL' | 'VIOLENCE' | 'MISCONDUCT' | 'PROMPT_ATTACK';
-export type GuardrailPiiAction = 'BLOCK' | 'ANONYMIZE';
-export type GuardrailStatus = 'draft' | 'creating' | 'active' | 'updating' | 'failed' | 'deleting' | 'deleted';
+export type GuardrailFilterStrength = "NONE" | "LOW" | "MEDIUM" | "HIGH";
+export type GuardrailFilterType =
+  | "HATE"
+  | "INSULTS"
+  | "SEXUAL"
+  | "VIOLENCE"
+  | "MISCONDUCT"
+  | "PROMPT_ATTACK";
+export type GuardrailPiiAction = "BLOCK" | "ANONYMIZE";
+export type GuardrailStatus =
+  | "draft"
+  | "creating"
+  | "active"
+  | "updating"
+  | "failed"
+  | "deleting"
+  | "deleted";
 
 export interface ContentFilterConfig {
   type: GuardrailFilterType;
@@ -343,15 +374,53 @@ export interface GuardrailEvent {
   details?: Record<string, any>;
 }
 
+// -----------------------------------------------------------------------------
+// Knowledge
+// -----------------------------------------------------------------------------
+
+export interface GlueTable {
+  name: string;
+  table_type: string;
+}
+
+export interface GlueDatabase {
+  name: string;
+  description: string;
+  tables: GlueTable[];
+}
+
+export interface AthenaWorkgroup {
+  name: string;
+  state: string;
+}
+
+export interface KnowledgeRegistration {
+  registration_id: string;
+  name: string;
+  type: string;
+  description: string;
+  status: "PROVISIONING" | "ACTIVE" | "FAILED" | "DELETING" | "DELETED";
+  config: Record<string, any>;
+  gateway_endpoint: string;
+  tools: string[];
+  mcp_server: string;
+  iam_role_arn: string;
+  runtime_id: string;
+  gateway_id: string;
+  target_id: string;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+}
 // Service Approval (Service Onboarding) ------------------------------------
 
-export type ServiceApprovalTestingMode = 'skip' | 'dry-run' | 'full-deploy';
-export type ServiceApprovalFramework = 'ccmv4' | 'nist' | 'cis' | 'iso';
-export type ServiceApprovalRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-export type ServiceApprovalPhaseStatus = 'pending' | 'running' | 'complete' | 'failed';
+export type ServiceApprovalTestingMode = "skip" | "dry-run" | "full-deploy";
+export type ServiceApprovalFramework = "ccmv4" | "nist" | "cis" | "iso";
+export type ServiceApprovalRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type ServiceApprovalPhaseStatus = "pending" | "running" | "complete" | "failed";
 
 export interface ServiceApprovalPhaseState {
-  key: string;             // assess | research | validate | map | generate | test | summarize | evidence
+  key: string; // assess | research | validate | map | generate | test | summarize | evidence
   label: string;
   status: ServiceApprovalPhaseStatus;
   file_count: number;
@@ -371,7 +440,7 @@ export interface ServiceApprovalRun {
   created_by?: string | null;
   execution_arn?: string | null;
   phases: ServiceApprovalPhaseState[];
-  approval_report_path?: string | null;  // s3 key relative to slug, e.g. 07-summarize/APPROVAL-REPORT.md
+  approval_report_path?: string | null; // s3 key relative to slug, e.g. 07-summarize/APPROVAL-REPORT.md
   error?: string | null;
 }
 
@@ -382,14 +451,14 @@ export interface ServiceApprovalRunCreate {
 }
 
 export interface ServiceApprovalFileEntry {
-  path: string;            // relative to slug, e.g. 05-generate/preventive/CTRL-ORG-PRV-001.json
+  path: string; // relative to slug, e.g. 05-generate/preventive/CTRL-ORG-PRV-001.json
   size: number;
   modified_at: string;
 }
 
 export interface ServiceApprovalFileTree {
   slug: string;
-  phase: string;           // e.g. 05-generate
+  phase: string; // e.g. 05-generate
   groups: { name: string; files: ServiceApprovalFileEntry[] }[];
 }
 
@@ -397,11 +466,205 @@ export interface ServiceApprovalFileContent {
   path: string;
   size: number;
   content: string;
-  encoding: 'utf-8' | 'base64';
+  encoding: "utf-8" | "base64";
   language?: string;
 }
 
 export interface AwsService {
   label: string;
   slug: string;
+}
+
+// Guardrail Validation (Test Suite) ------------------------------------------
+
+export type GuardrailTestCaseCategory =
+  | "pii"
+  | "content-filter"
+  | "denied-topics"
+  | "prompt-injection"
+  | "grounding"
+  | "word-filter"
+  | "regex";
+export type GuardrailTestSeverity = "critical" | "high" | "medium" | "low";
+export type GuardrailTestSchedule = "hourly" | "daily" | "weekly" | "manual";
+export type GuardrailTestRunStatus = "success" | "partial" | "failed";
+
+export interface GuardrailTestCase {
+  id: string;
+  name: string;
+  description: string;
+  input: string;
+  expectedResult: "block" | "pass";
+  category: GuardrailTestCaseCategory;
+  severity: GuardrailTestSeverity;
+}
+
+export interface GuardrailTestSuite {
+  id: string;
+  name: string;
+  description: string;
+  guardrailId: string;
+  guardrailName: string;
+  testCases: GuardrailTestCase[];
+  schedule: GuardrailTestSchedule;
+  lastRun?: string;
+  nextRun?: string;
+  enabled: boolean;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface GuardrailTestResult {
+  testCaseId: string;
+  testCaseName: string;
+  input: string;
+  expectedResult: "block" | "pass";
+  actualResult: "block" | "pass";
+  passed: boolean;
+  latency: number;
+  details?: string;
+}
+
+export interface GuardrailTestRun {
+  id: string;
+  suiteId: string;
+  suiteName: string;
+  guardrailId: string;
+  guardrailName: string;
+  timestamp: string;
+  duration: number;
+  totalTests: number;
+  passed: number;
+  failed: number;
+  status: GuardrailTestRunStatus;
+  results: GuardrailTestResult[];
+  triggeredBy?: "scheduled" | "manual";
+}
+
+export interface GuardrailValidationSummary {
+  totalSuites: number;
+  enabledSuites: number;
+  totalTestCases: number;
+  lastRunTimestamp?: string;
+  passRate24h: number;
+  failedTests24h: number;
+  criticalFailures24h: number;
+  coverageByCategory: Record<GuardrailTestCaseCategory, number>;
+  recentRuns: GuardrailTestRun[];
+  trendData7d: { date: string; passed: number; failed: number }[];
+}
+
+// Advanced Prompt Optimization (AdvPO) -------------------------------------
+
+export type AdvPOJobStatus =
+  | "Submitted"
+  | "InProgress"
+  | "Completed"
+  | "PartiallyCompleted"
+  | "Failed"
+  | "Stopping"
+  | "Stopped"
+  | "Deleting";
+
+export interface AdvPOInferenceConfig {
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  stop_sequences?: string[];
+}
+
+export interface AdvPOModelConfiguration {
+  model_id: string;
+  inference_config?: AdvPOInferenceConfig;
+  additional_model_request_fields?: Record<string, unknown>;
+}
+
+export interface AdvPOJobCreate {
+  job_name: string;
+  input_s3_uri: string;
+  model_configurations: AdvPOModelConfiguration[];
+  output_s3_uri?: string;
+  job_description?: string;
+  encryption_key_arn?: string;
+  tags?: Record<string, string>;
+}
+
+export interface AdvPOJobSummary {
+  job_arn: string;
+  job_name: string;
+  status: AdvPOJobStatus;
+}
+
+export interface AdvPOJob {
+  job_arn: string;
+  job_name: string;
+  status: AdvPOJobStatus;
+  input_s3_uri?: string;
+  output_s3_uri?: string;
+  model_configurations: AdvPOModelConfiguration[];
+  encryption_key_arn?: string;
+  failure_message?: string;
+  creation_time?: string;
+  last_modified_time?: string;
+  results_uri?: string;
+}
+
+export interface AdvPODatasetUpload {
+  name: string;
+  content: string;
+}
+
+export interface AdvPODatasetUploadResult {
+  s3_uri: string;
+  bucket: string;
+  key: string;
+  size: number;
+}
+
+export interface AdvPODatasetItem {
+  key: string;
+  name: string;
+  s3_uri: string;
+  size: number;
+  last_modified?: string;
+}
+
+export interface AdvPODatasetList {
+  bucket: string;
+  datasets: AdvPODatasetItem[];
+}
+
+export interface AdvPOResults {
+  job_arn: string;
+  s3_uri: string;
+  content: string;
+}
+
+export type AdvPOModelScope = "global" | "regional" | "in_region";
+
+export interface AdvPOModel {
+  id: string;
+  name: string;
+  scope: AdvPOModelScope;
+  provider?: string;
+  cris_geo?: string;
+}
+
+export interface AdvPOModelList {
+  region: string;
+  cris_geo: string;
+  models: AdvPOModel[];
+}
+
+export interface AdvPOJobListItem {
+  job_arn: string;
+  job_name: string;
+  status: AdvPOJobStatus;
+  creation_time?: string;
+  last_modified_time?: string;
+}
+
+export interface AdvPOJobList {
+  jobs: AdvPOJobListItem[];
+  next_token?: string;
 }

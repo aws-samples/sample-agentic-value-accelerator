@@ -6,6 +6,7 @@ import { decisionColor, riskColor, fmtMoney, fmtPct } from './business_cases/sco
 import { STATUSES } from './business_cases/types';
 import BusinessCaseDrawer from './business_cases/BusinessCaseDrawer';
 import ConfirmDialog from './ConfirmDialog';
+import { Icon } from './govern/icons';
 
 type SortKey = 'npv' | 'irr' | 'risk' | 'updated' | 'name';
 
@@ -106,18 +107,40 @@ export default function BusinessCases() {
     [items, editing]
   );
 
+  const handlePrint = () => window.print();
+
+  const activeFilters = useMemo(() => {
+    const parts: string[] = [];
+    if (search.trim()) parts.push(`Search: "${search.trim()}"`);
+    if (filterStatus !== 'all') parts.push(`Status: ${filterStatus}`);
+    if (filterDecision !== 'all') parts.push(`Decision: ${filterDecision}`);
+    return parts.length ? parts.join(' · ') : 'No filters applied';
+  }, [search, filterStatus, filterDecision]);
+
   return (
     <div className="min-h-[calc(100vh-4rem)] relative">
-      <div className="absolute inset-0 pointer-events-none" style={{
+      <div className="absolute inset-0 pointer-events-none print:hidden" style={{
         background: 'radial-gradient(ellipse 80% 70% at 20% 50%, rgba(219,234,254,0.8) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 80% 40%, rgba(221,214,254,0.6) 0%, transparent 55%), radial-gradient(ellipse 50% 60% at 50% 80%, rgba(252,231,243,0.5) 0%, transparent 50%)',
         animation: 'gradientDrift 20s ease-in-out infinite',
       }} />
       <div className="relative max-w-7xl mx-auto px-6 py-10">
         {/* Header */}
-        <div className="mb-8 animate-fade-in">
+        <div className="mb-8 animate-fade-in print:hidden">
           <Link to="/plan" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Plan</Link>
         </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-8">
+
+        {/* Print-only header */}
+        <div className="hidden print:block mb-6">
+          <h1 className="text-2xl font-bold text-slate-900">Business Cases — Summary</h1>
+          <div className="text-xs text-slate-600 mt-1">
+            Generated {new Date().toLocaleString()} · {filtered.length} of {items.length} cases · {activeFilters}
+          </div>
+          <div className="text-xs text-slate-600 mt-1">
+            Total {counts.total} · Portfolio NPV {fmtMoney(counts.totalNpv)} · Positive {counts.positive} · Negative {counts.negative} · IRR ≥ Hurdle {counts.passingHurdle}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-8 print:hidden">
           <div>
             <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Business Cases</h1>
             <p className="text-slate-500 mt-2 max-w-2xl">
@@ -131,6 +154,16 @@ export default function BusinessCases() {
               </span>
             )}
             <button onClick={refresh} className="px-3.5 py-2 bg-white text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 hover:border-blue-300 hover:text-blue-600 transition-all">Refresh</button>
+            <button
+              onClick={handlePrint}
+              title="Print summary as PDF"
+              className="px-3.5 py-2 bg-white text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 hover:border-blue-300 hover:text-blue-600 transition-all inline-flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+              </svg>
+              Print
+            </button>
             <button onClick={handleCreate}
               className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-lg hover:shadow-lg transition-all hover:-translate-y-0.5 inline-flex items-center gap-1.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -142,7 +175,7 @@ export default function BusinessCases() {
         </div>
 
         {/* Stat strip */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 print:hidden">
           <StatCard label="Cases" value={String(counts.total)} accent="from-blue-600 to-indigo-600" />
           <StatCard label="Portfolio NPV" value={fmtMoney(counts.totalNpv)} accent="from-indigo-600 to-violet-600" />
           <StatCard label="Positive NPV" value={String(counts.positive)} accent="from-emerald-500 to-teal-600" />
@@ -151,7 +184,7 @@ export default function BusinessCases() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-5 print:hidden">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <div className="md:col-span-5">
               <input type="text" placeholder="Search by name, sponsor, business unit…"
@@ -236,7 +269,7 @@ function BCCard({ bc, onEdit, onDelete }: { bc: BusinessCase; onEdit: () => void
   const fin = bc.computed?.financials;
   const risk = bc.computed?.risk;
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden print:break-inside-avoid print:shadow-none print:hover:translate-y-0">
       <div className="px-5 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2 mb-1">
           <h3 className="text-base font-semibold text-slate-900 truncate flex-1">{bc.name}</h3>
@@ -287,8 +320,18 @@ function BCCard({ bc, onEdit, onDelete }: { bc: BusinessCase; onEdit: () => void
         </div>
       </div>
 
-      <div className="border-t border-slate-100 px-5 py-2.5 flex items-center justify-between bg-slate-50/40">
-        <span className="text-[10px] text-slate-400">Updated {new Date(bc.updated_at).toLocaleDateString()}</span>
+      <div className="border-t border-slate-100 px-5 py-2.5 flex items-center justify-between bg-slate-50/40 print:hidden">
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-slate-400">Updated {new Date(bc.updated_at).toLocaleDateString()}</span>
+          <Link
+            to="/govern/compliance"
+            className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 hover:text-blue-600 transition-colors"
+            title="View compliance framework status"
+          >
+            <Icon name="document-check" className="w-3.5 h-3.5" />
+            <span>Compliance</span>
+          </Link>
+        </div>
         <div className="flex gap-1">
           <button onClick={onEdit} className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md hover:bg-blue-100">Edit</button>
           <button onClick={onDelete} className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded-md hover:bg-red-100">Delete</button>

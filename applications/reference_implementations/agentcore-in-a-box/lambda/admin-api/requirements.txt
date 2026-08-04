@@ -1,0 +1,5 @@
+# The bedrock-agentcore-control Cedar policy operations (create_policy/update_policy/
+# get_policy) only landed in boto3 1.43+. Lambda's built-in boto3 lags and 1.40–1.42
+# LACK these ops. PINNED EXACT for a reproducible Lambda bundle (was >=1.43.0, which could
+# resolve to an arbitrary future wheel). Bump deliberately when needed.
+boto3==1.43.42

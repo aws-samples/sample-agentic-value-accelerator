@@ -2,8 +2,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Agent Safety — Evaluation Controls Infrastructure.
   Creates: Evaluation Execution Role, Auto Eval Lambda, EventBridge rule.
-  When any AgentCore agent is created/deleted, evaluations and alarms are auto-managed
-  and signals are written to DynamoDB for the dashboard.
+  When any AgentCore agent or endpoint is created/deleted, evaluations and alarms
+  are auto-managed per-endpoint and signals are written to DynamoDB for the dashboard.
 
 Parameters:
   EvalSignalsTableName:
@@ -116,6 +116,8 @@ Resources:
                   - bedrock-agentcore:DeleteOnlineEvaluationConfig
                   - bedrock-agentcore:ListOnlineEvaluationConfigs
                   - bedrock-agentcore:GetOnlineEvaluationConfig
+                  - bedrock-agentcore:GetAgentRuntime
+                  - bedrock-agentcore:ListAgentRuntimeEndpoints
                 Resource: '*'
               - Sid: CloudWatchAlarms
                 Effect: Allow
@@ -188,70 +190,183 @@ Resources:
           EVALS = ["Builtin.Harmfulness","Builtin.Correctness","Builtin.Helpfulness","Builtin.GoalSuccessRate","Builtin.ToolSelectionAccuracy","Builtin.ToolParameterAccuracy","Builtin.Faithfulness"]
           NS = "Bedrock-AgentCore/Evaluations"
 
+          def _resolve_name(rid):
+              """Resolve agent name from runtime ID. Uses API first, then extracts from ARN."""
+              try:
+                  r = ac.get_agent_runtime(agentRuntimeId=rid)
+                  return r.get("agentRuntimeName","")
+              except ClientError as e:
+                  logger.warning(f"GetAgentRuntime failed for {rid}: {e}")
+                  # Fallback: runtime ID format is {agent_name}-{10_random_chars}
+                  # Only use this if the pattern matches (name part + hyphen + exactly 10 alphanum)
+                  import re
+                  m = re.match(r'^(.+)-[a-zA-Z0-9]{10}$', rid)
+                  if m:
+                      return m.group(1)
+                  return ""
+
+          def _cfg_name(name, ep):
+              # Eval config name must match [a-zA-Z][a-zA-Z0-9_]{0,47}
+              # Replace hyphens with underscores, truncate to 48 chars
+              safe_name = name.replace("-","_")
+              safe_ep = ep.replace("-","_")
+              if ep=="DEFAULT": return f"eval_{safe_name}"[:48]
+              return f"eval_{safe_name}_{safe_ep}"[:48]
+
+          def _alarm_name(name, ep):
+              if ep=="DEFAULT": return f"AgentSafety-Eval-{name}"
+              return f"AgentSafety-Eval-{name}-{ep}"
+
+          def _sig_key(key, ep):
+              if ep=="DEFAULT": return key
+              return f"{key}#{ep}"
+
+          def _create_eval(name, rid, ep):
+              cn = _cfg_name(name, ep)
+              # Log group pattern: [.\-_/#A-Za-z0-9]+
+              lg = f"/aws/bedrock-agentcore/runtimes/{rid}-{ep}"
+              # Service name pattern: [a-zA-Z0-9._-]+
+              sn = f"{name}.{ep}"
+              eid = ""
+              try:
+                  r = ac.create_online_evaluation_config(onlineEvaluationConfigName=cn,description=f"Auto eval for {name}/{ep}",rule={"samplingConfig":{"samplingPercentage":SAMPLING_PCT},"sessionConfig":{"sessionTimeoutMinutes":15}},dataSourceConfig={"cloudWatchLogs":{"logGroupNames":[lg],"serviceNames":[sn]}},evaluators=[{"evaluatorId":e} for e in EVALS],evaluationExecutionRoleArn=EVAL_EXECUTION_ROLE_ARN,enableOnCreate=True)
+                  eid = r.get("onlineEvaluationConfigId","")
+                  logger.info(f"Eval config created: {eid} for {name}/{ep}")
+              except ClientError as e:
+                  if "ConflictException" in str(e): logger.info(f"Eval exists: {cn}")
+                  else: logger.error(f"Eval create failed: {e}")
+              return eid, cn
+
+          def _create_alarm(name, ep):
+              sn = f"{name}.{ep}"
+              an = _alarm_name(name, ep)
+              try:
+                  mq = [{"Id":"h","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Harmfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Harmful"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"c1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Correctness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Incorrect"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"c2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Correctness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Partially Correct"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"g","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.GoalSuccessRate","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"No"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"u1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Helpfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not Helpful At All"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"u2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Helpfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Very Unhelpful"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"f1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Faithfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not At All"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"f2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Faithfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not Generally"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"total","Expression":"FILL(h,0)+FILL(c1,0)+FILL(c2,0)+FILL(g,0)+FILL(u1,0)+FILL(u2,0)+FILL(f1,0)+FILL(f2,0)","Label":"Total Bad","ReturnData":True}]
+                  ak = {"AlarmName":an,"AlarmDescription":f"Agent quality alarm for {name}/{ep}.","Metrics":mq,"EvaluationPeriods":1,"Threshold":1,"ComparisonOperator":"GreaterThanOrEqualToThreshold","TreatMissingData":"notBreaching"}
+                  if SNS_TOPIC_ARN: ak["AlarmActions"]=[SNS_TOPIC_ARN]; ak["OKActions"]=[SNS_TOPIC_ARN]
+                  cw.put_metric_alarm(**ak)
+                  logger.info(f"Alarm created: {an}")
+              except ClientError as e: logger.error(f"Alarm failed: {e}")
+
+          def _write_signals(name, ep, eid, cn):
+              now = datetime.now(timezone.utc); exp = int(now.timestamp())+86400; t = ddb.Table(EVAL_SIGNALS_TABLE)
+              an = _alarm_name(name, ep)
+              try: t.put_item(Item={"agent_name":name,"signal_key":_sig_key("alarm_summary",ep),"endpoint":ep,"alarm_name":an,"alarm_state":"INSUFFICIENT_DATA","alarm_reason":"Waiting for evaluation data","alarm_updated_at":now.isoformat(),"eval_config_id":eid,"eval_config_name":cn,"evaluator_count":len(EVALS),"sampling_pct":str(SAMPLING_PCT),"severity":"medium","synced_at":now.isoformat(),"expires_at":exp})
+              except ClientError as e: logger.warning(f"DDB write failed: {e}")
+              for ev in EVALS:
+                  try: t.put_item(Item={"agent_name":name,"signal_key":_sig_key(ev,ep),"endpoint":ep,"evaluator_name":ev.replace("Builtin.",""),"bad_count":0,"good_count":0,"total_count":0,"bad_pct":"0.0","severity":"low","description":f"{ev.replace('Builtin.','')}: waiting for data","config_name":cn,"synced_at":now.isoformat(),"expires_at":exp})
+                  except: pass
+
+          def _delete_signals_ep(name, ep):
+              t = ddb.Table(EVAL_SIGNALS_TABLE)
+              suffix = f"#{ep}" if ep != "DEFAULT" else ""
+              try:
+                  for i in t.scan().get("Items",[]):
+                      if i.get("agent_name") != name: continue
+                      sk = i.get("signal_key","")
+                      if ep == "DEFAULT" and "#" not in sk:
+                          t.delete_item(Key={"agent_name":name,"signal_key":sk})
+                      elif ep != "DEFAULT" and sk.endswith(suffix):
+                          t.delete_item(Key={"agent_name":name,"signal_key":sk})
+              except: pass
+
+          def _delete_all_configs(name):
+              prefix = f"eval_{name}"
+              try:
+                  cfgs = []
+                  for pg in ac.get_paginator("list_online_evaluation_configs").paginate():
+                      cfgs.extend(pg.get("onlineEvaluationConfigs",[]))
+                  for cfg in cfgs:
+                      cn = cfg.get("onlineEvaluationConfigName","")
+                      if cn == prefix[:48] or cn.startswith(f"{prefix}_"):
+                          try: ac.delete_online_evaluation_config(onlineEvaluationConfigId=cfg["onlineEvaluationConfigId"]); logger.info(f"Deleted config: {cn}")
+                          except ClientError: pass
+              except ClientError as e: logger.warning(f"List configs failed: {e}")
+
+          def _delete_all_alarms(name):
+              prefix = f"AgentSafety-Eval-{name}"
+              try:
+                  ans = []
+                  for pg in cw.get_paginator("describe_alarms").paginate(AlarmNamePrefix=prefix,AlarmTypes=["MetricAlarm"]):
+                      for a in pg.get("MetricAlarms",[]): ans.append(a["AlarmName"])
+                  if ans:
+                      for i in range(0,len(ans),100): cw.delete_alarms(AlarmNames=ans[i:i+100])
+                      logger.info(f"Deleted {len(ans)} alarms for {name}")
+              except ClientError: pass
+
           def handler(event, context):
               logger.info(f"Event: {json.dumps(event)}")
               detail = event.get("detail",{})
               en = detail.get("eventName","")
               rp = detail.get("requestParameters",{})
               re = detail.get("responseElements",{})
-              name = rp.get("agentRuntimeName","")
-              rid = rp.get("agentRuntimeId","") or re.get("agentRuntimeId","")
-              if not name and rid:
-                  p = rid.rsplit("-",1)
-                  name = p[0] if len(p)==2 else rid
-              if not name: return {"statusCode":200,"body":"no agent name"}
 
-              if en == "CreateAgentRuntime":
-                  if not EVAL_EXECUTION_ROLE_ARN:
-                      logger.error("EVAL_EXECUTION_ROLE_ARN not set")
-                      return {"statusCode":500,"body":"missing role"}
-                  cn = f"eval_{name}"[:48]
-                  lg = f"/aws/bedrock-agentcore/runtimes/{rid}-DEFAULT"
-                  sn = f"{name}.DEFAULT"
-                  # Create eval config
-                  eid = ""
-                  try:
-                      r = ac.create_online_evaluation_config(onlineEvaluationConfigName=cn,description=f"Auto eval for {name}",rule={"samplingConfig":{"samplingPercentage":SAMPLING_PCT},"sessionConfig":{"sessionTimeoutMinutes":15}},dataSourceConfig={"cloudWatchLogs":{"logGroupNames":[lg],"serviceNames":[sn]}},evaluators=[{"evaluatorId":e} for e in EVALS],evaluationExecutionRoleArn=EVAL_EXECUTION_ROLE_ARN,enableOnCreate=True)
-                      eid = r.get("onlineEvaluationConfigId","")
-                      logger.info(f"Eval config created: {eid}")
-                  except ClientError as e:
-                      if "ConflictException" in str(e): logger.info(f"Eval exists: {cn}")
-                      else: logger.error(f"Eval create failed: {e}")
-                  # Create alarm
-                  an = f"AgentSafety-Eval-{name}"
-                  try:
-                      mq = [{"Id":"h","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Harmfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Harmful"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"c1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Correctness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Incorrect"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"c2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Correctness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Partially Correct"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"g","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.GoalSuccessRate","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"No"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"u1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Helpfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not Helpful At All"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"u2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Helpfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Very Unhelpful"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"f1","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Faithfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not At All"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"f2","MetricStat":{"Metric":{"Namespace":NS,"MetricName":"Builtin.Faithfulness","Dimensions":[{"Name":"service.name","Value":sn},{"Name":"label","Value":"Not Generally"}]},"Period":3600,"Stat":"Sum"},"ReturnData":False},{"Id":"total","Expression":"FILL(h,0)+FILL(c1,0)+FILL(c2,0)+FILL(g,0)+FILL(u1,0)+FILL(u2,0)+FILL(f1,0)+FILL(f2,0)","Label":"Total Bad","ReturnData":True}]
-                      ak = {"AlarmName":an,"AlarmDescription":f"Agent quality alarm for {name}. Fires on harmful content, incorrect answers, goal failures, unhelpful responses, or faithfulness violations.","Metrics":mq,"EvaluationPeriods":1,"Threshold":1,"ComparisonOperator":"GreaterThanOrEqualToThreshold","TreatMissingData":"notBreaching"}
-                      if SNS_TOPIC_ARN: ak["AlarmActions"]=[SNS_TOPIC_ARN]; ak["OKActions"]=[SNS_TOPIC_ARN]
-                      cw.put_metric_alarm(**ak)
-                      logger.info(f"Alarm created: {an}")
-                  except ClientError as e: logger.error(f"Alarm failed: {e}")
-                  # Write DynamoDB
-                  now = datetime.now(timezone.utc); exp = int(now.timestamp())+86400; t = ddb.Table(EVAL_SIGNALS_TABLE)
-                  try: t.put_item(Item={"agent_name":name,"signal_key":"alarm_summary","alarm_name":an,"alarm_state":"INSUFFICIENT_DATA","alarm_reason":"Waiting for evaluation data","alarm_updated_at":now.isoformat(),"eval_config_id":eid,"eval_config_name":cn,"evaluator_count":len(EVALS),"sampling_pct":str(SAMPLING_PCT),"severity":"medium","synced_at":now.isoformat(),"expires_at":exp})
-                  except ClientError as e: logger.warning(f"DDB write failed: {e}")
-                  for ev in EVALS:
-                      try: t.put_item(Item={"agent_name":name,"signal_key":ev,"evaluator_name":ev.replace("Builtin.",""),"bad_count":0,"good_count":0,"total_count":0,"bad_pct":"0.0","severity":"low","description":f"{ev.replace('Builtin.','')}: waiting for data","config_name":cn,"synced_at":now.isoformat(),"expires_at":exp})
+              if en in ("CreateAgentRuntime","DeleteAgentRuntime"):
+                  name = rp.get("agentRuntimeName","")
+                  rid = rp.get("agentRuntimeId","") or re.get("agentRuntimeId","")
+                  if not name and rid:
+                      p = rid.rsplit("-",1)
+                      name = p[0] if len(p)==2 else rid
+                  if not name: return {"statusCode":200,"body":"no agent name"}
+
+                  if en == "CreateAgentRuntime":
+                      if not EVAL_EXECUTION_ROLE_ARN: return {"statusCode":500,"body":"missing role"}
+                      ep = "DEFAULT"
+                      eid, cn = _create_eval(name, rid, ep)
+                      _create_alarm(name, ep)
+                      _write_signals(name, ep, eid, cn)
+                      return {"statusCode":200,"body":json.dumps({"status":"created","agent_name":name,"endpoint":ep,"eval_config_id":eid})}
+                  else:
+                      _delete_all_configs(name)
+                      _delete_all_alarms(name)
+                      t = ddb.Table(EVAL_SIGNALS_TABLE)
+                      try:
+                          for i in t.scan().get("Items",[]):
+                              if i.get("agent_name")==name: t.delete_item(Key={"agent_name":i["agent_name"],"signal_key":i["signal_key"]})
                       except: pass
-                  return {"statusCode":200,"body":json.dumps({"status":"created","eval_config_id":eid})}
+                      return {"statusCode":200,"body":json.dumps({"status":"deleted","agent_name":name})}
 
-              elif en == "DeleteAgentRuntime":
-                  cn = f"eval_{name}"[:48]
-                  try:
-                      for pg in ac.get_paginator("list_online_evaluation_configs").paginate():
-                          for cfg in pg.get("onlineEvaluationConfigs",[]):
-                              if cfg.get("onlineEvaluationConfigName","")==cn:
-                                  ac.delete_online_evaluation_config(onlineEvaluationConfigId=cfg["onlineEvaluationConfigId"])
-                                  logger.info(f"Eval deleted: {cn}")
-                  except ClientError as e: logger.warning(f"Eval delete failed: {e}")
-                  try: cw.delete_alarms(AlarmNames=[f"AgentSafety-Eval-{name}"]); logger.info(f"Alarm deleted")
-                  except: pass
-                  t = ddb.Table(EVAL_SIGNALS_TABLE)
-                  try:
-                      for i in t.scan().get("Items",[]):
-                          if i.get("agent_name")==name: t.delete_item(Key={"agent_name":i["agent_name"],"signal_key":i["signal_key"]})
-                  except: pass
-                  return {"statusCode":200,"body":json.dumps({"status":"deleted"})}
+              elif en in ("CreateAgentRuntimeEndpoint","DeleteAgentRuntimeEndpoint"):
+                  rid = rp.get("agentRuntimeId","") or re.get("agentRuntimeId","")
+                  ep = rp.get("name","") or re.get("endpointName","")
+                  # CloudTrail may mask name/endpointName with ***. Extract from ARN as fallback.
+                  if not ep or ep == "***":
+                      ep_arn = re.get("agentRuntimeEndpointArn","")
+                      if "/runtime-endpoint/" in ep_arn:
+                          ep = ep_arn.rsplit("/runtime-endpoint/",1)[-1]
+                  if not rid: return {"statusCode":200,"body":"no agentRuntimeId"}
+                  if not ep or ep == "***": return {"statusCode":200,"body":"no endpoint name (masked by CloudTrail)"}
+                  if ep == "DEFAULT": return {"statusCode":200,"body":"DEFAULT handled by runtime event"}
+                  # Resolve agent name — try API first, then extract from agentRuntimeArn in event
+                  name = _resolve_name(rid)
+                  if not name:
+                      # Extract from ARN: arn:...:runtime/{runtimeId} → runtimeId → parse agent name
+                      rt_arn = re.get("agentRuntimeArn","")
+                      if "/runtime/" in rt_arn:
+                          rid_from_arn = rt_arn.rsplit("/runtime/",1)[-1]
+                          import re as re_mod
+                          m = re_mod.match(r'^(.+)-[a-zA-Z0-9]{10}$', rid_from_arn)
+                          if m: name = m.group(1)
+                  if not name: return {"statusCode":200,"body":f"cannot resolve name for {rid}"}
+
+                  if en == "CreateAgentRuntimeEndpoint":
+                      if not EVAL_EXECUTION_ROLE_ARN: return {"statusCode":500,"body":"missing role"}
+                      eid, cn = _create_eval(name, rid, ep)
+                      _create_alarm(name, ep)
+                      _write_signals(name, ep, eid, cn)
+                      return {"statusCode":200,"body":json.dumps({"status":"created","agent_name":name,"endpoint":ep,"eval_config_id":eid})}
+                  else:
+                      cn = _cfg_name(name, ep)
+                      try:
+                          for pg in ac.get_paginator("list_online_evaluation_configs").paginate():
+                              for cfg in pg.get("onlineEvaluationConfigs",[]):
+                                  if cfg.get("onlineEvaluationConfigName","")==cn:
+                                      ac.delete_online_evaluation_config(onlineEvaluationConfigId=cfg["onlineEvaluationConfigId"])
+                      except: pass
+                      try: cw.delete_alarms(AlarmNames=[_alarm_name(name,ep)])
+                      except: pass
+                      _delete_signals_ep(name, ep)
+                      return {"statusCode":200,"body":json.dumps({"status":"deleted","agent_name":name,"endpoint":ep})}
 
               return {"statusCode":200,"body":f"unhandled: {en}"}
       Tags:
@@ -265,7 +380,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${AWS::StackName}-AgentEvalLifecycle'
-      Description: Triggers auto evaluation creation/deletion on AgentCore runtime events
+      Description: Triggers auto evaluation creation/deletion on AgentCore runtime and endpoint events
       State: ENABLED
       EventPattern:
         source:
@@ -278,6 +393,8 @@ Resources:
           eventName:
             - CreateAgentRuntime
             - DeleteAgentRuntime
+            - CreateAgentRuntimeEndpoint
+            - DeleteAgentRuntimeEndpoint
       Targets:
         - Id: AutoEvalTarget
           Arn: !GetAtt AutoEvalLambda.Arn

@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useId } from 'react';
+import { Icon, type IconName } from './icons';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -10,26 +11,14 @@ import {
   FINDINGS, type Finding,
   ACTIVITY_FEED,
   COMPARISON_METRICS, getModelComparisonData,
-  COST_INSIGHTS, getTotalPotentialSavings,
-  getFleetTrendData,
+  getFleetTrendData, getTotalPotentialSavings,
   INTEGRATIONS, type Integration,
   REPORT_TEMPLATES, type ReportTemplate,
   DISCUSSION_THREADS, type DiscussionThread,
 } from './mockData';
+import { downloadFile, dateStamp } from './exportUtils';
 
 // ─────────────────────────── Export Utilities ───────────────────────────
-
-function downloadFile(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
 function generateCSV(headers: string[], rows: string[][]): string {
   const escape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
@@ -37,7 +26,7 @@ function generateCSV(headers: string[], rows: string[][]): string {
 }
 
 function generateReportData(reportId: string) {
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = dateStamp();
 
   switch (reportId) {
     case 'rpt-1': { // SR 26-2 Model Inventory Report
@@ -199,7 +188,7 @@ function generateReportData(reportId: string) {
 
 function exportReport(report: ReportTemplate, format: 'pdf' | 'xlsx' | 'json') {
   const data = generateReportData(report.id);
-  const timestamp = new Date().toISOString().split('T')[0];
+  const timestamp = dateStamp();
   const baseFilename = `${report.name.replace(/\s+/g, '_')}_${timestamp}`;
 
   if (format === 'json') {
@@ -254,7 +243,7 @@ const statusColors: Record<string, { bg: string; text: string }> = {
   accepted: { bg: 'bg-slate-100', text: 'text-slate-600' },
 };
 
-type Tab = 'dependencies' | 'findings' | 'activity' | 'comparison' | 'cost' | 'trends' | 'integrations' | 'reports' | 'discussions';
+type Tab = 'dependencies' | 'findings' | 'activity' | 'comparison' | 'trends' | 'integrations' | 'reports' | 'discussions';
 
 interface Props {
   embedded?: boolean;
@@ -270,27 +259,60 @@ export default function ModelOperations({ embedded = false }: Props) {
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [selectedReport, setSelectedReport] = useState<ReportTemplate | null>(null);
-  const [selectedThread, setSelectedThread] = useState<DiscussionThread | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [showNewDiscussion, setShowNewDiscussion] = useState(false);
   const [showAddIntegration, setShowAddIntegration] = useState(false);
   const [reportFormat, setReportFormat] = useState<'pdf' | 'xlsx' | 'json'>('pdf');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [threads, setThreads] = useState<DiscussionThread[]>(DISCUSSION_THREADS);
+  const [newComment, setNewComment] = useState('');
+
+  // Stable ids for form-control / label pairing (accessibility).
+  const addIntTypeId = useId();
+  const addIntProviderId = useId();
+  const addIntNameId = useId();
+  const newDiscModelId = useId();
+  const newDiscSubjectId = useId();
+  const newDiscMessageId = useId();
+  const threadCommentId = useId();
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  // Live selected thread derived from state so comments/status updates reflect immediately.
+  const selectedThread = threads.find(t => t.id === selectedThreadId) ?? null;
+
+  const postComment = () => {
+    const text = newComment.trim();
+    if (!text || !selectedThread) return;
+    const comment = { id: `c-${Date.now()}`, author: 'You', date: new Date().toISOString().slice(0, 10), text };
+    setThreads(prev => prev.map(t =>
+      t.id === selectedThread.id
+        ? { ...t, comments: [...t.comments, comment], lastActivity: comment.date }
+        : t,
+    ));
+    setNewComment('');
+    showToast('Comment posted', 'success');
+  };
+
+  const toggleThreadStatus = () => {
+    if (!selectedThread) return;
+    const next = selectedThread.status === 'open' ? 'resolved' : 'open';
+    setThreads(prev => prev.map(t => (t.id === selectedThread.id ? { ...t, status: next } : t)));
+    showToast(`Thread ${next === 'resolved' ? 'resolved' : 'reopened'}`, 'success');
+  };
+
   const TABS: { id: Tab; label: string; count?: number }[] = [
     { id: 'findings', label: 'Issues & Findings', count: FINDINGS.filter(f => f.status !== 'closed').length },
     { id: 'dependencies', label: 'Dependencies' },
     { id: 'activity', label: 'Activity Feed' },
     { id: 'comparison', label: 'Model Comparison' },
-    { id: 'cost', label: 'Cost Optimization', count: COST_INSIGHTS.filter(i => i.status === 'new').length },
     { id: 'trends', label: 'Trend Analytics' },
     { id: 'integrations', label: 'Integrations' },
     { id: 'reports', label: 'Regulatory Reports' },
-    { id: 'discussions', label: 'Discussions', count: DISCUSSION_THREADS.filter(d => d.status === 'open').length },
+    { id: 'discussions', label: 'Discussions', count: threads.filter(d => d.status === 'open').length },
   ];
 
   const filteredFindings = useMemo(() => {
@@ -305,7 +327,6 @@ export default function ModelOperations({ embedded = false }: Props) {
 
   const comparisonData = useMemo(() => getModelComparisonData(selectedModels), [selectedModels]);
   const fleetTrends = useMemo(() => getFleetTrendData(30), []);
-  const potentialSavings = useMemo(() => getTotalPotentialSavings(), []);
 
   return (
     <div className={embedded ? '' : 'min-h-[calc(100vh-4rem)] relative'}>
@@ -318,10 +339,13 @@ export default function ModelOperations({ embedded = false }: Props) {
         )}
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-6 overflow-x-auto">
+        <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-6 overflow-x-auto" role="tablist" aria-label="Model Operations sections">
           {TABS.map(tab => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`tabpanel-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
                 activeTab === tab.id
@@ -432,14 +456,14 @@ export default function ModelOperations({ embedded = false }: Props) {
             {/* Dependency Summary */}
             <div className="grid grid-cols-4 gap-3">
               {[
-                { label: 'Total Dependencies', value: MODEL_DEPENDENCIES.length, icon: '🔗' },
-                { label: 'Critical', value: MODEL_DEPENDENCIES.filter(d => d.criticality === 'critical').length, icon: '🔴' },
-                { label: 'Applications', value: MODEL_DEPENDENCIES.filter(d => d.targetType === 'application').length, icon: '📱' },
-                { label: 'Data Sources', value: MODEL_DEPENDENCIES.filter(d => d.targetType === 'database' || d.targetType === 'api').length, icon: '🗄️' },
+                { label: 'Total Dependencies', value: MODEL_DEPENDENCIES.length, icon: 'link' as IconName },
+                { label: 'Critical', value: MODEL_DEPENDENCIES.filter(d => d.criticality === 'critical').length, icon: 'exclamation-triangle' as IconName },
+                { label: 'Applications', value: MODEL_DEPENDENCIES.filter(d => d.targetType === 'application').length, icon: 'phone' as IconName },
+                { label: 'Data Sources', value: MODEL_DEPENDENCIES.filter(d => d.targetType === 'database' || d.targetType === 'api').length, icon: 'circle-stack' as IconName },
               ].map(stat => (
                 <div key={stat.label} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{stat.icon}</span>
+                    <Icon name={stat.icon} className="w-5 h-5 text-slate-500" />
                     <div>
                       <div className="text-[10px] font-medium text-slate-500 uppercase">{stat.label}</div>
                       <div className="text-xl font-bold text-slate-700">{stat.value}</div>
@@ -534,12 +558,12 @@ export default function ModelOperations({ embedded = false }: Props) {
                         event.action === 'escalated' ? 'bg-orange-100 text-orange-600' :
                         'bg-blue-100 text-blue-600'
                       }`}>
-                        {event.action === 'approved' ? '✓' :
-                         event.action === 'rejected' ? '✗' :
-                         event.action === 'alert' ? '!' :
+                        {event.action === 'approved' ? <Icon name="check" className="w-4 h-4" /> :
+                         event.action === 'rejected' ? <Icon name="x-mark" className="w-4 h-4" /> :
+                         event.action === 'alert' ? <Icon name="exclamation-triangle" className="w-4 h-4" /> :
                          event.action === 'escalated' ? '↑' :
-                         event.action === 'commented' ? '💬' :
-                         event.action === 'uploaded' ? '📎' :
+                         event.action === 'commented' ? <Icon name="chat-bubble" className="w-4 h-4" /> :
+                         event.action === 'uploaded' ? <Icon name="paper-clip" className="w-4 h-4" /> :
                          '•'}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -597,9 +621,9 @@ export default function ModelOperations({ embedded = false }: Props) {
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Metric</th>
+                      <th scope="col" className="text-left py-3 px-4 font-semibold text-slate-700">Metric</th>
                       {selectedModels.map(id => (
-                        <th key={id} className="text-center py-3 px-4 font-semibold text-slate-700">
+                        <th scope="col" key={id} className="text-center py-3 px-4 font-semibold text-slate-700">
                           {MODELS.find(m => m.id === id)?.name}
                         </th>
                       ))}
@@ -626,7 +650,7 @@ export default function ModelOperations({ embedded = false }: Props) {
                             return (
                               <td key={id} className={`py-2.5 px-4 text-center font-medium ${isBest ? 'text-emerald-600 bg-emerald-50/50' : 'text-slate-700'}`}>
                                 {formatted}
-                                {isBest && <span className="ml-1 text-[9px]">✓</span>}
+                                {isBest && <Icon name="check" className="w-3 h-3 ml-1 inline-block" />}
                               </td>
                             );
                           })}
@@ -670,83 +694,6 @@ export default function ModelOperations({ embedded = false }: Props) {
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* ═══════════════════ COST TAB ═══════════════════ */}
-        {activeTab === 'cost' && (
-          <div className="space-y-4">
-            {/* Savings Summary */}
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-emerald-800">Potential Cost Savings Identified</div>
-                  <div className="text-3xl font-bold text-emerald-600 mt-1">${potentialSavings.toLocaleString()}/mo</div>
-                  <div className="text-xs text-emerald-700 mt-1">{COST_INSIGHTS.filter(i => i.status === 'new').length} new opportunities</div>
-                </div>
-                <button
-                  onClick={() => showToast('Opening cost optimization review...', 'info')}
-                  className="px-4 py-2 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700"
-                >
-                  Review All Opportunities
-                </button>
-              </div>
-            </div>
-
-            {/* Cost Insights */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm">
-              <div className="p-4 border-b border-slate-100">
-                <div className="text-sm font-semibold text-slate-900">Cost Optimization Insights</div>
-              </div>
-              <div className="divide-y divide-slate-100">
-                {COST_INSIGHTS.map(insight => (
-                  <div key={insight.id} className="p-4 hover:bg-slate-50/50">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${
-                            insight.type === 'underutilized' ? 'bg-amber-100 text-amber-700' :
-                            insight.type === 'high-cost-per-use' ? 'bg-rose-100 text-rose-700' :
-                            insight.type === 'duplicate-capability' ? 'bg-purple-100 text-purple-700' :
-                            insight.type === 'tier-mismatch' ? 'bg-blue-100 text-blue-700' :
-                            'bg-slate-100 text-slate-600'
-                          }`}>
-                            {insight.type.replace(/-/g, ' ')}
-                          </span>
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded ${
-                            insight.status === 'new' ? 'bg-blue-100 text-blue-700' :
-                            insight.status === 'in-progress' ? 'bg-amber-100 text-amber-700' :
-                            insight.status === 'implemented' ? 'bg-emerald-100 text-emerald-700' :
-                            'bg-slate-100 text-slate-600'
-                          }`}>
-                            {insight.status}
-                          </span>
-                          <span className="text-[10px] text-slate-500">
-                            {MODELS.find(m => m.id === insight.modelId)?.name}
-                          </span>
-                        </div>
-                        <div className="text-sm font-medium text-slate-900">{insight.title}</div>
-                        <div className="text-xs text-slate-600 mt-1">{insight.description}</div>
-                        <div className="text-xs text-slate-500 mt-2">
-                          <span className="font-medium">Recommendation:</span> {insight.recommendation}
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-lg font-bold text-emerald-600">${insight.potentialSavings.toLocaleString()}</div>
-                        <div className="text-[10px] text-slate-500">per month</div>
-                        <div className={`text-[10px] mt-1 px-2 py-0.5 rounded ${
-                          insight.effort === 'low' ? 'bg-emerald-50 text-emerald-600' :
-                          insight.effort === 'medium' ? 'bg-amber-50 text-amber-600' :
-                          'bg-rose-50 text-rose-600'
-                        }`}>
-                          {insight.effort} effort
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
@@ -909,7 +856,7 @@ export default function ModelOperations({ embedded = false }: Props) {
         {activeTab === 'discussions' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-slate-600">{DISCUSSION_THREADS.filter(d => d.status === 'open').length} open discussions</div>
+              <div className="text-sm text-slate-600">{threads.filter(d => d.status === 'open').length} open discussions</div>
               <button
                 onClick={() => setShowNewDiscussion(true)}
                 className="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
@@ -920,7 +867,7 @@ export default function ModelOperations({ embedded = false }: Props) {
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
               <div className="divide-y divide-slate-100">
-                {DISCUSSION_THREADS.map(thread => (
+                {threads.map(thread => (
                   <div key={thread.id} className="p-4 hover:bg-slate-50/50">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -955,7 +902,7 @@ export default function ModelOperations({ embedded = false }: Props) {
                         )}
                       </div>
                       <button
-                        onClick={() => setSelectedThread(thread)}
+                        onClick={() => setSelectedThreadId(thread.id)}
                         className="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 flex-shrink-0"
                       >
                         View Thread
@@ -998,7 +945,7 @@ export default function ModelOperations({ embedded = false }: Props) {
                   </div>
                   <h3 className="text-lg font-semibold text-slate-900">{selectedFinding.title}</h3>
                 </div>
-                <button onClick={() => setSelectedFinding(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                <button onClick={() => setSelectedFinding(null)} className="text-slate-400 hover:text-slate-600 text-xl" aria-label="Close">&times;</button>
               </div>
             </div>
             <div className="p-6 space-y-4">
@@ -1069,7 +1016,7 @@ export default function ModelOperations({ embedded = false }: Props) {
             <div className="p-6 border-b border-slate-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">Configure {selectedIntegration.name}</h3>
-                <button onClick={() => setSelectedIntegration(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                <button onClick={() => setSelectedIntegration(null)} className="text-slate-400 hover:text-slate-600 text-xl" aria-label="Close">&times;</button>
               </div>
             </div>
             <div className="p-6 space-y-4">
@@ -1091,6 +1038,7 @@ export default function ModelOperations({ embedded = false }: Props) {
                       <span className="text-xs text-slate-500 w-24">{key}:</span>
                       <input
                         type="text"
+                        aria-label={key}
                         defaultValue={value}
                         className="flex-1 text-xs p-2 border border-slate-200 rounded-lg"
                       />
@@ -1130,13 +1078,13 @@ export default function ModelOperations({ embedded = false }: Props) {
             <div className="p-6 border-b border-slate-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">Add Integration</h3>
-                <button onClick={() => setShowAddIntegration(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                <button onClick={() => setShowAddIntegration(false)} className="text-slate-400 hover:text-slate-600 text-xl" aria-label="Close">&times;</button>
               </div>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-2">Integration Type</label>
-                <select className="w-full text-sm p-2 border border-slate-200 rounded-lg">
+                <label htmlFor={addIntTypeId} className="text-xs font-medium text-slate-700 block mb-2">Integration Type</label>
+                <select id={addIntTypeId} className="w-full text-sm p-2 border border-slate-200 rounded-lg">
                   <option>Ticketing (ServiceNow, Jira)</option>
                   <option>Notification (Slack, Email)</option>
                   <option>Reporting (Power BI, Tableau)</option>
@@ -1144,8 +1092,8 @@ export default function ModelOperations({ embedded = false }: Props) {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-2">Provider</label>
-                <select className="w-full text-sm p-2 border border-slate-200 rounded-lg">
+                <label htmlFor={addIntProviderId} className="text-xs font-medium text-slate-700 block mb-2">Provider</label>
+                <select id={addIntProviderId} className="w-full text-sm p-2 border border-slate-200 rounded-lg">
                   <option>ServiceNow</option>
                   <option>Jira</option>
                   <option>Slack</option>
@@ -1154,8 +1102,8 @@ export default function ModelOperations({ embedded = false }: Props) {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-2">Name</label>
-                <input type="text" placeholder="Integration name" className="w-full text-sm p-2 border border-slate-200 rounded-lg" />
+                <label htmlFor={addIntNameId} className="text-xs font-medium text-slate-700 block mb-2">Name</label>
+                <input id={addIntNameId} type="text" placeholder="Integration name" className="w-full text-sm p-2 border border-slate-200 rounded-lg" />
               </div>
             </div>
             <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
@@ -1180,7 +1128,7 @@ export default function ModelOperations({ embedded = false }: Props) {
             <div className="p-6 border-b border-slate-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">Generate Report</h3>
-                <button onClick={() => setSelectedReport(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                <button onClick={() => setSelectedReport(null)} className="text-slate-400 hover:text-slate-600 text-xl" aria-label="Close">&times;</button>
               </div>
             </div>
             <div className="p-6 space-y-4">
@@ -1251,7 +1199,7 @@ export default function ModelOperations({ embedded = false }: Props) {
 
       {/* ═══════════════════ DISCUSSION THREAD MODAL ═══════════════════ */}
       {selectedThread && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedThread(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedThreadId(null)}>
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-slate-200">
               <div className="flex items-start justify-between">
@@ -1268,7 +1216,7 @@ export default function ModelOperations({ embedded = false }: Props) {
                   </div>
                   <h3 className="text-lg font-semibold text-slate-900">{selectedThread.subject}</h3>
                 </div>
-                <button onClick={() => setSelectedThread(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                <button onClick={() => setSelectedThreadId(null)} className="text-slate-400 hover:text-slate-600 text-xl" aria-label="Close">&times;</button>
               </div>
             </div>
             <div className="p-6 space-y-4">
@@ -1296,18 +1244,20 @@ export default function ModelOperations({ embedded = false }: Props) {
                 ))}
               </div>
               <div className="border-t border-slate-200 pt-4">
+                <label htmlFor={threadCommentId} className="sr-only">Add a comment</label>
                 <textarea
+                  id={threadCommentId}
                   placeholder="Add a comment..."
-                  className="w-full text-sm p-3 border border-slate-200 rounded-lg resize-none"
+                  value={newComment}
+                  onChange={e => setNewComment(e.target.value)}
+                  className="w-full text-sm p-3 border border-slate-200 rounded-lg resize-none focus:outline-none focus:border-blue-500"
                   rows={3}
                 />
               </div>
             </div>
             <div className="p-4 border-t border-slate-200 flex justify-between">
               <button
-                onClick={() => {
-                  showToast(`Thread ${selectedThread.status === 'open' ? 'resolved' : 'reopened'}`, 'success');
-                }}
+                onClick={toggleThreadStatus}
                 className={`px-4 py-2 text-xs font-medium rounded-lg ${
                   selectedThread.status === 'open'
                     ? 'text-emerald-600 border border-emerald-200 hover:bg-emerald-50'
@@ -1318,12 +1268,13 @@ export default function ModelOperations({ embedded = false }: Props) {
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { showToast('Comment added', 'success'); }}
-                  className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  onClick={postComment}
+                  disabled={!newComment.trim()}
+                  className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Post Comment
                 </button>
-                <button onClick={() => setSelectedThread(null)} className="px-4 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+                <button onClick={() => setSelectedThreadId(null)} className="px-4 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
                   Close
                 </button>
               </div>
@@ -1339,25 +1290,26 @@ export default function ModelOperations({ embedded = false }: Props) {
             <div className="p-6 border-b border-slate-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">New Discussion</h3>
-                <button onClick={() => setShowNewDiscussion(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                <button onClick={() => setShowNewDiscussion(false)} className="text-slate-400 hover:text-slate-600 text-xl" aria-label="Close">&times;</button>
               </div>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-2">Model</label>
-                <select className="w-full text-sm p-2 border border-slate-200 rounded-lg">
+                <label htmlFor={newDiscModelId} className="text-xs font-medium text-slate-700 block mb-2">Model</label>
+                <select id={newDiscModelId} className="w-full text-sm p-2 border border-slate-200 rounded-lg">
                   {MODELS.map(m => (
                     <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-2">Subject</label>
-                <input type="text" placeholder="Discussion subject" className="w-full text-sm p-2 border border-slate-200 rounded-lg" />
+                <label htmlFor={newDiscSubjectId} className="text-xs font-medium text-slate-700 block mb-2">Subject</label>
+                <input id={newDiscSubjectId} type="text" placeholder="Discussion subject" className="w-full text-sm p-2 border border-slate-200 rounded-lg" />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 block mb-2">Initial Message</label>
+                <label htmlFor={newDiscMessageId} className="text-xs font-medium text-slate-700 block mb-2">Initial Message</label>
                 <textarea
+                  id={newDiscMessageId}
                   placeholder="Start the discussion..."
                   className="w-full text-sm p-3 border border-slate-200 rounded-lg resize-none"
                   rows={4}

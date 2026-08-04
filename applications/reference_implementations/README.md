@@ -8,8 +8,11 @@ End-to-end full-stack solutions for specific FSI use cases. Each reference imple
 
 | Implementation | Domain | Description |
 |---------------|--------|-------------|
-| Trade Surveillance | Capital Markets | Real-time trade monitoring, pattern detection, and regulatory alerting |
-| Intelligent Document Processing | Operations | Automated document ingestion, classification, extraction, and validation |
+| [Market Surveillance](market-surveillance/README.md) | Capital Markets | Real-time trade monitoring with decision-tree rules, multi-agent orchestration, and audit-ready reports |
+| [Shopping Concierge Agent](shopping-concierge-agent/README.md) | Agentic Payments | AI-powered concierge with product search, cart management, payment support, and Cognito auth |
+| [Case Management](case-management/README.md) | Risk & Compliance | Fraud detection and case management with pattern recognition (smurfing, mule accounts, high-velocity), conversational investigation, and optional AgentCore SAR generation |
+| [Agent Safety](agent-safety/README.md) | Safety & Governance | Safety controls for Bedrock AgentCore — budget/eval/observability auto-provisioning, session interventions, kill switch, audit trail, and centralized dashboard |
+| [Payments Fraud](payments-fraud/README.md) | Payments & Fraud | Agent-native fraud scoring, NL investigation (smurfing, velocity, mule networks), and FinCEN-structured SAR drafting — a supervisor + 3 specialist agents on Bedrock AgentCore (Strands), with a Next.js UI and Cognito auth |
 
 ---
 

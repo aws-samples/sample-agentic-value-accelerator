@@ -9,7 +9,7 @@ from langgraph.graph import StateGraph, START, END, MessagesState
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage, SystemMessage
 
-model = ChatBedrockConverse(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0")
+model = ChatBedrockConverse(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 
 
 def router(state: MessagesState) -> dict:

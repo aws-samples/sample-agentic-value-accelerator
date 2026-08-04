@@ -24,7 +24,7 @@ A research assistant agent that can:
 pip install -e .
 
 # Set environment variables (or copy .env.example)
-export MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
+export MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 export AWS_REGION=us-east-1
 
 # Run locally
@@ -93,7 +93,7 @@ graph = create_react_agent(llm, tools=[calculator, get_current_datetime, my_tool
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | Bedrock model ID |
+| `MODEL_ID` | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` | Bedrock model ID |
 | `AWS_REGION` | `us-east-1` | AWS region |
 | `LOG_LEVEL` | `INFO` | Log level |
 

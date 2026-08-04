@@ -23,7 +23,7 @@ resource "aws_ecs_task_definition" "langfuse_worker" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.langfuse-worker.name
-          "awslogs-region"        = data.aws_region.current.id
+          "awslogs-region"        = data.aws_region.current.region
           "awslogs-stream-prefix" = "ecs"
         }
       }
@@ -86,7 +86,7 @@ resource "aws_ecs_task_definition" "langfuse_worker" {
         },
         {
           name  = "S3_REGION"
-          value = data.aws_region.current.id
+          value = data.aws_region.current.region
         },
         {
           name  = "CLICKHOUSE_MIGRATION_URL"
@@ -122,11 +122,11 @@ resource "aws_ecs_task_definition" "langfuse_worker" {
         },
         {
           name  = "LANGFUSE_S3_BATCH_EXPORT_REGION"
-          value = data.aws_region.current.id
+          value = data.aws_region.current.region
         },
         {
           name  = "LANGFUSE_S3_EVENT_UPLOAD_REGION"
-          value = data.aws_region.current.id
+          value = data.aws_region.current.region
         },
         {
           name  = "LANGFUSE_S3_MEDIA_DOWNLOAD_URL_EXPIRY_SECONDS"
@@ -270,7 +270,7 @@ resource "aws_ecs_task_definition" "langfuse" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.langfuse.name
-          "awslogs-region"        = data.aws_region.current.id
+          "awslogs-region"        = data.aws_region.current.region
           "awslogs-stream-prefix" = "ecs"
         }
       }
@@ -333,7 +333,7 @@ resource "aws_ecs_task_definition" "langfuse" {
         },
         {
           name  = "S3_REGION"
-          value = data.aws_region.current.id
+          value = data.aws_region.current.region
         },
         {
           name  = "CLICKHOUSE_MIGRATION_URL"
@@ -369,11 +369,11 @@ resource "aws_ecs_task_definition" "langfuse" {
         },
         {
           name  = "LANGFUSE_S3_BATCH_EXPORT_REGION"
-          value = data.aws_region.current.id
+          value = data.aws_region.current.region
         },
         {
           name  = "LANGFUSE_S3_EVENT_UPLOAD_REGION"
-          value = data.aws_region.current.id
+          value = data.aws_region.current.region
         },
         {
           name  = "LANGFUSE_S3_MEDIA_DOWNLOAD_URL_EXPIRY_SECONDS"
@@ -514,7 +514,7 @@ resource "aws_ecs_task_definition" "clickhouse" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.clickhouse.name
-          "awslogs-region"        = data.aws_region.current.id
+          "awslogs-region"        = data.aws_region.current.region
           "awslogs-stream-prefix" = "ecs"
         }
       }

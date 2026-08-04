@@ -1,0 +1,3 @@
+# Needs a current boto3 for the bedrock-agentcore complete_resource_token_auth op.
+# PINNED EXACT for a reproducible bundle.
+boto3==1.43.42

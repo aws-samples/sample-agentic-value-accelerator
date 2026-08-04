@@ -47,7 +47,10 @@ resource "aws_iam_policy" "bedrock_invoke" {
           "bedrock:InvokeModelWithResponseStream"
         ]
         Resource = [
-          "arn:aws:bedrock:${local.region}::foundation-model/${var.model_id}",
+          # Foundation models in any region: cross-region inference profiles
+          # (e.g. us.anthropic.*) route to underlying models in multiple regions,
+          # so scoping to a single region breaks InvokeModelWithResponseStream.
+          "arn:aws:bedrock:*::foundation-model/*",
           "arn:aws:bedrock:${local.region}:${local.account_id}:inference-profile/*"
         ]
       }

@@ -2,7 +2,9 @@
 Bootstrap API routes for project generation
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from core.rbac import require_role, Role
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any
 import logging
@@ -27,7 +29,7 @@ class BootstrapRequest(BaseModel):
 
 
 @router.post("")
-async def bootstrap_project(request: BootstrapRequest):
+async def bootstrap_project(request: BootstrapRequest, _=Depends(require_role(Role.ADMIN))):
     """
     Bootstrap a new project from a template
 

@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { guardrailsApi } from '../../api/client';
-import type { GuardrailTemplateCreate, GuardrailPreset, ContentFilterConfig, PiiEntityConfig, DeniedTopic, WordFilterConfig, ContextualGroundingConfig } from '../../types';
+import type { GuardrailTemplateCreate, ContentFilterConfig, PiiEntityConfig, DeniedTopic, WordFilterConfig, ContextualGroundingConfig, GuardrailFilterType } from '../../types';
 import ContentFilterPanel from './ContentFilterPanel';
 import PiiDetectionPanel from './PiiDetectionPanel';
 import DeniedTopicsPanel from './DeniedTopicsPanel';
 import WordFiltersPanel from './WordFiltersPanel';
 import ContextualGroundingPanel from './ContextualGroundingPanel';
 import DataFlowVisualizer from './DataFlowVisualizer';
+import type { FSITemplate } from './FSIGuardrailTemplates';
+import { FSI_TEMPLATES } from './FSIGuardrailTemplates';
 
 interface Props {
   onComplete: () => void;
+  initialFSITemplate?: FSITemplate;
 }
 
 type Step = 'preset' | 'configure' | 'review';
@@ -22,39 +25,76 @@ const SECTIONS = [
   { id: 'grounding', label: 'Contextual Grounding', icon: '📌', description: 'Ensure factual accuracy' },
 ] as const;
 
-export default function GuardrailBuilder({ onComplete }: Props) {
-  const [step, setStep] = useState<Step>('preset');
-  const [presets, setPresets] = useState<GuardrailPreset[]>([]);
+export default function GuardrailBuilder({ onComplete, initialFSITemplate }: Props) {
+  const [step, setStep] = useState<Step>(initialFSITemplate ? 'configure' : 'preset');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [expandedSection, setExpandedSection] = useState<string | null>('content');
+  const [fromFSITemplate, setFromFSITemplate] = useState<string | null>(initialFSITemplate?.name || null);
 
   // Form state
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [contentFilters, setContentFilters] = useState<ContentFilterConfig[]>([]);
-  const [piiEntities, setPiiEntities] = useState<PiiEntityConfig[]>([]);
-  const [deniedTopics, setDeniedTopics] = useState<DeniedTopic[]>([]);
-  const [wordFilter, setWordFilter] = useState<WordFilterConfig>({ enable_profanity: false, blocked_words: [] });
-  const [contextualGrounding, setContextualGrounding] = useState<ContextualGroundingConfig>({ enabled: false, grounding_threshold: 0.7, relevance_threshold: 0.7 });
+  const [name, setName] = useState(initialFSITemplate?.name || '');
+  const [description, setDescription] = useState(initialFSITemplate?.detailedDescription || '');
+  const [contentFilters, setContentFilters] = useState<ContentFilterConfig[]>(() => {
+    if (!initialFSITemplate) return [];
+    return initialFSITemplate.controls.contentFilters.map(f => ({
+      type: f.type as GuardrailFilterType,
+      input_strength: f.inputStrength,
+      output_strength: f.outputStrength,
+    }));
+  });
+  const [piiEntities, setPiiEntities] = useState<PiiEntityConfig[]>(() => {
+    if (!initialFSITemplate) return [];
+    return initialFSITemplate.controls.piiEntities.map(e => ({
+      type: e.type,
+      action: e.action,
+    }));
+  });
+  const [deniedTopics, setDeniedTopics] = useState<DeniedTopic[]>(() => {
+    if (!initialFSITemplate) return [];
+    return initialFSITemplate.controls.deniedTopics.map(t => ({
+      name: t.name,
+      definition: t.definition,
+      examples: t.examples,
+    }));
+  });
+  const [wordFilter, setWordFilter] = useState<WordFilterConfig>(() => {
+    if (!initialFSITemplate) return { enable_profanity: false, blocked_words: [] };
+    return {
+      enable_profanity: initialFSITemplate.controls.wordFilter.enableProfanity,
+      blocked_words: initialFSITemplate.controls.wordFilter.blockedWords,
+    };
+  });
+  const [contextualGrounding, setContextualGrounding] = useState<ContextualGroundingConfig>(() => {
+    if (!initialFSITemplate) return { enabled: false, grounding_threshold: 0.7, relevance_threshold: 0.7 };
+    return {
+      enabled: initialFSITemplate.controls.contextualGrounding.enabled,
+      grounding_threshold: initialFSITemplate.controls.contextualGrounding.groundingThreshold,
+      relevance_threshold: initialFSITemplate.controls.contextualGrounding.relevanceThreshold,
+    };
+  });
 
   useEffect(() => {
-    guardrailsApi.getPresets().then(setPresets).catch(() => {});
+    guardrailsApi.getPresets().catch(() => {});
   }, []);
-
-  const applyPreset = (preset: GuardrailPreset) => {
-    setName(preset.config.name);
-    setDescription(preset.config.description || '');
-    setContentFilters(preset.config.content_filters);
-    setPiiEntities(preset.config.pii_entities);
-    setDeniedTopics(preset.config.denied_topics);
-    if (preset.config.word_filter) setWordFilter(preset.config.word_filter);
-    if (preset.config.contextual_grounding) setContextualGrounding(preset.config.contextual_grounding);
-    setStep('configure');
-  };
 
   const handleCreate = async () => {
     if (!name.trim()) { setError('Please provide a name'); return; }
+    // A Bedrock guardrail needs at least one policy configured.
+    const hasWordFilter = wordFilter.enable_profanity || wordFilter.blocked_words.length > 0;
+    if (
+      contentFilters.length === 0 && deniedTopics.length === 0 && piiEntities.length === 0 &&
+      !hasWordFilter && !contextualGrounding.enabled
+    ) {
+      setError('Add at least one policy — a content filter, denied topic, PII entity, word filter, or contextual grounding.');
+      return;
+    }
+    // Denied topics require a definition (Bedrock rejects otherwise).
+    const badTopic = deniedTopics.find(t => !t.definition || !t.definition.trim());
+    if (badTopic) {
+      setError(`Denied topic "${badTopic.name || 'unnamed'}" needs a definition — describe what it should block.`);
+      return;
+    }
     setCreating(true);
     setError('');
     try {
@@ -85,57 +125,209 @@ export default function GuardrailBuilder({ onComplete }: Props) {
     contextualGrounding.enabled,
   ].filter(Boolean).length;
 
+  const applyFSITemplate = (template: FSITemplate) => {
+    setName(template.name);
+    setDescription(template.detailedDescription);
+    setContentFilters(template.controls.contentFilters.map(f => ({
+      type: f.type as GuardrailFilterType,
+      input_strength: f.inputStrength,
+      output_strength: f.outputStrength,
+    })));
+    setPiiEntities(template.controls.piiEntities.map(e => ({
+      type: e.type,
+      action: e.action,
+    })));
+    setDeniedTopics(template.controls.deniedTopics.map(t => ({
+      name: t.name,
+      definition: t.definition,
+      examples: t.examples,
+    })));
+    setWordFilter({
+      enable_profanity: template.controls.wordFilter.enableProfanity,
+      blocked_words: template.controls.wordFilter.blockedWords,
+    });
+    setContextualGrounding({
+      enabled: template.controls.contextualGrounding.enabled,
+      grounding_threshold: template.controls.contextualGrounding.groundingThreshold,
+      relevance_threshold: template.controls.contextualGrounding.relevanceThreshold,
+    });
+    setFromFSITemplate(template.name);
+    setStep('configure');
+  };
+
+  const RISK_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+    'Critical': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+    'High': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+    'Medium': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+    'Low': { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  };
+
+  const FSI_CATEGORY_META: Record<string, { label: string; bg: string; text: string }> = {
+    'AWS': { label: 'AWS Best Practice', bg: 'bg-orange-50', text: 'text-orange-700' },
+    'B': { label: 'Banking', bg: 'bg-blue-50', text: 'text-blue-700' },
+    'P': { label: 'Payments', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+    'R': { label: 'Risk & Compliance', bg: 'bg-red-50', text: 'text-red-700' },
+    'C': { label: 'Capital Markets', bg: 'bg-violet-50', text: 'text-violet-700' },
+    'I': { label: 'Insurance', bg: 'bg-amber-50', text: 'text-amber-700' },
+    'O': { label: 'Operations', bg: 'bg-teal-50', text: 'text-teal-700' },
+  };
+
   // --- Step: Preset selection ---
+  const [presetChoice, setPresetChoice] = useState<'scratch' | 'template' | null>(null);
+
   if (step === 'preset') {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Create Guardrail Template</h2>
-            <p className="text-sm text-slate-500 mt-1">Start from a preset or configure from scratch</p>
+            <p className="text-sm text-slate-500 mt-1">Choose how you want to get started</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {presets.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => applyPreset(preset)}
-              className="card text-left hover:border-blue-200 hover:shadow-md transition-all group"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                  </svg>
-                </div>
-                <h3 className="text-sm font-semibold text-slate-900 group-hover:text-blue-700">{preset.name}</h3>
-              </div>
-              <p className="text-xs text-slate-500 mb-3">{preset.description}</p>
-              <div className="flex flex-wrap gap-1">
-                {preset.tags.map((tag) => (
-                  <span key={tag} className="px-2 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-600 rounded-full">{tag}</span>
-                ))}
-              </div>
-            </button>
-          ))}
-
+        {/* Two Main Options */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Start from scratch */}
           <button
-            onClick={() => setStep('configure')}
-            className="card text-left hover:border-slate-300 hover:shadow-md transition-all border-dashed group"
+            onClick={() => setPresetChoice('scratch')}
+            className={`p-6 rounded-2xl border-2 text-left transition-all ${
+              presetChoice === 'scratch'
+                ? 'border-blue-500 bg-blue-50 shadow-lg'
+                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+            }`}
           >
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <div className="flex items-center gap-4 mb-4">
+              <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+                presetChoice === 'scratch' ? 'bg-blue-100' : 'bg-slate-100'
+              }`}>
+                <svg className={`w-7 h-7 ${presetChoice === 'scratch' ? 'text-blue-600' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
               </div>
-              <h3 className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">Start from Scratch</h3>
+              <div>
+                <h3 className={`text-lg font-semibold ${presetChoice === 'scratch' ? 'text-blue-900' : 'text-slate-900'}`}>
+                  Start from Scratch
+                </h3>
+                <p className="text-sm text-slate-500">Build a fully custom configuration</p>
+              </div>
             </div>
-            <p className="text-xs text-slate-500">Configure each guardrail feature manually</p>
+            <ul className="space-y-2 text-sm text-slate-600">
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Full control over every setting
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Add controls one at a time
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Best for unique requirements
+              </li>
+            </ul>
+          </button>
+
+          {/* Choose a template */}
+          <button
+            onClick={() => setPresetChoice('template')}
+            className={`p-6 rounded-2xl border-2 text-left transition-all ${
+              presetChoice === 'template'
+                ? 'border-blue-500 bg-blue-50 shadow-lg'
+                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+            }`}
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+                presetChoice === 'template' ? 'bg-blue-100' : 'bg-slate-100'
+              }`}>
+                <svg className={`w-7 h-7 ${presetChoice === 'template' ? 'text-blue-600' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className={`text-lg font-semibold ${presetChoice === 'template' ? 'text-blue-900' : 'text-slate-900'}`}>
+                  Choose a Template
+                </h3>
+                <p className="text-sm text-slate-500">Start with a pre-built configuration</p>
+              </div>
+            </div>
+            <ul className="space-y-2 text-sm text-slate-600">
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                {FSI_TEMPLATES.length} FSI best-practice templates
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Regulatory alignment included
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Customize after selecting
+              </li>
+            </ul>
           </button>
         </div>
+
+        {/* Continue Button for Scratch */}
+        {presetChoice === 'scratch' && (
+          <div className="flex justify-end">
+            <button
+              onClick={() => setStep('configure')}
+              className="btn-primary px-6 py-2.5 text-sm"
+            >
+              Continue with Empty Guardrail
+            </button>
+          </div>
+        )}
+
+        {/* Template Library (shown when template is selected) */}
+        {presetChoice === 'template' && (
+          <div className="mt-4 p-5 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-slate-900">Select a Template</h3>
+              <span className="text-xs text-slate-500">{FSI_TEMPLATES.length} templates available</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-2">
+              {FSI_TEMPLATES.map((template) => {
+                const riskColors = RISK_COLORS[template.riskTier] || RISK_COLORS['Medium'];
+                const categoryMeta = FSI_CATEGORY_META[template.category] || FSI_CATEGORY_META['O'];
+                return (
+                  <button
+                    key={template.id}
+                    onClick={() => applyFSITemplate(template)}
+                    className="bg-white p-4 rounded-xl border border-slate-200 text-left hover:border-blue-300 hover:shadow-md transition-all group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-lg flex-shrink-0 group-hover:bg-blue-50">
+                        {template.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${categoryMeta.bg} ${categoryMeta.text}`}>
+                            {template.useCaseId}
+                          </span>
+                          <h4 className="text-xs font-semibold text-slate-900 group-hover:text-blue-700 truncate">
+                            {template.shortName}
+                          </h4>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${riskColors.bg} ${riskColors.text}`}>
+                            {template.riskTier}
+                          </span>
+                          <span className="text-[9px] text-slate-400">
+                            {template.controls.contentFilters.length} filters • {template.controls.piiEntities.length} PII
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 line-clamp-2">{template.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -161,6 +353,30 @@ export default function GuardrailBuilder({ onComplete }: Props) {
 
     return (
       <div className="h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
+        {/* FSI Template Banner */}
+        {fromFSITemplate && (
+          <div className="mb-4 px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex items-center gap-3 flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-900">Building from FSI Template</p>
+              <p className="text-xs text-blue-600">{fromFSITemplate}</p>
+            </div>
+            <button
+              onClick={() => {
+                setFromFSITemplate(null);
+                setStep('preset');
+              }}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Change template
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-1 pb-4 flex-shrink-0">
           <div>

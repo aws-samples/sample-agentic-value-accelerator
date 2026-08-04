@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import List, Optional
 import logging
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from core.rbac import require_role, Role
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -61,7 +63,7 @@ def _user_email(request: Request) -> Optional[str]:
 
 
 @router.get("/aws-services", response_model=List[AwsService])
-async def list_aws_services():
+async def list_aws_services(_=Depends(require_role(Role.VIEWER))):
     """Canonical AWS service catalog from the plugin's sar-slugs.json."""
     return _load_aws_services()
 
@@ -69,19 +71,19 @@ async def list_aws_services():
 # -- runs --------------------------------------------------------------------
 
 @router.post("/runs", response_model=ServiceApprovalRun, status_code=201)
-async def create_run(req: ServiceApprovalRunCreate, request: Request):
+async def create_run(req: ServiceApprovalRunCreate, request: Request, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     return svc.create_run(req, created_by=_user_email(request))
 
 
 @router.get("/runs", response_model=List[ServiceApprovalRun])
-async def list_runs():
+async def list_runs(_=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     return svc.list_runs()
 
 
 @router.get("/runs/{slug}", response_model=ServiceApprovalRun)
-async def get_run(slug: str):
+async def get_run(slug: str, _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     run = svc.get_run(slug)
     if not run:
@@ -90,7 +92,7 @@ async def get_run(slug: str):
 
 
 @router.post("/runs/{slug}/cancel", response_model=ServiceApprovalRun)
-async def cancel_run(slug: str):
+async def cancel_run(slug: str, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     run = svc.cancel_run(slug)
     if not run:
@@ -99,7 +101,7 @@ async def cancel_run(slug: str):
 
 
 @router.delete("/runs/{slug}", status_code=204)
-async def delete_run(slug: str):
+async def delete_run(slug: str, _=Depends(require_role(Role.OPERATOR))):
     """Permanently delete a run — stops any in-flight execution, removes S3
     artifacts, and drops the DynamoDB record."""
     svc = get_service()
@@ -111,7 +113,7 @@ async def delete_run(slug: str):
 # -- files -------------------------------------------------------------------
 
 @router.get("/runs/{slug}/files", response_model=FileTree)
-async def list_files(slug: str, phase: str = Query(..., description="Phase directory, e.g. 05-generate")):
+async def list_files(slug: str, phase: str = Query(..., description="Phase directory, e.g. 05-generate"), _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     if not svc.get_run(slug):
         raise HTTPException(status_code=404, detail="Run not found")
@@ -119,7 +121,7 @@ async def list_files(slug: str, phase: str = Query(..., description="Phase direc
 
 
 @router.get("/runs/{slug}/file")
-async def get_file(slug: str, path: str = Query(...), download: int = Query(default=0)):
+async def get_file(slug: str, path: str = Query(...), download: int = Query(default=0), _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     if download:
         result = svc.get_file_bytes(slug, path)
@@ -139,7 +141,7 @@ async def get_file(slug: str, path: str = Query(...), download: int = Query(defa
 
 
 @router.get("/runs/{slug}/download")
-async def download_zip(slug: str, phase: Optional[str] = Query(default=None)):
+async def download_zip(slug: str, phase: Optional[str] = Query(default=None), _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     if not svc.get_run(slug):
         raise HTTPException(status_code=404, detail="Run not found")

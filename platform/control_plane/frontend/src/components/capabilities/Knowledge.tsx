@@ -1,233 +1,236 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { knowledgeApi } from '../../api/client';
+import type { KnowledgeRegistration } from '../../types';
+import RegisterKnowledgeModal from './RegisterKnowledgeModal';
+import { Icon } from '../govern/icons';
 
-type CategoryId = 'data-sources' | 'knowledge-bases' | 'document-stores' | 'streaming';
+const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
+  ACTIVE:       { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  PROVISIONING: { bg: 'bg-blue-50',    text: 'text-blue-700',    dot: 'bg-blue-500' },
+  FAILED:       { bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500' },
+  DELETING:     { bg: 'bg-orange-50',  text: 'text-orange-700',  dot: 'bg-orange-500' },
+  DELETED:      { bg: 'bg-slate-50',   text: 'text-slate-500',   dot: 'bg-slate-400' },
+};
 
-interface Category {
-  id: CategoryId;
-  label: string;
-  color: string;
-  bg: string;
-  border: string;
-  hint: string;
-}
-
-const CATEGORIES: Category[] = [
-  { id: 'data-sources',    label: 'Data Sources',     color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200',    hint: 'Structured data: S3 + databases + APIs' },
-  { id: 'knowledge-bases', label: 'Knowledge Bases',  color: 'text-indigo-700',  bg: 'bg-indigo-50',  border: 'border-indigo-200',  hint: 'Vector-indexed retrieval over documents' },
-  { id: 'document-stores', label: 'Document Stores',  color: 'text-violet-700',  bg: 'bg-violet-50',  border: 'border-violet-200',  hint: 'Raw document repositories, pre-index' },
-  { id: 'streaming',       label: 'Streaming',        color: 'text-teal-700',    bg: 'bg-teal-50',    border: 'border-teal-200',    hint: 'Real-time feeds and changelogs' },
-];
-
-const CATEGORY_LOOKUP = CATEGORIES.reduce((acc, c) => { acc[c.id] = c; return acc; }, {} as Record<CategoryId, Category>);
-
-interface KnowledgeItem {
+interface TypeTheme {
   id: string;
-  name: string;
-  description: string;
-  category: CategoryId;
-  status: 'available' | 'coming_soon';
-  icon: string;
-  freshness: string;
-  attachedAgents: number;
-  sizeOrScope: string;
-  backends: string[];
+  label: string;
+  pill: string;
+  accentFrom: string;
+  accentTo: string;
+  hoverBorder: string;
+  hoverTitle: string;
+  chipBg: string;
+  chipText: string;
+  filterText: string;
 }
 
-const ITEMS: KnowledgeItem[] = [
-  {
-    id: 'customer-records-s3',
-    name: 'Customer Records (S3)',
-    description: 'Structured customer profile, KYC, and transaction snapshots delivered hourly to a governed bucket.',
-    category: 'data-sources',
-    status: 'available',
-    icon: 'M3 7.5L7.5 3m0 0H3m4.5 0v4.5M3 12.75h16.5m-16.5 4.5h16.5M3 21h18M3 3h.008v.008H3V3zm4.5 3.75h.008v.008H7.5v-.008z',
-    freshness: 'Updated hourly',
-    attachedAgents: 12,
-    sizeOrScope: '48M records',
-    backends: ['S3', 'Glue Catalog', 'Lake Formation'],
+const TYPE_THEMES: Record<string, TypeTheme> = {
+  data_lake: {
+    id: 'data_lake',
+    label: 'Data Lake',
+    pill: 'bg-violet-50 text-violet-700 border-violet-200',
+    accentFrom: 'from-violet-500',
+    accentTo: 'to-purple-600',
+    hoverBorder: 'hover:border-violet-200',
+    hoverTitle: 'group-hover:text-violet-700',
+    chipBg: 'bg-violet-50',
+    chipText: 'text-violet-700',
+    filterText: 'text-violet-700',
   },
-  {
-    id: 'core-banking-db',
-    name: 'Core Banking (RDS)',
-    description: 'Read-replica connection to the system-of-record banking database with schema introspection for SQL generation.',
-    category: 'data-sources',
-    status: 'available',
-    icon: 'M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375 7.444 2.25 12 2.25s8.25 1.847 8.25 4.125zM3.75 6.375v11.25c0 2.278 3.694 4.125 8.25 4.125s8.25-1.847 8.25-4.125V6.375M3.75 12c0 2.278 3.694 4.125 8.25 4.125s8.25-1.847 8.25-4.125',
-    freshness: 'Real-time replica',
-    attachedAgents: 7,
-    sizeOrScope: '118 tables',
-    backends: ['RDS', 'JDBC', 'Read-replica'],
+  knowledge_base: {
+    id: 'knowledge_base',
+    label: 'Knowledge Base',
+    pill: 'bg-blue-50 text-blue-700 border-blue-200',
+    accentFrom: 'from-blue-500',
+    accentTo: 'to-indigo-600',
+    hoverBorder: 'hover:border-blue-200',
+    hoverTitle: 'group-hover:text-blue-700',
+    chipBg: 'bg-blue-50',
+    chipText: 'text-blue-600',
+    filterText: 'text-blue-700',
   },
-  {
-    id: 'external-apis',
-    name: 'Market & Reg APIs',
-    description: 'Curated external APIs: market data, sanctions lists, regulatory feeds. Authenticated, rate-limited, and audited.',
-    category: 'data-sources',
-    status: 'available',
-    icon: 'M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244',
-    freshness: 'Per-call latest',
-    attachedAgents: 9,
-    sizeOrScope: '22 endpoints',
-    backends: ['OpenAPI', 'Secrets Manager', 'API Gateway'],
-  },
-  {
-    id: 'policy-library-kb',
-    name: 'Policy Library KB',
-    description: 'Indexed internal policies, procedures, and regulatory guidance — the single retrieval target for compliance agents.',
-    category: 'knowledge-bases',
-    status: 'available',
-    icon: 'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25',
-    freshness: 'Re-indexed daily',
-    attachedAgents: 14,
-    sizeOrScope: '4.2k documents',
-    backends: ['Bedrock KB', 'OpenSearch Serverless', 'Titan Embed v2'],
-  },
-  {
-    id: 'product-docs-kb',
-    name: 'Product Documentation KB',
-    description: 'Customer-facing product docs and FAQs with hybrid (keyword + vector) retrieval and inline citations.',
-    category: 'knowledge-bases',
-    status: 'available',
-    icon: 'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25',
-    freshness: 'Re-indexed on change',
-    attachedAgents: 6,
-    sizeOrScope: '1.8k articles',
-    backends: ['Bedrock KB', 'Pinecone', 'Cohere Embed v3'],
-  },
-  {
-    id: 'credit-memo-kb',
-    name: 'Credit Memo Archive',
-    description: 'Historical credit memos and investment committee decisions, chunked by section for precise retrieval.',
-    category: 'knowledge-bases',
-    status: 'coming_soon',
-    icon: 'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25',
-    freshness: 'Weekly',
-    attachedAgents: 0,
-    sizeOrScope: '12k memos',
-    backends: ['Bedrock KB', 'OpenSearch'],
-  },
-  {
-    id: 'contracts-store',
-    name: 'Contracts & Agreements',
-    description: 'Raw PDF store for counterparty agreements, feeding downstream KBs or ad-hoc extraction tools.',
-    category: 'document-stores',
-    status: 'available',
-    icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    freshness: 'Upload on demand',
-    attachedAgents: 4,
-    sizeOrScope: '38k files · 1.2 TB',
-    backends: ['S3', 'Textract', 'KMS'],
-  },
-  {
-    id: 'media-archive',
-    name: 'Adverse Media Archive',
-    description: 'Collected news, press releases, and third-party alerts — raw, with text extraction and sentiment tagging.',
-    category: 'document-stores',
-    status: 'coming_soon',
-    icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    freshness: 'Daily ingest',
-    attachedAgents: 0,
-    sizeOrScope: '∼2.8M articles',
-    backends: ['S3', 'Comprehend'],
-  },
-  {
-    id: 'transaction-stream',
-    name: 'Transaction Stream',
-    description: 'Kinesis-backed real-time feed of transactions for fraud detection and market surveillance agents.',
-    category: 'streaming',
-    status: 'available',
-    icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-    freshness: 'Sub-second',
-    attachedAgents: 5,
-    sizeOrScope: '∼12M events/day',
-    backends: ['Kinesis', 'EventBridge'],
-  },
-  {
-    id: 'audit-changelog',
-    name: 'Audit Changelog',
-    description: 'Append-only log of policy, control, and approval changes — the source feed for governance activity agents.',
-    category: 'streaming',
-    status: 'coming_soon',
-    icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-    freshness: 'Real-time',
-    attachedAgents: 0,
-    sizeOrScope: 'Continuous',
-    backends: ['EventBridge', 'CloudTrail'],
-  },
-];
+};
+
+const DEFAULT_THEME: TypeTheme = {
+  id: 'other',
+  label: 'Other',
+  pill: 'bg-slate-50 text-slate-700 border-slate-200',
+  accentFrom: 'from-slate-400',
+  accentTo: 'to-slate-500',
+  hoverBorder: 'hover:border-slate-300',
+  hoverTitle: 'group-hover:text-slate-700',
+  chipBg: 'bg-slate-50',
+  chipText: 'text-slate-600',
+  filterText: 'text-slate-700',
+};
+
+function getTheme(type: string): TypeTheme {
+  return TYPE_THEMES[type] ?? DEFAULT_THEME;
+}
 
 export default function Knowledge() {
-  const [filter, setFilter] = useState<'all' | CategoryId>('all');
+  const [registrations, setRegistrations] = useState<KnowledgeRegistration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showDrawer, setShowDrawer] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeRegistration | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | string>('all');
 
-  const filtered = ITEMS.filter(item => {
-    const matchesFilter = filter === 'all' || item.category === filter;
+  const fetchRegistrations = useCallback(async () => {
+    try {
+      const data = await knowledgeApi.list();
+      setRegistrations(data.registrations.filter(r => r.status !== 'DELETED'));
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRegistrations();
+  }, [fetchRegistrations]);
+
+  // Poll for in-progress items
+  useEffect(() => {
+    const hasInProgress = registrations.some(
+      r => r.status === 'PROVISIONING' || r.status === 'DELETING',
+    );
+    if (!hasInProgress) return;
+    const interval = setInterval(fetchRegistrations, 5000);
+    return () => clearInterval(interval);
+  }, [registrations, fetchRegistrations]);
+
+  const handleRetry = async (id: string) => {
+    await knowledgeApi.retry(id);
+    fetchRegistrations();
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await knowledgeApi.delete(id);
+      fetchRegistrations();
+      setDeleteTarget(null);
+    } catch (e: any) {
+      setDeleteError(e?.response?.data?.detail || e?.message || 'Failed to delete');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const copyEndpoint = (url: string) => {
+    navigator.clipboard.writeText(url);
+  };
+
+  // Derive unique types present in the current list
+  const presentTypes = Array.from(new Set(registrations.map(r => r.type)));
+
+  const filtered = registrations.filter(reg => {
+    const matchesType = typeFilter === 'all' || reg.type === typeFilter;
     const q = search.toLowerCase();
-    const matchesSearch = !q
-      || item.name.toLowerCase().includes(q)
-      || item.description.toLowerCase().includes(q)
-      || item.backends.some(b => b.toLowerCase().includes(q));
-    return matchesFilter && matchesSearch;
+    const matchesSearch =
+      !q ||
+      reg.name.toLowerCase().includes(q) ||
+      reg.type.toLowerCase().includes(q) ||
+      (reg.description || '').toLowerCase().includes(q) ||
+      reg.tools.some(t => t.toLowerCase().includes(q));
+    return matchesType && matchesSearch;
   });
 
   return (
     <div className="min-h-[calc(100vh-4rem)] relative">
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: 'radial-gradient(ellipse 80% 70% at 20% 50%, rgba(224,231,255,0.8) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 80% 40%, rgba(221,214,254,0.5) 0%, transparent 55%), radial-gradient(ellipse 50% 60% at 50% 80%, rgba(204,251,241,0.4) 0%, transparent 50%)',
-        animation: 'gradientDrift 20s ease-in-out infinite',
-      }} />
+      {/* Ombre gradient background — violet/purple/pink accent */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 70% at 20% 50%, rgba(237,233,254,0.8) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 80% 40%, rgba(221,214,254,0.6) 0%, transparent 55%), radial-gradient(ellipse 50% 60% at 50% 80%, rgba(252,231,243,0.5) 0%, transparent 50%)',
+          animation: 'gradientDrift 20s ease-in-out infinite',
+        }}
+      />
+
       <div className="relative max-w-7xl mx-auto px-6 py-10">
+        {/* Page header */}
         <div className="mb-8 animate-fade-in">
-          <Link to="/capabilities" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Capabilities</Link>
+          <Link
+            to="/capabilities"
+            className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium"
+          >
+            ← Back to Capabilities
+          </Link>
           <h1 className="text-3xl font-semibold text-slate-900 tracking-tight mt-3">Knowledge</h1>
           <p className="text-slate-500 mt-2 max-w-2xl">
-            Everything agents read from — raw data sources for structured lookup, indexed knowledge bases for retrieval-augmented answers, and streaming feeds for real-time reasoning. All governed, lineaged, and access-controlled in one place.
+            Register data lakes and knowledge bases as MCP servers. Agents discover and query your data automatically at runtime — no manual wiring required.
           </p>
         </div>
 
-        {/* How it works */}
-        <div className="card bg-indigo-50/50 border-indigo-200/60 mb-6 animate-fade-in stagger-1">
+        {/* How Knowledge works — violet tone */}
+        <div className="card bg-violet-50/50 border-violet-200/60 mb-6 animate-fade-in stagger-1">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-              </svg>
+            <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Icon name="circle-stack" className="w-4 h-4 text-violet-600" />
             </div>
             <div>
-              <p className="text-sm text-indigo-900 font-semibold">How Knowledge works</p>
-              <p className="text-sm text-indigo-700/80 mt-1">
-                Register a source once, govern it everywhere. <strong>Data sources</strong> (S3, RDS, APIs) give agents structured lookups. <strong>Knowledge bases</strong> index documents into vector stores for grounded retrieval. Attach either to an agent at deploy time — retrieval happens automatically during reasoning, with lineage and access captured for audit.
+              <p className="text-sm text-violet-900 font-semibold">How Knowledge works</p>
+              <p className="text-sm text-violet-700/80 mt-1">
+                Each registered source spins up a dedicated <strong>MCP server</strong> backed by AgentCore Gateway. Agents receive the endpoint at deploy time and call it to discover schemas and run queries — Glue Catalogs, Bedrock Knowledge Bases, and S3 + Athena workgroups are all supported.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Register CTA */}
+        {/* Register Knowledge CTA */}
         <div className="mb-6 animate-fade-in stagger-1">
-          <div className="group relative bg-white rounded-xl border-2 border-dashed border-slate-300 overflow-hidden hover:border-indigo-400 transition-all cursor-pointer">
+          <div
+            className="group relative bg-white rounded-xl border-2 border-dashed border-slate-300 overflow-hidden hover:border-violet-400 transition-all cursor-pointer"
+            onClick={() => setShowDrawer(true)}
+          >
             <div className="relative p-6 flex items-center gap-5">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-md ring-1 ring-slate-900/5 group-hover:scale-105 group-hover:shadow-lg transition-all flex-shrink-0">
-                <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="w-14 h-14 rounded-2xl bg-violet-600 flex items-center justify-center shadow-md ring-1 ring-slate-900/5 group-hover:scale-105 group-hover:shadow-lg transition-all flex-shrink-0">
+                <svg
+                  className="w-7 h-7 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-lg font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">Register Knowledge</h3>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    Coming Soon
-                  </span>
+                  <h3 className="text-lg font-semibold text-slate-900 group-hover:text-violet-700 transition-colors">
+                    Register Knowledge Source
+                  </h3>
                 </div>
-                <p className="text-sm text-slate-500">Connect a new data source, spin up a Bedrock Knowledge Base, or register a streaming feed — with IAM scope, lineage, and access audit baked in from day one.</p>
+                <p className="text-sm text-slate-500">
+                  Connect a data lake or knowledge base and expose it as an MCP server for your agents.
+                </p>
                 <div className="flex flex-wrap gap-1.5 mt-2.5">
-                  {['S3 bucket', 'JDBC database', 'OpenAPI endpoint', 'Bedrock KB', 'Kinesis stream'].map(t => (
-                    <span key={t} className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md border border-slate-200">{t}</span>
+                  {['Glue Catalog', 'Bedrock KB', 'S3 + Athena', 'OpenSearch'].map(t => (
+                    <span
+                      key={t}
+                      className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md border border-slate-200"
+                    >
+                      {t}
+                    </span>
                   ))}
                 </div>
               </div>
-              <div className="hidden sm:flex w-10 h-10 items-center justify-center rounded-full bg-slate-100 group-hover:bg-indigo-100 transition-colors flex-shrink-0">
-                <svg className="w-4 h-4 text-slate-500 group-hover:text-indigo-700 group-hover:translate-x-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="hidden sm:flex w-10 h-10 items-center justify-center rounded-full bg-slate-100 group-hover:bg-violet-100 transition-colors flex-shrink-0">
+                <svg
+                  className="w-4 h-4 text-slate-500 group-hover:text-violet-700 group-hover:translate-x-0.5 transition-all"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </div>
@@ -237,106 +240,291 @@ export default function Knowledge() {
 
         {/* Search */}
         <div className="relative mb-6 animate-fade-in stagger-1">
-          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
           </svg>
           <input
             type="text"
-            placeholder="Search sources, KBs, or backends..."
+            placeholder="Search by name, type, or tool..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full py-3 bg-white border border-slate-200 rounded-lg text-slate-800 text-sm outline-none transition-all duration-150 focus:border-indigo-400 pr-4"
+            className="w-full py-3 bg-white border border-slate-200 rounded-lg text-slate-800 text-sm outline-none transition-all duration-150 focus:border-violet-400 pr-4"
             style={{ paddingLeft: '2.75rem' }}
           />
         </div>
 
-        {/* Category filter */}
+        {/* Type filter */}
         <div className="flex flex-wrap gap-2 mb-8 animate-fade-in stagger-2">
           <button
-            onClick={() => setFilter('all')}
+            onClick={() => setTypeFilter('all')}
             className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-              filter === 'all'
+              typeFilter === 'all'
                 ? 'bg-slate-800 text-white'
                 : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-700'
             }`}
           >
-            All ({ITEMS.length})
+            All ({registrations.length})
           </button>
-          {CATEGORIES.map(cat => {
-            const count = ITEMS.filter(i => i.category === cat.id).length;
-            if (!count) return null;
+          {presentTypes.map(type => {
+            const theme = getTheme(type);
+            const count = registrations.filter(r => r.type === type).length;
             return (
               <button
-                key={cat.id}
-                onClick={() => setFilter(filter === cat.id ? 'all' : cat.id)}
+                key={type}
+                onClick={() => setTypeFilter(typeFilter === type ? 'all' : type)}
                 className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                  filter === cat.id
-                    ? `${cat.bg} ${cat.color} border ${cat.border}`
-                    : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-700'
+                  typeFilter === type
+                    ? 'bg-slate-800 text-white'
+                    : `bg-white ${theme.filterText} border border-slate-200 hover:border-slate-300`
                 }`}
               >
-                {cat.label} ({count})
+                {theme.label} ({count})
               </button>
             );
           })}
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-3">
-          {filtered.map(item => {
-            const cat = CATEGORY_LOOKUP[item.category];
-            return (
-              <div key={item.id} className="group bg-white/90 backdrop-blur-sm rounded-xl border border-slate-200/70 p-5 hover:shadow-md hover:border-indigo-300/60 transition-all flex flex-col">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-xl ${cat.bg} flex items-center justify-center flex-shrink-0`}>
-                    <svg className={`w-5 h-5 ${cat.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-base font-semibold text-slate-900 leading-tight">{item.name}</h3>
-                      {item.status === 'coming_soon' && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 flex-shrink-0">Soon</span>
-                      )}
-                    </div>
-                    <span className={`text-[10px] font-medium ${cat.color} mt-0.5 inline-block`}>{cat.label}</span>
-                  </div>
-                </div>
-
-                <p className="text-sm text-slate-600 leading-relaxed mb-3 line-clamp-3">{item.description}</p>
-
-                <div className="grid grid-cols-3 gap-2 mb-3 pt-3 border-t border-slate-100">
-                  <div>
-                    <div className="text-[9px] uppercase tracking-widest text-slate-400">Agents</div>
-                    <div className="text-sm font-semibold text-slate-900 mt-0.5">{item.attachedAgents}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] uppercase tracking-widest text-slate-400">Scope</div>
-                    <div className="text-[11px] font-semibold text-slate-900 mt-0.5 truncate" title={item.sizeOrScope}>{item.sizeOrScope}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] uppercase tracking-widest text-slate-400">Refresh</div>
-                    <div className="text-[11px] font-semibold text-slate-900 mt-0.5 truncate" title={item.freshness}>{item.freshness}</div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-1 mt-auto">
-                  {item.backends.map(b => (
-                    <span key={b} className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded-md border border-slate-200">{b}</span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {filtered.length === 0 && (
-          <div className="text-center py-16 text-slate-400">
-            <p className="text-sm">No sources match your search.</p>
+        {/* Content area */}
+        {loading ? (
+          <div className="text-center py-20 text-slate-400">Loading...</div>
+        ) : registrations.length === 0 ? (
+          <div className="text-center py-16 border-2 border-dashed border-slate-200 rounded-2xl bg-white/60">
+            <Icon name="circle-stack" className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+            <h3 className="text-lg font-semibold text-slate-700 mb-1">No knowledge sources registered</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Register a data lake or knowledge base to expose it as an MCP server for your agents.
+            </p>
+            <button
+              onClick={() => setShowDrawer(true)}
+              className="px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-xl hover:bg-violet-700"
+            >
+              Register Knowledge
+            </button>
           </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-fade-in stagger-3">
+              {filtered.map(reg => {
+                const theme = getTheme(reg.type);
+                const statusStyle = STATUS_STYLES[reg.status] || STATUS_STYLES.ACTIVE;
+                return (
+                  <div
+                    key={reg.registration_id}
+                    className={`group relative bg-white rounded-xl border border-slate-200 overflow-hidden ${theme.hoverBorder} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col`}
+                  >
+                    {/* Top accent bar */}
+                    <div className={`h-1 bg-gradient-to-r ${theme.accentFrom} ${theme.accentTo}`} />
+
+                    <div className="relative p-6 flex flex-col flex-1">
+                      {/* Type pill + status pill */}
+                      <div className="flex items-center justify-between mb-3">
+                        <span
+                          className={`inline-block text-xs font-semibold px-3 py-1 rounded-lg border ${theme.pill}`}
+                        >
+                          {theme.label}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusStyle.bg} ${statusStyle.text}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot} ${
+                              reg.status === 'PROVISIONING' ? 'animate-pulse' : ''
+                            }`}
+                          />
+                          {reg.status}
+                        </span>
+                      </div>
+
+                      {/* Name */}
+                      <h3
+                        className={`text-xl font-bold text-slate-900 mb-2 ${theme.hoverTitle} transition-colors`}
+                      >
+                        {reg.name}
+                      </h3>
+
+                      {/* Key config fields */}
+                      <div className="text-sm text-slate-500 mb-4 flex-1 space-y-1">
+                        {reg.type === 'data_lake' && (
+                          <>
+                            {reg.config.databases?.length > 0 && (
+                              <p>
+                                <span className="font-medium text-slate-600">Databases: </span>
+                                {reg.config.databases.join(', ')}
+                              </p>
+                            )}
+                            {reg.config.athena_workgroup && (
+                              <p>
+                                <span className="font-medium text-slate-600">Workgroup: </span>
+                                {reg.config.athena_workgroup}
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {reg.type === 'knowledge_base' && (
+                          <>
+                            {reg.config.knowledge_base_id && (
+                              <p>
+                                <span className="font-medium text-slate-600">KB ID: </span>
+                                {reg.config.knowledge_base_id}
+                              </p>
+                            )}
+                            {reg.config.model_id && (
+                              <p>
+                                <span className="font-medium text-slate-600">Model: </span>
+                                {reg.config.model_id}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Tools chips */}
+                      {reg.tools.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                            Tools
+                          </h4>
+                          <div className="flex flex-wrap gap-1.5">
+                            {reg.tools.map(t => (
+                              <span
+                                key={t}
+                                className={`text-xs px-2.5 py-1 ${theme.chipBg} ${theme.chipText} rounded-lg font-medium`}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Endpoint — only when ACTIVE */}
+                      {reg.status === 'ACTIVE' && reg.gateway_endpoint && (
+                        <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 mb-3">
+                          <span className="text-xs text-slate-500">Endpoint:</span>
+                          <code className="text-xs text-slate-700 font-mono flex-1 truncate">
+                            {reg.gateway_endpoint}
+                          </code>
+                          <button
+                            onClick={() => copyEndpoint(reg.gateway_endpoint)}
+                            className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Error notification */}
+                      {reg.status === 'FAILED' && reg.error_message && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
+                          <p className="text-xs text-red-700">{reg.error_message}</p>
+                        </div>
+                      )}
+
+                      {/* Provisioning notification */}
+                      {reg.status === 'PROVISIONING' && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 mb-3">
+                          <p className="text-xs text-blue-700">
+                            Provisioning resources… This takes about 30 seconds.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Footer actions */}
+                      <div className="pt-4 border-t border-slate-100 flex justify-end gap-2 mt-auto">
+                        {reg.status === 'FAILED' && (
+                          <button
+                            onClick={() => handleRetry(reg.registration_id)}
+                            className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+                          >
+                            Retry
+                          </button>
+                        )}
+                        {(reg.status === 'ACTIVE' || reg.status === 'FAILED') && (
+                          <button
+                            onClick={() => setDeleteTarget(reg)}
+                            className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {filtered.length === 0 && (
+              <div className="text-center py-20 text-slate-400">
+                {search
+                  ? `No knowledge sources matching "${search}"`
+                  : 'No knowledge sources in this category'}
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Registration Modal */}
+      <RegisterKnowledgeModal
+        open={showDrawer}
+        onClose={() => setShowDrawer(false)}
+        onCreated={fetchRegistrations}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => { if (!deleting) { setDeleteTarget(null); setDeleteError(null); } }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Delete Knowledge Source</h3>
+            <p className="text-sm text-slate-600 mb-1">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold">{deleteTarget.name}</span>?
+            </p>
+            <p className="text-xs text-slate-500 mb-5">
+              This will tear down the MCP server, AgentCore Gateway, Runtime, and IAM role. This
+              action cannot be undone.
+            </p>
+            {deleteError && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
+                disabled={deleting}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteTarget.registration_id)}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

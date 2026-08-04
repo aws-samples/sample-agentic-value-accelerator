@@ -54,7 +54,7 @@ terraform init && terraform apply
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | Bedrock model |
+| `MODEL_ID` | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` | Bedrock model |
 | `AWS_REGION` | `us-east-1` | AWS region |
 | `KNOWLEDGE_BASE_ID` | *(required)* | Bedrock Knowledge Base ID |
 

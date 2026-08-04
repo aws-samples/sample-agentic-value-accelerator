@@ -9,7 +9,7 @@ from strands import Agent
 from strands.models import BedrockModel
 from strands.multiagent import Swarm
 
-model = BedrockModel(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0")
+model = BedrockModel(model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 
 triage = Agent(
     name="triage",

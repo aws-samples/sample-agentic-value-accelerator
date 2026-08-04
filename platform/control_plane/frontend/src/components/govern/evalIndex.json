@@ -1,0 +1,1283 @@
+{
+  "jobs": [
+    {
+      "jobName": "eval-opus-4-7-fsi-core",
+      "modelId": "opus-4-7",
+      "model": "anthropic.claude-opus-4-7-v1:0",
+      "evaluator": "amazon.nova-pro-v1:0",
+      "status": "Completed",
+      "created": "2026-05-26 09:00",
+      "metricCount": 12,
+      "totalCases": 596,
+      "datasetId": "fsi-core-595",
+      "triggeredBy": "Scheduled"
+    },
+    {
+      "jobName": "eval-nova-lite-fsi-core",
+      "modelId": "nova-lite",
+      "model": "amazon.nova-lite-v1:0",
+      "evaluator": "amazon.nova-pro-v1:0",
+      "status": "Completed",
+      "created": "2026-05-20 09:00",
+      "metricCount": 12,
+      "totalCases": 596,
+      "datasetId": "fsi-core-595",
+      "triggeredBy": "Scheduled"
+    },
+    {
+      "jobName": "eval-nova-pro-fsi-core",
+      "modelId": "nova-pro",
+      "model": "amazon.nova-pro-v1:0",
+      "evaluator": "amazon.nova-pro-v1:0",
+      "status": "Completed",
+      "created": "2026-05-24 09:00",
+      "metricCount": 12,
+      "totalCases": 596,
+      "datasetId": "fsi-core-595",
+      "triggeredBy": "Manual"
+    },
+    {
+      "jobName": "eval-sonnet-4-5-fsi-core",
+      "modelId": "sonnet-4-5",
+      "model": "anthropic.claude-sonnet-4-5-v1:0",
+      "evaluator": "amazon.nova-pro-v1:0",
+      "status": "Completed",
+      "created": "2026-05-26 09:00",
+      "metricCount": 12,
+      "totalCases": 596,
+      "datasetId": "fsi-core-595",
+      "triggeredBy": "Scheduled"
+    },
+    {
+      "jobName": "eval-haiku-4-5-fsi-core",
+      "modelId": "haiku-4-5",
+      "model": "anthropic.claude-haiku-4-5-v1:0",
+      "evaluator": "amazon.nova-pro-v1:0",
+      "status": "Completed",
+      "created": "2026-05-25 09:00",
+      "metricCount": 12,
+      "totalCases": 596,
+      "datasetId": "fsi-core-595",
+      "triggeredBy": "CI Pipeline"
+    }
+  ],
+  "leaderboard": [
+    {
+      "modelId": "opus-4-7",
+      "modelName": "Claude Opus 4.7",
+      "overall": 92.0,
+      "metrics": {
+        "Helpfulness": 91.8,
+        "Faithfulness": 92.2,
+        "Completeness": 91.2,
+        "Correctness": 92.2,
+        "ProfessionalStyleAndTone": 92.3,
+        "Coherence": 92.3,
+        "Relevance": 92.2,
+        "FollowingInstructions": 92.1,
+        "Readability": 91.7,
+        "Harmfulness": 0.0,
+        "Stereotyping": 0.2,
+        "Refusal": 0.0
+      }
+    },
+    {
+      "modelId": "sonnet-4-5",
+      "modelName": "Claude Sonnet 4.5",
+      "overall": 88.0,
+      "metrics": {
+        "Helpfulness": 86.5,
+        "Faithfulness": 89.1,
+        "Completeness": 82.6,
+        "Correctness": 88.6,
+        "ProfessionalStyleAndTone": 89.2,
+        "Coherence": 89.1,
+        "Relevance": 89.1,
+        "FollowingInstructions": 88.8,
+        "Readability": 88.9,
+        "Harmfulness": 0.0,
+        "Stereotyping": 0.3,
+        "Refusal": 0.0
+      }
+    },
+    {
+      "modelId": "haiku-4-5",
+      "modelName": "Claude Haiku 4.5",
+      "overall": 83.0,
+      "metrics": {
+        "Helpfulness": 78.7,
+        "Faithfulness": 85.3,
+        "Completeness": 74.0,
+        "Correctness": 83.2,
+        "ProfessionalStyleAndTone": 85.5,
+        "Coherence": 85.3,
+        "Relevance": 85.4,
+        "FollowingInstructions": 84.7,
+        "Readability": 84.8,
+        "Harmfulness": 0.0,
+        "Stereotyping": 0.5,
+        "Refusal": 0.0
+      }
+    },
+    {
+      "modelId": "nova-pro",
+      "modelName": "Nova Pro",
+      "overall": 81.0,
+      "metrics": {
+        "Helpfulness": 80.3,
+        "Faithfulness": 81.9,
+        "Completeness": 80.0,
+        "Correctness": 81.0,
+        "ProfessionalStyleAndTone": 81.9,
+        "Coherence": 81.4,
+        "Relevance": 81.2,
+        "FollowingInstructions": 80.5,
+        "Readability": 81.1,
+        "Harmfulness": 0.0,
+        "Stereotyping": 0.3,
+        "Refusal": 1.0
+      }
+    },
+    {
+      "modelId": "nova-lite",
+      "modelName": "Nova Lite",
+      "overall": 78.0,
+      "metrics": {
+        "Helpfulness": 76.7,
+        "Faithfulness": 78.7,
+        "Completeness": 75.9,
+        "Correctness": 78.0,
+        "ProfessionalStyleAndTone": 78.8,
+        "Coherence": 78.4,
+        "Relevance": 78.6,
+        "FollowingInstructions": 78.2,
+        "Readability": 78.5,
+        "Harmfulness": 0.0,
+        "Stereotyping": 0.3,
+        "Refusal": 0.3
+      }
+    }
+  ],
+  "summaries": {
+    "eval-opus-4-7-fsi-core": {
+      "metrics": {
+        "Helpfulness": {
+          "percent": 91.8,
+          "average": 0.918,
+          "count": 596,
+          "perfect": 575
+        },
+        "Faithfulness": {
+          "percent": 92.2,
+          "average": 0.922,
+          "count": 596,
+          "perfect": 593
+        },
+        "Completeness": {
+          "percent": 91.2,
+          "average": 0.912,
+          "count": 596,
+          "perfect": 567
+        },
+        "Correctness": {
+          "percent": 92.2,
+          "average": 0.922,
+          "count": 596,
+          "perfect": 594
+        },
+        "ProfessionalStyleAndTone": {
+          "percent": 92.3,
+          "average": 0.923,
+          "count": 596,
+          "perfect": 593
+        },
+        "Coherence": {
+          "percent": 92.3,
+          "average": 0.923,
+          "count": 596,
+          "perfect": 593
+        },
+        "Relevance": {
+          "percent": 92.2,
+          "average": 0.922,
+          "count": 596,
+          "perfect": 592
+        },
+        "FollowingInstructions": {
+          "percent": 92.1,
+          "average": 0.921,
+          "count": 596,
+          "perfect": 594
+        },
+        "Readability": {
+          "percent": 91.7,
+          "average": 0.917,
+          "count": 596,
+          "perfect": 580
+        },
+        "Harmfulness": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        },
+        "Stereotyping": {
+          "percent": 0.2,
+          "average": 0.0017,
+          "count": 596,
+          "perfect": 595
+        },
+        "Refusal": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        }
+      },
+      "categories": {
+        "Banking Accounts": {
+          "avg_score": 92.1,
+          "count": 10
+        },
+        "Banking Loans": {
+          "avg_score": 90.2,
+          "count": 10
+        },
+        "Banking Credit Cards": {
+          "avg_score": 92.1,
+          "count": 10
+        },
+        "Insurance Life": {
+          "avg_score": 92.4,
+          "count": 10
+        },
+        "Insurance Health": {
+          "avg_score": 92.2,
+          "count": 11
+        },
+        "Insurance Auto": {
+          "avg_score": 92.2,
+          "count": 10
+        },
+        "Insurance Property": {
+          "avg_score": 92.4,
+          "count": 11
+        },
+        "Capital Markets Stocks": {
+          "avg_score": 92.0,
+          "count": 10
+        },
+        "Capital Markets Bonds": {
+          "avg_score": 92.2,
+          "count": 10
+        },
+        "Capital Markets Trading": {
+          "avg_score": 92.4,
+          "count": 10
+        },
+        "Wealth Retirement": {
+          "avg_score": 90.9,
+          "count": 10
+        },
+        "Wealth Investment": {
+          "avg_score": 92.3,
+          "count": 13
+        },
+        "Payments Digital": {
+          "avg_score": 91.5,
+          "count": 10
+        },
+        "Security Fraud": {
+          "avg_score": 92.4,
+          "count": 10
+        },
+        "Regulatory Compliance": {
+          "avg_score": 91.1,
+          "count": 10
+        },
+        "Estate Planning": {
+          "avg_score": 92.2,
+          "count": 10
+        },
+        "Annuities Retirement Income": {
+          "avg_score": 92.4,
+          "count": 10
+        },
+        "AML Compliance": {
+          "avg_score": 92.0,
+          "count": 20
+        },
+        "Mortgage Lending": {
+          "avg_score": 92.0,
+          "count": 35
+        },
+        "Consumer Finance": {
+          "avg_score": 91.3,
+          "count": 30
+        },
+        "Commercial Banking": {
+          "avg_score": 91.7,
+          "count": 30
+        },
+        "Digital Banking": {
+          "avg_score": 92.0,
+          "count": 30
+        },
+        "Cybersecurity": {
+          "avg_score": 92.2,
+          "count": 30
+        },
+        "Consumer Protection": {
+          "avg_score": 92.0,
+          "count": 35
+        },
+        "Treasury Management": {
+          "avg_score": 92.1,
+          "count": 31
+        },
+        "Trade Finance": {
+          "avg_score": 92.2,
+          "count": 30
+        },
+        "Fraud Detection": {
+          "avg_score": 92.0,
+          "count": 35
+        },
+        "KYC Verification": {
+          "avg_score": 92.2,
+          "count": 35
+        },
+        "KYB Verification": {
+          "avg_score": 91.8,
+          "count": 10
+        },
+        "Phishing Scams": {
+          "avg_score": 91.6,
+          "count": 10
+        },
+        "Identity Theft": {
+          "avg_score": 92.3,
+          "count": 35
+        },
+        "Account Takeover": {
+          "avg_score": 92.4,
+          "count": 5
+        },
+        "Payment Fraud": {
+          "avg_score": 92.0,
+          "count": 5
+        },
+        "Synthetic Identity": {
+          "avg_score": 91.8,
+          "count": 5
+        },
+        "Elder Fraud": {
+          "avg_score": 92.4,
+          "count": 5
+        },
+        "Social Engineering": {
+          "avg_score": 91.8,
+          "count": 5
+        }
+      },
+      "overallScore": 92.0,
+      "totalCases": 596
+    },
+    "eval-sonnet-4-5-fsi-core": {
+      "metrics": {
+        "Helpfulness": {
+          "percent": 86.5,
+          "average": 0.865,
+          "count": 596,
+          "perfect": 498
+        },
+        "Faithfulness": {
+          "percent": 89.1,
+          "average": 0.891,
+          "count": 596,
+          "perfect": 592
+        },
+        "Completeness": {
+          "percent": 82.6,
+          "average": 0.826,
+          "count": 596,
+          "perfect": 441
+        },
+        "Correctness": {
+          "percent": 88.6,
+          "average": 0.886,
+          "count": 596,
+          "perfect": 588
+        },
+        "ProfessionalStyleAndTone": {
+          "percent": 89.2,
+          "average": 0.892,
+          "count": 596,
+          "perfect": 593
+        },
+        "Coherence": {
+          "percent": 89.1,
+          "average": 0.891,
+          "count": 596,
+          "perfect": 591
+        },
+        "Relevance": {
+          "percent": 89.1,
+          "average": 0.891,
+          "count": 596,
+          "perfect": 592
+        },
+        "FollowingInstructions": {
+          "percent": 88.8,
+          "average": 0.888,
+          "count": 596,
+          "perfect": 593
+        },
+        "Readability": {
+          "percent": 88.9,
+          "average": 0.889,
+          "count": 596,
+          "perfect": 586
+        },
+        "Harmfulness": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        },
+        "Stereotyping": {
+          "percent": 0.3,
+          "average": 0.0034,
+          "count": 596,
+          "perfect": 594
+        },
+        "Refusal": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        }
+      },
+      "categories": {
+        "Banking Accounts": {
+          "avg_score": 87.1,
+          "count": 10
+        },
+        "Banking Loans": {
+          "avg_score": 86.1,
+          "count": 10
+        },
+        "Banking Credit Cards": {
+          "avg_score": 87.7,
+          "count": 10
+        },
+        "Insurance Life": {
+          "avg_score": 88.5,
+          "count": 10
+        },
+        "Insurance Health": {
+          "avg_score": 88.3,
+          "count": 11
+        },
+        "Insurance Auto": {
+          "avg_score": 87.1,
+          "count": 10
+        },
+        "Insurance Property": {
+          "avg_score": 88.1,
+          "count": 11
+        },
+        "Capital Markets Stocks": {
+          "avg_score": 87.8,
+          "count": 10
+        },
+        "Capital Markets Bonds": {
+          "avg_score": 88.6,
+          "count": 10
+        },
+        "Capital Markets Trading": {
+          "avg_score": 88.3,
+          "count": 10
+        },
+        "Wealth Retirement": {
+          "avg_score": 87.2,
+          "count": 10
+        },
+        "Wealth Investment": {
+          "avg_score": 88.4,
+          "count": 13
+        },
+        "Payments Digital": {
+          "avg_score": 87.9,
+          "count": 10
+        },
+        "Security Fraud": {
+          "avg_score": 88.7,
+          "count": 10
+        },
+        "Regulatory Compliance": {
+          "avg_score": 87.6,
+          "count": 10
+        },
+        "Estate Planning": {
+          "avg_score": 87.4,
+          "count": 10
+        },
+        "Annuities Retirement Income": {
+          "avg_score": 88.9,
+          "count": 10
+        },
+        "AML Compliance": {
+          "avg_score": 87.7,
+          "count": 20
+        },
+        "Mortgage Lending": {
+          "avg_score": 87.9,
+          "count": 35
+        },
+        "Consumer Finance": {
+          "avg_score": 86.3,
+          "count": 30
+        },
+        "Commercial Banking": {
+          "avg_score": 87.6,
+          "count": 30
+        },
+        "Digital Banking": {
+          "avg_score": 86.9,
+          "count": 30
+        },
+        "Cybersecurity": {
+          "avg_score": 88.1,
+          "count": 30
+        },
+        "Consumer Protection": {
+          "avg_score": 87.8,
+          "count": 35
+        },
+        "Treasury Management": {
+          "avg_score": 88.7,
+          "count": 31
+        },
+        "Trade Finance": {
+          "avg_score": 88.8,
+          "count": 30
+        },
+        "Fraud Detection": {
+          "avg_score": 88.6,
+          "count": 35
+        },
+        "KYC Verification": {
+          "avg_score": 88.4,
+          "count": 35
+        },
+        "KYB Verification": {
+          "avg_score": 88.7,
+          "count": 10
+        },
+        "Phishing Scams": {
+          "avg_score": 88.0,
+          "count": 10
+        },
+        "Identity Theft": {
+          "avg_score": 89.0,
+          "count": 35
+        },
+        "Account Takeover": {
+          "avg_score": 87.6,
+          "count": 5
+        },
+        "Payment Fraud": {
+          "avg_score": 88.7,
+          "count": 5
+        },
+        "Synthetic Identity": {
+          "avg_score": 88.7,
+          "count": 5
+        },
+        "Elder Fraud": {
+          "avg_score": 88.2,
+          "count": 5
+        },
+        "Social Engineering": {
+          "avg_score": 88.2,
+          "count": 5
+        }
+      },
+      "overallScore": 88.0,
+      "totalCases": 596
+    },
+    "eval-haiku-4-5-fsi-core": {
+      "metrics": {
+        "Helpfulness": {
+          "percent": 78.7,
+          "average": 0.787,
+          "count": 596,
+          "perfect": 353
+        },
+        "Faithfulness": {
+          "percent": 85.3,
+          "average": 0.853,
+          "count": 596,
+          "perfect": 591
+        },
+        "Completeness": {
+          "percent": 74.0,
+          "average": 0.74,
+          "count": 596,
+          "perfect": 357
+        },
+        "Correctness": {
+          "percent": 83.2,
+          "average": 0.832,
+          "count": 596,
+          "perfect": 569
+        },
+        "ProfessionalStyleAndTone": {
+          "percent": 85.5,
+          "average": 0.855,
+          "count": 596,
+          "perfect": 596
+        },
+        "Coherence": {
+          "percent": 85.3,
+          "average": 0.853,
+          "count": 596,
+          "perfect": 591
+        },
+        "Relevance": {
+          "percent": 85.4,
+          "average": 0.854,
+          "count": 596,
+          "perfect": 593
+        },
+        "FollowingInstructions": {
+          "percent": 84.7,
+          "average": 0.847,
+          "count": 596,
+          "perfect": 591
+        },
+        "Readability": {
+          "percent": 84.8,
+          "average": 0.848,
+          "count": 596,
+          "perfect": 580
+        },
+        "Harmfulness": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        },
+        "Stereotyping": {
+          "percent": 0.5,
+          "average": 0.005,
+          "count": 596,
+          "perfect": 593
+        },
+        "Refusal": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        }
+      },
+      "categories": {
+        "Banking Accounts": {
+          "avg_score": 83.4,
+          "count": 10
+        },
+        "Banking Loans": {
+          "avg_score": 79.8,
+          "count": 10
+        },
+        "Banking Credit Cards": {
+          "avg_score": 83.6,
+          "count": 10
+        },
+        "Insurance Life": {
+          "avg_score": 84.0,
+          "count": 10
+        },
+        "Insurance Health": {
+          "avg_score": 82.5,
+          "count": 11
+        },
+        "Insurance Auto": {
+          "avg_score": 82.4,
+          "count": 10
+        },
+        "Insurance Property": {
+          "avg_score": 82.1,
+          "count": 11
+        },
+        "Capital Markets Stocks": {
+          "avg_score": 83.7,
+          "count": 10
+        },
+        "Capital Markets Bonds": {
+          "avg_score": 84.4,
+          "count": 10
+        },
+        "Capital Markets Trading": {
+          "avg_score": 83.2,
+          "count": 10
+        },
+        "Wealth Retirement": {
+          "avg_score": 80.4,
+          "count": 10
+        },
+        "Wealth Investment": {
+          "avg_score": 83.8,
+          "count": 13
+        },
+        "Payments Digital": {
+          "avg_score": 82.6,
+          "count": 10
+        },
+        "Security Fraud": {
+          "avg_score": 81.9,
+          "count": 10
+        },
+        "Regulatory Compliance": {
+          "avg_score": 84.3,
+          "count": 10
+        },
+        "Estate Planning": {
+          "avg_score": 84.0,
+          "count": 10
+        },
+        "Annuities Retirement Income": {
+          "avg_score": 83.1,
+          "count": 10
+        },
+        "AML Compliance": {
+          "avg_score": 82.9,
+          "count": 20
+        },
+        "Mortgage Lending": {
+          "avg_score": 83.3,
+          "count": 35
+        },
+        "Consumer Finance": {
+          "avg_score": 82.3,
+          "count": 30
+        },
+        "Commercial Banking": {
+          "avg_score": 83.1,
+          "count": 30
+        },
+        "Digital Banking": {
+          "avg_score": 82.6,
+          "count": 30
+        },
+        "Cybersecurity": {
+          "avg_score": 83.3,
+          "count": 30
+        },
+        "Consumer Protection": {
+          "avg_score": 83.4,
+          "count": 35
+        },
+        "Treasury Management": {
+          "avg_score": 82.5,
+          "count": 31
+        },
+        "Trade Finance": {
+          "avg_score": 83.8,
+          "count": 30
+        },
+        "Fraud Detection": {
+          "avg_score": 83.3,
+          "count": 35
+        },
+        "KYC Verification": {
+          "avg_score": 84.1,
+          "count": 35
+        },
+        "KYB Verification": {
+          "avg_score": 80.7,
+          "count": 10
+        },
+        "Phishing Scams": {
+          "avg_score": 82.2,
+          "count": 10
+        },
+        "Identity Theft": {
+          "avg_score": 83.2,
+          "count": 35
+        },
+        "Account Takeover": {
+          "avg_score": 79.8,
+          "count": 5
+        },
+        "Payment Fraud": {
+          "avg_score": 83.6,
+          "count": 5
+        },
+        "Synthetic Identity": {
+          "avg_score": 80.1,
+          "count": 5
+        },
+        "Elder Fraud": {
+          "avg_score": 81.8,
+          "count": 5
+        },
+        "Social Engineering": {
+          "avg_score": 83.8,
+          "count": 5
+        }
+      },
+      "overallScore": 83.0,
+      "totalCases": 596
+    },
+    "eval-nova-pro-fsi-core": {
+      "metrics": {
+        "Helpfulness": {
+          "percent": 80.3,
+          "average": 0.803,
+          "count": 596,
+          "perfect": 558
+        },
+        "Faithfulness": {
+          "percent": 81.9,
+          "average": 0.819,
+          "count": 596,
+          "perfect": 593
+        },
+        "Completeness": {
+          "percent": 80.0,
+          "average": 0.8,
+          "count": 596,
+          "perfect": 563
+        },
+        "Correctness": {
+          "percent": 81.0,
+          "average": 0.81,
+          "count": 596,
+          "perfect": 588
+        },
+        "ProfessionalStyleAndTone": {
+          "percent": 81.9,
+          "average": 0.819,
+          "count": 596,
+          "perfect": 594
+        },
+        "Coherence": {
+          "percent": 81.4,
+          "average": 0.814,
+          "count": 596,
+          "perfect": 588
+        },
+        "Relevance": {
+          "percent": 81.2,
+          "average": 0.812,
+          "count": 596,
+          "perfect": 589
+        },
+        "FollowingInstructions": {
+          "percent": 80.5,
+          "average": 0.805,
+          "count": 596,
+          "perfect": 586
+        },
+        "Readability": {
+          "percent": 81.1,
+          "average": 0.811,
+          "count": 596,
+          "perfect": 587
+        },
+        "Harmfulness": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        },
+        "Stereotyping": {
+          "percent": 0.3,
+          "average": 0.0034,
+          "count": 596,
+          "perfect": 594
+        },
+        "Refusal": {
+          "percent": 1.0,
+          "average": 0.0101,
+          "count": 596,
+          "perfect": 590
+        }
+      },
+      "categories": {
+        "Banking Accounts": {
+          "avg_score": 73.5,
+          "count": 10
+        },
+        "Banking Loans": {
+          "avg_score": 79.4,
+          "count": 10
+        },
+        "Banking Credit Cards": {
+          "avg_score": 82.2,
+          "count": 10
+        },
+        "Insurance Life": {
+          "avg_score": 82.2,
+          "count": 10
+        },
+        "Insurance Health": {
+          "avg_score": 81.6,
+          "count": 11
+        },
+        "Insurance Auto": {
+          "avg_score": 81.7,
+          "count": 10
+        },
+        "Insurance Property": {
+          "avg_score": 81.4,
+          "count": 11
+        },
+        "Capital Markets Stocks": {
+          "avg_score": 82.2,
+          "count": 10
+        },
+        "Capital Markets Bonds": {
+          "avg_score": 82.0,
+          "count": 10
+        },
+        "Capital Markets Trading": {
+          "avg_score": 82.2,
+          "count": 10
+        },
+        "Wealth Retirement": {
+          "avg_score": 80.7,
+          "count": 10
+        },
+        "Wealth Investment": {
+          "avg_score": 82.1,
+          "count": 13
+        },
+        "Payments Digital": {
+          "avg_score": 73.3,
+          "count": 10
+        },
+        "Security Fraud": {
+          "avg_score": 82.0,
+          "count": 10
+        },
+        "Regulatory Compliance": {
+          "avg_score": 82.2,
+          "count": 10
+        },
+        "Estate Planning": {
+          "avg_score": 81.7,
+          "count": 10
+        },
+        "Annuities Retirement Income": {
+          "avg_score": 81.9,
+          "count": 10
+        },
+        "AML Compliance": {
+          "avg_score": 74.1,
+          "count": 20
+        },
+        "Mortgage Lending": {
+          "avg_score": 81.7,
+          "count": 35
+        },
+        "Consumer Finance": {
+          "avg_score": 81.8,
+          "count": 30
+        },
+        "Commercial Banking": {
+          "avg_score": 81.9,
+          "count": 30
+        },
+        "Digital Banking": {
+          "avg_score": 82.1,
+          "count": 30
+        },
+        "Cybersecurity": {
+          "avg_score": 79.5,
+          "count": 30
+        },
+        "Consumer Protection": {
+          "avg_score": 81.7,
+          "count": 35
+        },
+        "Treasury Management": {
+          "avg_score": 82.1,
+          "count": 31
+        },
+        "Trade Finance": {
+          "avg_score": 82.1,
+          "count": 30
+        },
+        "Fraud Detection": {
+          "avg_score": 82.2,
+          "count": 35
+        },
+        "KYC Verification": {
+          "avg_score": 82.0,
+          "count": 35
+        },
+        "KYB Verification": {
+          "avg_score": 81.2,
+          "count": 10
+        },
+        "Phishing Scams": {
+          "avg_score": 81.2,
+          "count": 10
+        },
+        "Identity Theft": {
+          "avg_score": 82.1,
+          "count": 35
+        },
+        "Account Takeover": {
+          "avg_score": 82.2,
+          "count": 5
+        },
+        "Payment Fraud": {
+          "avg_score": 81.6,
+          "count": 5
+        },
+        "Synthetic Identity": {
+          "avg_score": 81.6,
+          "count": 5
+        },
+        "Elder Fraud": {
+          "avg_score": 62.8,
+          "count": 5
+        },
+        "Social Engineering": {
+          "avg_score": 81.1,
+          "count": 5
+        }
+      },
+      "overallScore": 81.0,
+      "totalCases": 596
+    },
+    "eval-nova-lite-fsi-core": {
+      "metrics": {
+        "Helpfulness": {
+          "percent": 76.7,
+          "average": 0.767,
+          "count": 596,
+          "perfect": 524
+        },
+        "Faithfulness": {
+          "percent": 78.7,
+          "average": 0.787,
+          "count": 596,
+          "perfect": 592
+        },
+        "Completeness": {
+          "percent": 75.9,
+          "average": 0.759,
+          "count": 596,
+          "perfect": 529
+        },
+        "Correctness": {
+          "percent": 78.0,
+          "average": 0.78,
+          "count": 596,
+          "perfect": 586
+        },
+        "ProfessionalStyleAndTone": {
+          "percent": 78.8,
+          "average": 0.788,
+          "count": 596,
+          "perfect": 595
+        },
+        "Coherence": {
+          "percent": 78.4,
+          "average": 0.784,
+          "count": 596,
+          "perfect": 589
+        },
+        "Relevance": {
+          "percent": 78.6,
+          "average": 0.786,
+          "count": 596,
+          "perfect": 593
+        },
+        "FollowingInstructions": {
+          "percent": 78.2,
+          "average": 0.782,
+          "count": 596,
+          "perfect": 591
+        },
+        "Readability": {
+          "percent": 78.5,
+          "average": 0.785,
+          "count": 596,
+          "perfect": 590
+        },
+        "Harmfulness": {
+          "percent": 0.0,
+          "average": 0.0,
+          "count": 596,
+          "perfect": 596
+        },
+        "Stereotyping": {
+          "percent": 0.3,
+          "average": 0.0034,
+          "count": 596,
+          "perfect": 594
+        },
+        "Refusal": {
+          "percent": 0.3,
+          "average": 0.0034,
+          "count": 596,
+          "perfect": 594
+        }
+      },
+      "categories": {
+        "Banking Accounts": {
+          "avg_score": 77.1,
+          "count": 10
+        },
+        "Banking Loans": {
+          "avg_score": 75.5,
+          "count": 10
+        },
+        "Banking Credit Cards": {
+          "avg_score": 78.2,
+          "count": 10
+        },
+        "Insurance Life": {
+          "avg_score": 77.9,
+          "count": 10
+        },
+        "Insurance Health": {
+          "avg_score": 77.6,
+          "count": 11
+        },
+        "Insurance Auto": {
+          "avg_score": 78.6,
+          "count": 10
+        },
+        "Insurance Property": {
+          "avg_score": 78.8,
+          "count": 11
+        },
+        "Capital Markets Stocks": {
+          "avg_score": 78.4,
+          "count": 10
+        },
+        "Capital Markets Bonds": {
+          "avg_score": 79.0,
+          "count": 10
+        },
+        "Capital Markets Trading": {
+          "avg_score": 78.4,
+          "count": 10
+        },
+        "Wealth Retirement": {
+          "avg_score": 76.5,
+          "count": 10
+        },
+        "Wealth Investment": {
+          "avg_score": 78.4,
+          "count": 13
+        },
+        "Payments Digital": {
+          "avg_score": 78.4,
+          "count": 10
+        },
+        "Security Fraud": {
+          "avg_score": 77.9,
+          "count": 10
+        },
+        "Regulatory Compliance": {
+          "avg_score": 78.8,
+          "count": 10
+        },
+        "Estate Planning": {
+          "avg_score": 77.8,
+          "count": 10
+        },
+        "Annuities Retirement Income": {
+          "avg_score": 79.0,
+          "count": 10
+        },
+        "AML Compliance": {
+          "avg_score": 69.1,
+          "count": 20
+        },
+        "Mortgage Lending": {
+          "avg_score": 77.6,
+          "count": 35
+        },
+        "Consumer Finance": {
+          "avg_score": 78.3,
+          "count": 30
+        },
+        "Commercial Banking": {
+          "avg_score": 78.8,
+          "count": 30
+        },
+        "Digital Banking": {
+          "avg_score": 78.8,
+          "count": 30
+        },
+        "Cybersecurity": {
+          "avg_score": 78.8,
+          "count": 30
+        },
+        "Consumer Protection": {
+          "avg_score": 78.2,
+          "count": 35
+        },
+        "Treasury Management": {
+          "avg_score": 78.5,
+          "count": 31
+        },
+        "Trade Finance": {
+          "avg_score": 78.9,
+          "count": 30
+        },
+        "Fraud Detection": {
+          "avg_score": 78.8,
+          "count": 35
+        },
+        "KYC Verification": {
+          "avg_score": 78.5,
+          "count": 35
+        },
+        "KYB Verification": {
+          "avg_score": 78.1,
+          "count": 10
+        },
+        "Phishing Scams": {
+          "avg_score": 77.1,
+          "count": 10
+        },
+        "Identity Theft": {
+          "avg_score": 78.3,
+          "count": 35
+        },
+        "Account Takeover": {
+          "avg_score": 77.9,
+          "count": 5
+        },
+        "Payment Fraud": {
+          "avg_score": 78.1,
+          "count": 5
+        },
+        "Synthetic Identity": {
+          "avg_score": 79.0,
+          "count": 5
+        },
+        "Elder Fraud": {
+          "avg_score": 76.6,
+          "count": 5
+        },
+        "Social Engineering": {
+          "avg_score": 77.9,
+          "count": 5
+        }
+      },
+      "overallScore": 78.0,
+      "totalCases": 596
+    }
+  }
+}

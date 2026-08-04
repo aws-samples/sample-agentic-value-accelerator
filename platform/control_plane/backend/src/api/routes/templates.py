@@ -2,7 +2,9 @@
 Templates API routes for template catalog
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from core.rbac import require_role, Role
 from typing import List, Optional
 import logging
 import io
@@ -59,6 +61,7 @@ async def list_templates(
     category: Optional[str] = Query(None, description="Filter by category"),
     framework: Optional[str] = Query(None, description="Filter by framework (strands, langgraph)"),
     search: Optional[str] = Query(None, description="Search query"),
+    _=Depends(require_role(Role.VIEWER)),
 ):
     """
     List available templates with optional filtering
@@ -96,7 +99,7 @@ async def list_templates(
 
 
 @router.get("/stats", response_model=CatalogStatsResponse)
-async def get_catalog_stats():
+async def get_catalog_stats(_=Depends(require_role(Role.VIEWER))):
     """
     Get template catalog statistics
 
@@ -114,7 +117,7 @@ async def get_catalog_stats():
 
 
 @router.get("/{template_id}", response_model=TemplateDetailResponse)
-async def get_template(template_id: str):
+async def get_template(template_id: str, _=Depends(require_role(Role.VIEWER))):
     """
     Get template details by ID
 
@@ -137,7 +140,7 @@ async def get_template(template_id: str):
 
 
 @router.post("/{template_id}/validate")
-async def validate_template(template_id: str):
+async def validate_template(template_id: str, _=Depends(require_role(Role.OPERATOR))):
     """
     Validate a template
 
@@ -158,7 +161,7 @@ async def validate_template(template_id: str):
 
 
 @router.post("/reload")
-async def reload_catalog():
+async def reload_catalog(_=Depends(require_role(Role.ADMIN))):
     """
     Reload template catalog from disk
 
@@ -182,7 +185,8 @@ async def reload_catalog():
 @router.get("/{template_id}/download")
 async def download_template(
     template_id: str,
-    iac: Optional[str] = Query(None, description="IaC variant to include (terraform, cdk). If not specified, includes all.")
+    iac: Optional[str] = Query(None, description="IaC variant to include (terraform, cdk). If not specified, includes all."),
+    _=Depends(require_role(Role.VIEWER)),
 ):
     """
     Download a template as a ZIP file

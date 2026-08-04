@@ -3,7 +3,9 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from core.rbac import require_role, Role
 
 from core.config import settings
 from models.prioritization import (
@@ -35,7 +37,7 @@ def get_service() -> PrioritizationService:
 # --- Reference / framework metadata ---
 
 @router.get("/framework")
-async def get_framework():
+async def get_framework(_=Depends(require_role(Role.VIEWER))):
     """Return dimension weights, sub-criteria weights, and Go/No-Go thresholds.
 
     Used by the frontend to render scoring forms without hard-coding the schema.
@@ -54,20 +56,20 @@ async def get_framework():
 # --- CRUD ---
 
 @router.post("", response_model=UseCase, status_code=201)
-async def create_use_case(req: UseCaseCreate):
+async def create_use_case(req: UseCaseCreate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     return svc.create(req, created_by="user")
 
 
 @router.get("", response_model=List[UseCase])
-async def list_use_cases(status: Optional[str] = Query(default=None)):
+async def list_use_cases(status: Optional[str] = Query(default=None), _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     status_filter = UseCaseStatus(status) if status else None
     return svc.list(status=status_filter)
 
 
 @router.get("/{use_case_id}", response_model=UseCase)
-async def get_use_case(use_case_id: str):
+async def get_use_case(use_case_id: str, _=Depends(require_role(Role.VIEWER))):
     svc = get_service()
     uc = svc.get(use_case_id)
     if not uc:
@@ -76,7 +78,7 @@ async def get_use_case(use_case_id: str):
 
 
 @router.put("/{use_case_id}", response_model=UseCase)
-async def update_use_case(use_case_id: str, req: UseCaseUpdate):
+async def update_use_case(use_case_id: str, req: UseCaseUpdate, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     uc = svc.update(use_case_id, req)
     if not uc:
@@ -85,7 +87,7 @@ async def update_use_case(use_case_id: str, req: UseCaseUpdate):
 
 
 @router.delete("/{use_case_id}", response_model=UseCase)
-async def delete_use_case(use_case_id: str):
+async def delete_use_case(use_case_id: str, _=Depends(require_role(Role.OPERATOR))):
     svc = get_service()
     uc = svc.delete(use_case_id)
     if not uc:

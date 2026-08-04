@@ -1,0 +1,12 @@
+{
+  "_comment": "Template for pointing an external MCP client at the AgentCore Gateway. Copy to your client's MCP config (for Claude Code: .mcp.json at a project root, or `claude mcp add`). The Gateway speaks streamable-HTTP MCP and authenticates with a Cognito Bearer token — mint one with scripts/mcp_token.sh. Tokens expire in 60 min; re-mint and update the header, or use `claude mcp add` (below) which re-reads it.",
+  "mcpServers": {
+    "agentcore-gateway": {
+      "type": "http",
+      "url": "https://GATEWAY_ID.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp",
+      "headers": {
+        "Authorization": "Bearer PASTE_TOKEN_FROM_scripts/mcp_token.sh"
+      }
+    }
+  }
+}

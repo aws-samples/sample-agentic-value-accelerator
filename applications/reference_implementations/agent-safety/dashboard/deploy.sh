@@ -191,16 +191,6 @@ if [[ "$STACK_STATUS" == *"IN_PROGRESS"* ]]; then
   aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" $AWS_OPTS 2>/dev/null || \
   aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" $AWS_OPTS 2>/dev/null || true
   echo "   Stack ready."
-  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" $AWS_OPTS \
-    --query 'Stacks[0].StackStatus' --output text 2>/dev/null) || true
-fi
-
-# CloudFormation will not update a stack in ROLLBACK_COMPLETE — delete it first so the next deploy starts clean.
-if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
-  echo "   Stack is in ROLLBACK_COMPLETE from a prior failure — deleting before redeploy..."
-  aws cloudformation delete-stack --stack-name "$STACK_NAME" $AWS_OPTS
-  aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" $AWS_OPTS 2>/dev/null || true
-  echo "   Stack deleted."
 fi
 
 # Build parameter overrides

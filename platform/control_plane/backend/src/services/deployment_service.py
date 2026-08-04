@@ -116,7 +116,154 @@ class DeploymentService:
             deployment.outputs = outputs
         self.table.put_item(Item=self._to_item(deployment))
         logger.info(f"Updated deployment {deployment_id} to {new_status}")
+
+        # Auto-provision a gateway when deployment succeeds
+        if new_status == DeploymentStatus.DEPLOYED:
+            self._provision_gateway(deployment)
+
         return deployment
+
+    def _provision_gateway(self, deployment: Deployment):
+        """Auto-create a dedicated gateway for the use case and point the runtime at it.
+
+        Architecture:
+        - The gateway is an MCP protocol endpoint with Cedar policy enforcement.
+        - MCP tool servers (Lambda, etc.) are added as gateway targets.
+        - The agent runtime connects TO the gateway (via GATEWAY_URL env var) to access tools.
+        - Policies attached to the gateway control what the agent can do.
+
+        This method:
+        1. Creates a per-use-case gateway (or reuses existing)
+        2. Waits for READY
+        3. Updates the runtime's GATEWAY_URL env var to use this dedicated gateway
+        """
+        import time
+
+        try:
+            # Skip if deployment already has a gateway configured
+            if deployment.outputs and deployment.outputs.get("gateway_id"):
+                logger.info(f"Deployment {deployment.deployment_id} already has gateway")
+                return
+
+            # Derive use case name from template_id (e.g. "foundry-customer_service" -> "customer-service")
+            use_case_name = deployment.template_id.replace("foundry-", "").replace("_", "-")
+            gateway_name = f"{use_case_name}-gateway"
+
+            agentcore = boto3.client("bedrock-agentcore-control", region_name=self.region)
+
+            # Reuse the platform gateway's IAM role for per-use-case gateways.
+            # (Previously hardcoded to a specific account's role ARN, which broke
+            # in every other account and made per-use-case gateways un-attachable.)
+            # Deriving it from the configured platform gateway keeps all gateways
+            # on one role — the same role the ECS task is granted iam:PassRole for.
+            from core.config import settings as _settings
+            gateway_role_arn = None
+            platform_gw_arn = _settings.GATEWAY_ARN or ""
+            # Primary: read the platform gateway's actual role and reuse it.
+            try:
+                if platform_gw_arn:
+                    platform_gw_id = platform_gw_arn.split("/")[-1]
+                    plat = agentcore.get_gateway(gatewayIdentifier=platform_gw_id)
+                    gateway_role_arn = plat.get("roleArn")
+            except Exception as e:
+                logger.warning(f"Could not read platform gateway role, will derive it: {e}")
+            # Fallback: derive the PLATFORM gateway role name from the deploy's
+            # name_prefix (gateway id looks like "<name_prefix>-gw-<suffix>"), so
+            # per-use-case gateways still land on the real, PassRole-granted role.
+            if not gateway_role_arn and platform_gw_arn:
+                acct = platform_gw_arn.split(":")[4]
+                gw_id = platform_gw_arn.split("/")[-1]           # <name_prefix>-gw-<suffix>
+                name_prefix = gw_id.rsplit("-gw-", 1)[0]         # <name_prefix>
+                gateway_role_arn = f"arn:aws:iam::{acct}:role/{name_prefix}-agentcore-gateway-role"
+                logger.warning(f"Derived platform gateway role: {gateway_role_arn}")
+            if not gateway_role_arn:
+                # GATEWAY_ARN not configured — cannot safely create a gateway.
+                # Fail loudly rather than create one with a bad role (which would
+                # silently produce an un-attachable gateway).
+                raise RuntimeError(
+                    "Cannot provision use-case gateway: GATEWAY_ARN is not configured, "
+                    "so the platform gateway role cannot be determined."
+                )
+
+            # Check if gateway already exists for this use case
+            gateway_id = None
+            gateway_url = ""
+            existing = agentcore.list_gateways()
+            for gw in existing.get("items", []):
+                if gw.get("name") == gateway_name and gw.get("status") not in ("DELETING", "DELETE_FAILED"):
+                    gateway_id = gw["gatewayId"]
+                    gateway_url = gw.get("gatewayUrl", "")
+                    logger.info(f"Gateway already exists for {use_case_name}: {gateway_id}")
+                    break
+
+            # Create gateway if it doesn't exist
+            if not gateway_id:
+                resp = agentcore.create_gateway(
+                    name=gateway_name,
+                    description=f"Dedicated gateway for {use_case_name} use case — Cedar policy enforcement",
+                    roleArn=gateway_role_arn,
+                    protocolType="MCP",
+                    authorizerType="NONE",
+                )
+                gateway_id = resp["gatewayId"]
+                gateway_url = resp.get("gatewayUrl", "")
+                logger.info(f"Created gateway {gateway_id} for deployment {deployment.deployment_id}")
+
+            # Wait for gateway to be READY
+            start = time.time()
+            timeout = 60
+            while time.time() - start < timeout:
+                gw_detail = agentcore.get_gateway(gatewayIdentifier=gateway_id)
+                status = gw_detail.get("status", "")
+                if status == "READY":
+                    # Get the gateway URL from detail if not already set
+                    if not gateway_url:
+                        gateway_url = gw_detail.get("gatewayUrl", "")
+                    break
+                if status in ("FAILED", "DELETE_FAILED"):
+                    logger.error(f"Gateway {gateway_id} failed: {gw_detail.get('statusReasons', [])}")
+                    break
+                time.sleep(3)
+
+            # Get gateway URL (format: https://{id}.gateway.bedrock-agentcore.{region}.amazonaws.com/mcp)
+            if not gateway_url:
+                gateway_url = f"https://{gateway_id}.gateway.bedrock-agentcore.{self.region}.amazonaws.com/mcp"
+
+            # Update the runtime's GATEWAY_URL env var to point to this dedicated gateway
+            runtime_id = None
+            if deployment.outputs:
+                runtime_id = deployment.outputs.get("agentcore_runtime_id")
+            if runtime_id:
+                try:
+                    # Get current runtime config (need all required fields for update)
+                    runtime_detail = agentcore.get_agent_runtime(agentRuntimeId=runtime_id)
+                    env_vars = runtime_detail.get("environmentVariables", {})
+                    old_gateway = env_vars.get("GATEWAY_URL", "")
+
+                    if old_gateway != gateway_url:
+                        env_vars["GATEWAY_URL"] = gateway_url
+                        agentcore.update_agent_runtime(
+                            agentRuntimeId=runtime_id,
+                            roleArn=runtime_detail["roleArn"],
+                            networkConfiguration=runtime_detail["networkConfiguration"],
+                            agentRuntimeArtifact=runtime_detail["agentRuntimeArtifact"],
+                            environmentVariables=env_vars,
+                        )
+                        logger.info(f"Updated runtime {runtime_id} GATEWAY_URL: {old_gateway} -> {gateway_url}")
+                    else:
+                        logger.info(f"Runtime {runtime_id} already points to {gateway_url}")
+                except Exception as re:
+                    logger.error(f"Failed to update runtime GATEWAY_URL: {re}")
+
+            # Store gateway info in deployment outputs
+            deployment.outputs = deployment.outputs or {}
+            deployment.outputs["gateway_id"] = gateway_id
+            deployment.outputs["gateway_url"] = gateway_url
+            deployment.outputs["gateway_name"] = gateway_name
+            self.table.put_item(Item=self._to_item(deployment))
+
+        except Exception as e:
+            logger.error(f"Failed to provision gateway for deployment {deployment.deployment_id}: {e}")
 
     def store_outputs(self, deployment_id: str, outputs: Dict[str, str]) -> Deployment:
         """Store IaC outputs (endpoints, ARNs, resource IDs) in the deployment record."""

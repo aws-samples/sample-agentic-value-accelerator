@@ -3,6 +3,9 @@
 import boto3
 import logging
 import json
+import re
+import time
+import threading
 from decimal import Decimal
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -124,13 +127,50 @@ FSI_PRESETS: List[GuardrailPreset] = [
 
 
 class GuardrailService:
-    def __init__(self, table_name: str = "fsi-control-plane-guardrails", region: str = "us-east-1"):
+    # Class-level sync state for auto-discovery
+    _last_sync_time: float = 0
+    _sync_lock = threading.Lock()
+    _SYNC_INTERVAL_SECONDS = 300  # 5 minutes between auto-syncs
+
+    def __init__(self, table_name: str = "fsi-control-plane-guardrails", region: str = "us-east-1", auto_sync: bool = True):
         self.table_name = table_name
         self.region = region
         self.dynamodb = boto3.resource("dynamodb", region_name=region)
         self.table = self.dynamodb.Table(table_name)
         self.bedrock_client = boto3.client("bedrock", region_name=region)
         self.cloudwatch_client = boto3.client("cloudwatch", region_name=region)
+
+        # Auto-sync on first initialization if enabled
+        if auto_sync:
+            self._maybe_auto_sync()
+
+    def _maybe_auto_sync(self) -> bool:
+        """Run auto-sync if enough time has passed since last sync.
+
+        Returns True if sync was run, False if skipped (too recent).
+        Thread-safe via lock to prevent concurrent syncs.
+        """
+        now = time.time()
+        with GuardrailService._sync_lock:
+            if now - GuardrailService._last_sync_time < GuardrailService._SYNC_INTERVAL_SECONDS:
+                return False
+            GuardrailService._last_sync_time = now
+
+        # Run sync outside the lock to not block other requests
+        try:
+            logger.debug("Running auto-sync with AWS Bedrock guardrails...")
+            result = self.discover_aws_guardrails()
+            if result.get("success"):
+                synced = result.get("synced", 0)
+                discovered = result.get("discovered", 0)
+                if synced > 0:
+                    logger.info(f"Auto-sync: imported {synced} new guardrails from AWS (total {discovered} in AWS)")
+                else:
+                    logger.debug(f"Auto-sync: all {discovered} AWS guardrails already tracked")
+            return True
+        except Exception as e:
+            logger.warning(f"Auto-sync failed (non-fatal): {e}")
+            return False
 
     # --- DynamoDB helpers ---
 
@@ -179,6 +219,9 @@ class GuardrailService:
         except Exception as e:
             logger.error(f"Failed to create Bedrock guardrail: {e}")
             self._add_status(template, GuardrailStatus.FAILED, f"Bedrock API error: {str(e)[:200]}")
+            # Don't persist an orphaned record — no Bedrock guardrail was created.
+            # The route surfaces the FAILED status as an error; nothing is stored.
+            return template
 
         self.table.put_item(Item=self._to_item(template))
         logger.info(f"Created guardrail template {template.template_id} (bedrock_id={template.guardrail_id})")
@@ -191,7 +234,11 @@ class GuardrailService:
             return None
         return self._from_item(item)
 
-    def list_templates(self, status: Optional[GuardrailStatus] = None) -> List[GuardrailTemplate]:
+    def list_templates(self, status: Optional[GuardrailStatus] = None, auto_sync: bool = True) -> List[GuardrailTemplate]:
+        # Auto-sync from AWS before listing (rate-limited to every 5 min)
+        if auto_sync:
+            self._maybe_auto_sync()
+
         # Scan with filter — acceptable for control plane (low cardinality)
         scan_kwargs: Dict = {}
         if status:
@@ -272,9 +319,16 @@ class GuardrailService:
     # --- Bedrock SDK integration ---
 
     def _build_bedrock_params(self, template: GuardrailTemplate) -> dict:
+        # Bedrock guardrail name must match [0-9a-zA-Z-_]+ (no spaces or
+        # punctuation) and description must be <= 200 chars. Template names
+        # contain spaces/em-dashes/commas, so sanitize hard and truncate.
+        name_slug = re.sub(r"[^0-9a-zA-Z]+", "-", template.name)[:30].strip("-").lower()
+        safe_name = f"ava-{template.template_id[:8]}-{name_slug}".strip("-")[:63]
+        raw_desc = template.description or f"AVA Guardrail: {template.name}"
+        safe_desc = raw_desc[:200]
         params: Dict = {
-            "name": f"ava-{template.template_id[:8]}-{template.name[:30].replace(' ', '-').lower()}",
-            "description": template.description or f"AVA Guardrail: {template.name}",
+            "name": safe_name,
+            "description": safe_desc,
             "blockedInputMessaging": "Your request was blocked by the guardrail policy. Please rephrase your input.",
             "blockedOutputsMessaging": "The response was blocked by the guardrail policy as it may contain restricted content.",
         }
@@ -446,3 +500,173 @@ class GuardrailService:
 
     def get_presets(self) -> List[GuardrailPreset]:
         return FSI_PRESETS
+
+    # --- Discovery & Sync ---
+
+    def discover_aws_guardrails(self) -> dict:
+        """Discover Bedrock Guardrails in AWS and sync to inventory.
+
+        Lists all guardrails in the AWS account and imports any that aren't
+        already tracked in DynamoDB. Returns a summary of discovered vs synced.
+
+        This is called automatically:
+        - On service initialization
+        - Before list_templates() (rate-limited to every 5 minutes)
+        - Can also be called manually via POST /api/v1/guardrails/discover
+        """
+        discovered = []
+        synced = []
+        already_tracked = []
+        errors = []
+
+        try:
+            # Get all existing guardrail_ids we already track (skip auto_sync to avoid recursion)
+            existing = self.list_templates(auto_sync=False)
+            tracked_ids = {t.guardrail_id for t in existing if t.guardrail_id}
+
+            # List all Bedrock guardrails in the account
+            paginator_token = None
+            while True:
+                kwargs = {"maxResults": 50}
+                if paginator_token:
+                    kwargs["nextToken"] = paginator_token
+                resp = self.bedrock_client.list_guardrails(**kwargs)
+
+                for g in resp.get("guardrails", []):
+                    gid = g.get("id")
+                    name = g.get("name", "")
+                    status = g.get("status", "")
+                    version = g.get("version", "DRAFT")
+                    arn = g.get("arn", "")
+                    created = g.get("createdAt")
+
+                    discovered.append({
+                        "guardrail_id": gid,
+                        "name": name,
+                        "status": status,
+                        "version": version,
+                    })
+
+                    if gid in tracked_ids:
+                        already_tracked.append(gid)
+                        continue
+
+                    # Import this guardrail into our inventory
+                    try:
+                        # Fetch full details to get configuration
+                        details = self.bedrock_client.get_guardrail(
+                            guardrailIdentifier=gid,
+                            guardrailVersion=version if version != "DRAFT" else "DRAFT"
+                        )
+
+                        # Create a template record for it
+                        template = GuardrailTemplate(
+                            name=name,
+                            description=details.get("description", f"Imported from AWS: {name}"),
+                            guardrail_id=gid,
+                            guardrail_arn=arn,
+                            guardrail_version=version,
+                            created_by="aws-discovery",
+                        )
+
+                        # Parse content filters if present
+                        content_policy = details.get("contentPolicy", {})
+                        if content_policy.get("filters"):
+                            template.content_filters = [
+                                ContentFilterConfig(
+                                    type=FilterType(f.get("type", "HATE")),
+                                    input_strength=FilterStrength(f.get("inputStrength", "MEDIUM")),
+                                    output_strength=FilterStrength(f.get("outputStrength", "MEDIUM")),
+                                )
+                                for f in content_policy["filters"]
+                                if f.get("type") in [ft.value for ft in FilterType]
+                            ]
+
+                        # Parse denied topics if present
+                        topic_policy = details.get("topicPolicy", {})
+                        if topic_policy.get("topics"):
+                            template.denied_topics = [
+                                DeniedTopic(
+                                    name=t.get("name", ""),
+                                    definition=t.get("definition", ""),
+                                    examples=t.get("examples", []),
+                                )
+                                for t in topic_policy["topics"]
+                                if t.get("type") == "DENY"
+                            ]
+
+                        # Parse PII config if present
+                        sensitive_policy = details.get("sensitiveInformationPolicy", {})
+                        if sensitive_policy.get("piiEntities"):
+                            template.pii_entities = []
+                            for p in sensitive_policy["piiEntities"]:
+                                try:
+                                    template.pii_entities.append(
+                                        PiiEntityConfig(
+                                            type=PiiEntityType(p.get("type", "NAME")),
+                                            action=PiiAction(p.get("action", "ANONYMIZE")),
+                                        )
+                                    )
+                                except ValueError:
+                                    pass  # Skip unknown PII types
+
+                        # Parse word filter if present
+                        word_policy = details.get("wordPolicy", {})
+                        if word_policy:
+                            managed = word_policy.get("managedWordLists", [])
+                            words = word_policy.get("words", [])
+                            template.word_filter = WordFilterConfig(
+                                enable_profanity=any(m.get("type") == "PROFANITY" for m in managed),
+                                blocked_words=[w.get("text", "") for w in words if w.get("text")],
+                            )
+
+                        # Set status based on Bedrock status
+                        bedrock_status = status.upper()
+                        if bedrock_status == "READY":
+                            self._add_status(template, GuardrailStatus.ACTIVE, "Imported from AWS Bedrock")
+                        elif bedrock_status == "CREATING":
+                            self._add_status(template, GuardrailStatus.CREATING, "Discovered in creating state")
+                        elif bedrock_status == "FAILED":
+                            self._add_status(template, GuardrailStatus.FAILED, "Discovered in failed state")
+                        else:
+                            self._add_status(template, GuardrailStatus.DRAFT, f"Imported with status: {bedrock_status}")
+
+                        # Save to DynamoDB
+                        self.table.put_item(Item=self._to_item(template))
+                        synced.append({
+                            "guardrail_id": gid,
+                            "name": name,
+                            "template_id": template.template_id,
+                        })
+                        logger.info(f"Synced AWS guardrail {gid} ({name}) -> template {template.template_id}")
+
+                    except Exception as e:
+                        logger.warning(f"Failed to import guardrail {gid}: {e}")
+                        errors.append({"guardrail_id": gid, "error": str(e)[:200]})
+
+                paginator_token = resp.get("nextToken")
+                if not paginator_token:
+                    break
+
+        except Exception as e:
+            logger.error(f"Failed to discover AWS guardrails: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "discovered": 0,
+                "synced": 0,
+            }
+
+        return {
+            "success": True,
+            "discovered": len(discovered),
+            "synced": len(synced),
+            "already_tracked": len(already_tracked),
+            "errors": len(errors),
+            "details": {
+                "discovered": discovered,
+                "synced": synced,
+                "already_tracked": already_tracked,
+                "errors": errors,
+            },
+        }

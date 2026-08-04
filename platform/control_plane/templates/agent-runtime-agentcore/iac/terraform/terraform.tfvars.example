@@ -21,7 +21,7 @@ container_image_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-agent:v1.
 
 # environment_variables = {
 #   LOG_LEVEL  = "INFO"
-#   MODEL_ID   = "anthropic.claude-sonnet-4-20250514"
+#   MODEL_ID   = "anthropic.claude-sonnet-4-5-20250929"
 # }
 
 # -----------------------------------------------------------------------------
@@ -43,7 +43,7 @@ container_image_uri = "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-agent:v1.
 # Model Access
 # -----------------------------------------------------------------------------
 
-# model_id = "anthropic.claude-sonnet-4-20250514"
+# model_id = "anthropic.claude-sonnet-4-5-20250929"
 
 # -----------------------------------------------------------------------------
 # Observability

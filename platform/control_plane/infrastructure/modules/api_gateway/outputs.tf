@@ -20,7 +20,7 @@ output "api_arn" {
 
 output "custom_domain_url" {
   description = "Custom domain URL (if configured)"
-  value       = var.domain_name != "" && var.hosted_zone_id != "" ? "https://api.${var.domain_name}" : null
+  value       = var.domain_name != "" && var.hosted_zone_id != "" ? "https://${var.api_prefix}.${var.domain_name}" : null
 }
 
 output "vpc_link_id" {

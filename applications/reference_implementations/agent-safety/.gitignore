@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Workspace
+.idea/
+.vscode/
+.kiro/
+*.swp
+*.swo
+
+# Build artifacts
+*.zip
+layer/

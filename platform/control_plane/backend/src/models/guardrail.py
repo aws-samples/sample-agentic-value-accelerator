@@ -46,6 +46,8 @@ class PiiEntityType(str, Enum):
     PIN = "PIN"
     SWIFT_CODE = "SWIFT_CODE"
     INTERNATIONAL_BANK_ACCOUNT_NUMBER = "INTERNATIONAL_BANK_ACCOUNT_NUMBER"
+    US_BANK_ACCOUNT_NUMBER = "US_BANK_ACCOUNT_NUMBER"
+    US_BANK_ROUTING_NUMBER = "US_BANK_ROUTING_NUMBER"
     # Personal
     NAME = "NAME"
     EMAIL = "EMAIL"
@@ -79,7 +81,10 @@ class ContentFilterConfig(BaseModel):
 
 class DeniedTopic(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    definition: str = Field(..., min_length=1, max_length=500)
+    # Optional at the schema level so the create route can return a friendly
+    # 400 ("topic X needs a definition") instead of an opaque 422. Bedrock
+    # still requires it — the route validates presence before calling AWS.
+    definition: Optional[str] = Field(default=None, max_length=500)
     examples: List[str] = Field(default_factory=list)
 
 

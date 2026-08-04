@@ -8,14 +8,20 @@
  *
  * Status markers: 'done' (implemented), 'partial' (UI-only / coming soon), 'todo' (not started)
  *
- * Integration opportunities from AI Trust Platform:
+ * Integration opportunities (roadmap):
  * - Explainability engine (LIME, SHAP, adverse action notices)
  * - Live compliance control tracking (not just framework mapping)
  * - Real-time agent monitoring with actual metrics
  * - Model inventory with attestation workflow
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Icon, type IconName } from './icons';
+import { downloadJSON, dateStamp } from './exportUtils';
+import { AGENT_SCOPE_META, type AgentScopeLevel } from './autonomyLadder';
+import useGovernanceAggregator, { type GovernanceAggregatorResult } from './useGovernanceAggregator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
+import { useLiveKPIs } from './useLiveKPIs';
+import { useGuardrailMetrics } from './useGuardrailMetrics';
 
 type Status = 'done' | 'partial' | 'todo';
 
@@ -101,14 +107,107 @@ interface Layer {
   threeLoD: ThreeLoD;
   frontierAgents?: FrontierAgent[];
   oldLayers: string[];
+  /** Build-side GenAI sourcing scopes this layer serves (3–5). */
+  genaiScopes: number[];
+  /** Agentic agency levels that operate at this layer (L1–L4, canonical AGENT_SCOPE_META). */
+  agencyLevels: AgentScopeLevel[];
 }
 
 // ─────────────────────────── Readiness scores ───────────────────────────
-// Scores reflect actual implementation status: implemented features vs planned
-const l1Score = 75; // Guardrails implemented, compliance framework UI ready
-const l2Score = 85; // FSI Foundry + deployments fully implemented
-const l3Score = 45; // Govern UI with mock data, needs backend integration
-const overallScore = Math.round((l1Score + l2Score + l3Score) / 3);
+// Baseline (illustrative) readiness — the platform-capability breadth story,
+// used as a fallback when no live estate signals are present (fresh install /
+// backend unreachable). When the aggregator returns real signals, the layers
+// are graded live by computeLayerReadiness() below instead.
+const L1_BASELINE = 80; // Guardrails + agent identity/registry + MCP governance
+const L2_BASELINE = 85; // FSI Foundry + deployments + model registry/eval gate
+const L3_BASELINE = 65; // Agentic governance surfaces built; telemetry partial
+
+/** Result of grading one layer from live signals (or the baseline fallback). */
+interface LayerReadiness {
+  score: number;
+  /** True when the score is computed from real estate signals, not the baseline. */
+  live: boolean;
+  /** Short "what fed this" note for the tooltip/caption. */
+  basis: string;
+}
+
+/**
+ * Grade each layer's readiness from REAL useGovernanceAggregator signals.
+ *
+ * Honesty rules:
+ * - Only real signal families feed the score. Model-registry counts are mock in
+ *   this edition (aggregator hardcodes totalModels), so they're excluded.
+ * - Each layer averages a set of 0..1 "dimension" ratios drawn from live data.
+ * - If a layer has NO live signal to grade (empty estate), it falls back to the
+ *   documented baseline and is marked live:false so the UI can say so.
+ */
+function computeLayerReadiness(agg: GovernanceAggregatorResult): Record<number, LayerReadiness> {
+  const s = agg.summary;
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+  const pct = (n: number) => Math.round(clamp01(n) * 100);
+
+  // ── Layer 1 · Foundation — guardrails, agent identity/registry, Cedar policy ──
+  const guardrailTotal = s.guardrailsActive + s.guardrailsDraft + s.guardrailsFailed;
+  const l1Dims: number[] = [];
+  if (guardrailTotal > 0) l1Dims.push(s.guardrailsActive / guardrailTotal);       // guardrail health
+  if (s.totalAgents > 0) l1Dims.push(agg.policyMetricsTotal.activePolicies > 0 ? 1 : 0.4); // agents governed by policy
+  if (agg.policyMetricsTotal.totalPolicies > 0) l1Dims.push(agg.policyMetricsTotal.activePolicies / agg.policyMetricsTotal.totalPolicies); // policy activation
+  const l1 = l1Dims.length
+    ? { score: pct(l1Dims.reduce((a, b) => a + b, 0) / l1Dims.length), live: true, basis: `${s.guardrailsActive} active guardrails · ${agg.policyMetricsTotal.activePolicies} active policies · ${s.totalAgents} agents` }
+    : { score: L1_BASELINE, live: false, basis: 'illustrative baseline — no live guardrail/policy signals yet' };
+
+  // ── Layer 2 · Production — use-case lifecycle, risk scoring, deployments ──
+  const deployTotal = s.deploymentsActive + s.deploymentsPending + s.deploymentsFailed;
+  const l2Dims: number[] = [];
+  if (s.totalUseCases > 0) l2Dims.push(s.deployedUseCases / s.totalUseCases);       // lifecycle progress to production
+  if (s.totalUseCases > 0) l2Dims.push(agg.useCaseRiskHeatmap.length / s.totalUseCases); // risk-scored coverage
+  if (deployTotal > 0) l2Dims.push(s.deploymentsActive / deployTotal);             // deployment health
+  const l2 = l2Dims.length
+    ? { score: pct(l2Dims.reduce((a, b) => a + b, 0) / l2Dims.length), live: true, basis: `${s.deployedUseCases}/${s.totalUseCases} use cases in production · ${agg.useCaseRiskHeatmap.length} risk-scored · ${s.deploymentsActive} active deployments` }
+    : { score: L2_BASELINE, live: false, basis: 'illustrative baseline — no live use-case/deployment signals yet' };
+
+  // ── Layer 3 · Scale — governance controls evidenced, runtime telemetry, approvals ──
+  const l3Dims: number[] = [];
+  if (agg.controlStats.total > 0) l3Dims.push(agg.controlStats.implemented / agg.controlStats.total); // governance control checklist
+  if (agg.guardrailMetricsTotal.totalInvocations > 0) l3Dims.push(1);              // live runtime telemetry present
+  if (agg.serviceApprovalRuns.length > 0) l3Dims.push(agg.serviceApprovalRuns.filter(r => r.status === 'completed').length / agg.serviceApprovalRuns.length); // approval completion
+  const l3 = l3Dims.length
+    ? { score: pct(l3Dims.reduce((a, b) => a + b, 0) / l3Dims.length), live: true, basis: `${agg.controlStats.percentage}% controls evidenced · ${agg.guardrailMetricsTotal.totalInvocations > 0 ? 'runtime telemetry live' : 'no telemetry'} · ${agg.serviceApprovalRuns.length} approval runs` }
+    : { score: L3_BASELINE, live: false, basis: 'illustrative baseline — no live control/telemetry signals yet' };
+
+  return { 1: l1, 2: l2, 3: l3 };
+}
+
+/**
+ * Grade the OPERATING-MODEL readiness (Step 3) from the operating models the
+ * aggregator already fetches from Plan. Real signals: assessment completion,
+ * maturity level (1–5), and whether a target pattern has been chosen. Falls back
+ * to an illustrative baseline when no operating model has been started.
+ */
+function computeOperateReadiness(agg: GovernanceAggregatorResult): LayerReadiness & { maturityLevel: number | null; pattern: string | null } {
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+  const pct = (n: number) => Math.round(clamp01(n) * 100);
+  const oms = agg.operatingModels;
+  if (!oms.length) {
+    return { score: 40, live: false, basis: 'illustrative baseline — no operating model designed yet (start one in Plan)', maturityLevel: null, pattern: null };
+  }
+  // Use the most mature/complete operating model as the estate's posture.
+  const best = oms.reduce((a, b) => ((b.computed?.composite ?? 0) > (a.computed?.composite ?? 0) ? b : a));
+  const c = best.computed;
+  const dims: number[] = [];
+  if (c) {
+    dims.push(clamp01(c.completion));            // assessment answered (0–1)
+    dims.push(clamp01(c.maturity_level / 5));    // maturity on a 5-point ladder
+  }
+  dims.push(best.pattern ? 1 : 0.5);             // target operating pattern chosen
+  return {
+    score: pct(dims.reduce((a, b) => a + b, 0) / dims.length),
+    live: true,
+    basis: `${oms.length} operating model${oms.length > 1 ? 's' : ''} · maturity L${c?.maturity_level ?? '—'} · ${Math.round((c?.completion ?? 0) * 100)}% assessed`,
+    maturityLevel: c?.maturity_level ?? null,
+    pattern: best.pattern || null,
+  };
+}
 
 // ─────────────────────────── 3-Layer Data (AVA actual implementation status) ───────────────────────────
 const LAYERS: Layer[] = [
@@ -116,41 +215,43 @@ const LAYERS: Layer[] = [
     id: 3,
     label: 'LAYER 3',
     name: 'Observe and Scale',
-    question: 'How can we explain AI decisions, govern autonomous actions, and prove compliance?',
+    question: 'How can we govern autonomous agents, prove AI safety, and roll up compliance?',
     color: '#3b82f6', // blue-500 — Layer 3 (Scale)
     bgGradient: 'from-blue-50 to-slate-50',
-    score: l3Score,
+    score: L3_BASELINE,
     kpis: [
-      { label: 'Frontier Agents', value: '2/3', sub: '1 coming soon', color: '#1e40af' },
-      { label: 'Govern UI', value: 'Ready', sub: 'mock data', color: '#1e3a8a' },
-      { label: 'Risk Heatmap', value: 'Ready', sub: 'needs backend', color: '#1e40af' },
-      { label: 'FinOps', value: 'Ready', sub: 'needs backend', color: '#1d4ed8' },
+      { label: 'AI Safety', value: '6', sub: 'safety surfaces', color: '#1e40af' },
+      { label: 'RAI Coverage', value: '8-dim', sub: 'AWS RAI rubric', color: '#1e3a8a' },
+      { label: 'Command Center', value: 'Live', sub: 'scorecard roll-up', color: '#1e40af' },
+      { label: 'Fleet & FinOps', value: 'Live', sub: 'posture + TCO', color: '#1d4ed8' },
     ],
     capabilities: [
-      { status: 'done',    text: 'AWS DevOps Agent — incident investigation, root cause analysis (Available)' },
-      { status: 'done',    text: 'AWS Security Agent — design review, code review, pen testing (Available)' },
-      { status: 'partial', text: 'Kiro IDE — spec-driven development, autonomous agents (Coming Soon)' },
-      { status: 'partial', text: 'Governance Command Center UI — risk heatmap, compliance, FinOps (UI ready, needs live data)' },
-      { status: 'partial', text: 'Agent fleet observability — health, metrics, incident tracking (UI ready, needs backend)' },
-      { status: 'todo',    text: 'Explainability — LIME, SHAP, adverse action notices (Not yet implemented)' },
+      { status: 'done',    text: 'AI Safety module — RAI coverage rubric, frontier capability thresholds, safety cases, red-team evals, incident management' },
+      { status: 'done',    text: 'Threat Modeling — MAESTRO 7-layer + OWASP Agentic T1–T17, capability → control → residual' },
+      { status: 'done',    text: 'Command Center — governance scorecard roll-up across risk, audit, data, FinOps, model (shared metric contract)' },
+      { status: 'done',    text: 'Agentic Fleet — health, autonomy posture, kill-switch, cost & Collaboration-TCO (human↔agent spectrum)' },
+      { status: 'done',    text: 'Frontier Agents — AWS DevOps and Security agents (Available); Kiro agentic IDE (Coming Soon)' },
+      { status: 'partial', text: 'Live runtime telemetry — guardrail/CloudWatch signals feed the scorecard where wired; rest illustrative in this edition' },
+      { status: 'partial', text: 'Model explainability — SHAP/LIME + bias/fairness surfaced in Model Management; adverse-action notices roadmap' },
     ],
     modules: [
-      { label: 'Frontier Agents',  icon: 'cpu-chip',         desc: '2 available, Kiro coming', route: '/aaas/aws-agents' },
-      { label: 'Govern Dashboard', icon: 'chart-bar',        desc: 'UI ready, mock data',      route: '/govern' },
-      { label: 'FinOps',           icon: 'currency-dollar',  desc: 'UI ready, needs backend',  route: '/govern/finops' },
-      { label: 'Audit Trail',      icon: 'clipboard-list',   desc: 'UI ready, needs backend',  route: '/govern/audit' },
+      { label: 'AI Safety',       icon: 'shield-check',    desc: '6 surfaces, RAI 8-dim',    route: '/govern/safety' },
+      { label: 'Command Center',  icon: 'chart-bar',       desc: 'scorecard roll-up',        route: '/govern/command-center' },
+      { label: 'Agentic Fleet',   icon: 'cpu-chip',        desc: 'posture + kill-switch',    route: '/govern/fleet' },
+      { label: 'FinOps',          icon: 'currency-dollar', desc: 'cost + Collaboration TCO', route: '/govern/finops' },
+      { label: 'Audit & Incidents', icon: 'clipboard-list', desc: 'trail + EU Art.73 clocks', route: '/govern/audit' },
     ],
     keyControls: [
-      { id: 'OBS-001', name: 'Frontier Agent Deployment', status: 'Active' },
-      { id: 'OBS-002', name: 'Govern UI Components', status: 'Active' },
-      { id: 'OBS-003', name: 'Live Data Integration', status: 'Pending' },
-      { id: 'OBS-004', name: 'Explainability Engine', status: 'Pending' },
+      { id: 'OBS-001', name: 'AI Safety Module (RAI rubric + evals)', status: 'Active' },
+      { id: 'OBS-002', name: 'MAESTRO Threat Modeling', status: 'Active' },
+      { id: 'OBS-003', name: 'Governance Scorecard Roll-up', status: 'Active' },
+      { id: 'OBS-004', name: 'Live Runtime Telemetry Integration', status: 'Pending' },
     ],
     awsServices: ['Bedrock AgentCore', 'CloudWatch', 'CloudTrail', 'Cost Explorer'],
     awsServiceMap: [
-      { service: 'Amazon Bedrock AgentCore', challenge: 'How do we govern autonomous agents at scale?', solves: 'Agent runtime, memory, tool orchestration, and fleet management with full observability', features: ['Agent Runtime', 'Session Memory', 'Tool Registry (MCP)', 'Observability API', 'Fleet Management'] },
+      { service: 'Amazon Bedrock AgentCore', challenge: 'How do we govern autonomous agents at scale?', solves: 'Agent runtime, memory, identity, and tool exposure via Gateway with full observability', features: ['Runtime', 'Memory', 'Identity', 'Gateway (MCP tools)', 'Observability'] },
       { service: 'Amazon CloudWatch', challenge: 'How do we know when AI systems degrade?', solves: 'Real-time metrics, alarms, dashboards for latency, errors, drift, and quality scores', features: ['Custom AI Metrics', 'Composite Alarms', 'Real-time Dashboards', 'Anomaly Detection', 'Logs Insights'] },
-      { service: 'AWS CloudTrail', challenge: 'How do we prove every AI action was logged?', solves: 'Immutable audit trail for every Bedrock invocation — 7-year retention for regulators', features: ['Management Events', 'Data Events', 'CloudTrail Lake', 'Organization Trail', 'Tamper Detection'] },
+      { service: 'AWS CloudTrail', challenge: 'How do we prove every AI action was logged?', solves: 'Immutable audit trail for every Bedrock invocation — 7-year retention for regulators', features: ['Management Events', 'Data Events', 'CloudTrail Lake', 'Organization Trail', 'Log File Integrity Validation'] },
       { service: 'AWS Cost Explorer', challenge: 'How do we govern AI spend across business units?', solves: 'Per-model cost tracking, BU budgets, showback/chargeback, optimization recommendations', features: ['Cost Allocation Tags', 'Budget Alerts', 'Savings Plans', 'Forecasting', 'Anomaly Detection'] },
     ],
     threeLoD: {
@@ -159,7 +260,7 @@ const LAYERS: Layer[] = [
         subtitle: 'Model owners, AI/ML engineers, agent developers',
         activities: [
           { title: 'Day-to-day performance monitoring', how: 'Set CloudWatch alarms for drift >7%, latency p99 >5s, error rate >1%' },
-          { title: 'Agent development & tool integration', how: 'Deploy via AgentCore, configure MCP tools, set up 13 evaluators for quality' },
+          { title: 'Agent development & tool integration', how: 'Deploy via AgentCore, configure MCP tools, set up quality evaluators (accuracy, safety, latency)' },
           { title: 'Incident detection & first response', how: 'Use SSM runbook for auto-disable, SNS alerting within SLA' },
           { title: 'Cost tracking & optimization', how: 'Tag invocations with cost-center/BU, set AWS Budgets alerts per BU' },
         ],
@@ -198,12 +299,12 @@ const LAYERS: Layer[] = [
         agent: 'AWS Security Agent',
         role: 'Continuous security validation',
         description: 'Proactively secures applications with context-aware penetration testing and automated security reviews.',
-        capabilities: ['On-demand pen testing', 'Automated security reviews', 'Vulnerability discovery', 'OWASP LLM Top 10 validation', '90%+ faster security testing'],
+        capabilities: ['On-demand pen testing', 'Automated security reviews', 'Vulnerability discovery', 'OWASP LLM Top 10 validation', 'Accelerated security testing'],
         govRelevance: 'Validates AI application security continuously. Ensures guardrail bypass attempts are caught. Tests agent authorization boundaries.',
         status: 'Available',
       },
       {
-        agent: 'Kiro IDE',
+        agent: 'Kiro',
         role: 'Governed AI-assisted development',
         description: 'Spec-driven development with governance hooks — requirements → design → implementation with compliance checks at every step.',
         capabilities: ['Spec-driven development', 'Pre-commit governance hooks', 'Steering files for standards', 'Multi-file refactoring', 'IaC generation'],
@@ -212,6 +313,8 @@ const LAYERS: Layer[] = [
       },
     ],
     oldLayers: ['L5 — Explainability', 'L6 — AI Operations', 'L7 — Agentic Operations'],
+    genaiScopes: [4, 5],
+    agencyLevels: [3, 4],
   },
   {
     id: 2,
@@ -220,7 +323,7 @@ const LAYERS: Layer[] = [
     question: 'How can we govern every AI system through a structured lifecycle?',
     color: '#1d4ed8', // blue-700 — Layer 2 (Production)
     bgGradient: 'from-blue-100/60 to-slate-50',
-    score: l2Score,
+    score: L2_BASELINE,
     kpis: [
       { label: 'Use Cases',       value: 34,      sub: 'deployable',   color: '#1e40af' },
       { label: 'Frameworks',      value: 4,       sub: 'agent SDKs',   color: '#1e3a8a' },
@@ -228,28 +331,29 @@ const LAYERS: Layer[] = [
       { label: 'Custom Agents',   value: 'Soon',  sub: 'coming soon',  color: '#b45309' },
     ],
     capabilities: [
-      { status: 'done',    text: 'FSI Foundry: 34 use cases across Banking, Risk, Capital Markets, Insurance, Ops, Moderntic' },
+      { status: 'done',    text: 'FSI Foundry: 34 use cases across Banking, Payments, Risk & Compliance, Capital Markets, Insurance, Operations, Modernization' },
       { status: 'done',    text: 'Dual-framework: LangGraph/LangChain + Strands (CrewAI, LlamaIndex available)' },
       { status: 'done',    text: 'Deployment: EC2 + ALB, Step Functions + Lambda, Bedrock AgentCore' },
       { status: 'done',    text: 'IaC generation: CDK, CloudFormation, Terraform templates' },
+      { status: 'done',    text: 'Model Management: registry, evaluations, monitoring, and a deploy gate with attestation' },
+      { status: 'done',    text: 'Risk tiering & compliance mapping: use cases risk-scored and mapped to frameworks (SR 26-2, NIST, EU AI Act)' },
       { status: 'partial', text: 'Custom Agent Builder — UI ready, deployment orchestration coming soon' },
-      { status: 'partial', text: 'Model Registry — UI with mock data, needs live inventory integration' },
     ],
     modules: [
-      { label: 'FSI Foundry',    icon: 'building-office',     desc: '34 use cases, deploy now',  route: '/applications/fsi-foundry' },
-      { label: 'Deployments',    icon: 'rocket-launch',       desc: '3 patterns, IaC ready',     route: '/applications' },
-      { label: 'Custom Agents',  icon: 'wrench-screwdriver',  desc: 'UI ready, deploy coming',   route: '/aaas/custom' },
-      { label: 'Model Registry', icon: 'clipboard-list',      desc: 'UI ready, mock data',       route: '/govern/models' },
+      { label: 'FSI Foundry',       icon: 'building-office',    desc: '34 use cases, deploy now', route: '/applications/fsi-foundry' },
+      { label: 'Model Management',  icon: 'clipboard-list',     desc: 'registry + eval + gate',   route: '/govern/models' },
+      { label: 'Risk & Compliance', icon: 'scale',              desc: 'tiering + framework map',  route: '/govern/risk' },
+      { label: 'Custom Agents',     icon: 'wrench-screwdriver', desc: 'UI ready, deploy coming',  route: '/aaas/custom' },
     ],
     keyControls: [
       { id: 'PRD-001', name: 'FSI Foundry Catalog', status: 'Active' },
-      { id: 'PRD-002', name: 'Multi-Framework Support', status: 'Active' },
-      { id: 'PRD-003', name: 'IaC Deployment Patterns', status: 'Active' },
+      { id: 'PRD-002', name: 'Model Registry + Evaluation Gate', status: 'Active' },
+      { id: 'PRD-003', name: 'Risk Tiering & Framework Mapping', status: 'Active' },
       { id: 'PRD-004', name: 'Custom Agent Deployment', status: 'Pending' },
     ],
     awsServices: ['Bedrock AgentCore', 'Step Functions', 'Lambda', 'EC2', 'ALB', 'CDK'],
     awsServiceMap: [
-      { service: 'Amazon Bedrock AgentCore Registry', challenge: 'How do we inventory all AI assets?', solves: 'Complete AI inventory: models, agents, MCP servers, tools, skills — OSFI E-23 compliant', features: ['Model Registry', 'Agent Registry', 'Tool Registry', 'Version Tracking', 'Metadata & Tags'] },
+      { service: 'SageMaker Model Registry + AgentCore Gateway', challenge: 'How do we inventory all AI assets?', solves: 'Complete AI inventory: models in SageMaker Model Registry, agents/tools/MCP servers via AgentCore Gateway — OSFI E-23 compliant', features: ['Model Registry (SageMaker)', 'Agent inventory', 'Tools/MCP via Gateway', 'Version Tracking', 'Metadata & Tags'] },
       { service: 'Amazon Bedrock Evaluation', challenge: 'How do we validate models we didn\'t build?', solves: 'LLM-as-Judge scoring with FSI-specific metrics — independent validation', features: ['Automatic Evaluation', 'Human Evaluation', 'Custom Metrics', 'Model Comparison', 'CI/CD Integration'] },
       { service: 'Amazon Bedrock Guardrails', challenge: 'How do we enforce content policies at inference?', solves: 'Topic denial, content filters, PII redaction, prompt attack detection per use case', features: ['Content Filters', 'Denied Topics', 'PII Redaction', 'Prompt Attack Detection', 'Grounding Check'] },
       { service: 'AWS Step Functions', challenge: 'How do we enforce stage gates in governance?', solves: 'Orchestrated workflow — requirements must be met before advancement, no shortcuts', features: ['Visual Workflow', 'Choice States', 'Wait States', 'Error Handling', 'Full Audit Trail'] },
@@ -259,7 +363,7 @@ const LAYERS: Layer[] = [
         role: '1st Line — Business & Development',
         subtitle: 'Model owners, AI/ML engineers, data scientists',
         activities: [
-          { title: 'Use case lifecycle management', how: 'Submit via Registry, advance through 9-stage pipeline with evidence at each gate' },
+          { title: 'Use case lifecycle management', how: 'Submit via Registry, advance through staged pipeline (Concept → Pilot → Production) with evidence at each gate' },
           { title: 'Model selection & deployment', how: 'Run ListFoundationModels, pin version IDs, create evaluator jobs via Bedrock API' },
           { title: 'Guardrails configuration', how: 'Create guardrail with content filters, PII entities, denied topics per use case' },
           { title: 'Evaluation execution', how: 'Build FSI test cases, run Bedrock Evaluation with LLM-as-Judge metrics' },
@@ -270,7 +374,7 @@ const LAYERS: Layer[] = [
         subtitle: 'CRO, CCO, MRM team, DPO',
         activities: [
           { title: 'Independent model validation', how: 'Run same eval suite against 2-3 challenger models, compare weighted scores' },
-          { title: 'Framework compliance assessment', how: 'Map controls to 6 frameworks in Compliance Center, run gap analysis quarterly' },
+          { title: 'Framework compliance assessment', how: 'Map controls to frameworks in Compliance Center (SR 26-2, NIST AI RMF, EU AI Act, ISO 42001…), run gap analysis quarterly' },
           { title: 'Service approval gate reviews', how: 'Review at each gate: Risk, Security, Compliance, Architecture, Executive' },
           { title: 'Third-party risk management', how: 'Review DDQs for model providers, assess concentration risk, verify no-training terms' },
         ],
@@ -287,6 +391,8 @@ const LAYERS: Layer[] = [
       },
     },
     oldLayers: ['L3 — Model Assurance', 'L4 — Governance & Risk'],
+    genaiScopes: [3, 4],
+    agencyLevels: [2, 3],
   },
   {
     id: 1,
@@ -295,36 +401,36 @@ const LAYERS: Layer[] = [
     question: 'How do we establish a secure, responsible, and scalable foundation for AI?',
     color: '#1e3a8a', // blue-900 — Layer 1 (Foundation)
     bgGradient: 'from-slate-100/70 to-slate-50',
-    score: l1Score,
+    score: L1_BASELINE,
     kpis: [
-      { label: 'Guardrail Builder', value: 'Live',  sub: '5 types',     color: '#1d4ed8' },
-      { label: 'PII Detection',     value: 'Live',  sub: '12 entities', color: '#1e3a8a' },
-      { label: 'Tools',             value: '0/6',   sub: 'coming soon', color: '#b45309' },
-      { label: 'Knowledge',         value: '3/6',   sub: '3 coming',    color: '#1e40af' },
+      { label: 'Guardrail Builder', value: 'Live',  sub: '5 protection layers', color: '#1d4ed8' },
+      { label: 'PII Detection',     value: 'Live',  sub: '21 entity types', color: '#1e3a8a' },
+      { label: 'Agent Identity',    value: 'Live',  sub: 'registry + Cedar', color: '#1e40af' },
+      { label: 'MCP Governance',    value: 'Live',  sub: 'tool/server registry', color: '#1d4ed8' },
     ],
     capabilities: [
-      { status: 'done',    text: 'Guardrail Builder: Content filters, PII detection, denied topics, word filters, grounding' },
-      { status: 'done',    text: 'Guardrail Templates: Create, list, deploy to Bedrock Guardrails' },
-      { status: 'done',    text: 'Live Preview: Test guardrails before deployment' },
-      { status: 'done',    text: 'Service Onboarding: Guided AI service approval workflow' },
+      { status: 'done',    text: 'Guardrail Builder: content filters, PII detection, denied topics, word filters, grounding' },
+      { status: 'done',    text: 'Guardrail Templates + live preview: create, test, deploy to Bedrock Guardrails' },
+      { status: 'done',    text: 'Agent identity & registry: every agent/tool/MCP server inventoried with owner, scope, and Cedar policy binding' },
+      { status: 'done',    text: 'MCP governance: server/tool registry with auth method, approval state, and permission boundaries' },
       { status: 'partial', text: 'Tools Factory: MCP Gateway, Code Exec, Browser, APIs (Coming Soon)' },
-      { status: 'partial', text: 'Knowledge: 3 available, 3 coming (Credit Memos, Adverse Media, Gov Events)' },
+      { status: 'partial', text: 'Knowledge Bases: register and govern data sources for retrieval (Bedrock Knowledge Bases)' },
     ],
     modules: [
-      { label: 'Guardrails',         icon: 'shield-check',        desc: 'Builder + templates + preview', route: '/secure/guardrails' },
-      { label: 'Service Onboarding', icon: 'check-circle',        desc: 'AI service approval',           route: '/secure/service-onboarding' },
-      { label: 'Tools',              icon: 'wrench-screwdriver',  desc: '6 tools coming soon',           route: '/capabilities/tools' },
-      { label: 'Knowledge',          icon: 'book-open',           desc: '3 available, 3 coming',         route: '/capabilities/knowledge' },
+      { label: 'Guardrails',     icon: 'shield-check',       desc: 'Builder + templates + preview', route: '/secure/guardrails' },
+      { label: 'Agent Registry', icon: 'clipboard-list',     desc: 'agents, tools, MCP + Cedar',    route: '/govern/agents' },
+      { label: 'Policy',         icon: 'scale',              desc: 'Cedar deny-by-default',         route: '/secure/policy' },
+      { label: 'Tools',          icon: 'wrench-screwdriver', desc: '6 tools coming soon',           route: '/capabilities/tools' },
     ],
     keyControls: [
       { id: 'FND-001', name: 'Guardrail Builder', status: 'Active' },
-      { id: 'FND-002', name: 'PII Detection (12 types)', status: 'Active' },
-      { id: 'FND-003', name: 'Service Onboarding Flow', status: 'Active' },
-      { id: 'FND-004', name: 'Tools Factory', status: 'Pending' },
+      { id: 'FND-002', name: 'PII Detection (21 entity types)', status: 'Active' },
+      { id: 'FND-003', name: 'Agent Identity & MCP Registry', status: 'Active' },
+      { id: 'FND-004', name: 'Cedar Policy Enforcement', status: 'Active' },
     ],
     awsServices: ['Bedrock Guardrails', 'IAM', 'Cognito', 'KMS', 'S3', 'Textract'],
     awsServiceMap: [
-      { service: 'Amazon Bedrock Guardrails', challenge: 'How do we prevent harmful outputs?', solves: 'Content filters, topic denial, PII/PHI redaction before model input — 14 PHI types', features: ['Content Filters (4 categories)', 'Denied Topics', 'PII Filters (14 types)', 'Word Filters', 'Grounding Check'] },
+      { service: 'Amazon Bedrock Guardrails', challenge: 'How do we prevent harmful outputs?', solves: 'Content filters, topic denial, and PII redaction before model input — 21 PII entity types plus custom regex', features: ['Content Filters (6 categories)', 'Denied Topics', 'PII Filters (21 types)', 'Word Filters', 'Contextual Grounding'] },
       { service: 'AWS IAM', challenge: 'How do we enforce least-privilege access?', solves: 'Service-specific roles with resource policies — no wildcard, per-model access control', features: ['Service Roles', 'Resource Policies', 'Permission Boundaries', 'IAM Access Analyzer', 'SCPs'] },
       { service: 'AWS KMS', challenge: 'How do we encrypt AI data at rest and in transit?', solves: 'AES-256 at rest, TLS 1.3 in transit — customer-managed keys for all Bedrock data', features: ['Customer Managed Keys', 'Auto Key Rotation', 'Encryption Context', 'Multi-Region Keys', 'CloudTrail Logging'] },
       { service: 'AWS Security Hub', challenge: 'How do we assess security posture?', solves: 'Aggregated findings from 50+ services, compliance scoring, prioritized remediation', features: ['Security Best Practices', 'CIS Benchmarks', 'Automated Findings', 'Custom Actions', 'Compliance Score'] },
@@ -362,9 +468,203 @@ const LAYERS: Layer[] = [
       },
     },
     oldLayers: ['L1 — Infrastructure Security', 'L2 — Data Protection'],
+    genaiScopes: [3],
+    agencyLevels: [1, 2],
   },
 ];
 
+
+// ─────────────────────────── Industry Implementation Patterns ───────────────────────────
+interface ImplementationPattern {
+  id: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  bestFor: string;
+  organizations: string[];
+  layers: {
+    foundation: 'centralized' | 'federated' | 'hybrid';
+    production: 'centralized' | 'federated' | 'hybrid';
+    scale: 'centralized' | 'federated' | 'hybrid';
+  };
+  awsServices: string[];
+  pros: string[];
+  cons: string[];
+}
+
+const IMPLEMENTATION_PATTERNS: ImplementationPattern[] = [
+  {
+    id: 'coe',
+    name: 'Centralized CoE Pattern',
+    subtitle: 'Single team, full control',
+    description: 'A single AI governance team owns all 3 layers. Mandatory approval gates at each layer transition. All AI decisions flow through the Center of Excellence.',
+    bestFor: 'Highly regulated, risk-averse organizations',
+    organizations: ['Large Banks', 'Insurance Companies', 'Global Systemically Important Banks (G-SIBs)'],
+    layers: { foundation: 'centralized', production: 'centralized', scale: 'centralized' },
+    awsServices: ['Central Bedrock Account', 'Cross-account Guardrails', 'Shared Model Registry', 'Centralized CloudTrail'],
+    pros: [
+      'Maximum control and consistency',
+      'Single source of truth for AI governance',
+      'Simplified regulatory reporting',
+      'Clear accountability chain',
+    ],
+    cons: [
+      'Can become a bottleneck',
+      'Slower time-to-market',
+      'May not scale with rapid AI adoption',
+      'Requires large central team',
+    ],
+  },
+  {
+    id: 'hub-spoke',
+    name: 'Hub-and-Spoke Pattern',
+    subtitle: 'Central standards, distributed execution',
+    description: 'Central team sets standards and owns Foundation layer. Business units implement Application layer within guardrails. Shared risk appetite with local autonomy.',
+    bestFor: 'Multi-BU organizations with shared risk appetite',
+    organizations: ['Regional Banks', 'Asset Managers', 'Insurance Groups', 'Financial Holding Companies'],
+    layers: { foundation: 'centralized', production: 'hybrid', scale: 'federated' },
+    awsServices: ['Shared Guardrails', 'BU-specific Agents', 'Federated Model Registry', 'Cross-account Observability'],
+    pros: [
+      'Balances control with agility',
+      'BUs can innovate within guardrails',
+      'Scales with organizational growth',
+      'Shared infrastructure costs',
+    ],
+    cons: [
+      'Requires clear governance boundaries',
+      'Coordination overhead between hub and spokes',
+      'Risk of inconsistent implementation',
+      'Complex IAM and cross-account setup',
+    ],
+  },
+  {
+    id: 'federated',
+    name: 'Federated Pattern',
+    subtitle: 'Teams own full stack with guardrails as code',
+    description: 'Engineering teams own the full stack. Policy-as-code enforcement with Cedar policies. Self-service deployment with automated compliance gates.',
+    bestFor: 'Fast-moving, engineering-led organizations',
+    organizations: ['Fintechs', 'Startups', 'Digital-native Banks', 'Crypto/DeFi Companies'],
+    layers: { foundation: 'federated', production: 'federated', scale: 'federated' },
+    awsServices: ['GitOps Pipelines', 'Cedar Policies', 'Automated Gates', 'Decentralized Observability'],
+    pros: [
+      'Maximum development velocity',
+      'Teams accountable end-to-end',
+      'Policy changes via PR workflow',
+      'Scales with team count',
+    ],
+    cons: [
+      'Requires mature engineering culture',
+      'Higher risk of inconsistency',
+      'Harder to get org-wide view',
+      'May not satisfy conservative regulators',
+    ],
+  },
+  {
+    id: 'regulated-ai',
+    name: 'Regulated AI Pattern',
+    subtitle: 'Human-in-the-loop mandatory',
+    description: 'Human review required at Application layer for all high-stakes decisions. Full audit trail with explainability for every AI output. RETURN_CONTROL pattern for agent actions.',
+    bestFor: 'High-stakes decisions, regulatory scrutiny',
+    organizations: ['Healthcare', 'Government Agencies', 'Credit Decisioning', 'Insurance Underwriting'],
+    layers: { foundation: 'centralized', production: 'centralized', scale: 'hybrid' },
+    awsServices: ['A2I Workflows', 'Bedrock RETURN_CONTROL', 'Explainability APIs', 'Immutable Audit Trail'],
+    pros: [
+      'Maximum regulatory compliance',
+      'Human oversight at critical points',
+      'Explainability built-in',
+      'Defensible decisions',
+    ],
+    cons: [
+      'Slowest time-to-decision',
+      'Higher operational cost (human reviewers)',
+      'May not scale for high-volume use cases',
+      'Requires trained human reviewers',
+    ],
+  },
+];
+
+// ─────────────────────────── Scoping Matrices ───────────────────────────
+// Trust Stack was originally an LLM/Bedrock-first story (implicitly GenAI
+// Scope 3 — pre-trained models via API). AVA is now in the agentic space, so
+// the trust model has to classify along BOTH authoritative AWS matrices:
+//   1. GenAI Security Scoping Matrix — sourcing scope 1–5 (buy → build)
+//   2. Agentic AI Security Scoping Matrix — agency L1–L4 (canonical AGENT_SCOPE_META)
+// Each scope routes to the Govern surface that carries its governance load, so
+// this is a classifier that ROUTES, not just a diagram.
+
+type ScopeSide = 'buy' | 'build';
+
+interface GenAiScope {
+  id: number;
+  name: string;
+  side: ScopeSide;
+  blurb: string;
+  /** Where the governance load sits at this scope. */
+  focus: string;
+  color: string;
+  /** Cross-link to the Govern surface that serves this scope. */
+  to: { label: string; href: string };
+}
+
+// AWS Generative AI Security Scoping Matrix — 5 scopes, least → most ownership.
+const GENAI_SCOPES: GenAiScope[] = [
+  {
+    id: 1, name: 'Consumer app', side: 'buy',
+    blurb: 'Employees use a public third-party AI service under the provider’s terms.',
+    focus: 'Provider assessment · acceptable-use · shadow-AI detection',
+    color: '#0891b2',
+    to: { label: 'Shadow AI', href: '/govern/shadow-ai' },
+  },
+  {
+    id: 2, name: 'Enterprise app', side: 'buy',
+    blurb: 'A third-party enterprise app with embedded GenAI, under a vendor relationship.',
+    focus: 'Vendor DDQ · TOS & licensing · data sovereignty',
+    color: '#2563eb',
+    to: { label: 'Third-Party Risk', href: '/govern/risk?tab=third-party' },
+  },
+  {
+    id: 3, name: 'Pre-trained models', side: 'build',
+    blurb: 'You build an app on an existing foundation model via API (e.g. Claude on Bedrock).',
+    focus: 'Guardrails · prompt-injection threat modeling · evals',
+    color: '#7c3aed',
+    to: { label: 'AI Safety', href: '/govern/safety' },
+  },
+  {
+    id: 4, name: 'Fine-tuned models', side: 'build',
+    blurb: 'You refine a foundation model with your own data into a specialized model.',
+    focus: 'Data classification · model attestation · lineage',
+    color: '#c026d3',
+    to: { label: 'Model Management', href: '/govern/models' },
+  },
+  {
+    id: 5, name: 'Self-trained models', side: 'build',
+    blurb: 'You train a model from scratch on data you own — you own every aspect.',
+    focus: 'Full lifecycle · own legal terms · frontier thresholds',
+    color: '#db2777',
+    to: { label: 'Frontier Thresholds', href: '/govern/safety/capabilities' },
+  },
+];
+
+// The 5 security disciplines from the matrix, mapped to the Govern surface that
+// carries each. Shown as the "responsibility rows" that apply across all scopes.
+const SCOPE_DISCIPLINES: { name: string; to: { label: string; href: string } }[] = [
+  { name: 'Governance & Compliance', to: { label: 'Compliance', href: '/govern/compliance' } },
+  { name: 'Legal & Privacy', to: { label: 'Data Governance', href: '/govern/data' } },
+  { name: 'Risk Management', to: { label: 'Risk', href: '/govern/risk' } },
+  { name: 'Controls', to: { label: 'AI Safety', href: '/govern/safety' } },
+  { name: 'Resilience', to: { label: 'Fleet & Incidents', href: '/govern/fleet' } },
+];
+
+const GENAI_SCOPE_BY_ID: Record<number, GenAiScope> = Object.fromEntries(GENAI_SCOPES.map(s => [s.id, s]));
+const BUY_SCOPES = GENAI_SCOPES.filter(s => s.side === 'buy');
+
+// Agentic agency scope → the Govern surface that governs at that agency level.
+const AGENCY_LINK: Record<number, { label: string; href: string }> = {
+  1: { label: 'Agent Registry', href: '/govern/agents' },
+  2: { label: 'Human Oversight', href: '/govern/agents?tab=human-oversight' },
+  3: { label: 'AI Safety', href: '/govern/safety' },
+  4: { label: 'Threat Modeling', href: '/govern/safety/threat-modeling' },
+};
 
 // ─────────────────────────── Score Colors ───────────────────────────
 function scoreColor(score: number): string {
@@ -379,17 +679,110 @@ function scoreBg(score: number): string {
   return 'bg-rose-100';
 }
 
+// Key-control status badge — reflect the real status, not always green.
+const controlStatusBadge: Record<KeyControl['status'], string> = {
+  Active: 'bg-emerald-100 text-emerald-700',
+  Pending: 'bg-amber-100 text-amber-700',
+  Review: 'bg-blue-100 text-blue-700',
+};
+
 // ─────────────────────────── Component ───────────────────────────
 export default function TrustStack3Layer() {
   const [focusLayer, setFocusLayer] = useState<number | null>(null);
+  const [showPatterns, setShowPatterns] = useState(false);
+  const [expandedPattern, setExpandedPattern] = useState<string | null>(null);
+
+  // Grade each layer live from real estate signals (falls back to baseline when
+  // no signals are present). Same source the Command Center + program spine use.
+  const agg = useGovernanceAggregator();
+  const readiness = useMemo(() => computeLayerReadiness(agg), [agg]);
+  const operate = useMemo(() => computeOperateReadiness(agg), [agg]);
+  const anyLive = Object.values(readiness).some(r => r.live);
+  const overallScore = Math.round(
+    (readiness[1].score + readiness[2].score + readiness[3].score) / 3
+  );
+
+  // Live AWS data for KPIs
+  const { kpis: liveKpis, liveFlags, liveSources } = useLiveKPIs(60_000);
+  const { activeCount: guardrailsActive, totalCount: guardrailsTotal } = useGuardrailMetrics();
+
+  // Compute live KPIs for each layer
+  const liveLayerKpis = useMemo(() => ({
+    // Layer 1: Foundation — guardrails, agents, compliance
+    1: {
+      guardrails: liveFlags.guardrails ? `${guardrailsActive}` : 'Live',
+      guardrailsSub: liveFlags.guardrails ? `${guardrailsTotal} total` : '5 protection layers',
+      pii: liveFlags.guardrails ? `${liveKpis.guardrailInterventions}` : 'Live',
+      piiSub: liveFlags.guardrails ? 'interventions' : '21 entity types',
+      agents: liveFlags.agents ? `${liveKpis.totalAgents}` : 'Live',
+      agentsSub: liveFlags.agents ? `${liveKpis.bedrockAgents} Bedrock` : 'registry + Cedar',
+      compliance: liveFlags.config ? `${liveKpis.configCompliancePct}%` : 'Live',
+      complianceSub: liveFlags.config ? `${liveKpis.configTotalRules} rules` : 'AWS Config',
+    },
+    // Layer 2: Production — use cases, deployments, evals
+    2: {
+      useCases: `${agg.summary.totalUseCases}`,
+      useCasesSub: `${agg.summary.deployedUseCases} deployed`,
+      frameworks: '4',
+      frameworksSub: 'agent SDKs',
+      deployments: `${agg.summary.deploymentsActive}`,
+      deploymentsSub: `${agg.summary.deploymentsPending} pending`,
+      models: liveFlags.runtime ? `${liveKpis.totalInvocations > 0 ? Math.ceil(liveKpis.totalInvocations / 1000) + 'K' : '—'}` : 'Soon',
+      modelsSub: liveFlags.runtime ? 'invocations/7d' : 'coming soon',
+    },
+    // Layer 3: Scale — safety, runtime, cost, fleet
+    3: {
+      safety: '6',
+      safetySub: 'safety surfaces',
+      errorRate: liveFlags.runtime ? `${liveKpis.fleetErrorRatePct}%` : '—',
+      errorRateSub: liveFlags.runtime ? 'fleet errors' : 'CloudWatch',
+      cost: liveFlags.cost ? `$${Math.round(liveKpis.totalCost).toLocaleString()}` : 'Live',
+      costSub: liveFlags.cost ? `${liveKpis.costWindowDays}d spend` : 'Cost Explorer',
+      fleet: liveFlags.agents ? `${liveKpis.governedPct}%` : 'Live',
+      fleetSub: liveFlags.agents ? 'governed' : 'posture + TCO',
+    },
+  }), [liveKpis, liveFlags, agg.summary, guardrailsActive, guardrailsTotal]);
+
+  const hasAnyLiveData = liveSources.length > 0;
+
+  // Drill into the trust map by focusing the foundation layer and scrolling up.
+  const openTrustMap = () => {
+    setFocusLayer(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Regulator-ready evidence summary built from the live layer model.
+  const exportEvidencePackage = () => {
+    const pkg = {
+      title: 'AVA Trust Stack — Evidence Package',
+      generatedAt: new Date().toISOString(),
+      overallReadiness: overallScore,
+      readinessBasis: anyLive ? 'computed from live signals' : 'illustrative baseline',
+      operatingModel: { readiness: operate.score, live: operate.live, basis: operate.basis, pattern: operate.pattern, maturityLevel: operate.maturityLevel },
+      layers: LAYERS.map(l => ({
+        layer: l.label,
+        name: l.name,
+        readiness: readiness[l.id].score,
+        readinessLive: readiness[l.id].live,
+        readinessBasis: readiness[l.id].basis,
+        capabilities: l.capabilities.map(c => ({ status: c.status, item: c.text })),
+        keyControls: l.keyControls.map(k => ({ id: k.id, name: k.name, status: k.status })),
+        awsServices: l.awsServices,
+      })),
+    };
+    downloadJSON(pkg, `trust-stack-evidence-${dateStamp()}.json`);
+  };
 
   return (
     <div className="space-y-4">
       {/* Header with overall score */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">3-Layer Trust Stack</h2>
-          <p className="text-xs text-slate-500">Foundation → Production → Scale: controls, AWS services, and 3 Lines of Defense</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900">Trust Stack</h2>
+            {hasAnyLiveData ? <LiveDataBadge source={`${liveSources.length} AWS sources`} /> : <MockDataBadge integration="Illustrative capability mapping" />}
+          </div>
+          <p className="text-xs text-slate-500"><span className="font-medium text-slate-600">Decide</span> (classify + operating model) → <span className="font-medium text-slate-600">Build</span> (3-layer journey) → <span className="font-medium text-slate-600">Prove</span> (evidence)</p>
         </div>
         <div className="flex items-center gap-4">
           <a href="/govern/command-center" className="text-xs text-blue-600 hover:text-blue-800 font-medium">
@@ -398,46 +791,472 @@ export default function TrustStack3Layer() {
           <div className="text-center">
             <div className={`text-2xl font-bold ${scoreColor(overallScore)}`}>{overallScore}%</div>
             <div className="text-[9px] text-slate-400 uppercase tracking-wide">Trust Readiness</div>
+            <div className={`text-[8px] font-medium ${anyLive ? 'text-emerald-600' : 'text-slate-400'}`}>
+              {anyLive ? '● live' : 'baseline'}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Trust Stack Model — explains the 3 layers */}
+      {/* ══════════════════════ SECTION 1: DECIDE ══════════════════════ */}
       {!focusLayer && (
-        <div className="bg-gradient-to-r from-slate-50 via-blue-50 to-slate-50 rounded-xl border border-blue-200/60 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">The 3-Layer Trust Stack</span>
-            <span className="text-[10px] text-slate-400">Click a layer below to explore details</span>
-          </div>
+        <div>
           <div className="flex items-center gap-2 mb-3">
-            <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-blue-900 via-blue-700 to-blue-500" />
-            <span className="text-[10px] text-slate-500">Foundation → Production → Scale</span>
+            <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">1</span>
+            <h3 className="text-sm font-semibold text-slate-800">Decide</h3>
+            <span className="text-[10px] text-slate-400">— classify your AI systems and choose your operating model</span>
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            {[
-              { step: '1', title: 'Layer 1: Foundation', desc: 'Guardrails, encryption, data protection, vendor assessment', color: '#1e3a8a', layer: 1 },
-              { step: '2', title: 'Layer 2: Production', desc: 'Use case registry, model evaluation, risk tiering, evidence', color: '#1d4ed8', layer: 2 },
-              { step: '3', title: 'Layer 3: Scale', desc: 'Monitoring, explainability, agent governance, compliance', color: '#3b82f6', layer: 3 },
-              { step: '→', title: 'Prove Compliance', desc: 'Export evidence packages for regulators and auditors', color: '#475569', layer: null },
-            ].map((s, i) => (
-              <button
-                key={i}
-                onClick={() => s.layer && setFocusLayer(s.layer)}
-                className="flex gap-2 text-left p-2 rounded-lg hover:bg-white/60 transition-colors"
-              >
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                  style={{ background: s.color }}
-                >
-                  {s.step}
+          <div className="grid grid-cols-3 gap-3">
+            {/* Buy */}
+          <a
+            href="/govern/risk?tab=third-party"
+            className="group p-4 rounded-xl border-2 border-cyan-200 bg-cyan-50/30 hover:bg-cyan-50 hover:border-cyan-300 hover:shadow-md transition-all"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Icon name="shopping-cart" className="w-5 h-5 text-cyan-600" />
+              <span className="text-base font-semibold text-slate-800">Buy</span>
+            </div>
+            <p className="text-[11px] text-slate-600 mb-3">Provider owns the model — assess vendors, monitor shadow AI</p>
+            <div className="space-y-1">
+              {GENAI_SCOPES.filter(s => s.side === 'buy').map(sc => (
+                <div key={sc.id} className="flex items-center gap-2 text-[10px]">
+                  <span className="w-4 h-4 rounded flex items-center justify-center text-white text-[8px] font-bold" style={{ background: sc.color }}>S{sc.id}</span>
+                  <span className="text-slate-600">{sc.name}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[10px] text-cyan-600 font-medium group-hover:underline">
+              Third-Party Risk <Icon name="arrow-right" className="w-3 h-3" />
+            </div>
+          </a>
+
+          {/* Build */}
+          <a
+            href="/govern/safety"
+            className="group p-4 rounded-xl border-2 border-violet-200 bg-violet-50/30 hover:bg-violet-50 hover:border-violet-300 hover:shadow-md transition-all"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Icon name="wrench-screwdriver" className="w-5 h-5 text-violet-600" />
+              <span className="text-base font-semibold text-slate-800">Build</span>
+            </div>
+            <p className="text-[11px] text-slate-600 mb-3">You own the stack — guardrails, evals, threat modeling</p>
+            <div className="space-y-1">
+              {GENAI_SCOPES.filter(s => s.side === 'build').map(sc => (
+                <div key={sc.id} className="flex items-center gap-2 text-[10px]">
+                  <span className="w-4 h-4 rounded flex items-center justify-center text-white text-[8px] font-bold" style={{ background: sc.color }}>S{sc.id}</span>
+                  <span className="text-slate-600">{sc.name}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[10px] text-violet-600 font-medium group-hover:underline">
+              AI Safety <Icon name="arrow-right" className="w-3 h-3" />
+            </div>
+          </a>
+
+          {/* Operating Model */}
+          <div className="p-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/30">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Icon name="building-office" className="w-5 h-5 text-indigo-600" />
+                <span className="text-base font-semibold text-slate-800">Operate</span>
+              </div>
+              <span className={`text-lg font-bold ${scoreColor(operate.score)}`}>{operate.score}%</span>
+            </div>
+            <p className="text-[11px] text-slate-600 mb-3">How you run governance — centralized, federated, or hybrid</p>
+
+            {/* Pattern Preview Grid */}
+            <div className="grid grid-cols-2 gap-1.5 mb-2">
+              {IMPLEMENTATION_PATTERNS.map((pattern) => {
+                const isSelected = operate.pattern === pattern.name;
+                return (
+                  <button
+                    key={pattern.id}
+                    onClick={() => { setShowPatterns(true); setExpandedPattern(pattern.id); }}
+                    className={`p-1.5 rounded-lg border text-left transition-all hover:shadow-sm ${
+                      isSelected ? 'bg-indigo-100 border-indigo-300' : 'bg-white border-slate-200 hover:border-indigo-200'
+                    }`}
+                  >
+                    <div className="text-[9px] font-semibold text-slate-700 mb-1 truncate">{pattern.name}</div>
+                    <div className="flex items-center gap-0.5">
+                      {(['foundation', 'production', 'scale'] as const).map((layer, i) => {
+                        const status = pattern.layers[layer];
+                        const colors = { centralized: 'bg-blue-500', federated: 'bg-emerald-500', hybrid: 'bg-amber-500' };
+                        return (
+                          <div key={layer} className="flex items-center">
+                            <div className={`w-4 h-4 rounded ${colors[status]} flex items-center justify-center`}>
+                              <span className="text-[6px] text-white font-bold">L{i + 1}</span>
+                            </div>
+                            {i < 2 && <div className="w-1 h-px bg-slate-300" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-2 text-[8px] text-slate-500 mb-2">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-500" />Central</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-500" />Hybrid</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500" />Federated</span>
+            </div>
+
+            <button
+              onClick={() => setShowPatterns(!showPatterns)}
+              className="w-full flex items-center justify-center gap-1 text-[10px] text-indigo-600 font-medium hover:underline"
+            >
+              {showPatterns ? 'Hide' : 'Expand'} details <Icon name={showPatterns ? 'chevron-up' : 'chevron-down'} className="w-3 h-3" />
+            </button>
+          </div>
+          </div>
+        </div>
+      )}
+
+      {/* Operating Model Patterns (expanded) */}
+      {!focusLayer && showPatterns && (
+        <div className="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="p-4 bg-gradient-to-r from-indigo-50 to-violet-50 border-b border-indigo-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-white border border-indigo-200 flex items-center justify-center">
+                  <Icon name="building-office" className="w-5 h-5 text-indigo-600" strokeWidth={2} />
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-slate-800">{s.title}</div>
-                  <div className="text-[10px] text-slate-500 leading-tight">{s.desc}</div>
+                  <h4 className="text-sm font-semibold text-slate-800">Operating Model Patterns</h4>
+                  <p className="text-[10px] text-slate-500">How to centralize vs federate control across the 3 layers</p>
                 </div>
-              </button>
-            ))}
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Legend */}
+                <div className="flex items-center gap-3 text-[9px]">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500" /> Centralized</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-500" /> Hybrid</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500" /> Federated</span>
+                </div>
+                <button onClick={() => setShowPatterns(false)} className="text-slate-400 hover:text-slate-600">
+                  <Icon name="x-mark" className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* Pattern Grid */}
+          <div className="p-4">
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              {IMPLEMENTATION_PATTERNS.map((pattern) => (
+                <button
+                  key={pattern.id}
+                  onClick={() => setExpandedPattern(expandedPattern === pattern.id ? null : pattern.id)}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    expandedPattern === pattern.id
+                      ? 'bg-indigo-50 border-indigo-300 shadow-sm ring-2 ring-indigo-200'
+                      : 'bg-white border-slate-200 hover:border-indigo-200 hover:shadow-sm'
+                  }`}
+                >
+                  <div className="text-xs font-semibold text-slate-800 mb-1">{pattern.name}</div>
+                  <div className="text-[10px] text-slate-500 mb-2">{pattern.subtitle}</div>
+                  {/* Layer diagram */}
+                  <div className="flex items-center gap-1 mb-2">
+                    {(['foundation', 'production', 'scale'] as const).map((layer, i) => {
+                      const status = pattern.layers[layer];
+                      const colors = { centralized: 'bg-blue-500', federated: 'bg-emerald-500', hybrid: 'bg-amber-500' };
+                      return (
+                        <div key={layer} className="flex items-center">
+                          <div className={`w-6 h-6 rounded ${colors[status]} flex items-center justify-center`}>
+                            <span className="text-[8px] text-white font-bold">L{i + 1}</span>
+                          </div>
+                          {i < 2 && <div className="w-3 h-0.5 bg-slate-300" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="text-[9px] text-slate-400">{pattern.bestFor}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Expanded Pattern Details */}
+            {expandedPattern && (() => {
+              const pattern = IMPLEMENTATION_PATTERNS.find(p => p.id === expandedPattern);
+              if (!pattern) return null;
+              return (
+                <div className="border-t border-slate-200 pt-4">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h5 className="text-base font-semibold text-slate-800">{pattern.name}</h5>
+                      <p className="text-xs text-slate-600 mt-1">{pattern.description}</p>
+                    </div>
+                  </div>
+
+                  {/* Visual Layer Diagram */}
+                  <div className="mb-4 p-4 bg-gradient-to-r from-slate-50 to-indigo-50 rounded-lg border border-slate-200">
+                    <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide mb-3">Layer Ownership Model</div>
+                    <div className="flex items-center justify-center gap-3">
+                      {[
+                        { layer: 'Layer 1', name: 'Foundation', key: 'foundation' as const },
+                        { layer: 'Layer 2', name: 'Production', key: 'production' as const },
+                        { layer: 'Layer 3', name: 'Scale', key: 'scale' as const },
+                      ].map((l, i) => {
+                        const status = pattern.layers[l.key];
+                        const bgColors = { centralized: 'from-blue-100 to-blue-200 border-blue-300', federated: 'from-emerald-100 to-emerald-200 border-emerald-300', hybrid: 'from-amber-100 to-amber-200 border-amber-300' };
+                        const textColors = { centralized: 'text-blue-700', federated: 'text-emerald-700', hybrid: 'text-amber-700' };
+                        const icons = { centralized: 'building-office', federated: 'users', hybrid: 'arrows-right-left' } as const;
+                        return (
+                          <div key={l.key} className="flex items-center">
+                            <div className={`w-28 p-3 rounded-lg bg-gradient-to-br ${bgColors[status]} border text-center`}>
+                              <Icon name={icons[status]} className={`w-4 h-4 mx-auto mb-1 ${textColors[status]}`} strokeWidth={2} />
+                              <div className="text-[10px] font-semibold text-slate-700">{l.layer}</div>
+                              <div className="text-[9px] text-slate-500">{l.name}</div>
+                              <div className={`text-[10px] font-bold mt-1 ${textColors[status]} uppercase`}>{status}</div>
+                            </div>
+                            {i < 2 && <Icon name="arrow-right" className="w-4 h-4 mx-2 text-slate-400" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Info Grid */}
+                  <div className="grid grid-cols-4 gap-3">
+                    {/* Best For */}
+                    <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-200">
+                      <div className="text-[10px] text-indigo-600 font-semibold uppercase tracking-wide mb-1.5">Best For</div>
+                      <div className="text-[10px] text-slate-700 font-medium mb-2">{pattern.bestFor}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {pattern.organizations.slice(0, 3).map((org, i) => (
+                          <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-white border border-indigo-200 text-slate-600">{org}</span>
+                        ))}
+                      </div>
+                    </div>
+                    {/* AWS Services */}
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="text-[10px] text-slate-600 font-semibold uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                        <Icon name="cloud" className="w-3 h-3" /> AWS Services
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {pattern.awsServices.slice(0, 4).map((svc, i) => (
+                          <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">{svc}</span>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Pros */}
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                      <div className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                        <Icon name="check-circle" className="w-3 h-3" /> Advantages
+                      </div>
+                      {pattern.pros.slice(0, 3).map((pro, i) => (
+                        <div key={i} className="text-[9px] text-slate-700 flex items-start gap-1 mb-0.5">
+                          <span className="text-emerald-500">+</span> {pro}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Cons */}
+                    <div className="p-3 rounded-lg bg-rose-50 border border-rose-200">
+                      <div className="text-[10px] text-rose-600 font-semibold uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                        <Icon name="exclamation-triangle" className="w-3 h-3" /> Considerations
+                      </div>
+                      {pattern.cons.slice(0, 3).map((con, i) => (
+                        <div key={i} className="text-[9px] text-slate-700 flex items-start gap-1 mb-0.5">
+                          <span className="text-rose-500">−</span> {con}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Link to Plan */}
+                  <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between">
+                    <p className="text-[10px] text-slate-500">
+                      Configure your operating model in <a href="/operating-model" className="text-blue-600 hover:underline font-medium">Plan → Operating Model</a> for RACI, maturity assessment, and pattern selection.
+                    </p>
+                    <a href="/operating-model" className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 transition-colors">
+                      Configure <Icon name="arrow-right" className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════ SECTION 2: BUILD (Trust Journey + Layers) ══════════════════════ */}
+      {!focusLayer && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">2</span>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Build</h3>
+                <p className="text-[10px] text-slate-500">Your 3-layer trust journey — click any layer for full details</p>
+              </div>
+            </div>
+            {hasAnyLiveData && (
+              <div className="flex items-center gap-2 text-[10px] text-emerald-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {liveSources.length} live sources
+              </div>
+            )}
+          </div>
+
+          {/* Rich Trust Journey: Layer Cards with Full KPIs */}
+          <div className="flex items-stretch gap-3">
+            {/* Layer 1: Foundation */}
+            <button onClick={() => setFocusLayer(1)} className="flex-1 text-left group">
+              <div className="h-full rounded-xl p-4 border-2 border-l-4 transition-all hover:shadow-lg hover:-translate-y-1" style={{ borderLeftColor: '#1e3a8a', borderColor: '#1e3a8a30', backgroundColor: '#1e3a8a08' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#1e3a8a' }}>Layer 1</span>
+                    <div className="text-sm font-semibold text-slate-800">Foundation</div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold ${scoreColor(readiness[1].score)}`}>{readiness[1].score}%</div>
+                    <div className={`text-[8px] ${readiness[1].live ? 'text-emerald-600' : 'text-slate-400'}`}>{readiness[1].live ? '● live' : 'baseline'}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800 flex items-center justify-center gap-1">
+                      {liveLayerKpis[1].guardrails}
+                      {liveFlags.guardrails && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Guardrails</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800 flex items-center justify-center gap-1">
+                      {liveLayerKpis[1].agents}
+                      {liveFlags.agents && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Agents</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800 flex items-center justify-center gap-1">
+                      {liveLayerKpis[1].pii}
+                      {liveFlags.guardrails && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Interventions</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800 flex items-center justify-center gap-1">
+                      {liveLayerKpis[1].compliance}
+                      {liveFlags.config && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Config</div>
+                  </div>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${readiness[1].score}%`, backgroundColor: '#1e3a8a' }} />
+                </div>
+                <div className="mt-2 text-[9px] text-slate-500 text-center group-hover:text-blue-600">Click for details →</div>
+              </div>
+            </button>
+
+            <div className="flex items-center"><Icon name="arrow-right" className="w-5 h-5 text-slate-300" /></div>
+
+            {/* Layer 2: Production */}
+            <button onClick={() => setFocusLayer(2)} className="flex-1 text-left group">
+              <div className="h-full rounded-xl p-4 border-2 border-l-4 transition-all hover:shadow-lg hover:-translate-y-1" style={{ borderLeftColor: '#1d4ed8', borderColor: '#1d4ed830', backgroundColor: '#1d4ed808' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#1d4ed8' }}>Layer 2</span>
+                    <div className="text-sm font-semibold text-slate-800">Production</div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold ${scoreColor(readiness[2].score)}`}>{readiness[2].score}%</div>
+                    <div className={`text-[8px] ${readiness[2].live ? 'text-emerald-600' : 'text-slate-400'}`}>{readiness[2].live ? '● live' : 'baseline'}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800">{liveLayerKpis[2].useCases}</div>
+                    <div className="text-[9px] text-slate-500">Use Cases</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800">{liveLayerKpis[2].deployments}</div>
+                    <div className="text-[9px] text-slate-500">Deployments</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800">{liveLayerKpis[2].frameworks}</div>
+                    <div className="text-[9px] text-slate-500">Frameworks</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800 flex items-center justify-center gap-1">
+                      {liveLayerKpis[2].models}
+                      {liveFlags.runtime && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Invocations</div>
+                  </div>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${readiness[2].score}%`, backgroundColor: '#1d4ed8' }} />
+                </div>
+                <div className="mt-2 text-[9px] text-slate-500 text-center group-hover:text-blue-600">Click for details →</div>
+              </div>
+            </button>
+
+            <div className="flex items-center"><Icon name="arrow-right" className="w-5 h-5 text-slate-300" /></div>
+
+            {/* Layer 3: Scale */}
+            <button onClick={() => setFocusLayer(3)} className="flex-1 text-left group">
+              <div className="h-full rounded-xl p-4 border-2 border-l-4 transition-all hover:shadow-lg hover:-translate-y-1" style={{ borderLeftColor: '#3b82f6', borderColor: '#3b82f630', backgroundColor: '#3b82f608' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#3b82f6' }}>Layer 3</span>
+                    <div className="text-sm font-semibold text-slate-800">Scale</div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold ${scoreColor(readiness[3].score)}`}>{readiness[3].score}%</div>
+                    <div className={`text-[8px] ${readiness[3].live ? 'text-emerald-600' : 'text-slate-400'}`}>{readiness[3].live ? '● live' : 'baseline'}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800">{liveLayerKpis[3].safety}</div>
+                    <div className="text-[9px] text-slate-500">Safety</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold flex items-center justify-center gap-1" style={{ color: liveKpis.fleetErrorRatePct > 2 ? '#dc2626' : '#1e293b' }}>
+                      {liveLayerKpis[3].errorRate}
+                      {liveFlags.runtime && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Error Rate</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800 flex items-center justify-center gap-1">
+                      {liveLayerKpis[3].cost}
+                      {liveFlags.cost && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">AI Spend</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-white border border-slate-200">
+                    <div className="text-lg font-bold text-slate-800 flex items-center justify-center gap-1">
+                      {liveLayerKpis[3].fleet}
+                      {liveFlags.agents && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Governed</div>
+                  </div>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${readiness[3].score}%`, backgroundColor: '#3b82f6' }} />
+                </div>
+                <div className="mt-2 text-[9px] text-slate-500 text-center group-hover:text-blue-600">Click for details →</div>
+              </div>
+            </button>
+          </div>
+
+          {/* Live Data Sources */}
+          {hasAnyLiveData && (
+            <div className="mt-4 pt-3 border-t border-slate-200 flex items-center gap-2 flex-wrap">
+              <span className="text-[9px] text-slate-400 uppercase tracking-wide">Live from:</span>
+              {liveSources.map(src => (
+                <span key={src} className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {src}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -451,9 +1270,10 @@ export default function TrustStack3Layer() {
         </button>
       )}
 
-      {/* Layer Cards */}
+      {/* Full Layer Card — shown when a layer is focused */}
+      {focusLayer && (
       <div className="space-y-3">
-        {LAYERS.filter(layer => focusLayer ? layer.id === focusLayer : true).map((layer) => (
+        {LAYERS.filter(layer => layer.id === focusLayer).map((layer) => (
           <div
             key={layer.id}
             onClick={() => !focusLayer && setFocusLayer(layer.id)}
@@ -480,27 +1300,147 @@ export default function TrustStack3Layer() {
                     "{layer.question}"
                   </p>
 
-                  {/* KPI Strip */}
+                  {/* Scope classification — which GenAI scopes + agency levels this layer serves */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[8px] text-slate-400 uppercase tracking-wide">Scope</span>
+                    {layer.genaiScopes.map(id => {
+                      const sc = GENAI_SCOPE_BY_ID[id];
+                      return (
+                        <a key={`g${id}`} href={sc.to.href} title={`Scope ${id}: ${sc.name}`}
+                          className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded font-medium hover:underline"
+                          style={{ backgroundColor: `${sc.color}14`, color: sc.color }}>
+                          S{id} {sc.name}
+                        </a>
+                      );
+                    })}
+                    <span className="w-px h-3 bg-slate-200" />
+                    <span className="text-[8px] text-slate-400 uppercase tracking-wide">Agency</span>
+                    {layer.agencyLevels.map(lvl => {
+                      const meta = AGENT_SCOPE_META[lvl];
+                      const link = AGENCY_LINK[lvl];
+                      return (
+                        <a key={`a${lvl}`} href={link.href} title={`${meta.name} — ${meta.description}`}
+                          className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded font-medium hover:underline"
+                          style={{ backgroundColor: `${meta.color}14`, color: meta.color }}>
+                          L{lvl} {meta.name}
+                        </a>
+                      );
+                    })}
+                  </div>
+
+                  {/* KPI Strip — live data where available */}
                   <div className="flex gap-4 mt-3">
-                    {layer.kpis.map((kpi, i) => (
-                      <div key={i} className="text-center">
-                        <div className="text-lg font-bold" style={{ color: kpi.color }}>{kpi.value}</div>
-                        <div className="text-[9px] text-slate-500 uppercase">{kpi.label}</div>
-                        <div className="text-[8px] text-slate-400">{kpi.sub}</div>
-                      </div>
-                    ))}
+                    {layer.id === 1 && (
+                      <>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[1].guardrails}</div>
+                            {liveFlags.guardrails && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">Guardrails</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[1].guardrailsSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[1].pii}</div>
+                            {liveFlags.guardrails && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">Interventions</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[1].piiSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[1].agents}</div>
+                            {liveFlags.agents && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">Agents</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[1].agentsSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[1].compliance}</div>
+                            {liveFlags.config && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">Config</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[1].complianceSub}</div>
+                        </div>
+                      </>
+                    )}
+                    {layer.id === 2 && (
+                      <>
+                        <div className="text-center">
+                          <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[2].useCases}</div>
+                          <div className="text-[9px] text-slate-500 uppercase">Use Cases</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[2].useCasesSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[2].frameworks}</div>
+                          <div className="text-[9px] text-slate-500 uppercase">Frameworks</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[2].frameworksSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[2].deployments}</div>
+                          <div className="text-[9px] text-slate-500 uppercase">Deployments</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[2].deploymentsSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[2].models}</div>
+                            {liveFlags.runtime && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">Invocations</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[2].modelsSub}</div>
+                        </div>
+                      </>
+                    )}
+                    {layer.id === 3 && (
+                      <>
+                        <div className="text-center">
+                          <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[3].safety}</div>
+                          <div className="text-[9px] text-slate-500 uppercase">AI Safety</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[3].safetySub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: liveKpis.fleetErrorRatePct > 2 ? '#dc2626' : layer.color }}>{liveLayerKpis[3].errorRate}</div>
+                            {liveFlags.runtime && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">Error Rate</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[3].errorRateSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[3].cost}</div>
+                            {liveFlags.cost && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">AI Spend</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[3].costSub}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="text-lg font-bold" style={{ color: layer.color }}>{liveLayerKpis[3].fleet}</div>
+                            {liveFlags.agents && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                          </div>
+                          <div className="text-[9px] text-slate-500 uppercase">Fleet</div>
+                          <div className="text-[8px] text-slate-400">{liveLayerKpis[3].fleetSub}</div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
-                {/* Readiness Score */}
-                <div className="text-center ml-4">
-                  <div className={`text-2xl font-bold ${scoreColor(layer.score)}`}>{layer.score}%</div>
+                {/* Readiness Score — computed live from real signals where present */}
+                <div className="text-center ml-4" title={readiness[layer.id].basis}>
+                  <div className={`text-2xl font-bold ${scoreColor(readiness[layer.id].score)}`}>{readiness[layer.id].score}%</div>
                   <div className="text-[9px] text-slate-400 uppercase">Readiness</div>
-                  <div className={`mt-1 h-1.5 w-16 rounded-full ${scoreBg(layer.score)}`}>
+                  <div className={`mt-1 h-1.5 w-16 rounded-full ${scoreBg(readiness[layer.id].score)}`}>
                     <div
                       className="h-full rounded-full"
-                      style={{ width: `${layer.score}%`, background: layer.color }}
+                      style={{ width: `${readiness[layer.id].score}%`, background: layer.color }}
                     />
+                  </div>
+                  <div className={`text-[8px] font-medium mt-0.5 ${readiness[layer.id].live ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    {readiness[layer.id].live ? '● live' : 'baseline'}
                   </div>
                 </div>
               </div>
@@ -611,7 +1551,7 @@ export default function TrustStack3Layer() {
                           <span className="text-[10px] text-blue-600 font-mono">{ctrl.id}</span>
                           <span className="text-xs text-slate-700 ml-2">{ctrl.name}</span>
                         </div>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">{ctrl.status}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${controlStatusBadge[ctrl.status]}`}>{ctrl.status}</span>
                       </div>
                     ))}
                   </div>
@@ -720,32 +1660,112 @@ export default function TrustStack3Layer() {
           </div>
         ))}
       </div>
+      )}
 
-      {/* Cross-cutting CTAs — overview mode only */}
+      {/* ══════════════════════ SECTION 3: PROVE ══════════════════════ */}
       {!focusLayer && (
-        <div className="flex gap-3">
-          <button className="flex-1 p-3 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition-all text-left">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Icon name="map" className="w-5 h-5 text-blue-700" strokeWidth={2} />
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">3</span>
+            <h3 className="text-sm font-semibold text-slate-800">Prove</h3>
+            <span className="text-[10px] text-slate-400">— evidence for auditors across every layer</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {/* Evidence Summary */}
+            <a
+              href="/govern/audit?tab=evidence"
+              className="group p-4 rounded-xl border-2 border-emerald-200 bg-emerald-50/30 hover:bg-emerald-50 hover:border-emerald-300 hover:shadow-md transition-all"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Icon name="clipboard-document-check" className="w-5 h-5 text-emerald-600" />
+                  <span className="text-base font-semibold text-slate-800">Evidence</span>
+                </div>
+                <span className="text-lg font-bold text-emerald-600">{agg.controlStats.percentage}%</span>
               </div>
-              <div>
-                <div className="text-xs font-semibold text-slate-800">System Trust Map</div>
-                <div className="text-[10px] text-slate-500">Trace AI systems across all 3 layers</div>
+              <p className="text-[11px] text-slate-600 mb-3">Evidence collection across all layers</p>
+              <div className="space-y-1.5 mb-3">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-slate-600">Controls evidenced</span>
+                  <span className="font-medium text-slate-800">{agg.controlStats.implemented}/{agg.controlStats.total}</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-slate-600">Audit events (30d)</span>
+                  <span className="font-medium text-slate-800">{agg.activityFeed?.length ?? 0}</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-slate-600">Last refresh</span>
+                  <span className="font-medium text-emerald-600">Live</span>
+                </div>
               </div>
+              <div className="h-1.5 bg-emerald-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${agg.controlStats.percentage}%` }} />
+              </div>
+              <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-emerald-600 font-medium group-hover:underline">
+                View Evidence Dashboard <Icon name="arrow-right" className="w-3 h-3" />
+              </div>
+            </a>
+
+            {/* Framework Reports */}
+            <a
+              href="/govern/audit?tab=reports"
+              className="group p-4 rounded-xl border-2 border-blue-200 bg-blue-50/30 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md transition-all"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Icon name="document-text" className="w-5 h-5 text-blue-600" />
+                <span className="text-base font-semibold text-slate-800">Reports</span>
+              </div>
+              <p className="text-[11px] text-slate-600 mb-3">Framework-specific compliance packages</p>
+              <div className="space-y-1">
+                {['SR 26-2', 'NIST AI RMF', 'EU AI Act', 'ISO 42001'].map(fw => (
+                  <div key={fw} className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200">
+                    <span className="text-[10px] font-medium text-slate-700">{fw}</span>
+                    <Icon name="document-arrow-down" className="w-3 h-3 text-slate-400" />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-blue-600 font-medium group-hover:underline">
+                Generate Reports <Icon name="arrow-right" className="w-3 h-3" />
+              </div>
+            </a>
+
+            {/* Quick Export */}
+            <div className="p-4 rounded-xl border-2 border-slate-200 bg-slate-50/30">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon name="document-arrow-down" className="w-5 h-5 text-slate-600" />
+                <span className="text-base font-semibold text-slate-800">Quick Export</span>
+              </div>
+              <p className="text-[11px] text-slate-600 mb-3">Download Trust Stack summary now</p>
+              <div className="space-y-2">
+                <button
+                  onClick={exportEvidencePackage}
+                  className="w-full flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all text-left"
+                >
+                  <div>
+                    <div className="text-[10px] font-medium text-slate-700">Trust Stack Package</div>
+                    <div className="text-[9px] text-slate-500">Layers, controls, readiness</div>
+                  </div>
+                  <Icon name="arrow-down-tray" className="w-4 h-4 text-slate-400" />
+                </button>
+                <button
+                  onClick={openTrustMap}
+                  className="w-full flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all text-left"
+                >
+                  <div>
+                    <div className="text-[10px] font-medium text-slate-700">Trust Map</div>
+                    <div className="text-[9px] text-slate-500">Trace systems across layers</div>
+                  </div>
+                  <Icon name="map" className="w-4 h-4 text-slate-400" />
+                </button>
+              </div>
+              <a
+                href="/govern/audit"
+                className="mt-3 flex items-center justify-center gap-1 text-[10px] text-slate-600 font-medium hover:text-blue-600 hover:underline"
+              >
+                Full Audit & Evidence <Icon name="arrow-right" className="w-3 h-3" />
+              </a>
             </div>
-          </button>
-          <button className="flex-1 p-3 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-sm transition-all text-left">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Icon name="document-arrow-down" className="w-5 h-5 text-blue-700" strokeWidth={2} />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-slate-800">Export Evidence Package</div>
-                <div className="text-[10px] text-slate-500">Regulator-ready documentation</div>
-              </div>
-            </div>
-          </button>
+          </div>
         </div>
       )}
     </div>

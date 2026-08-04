@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { deploymentsApi } from '../api/client';
+import { openFsiApp } from '../lib/fsiAppLink';
 import type { Deployment } from '../types';
-import { useUser } from '../contexts/UserContext';
 
 export interface RefImplPrerequisite {
   title: string;
@@ -26,6 +26,7 @@ export interface RefImplConfig {
   parameters: { name: string; type: string; description: string; required: boolean; default?: string; input_type?: string; help_url?: string }[];
   tags: string[];
   prerequisites?: RefImplPrerequisite[];
+  hidden?: boolean;
 }
 
 const IMPLEMENTATIONS: RefImplConfig[] = [
@@ -42,6 +43,7 @@ const IMPLEMENTATIONS: RefImplConfig[] = [
     deployment_patterns: [{ id: 'bash', name: 'Bash orchestration', description: 'Modular deploy-all.sh across dashboard, cost/eval/obs controls, and sample agent' }],
     parameters: [],
     tags: ['safety', 'governance', 'hil', 'agentcore', 'cognito', 'cloudfront'],
+    hidden: true,
   },
   {
     id: 'market-surveillance',
@@ -95,11 +97,51 @@ const IMPLEMENTATIONS: RefImplConfig[] = [
     parameters: [],
     tags: ['fraud', 'case-management', 'dynamodb', 'bedrock', 'cloudfront', 'agentcore'],
   },
+  {
+    id: 'merchant-onboarding',
+    name: 'Merchant Onboarding',
+    domain: 'Payments',
+    description: 'AI-powered merchant onboarding platform with document processing (Textract OCR), OFAC sanctions screening, fraud risk assessment, and a three-gate Human-in-the-Loop approval workflow. Built with Strands Agents SDK and AWS Bedrock.',
+    status: 'Available',
+    color: 'teal',
+    features: ['Document OCR (Textract)', 'OFAC sanctions screening', 'AI fraud risk assessment', 'Human-in-the-Loop (3 gates)', 'KYB / KYC workflow'],
+    agents: ['Document Processor', 'Compliance Checker', 'Onboarding Agent'],
+    frameworks: [{ id: 'strands', name: 'Strands Agents SDK' }],
+    deployment_patterns: [{ id: 'cdk', name: 'AWS CDK', description: 'Multi-stack CDK deployment (DynamoDB + S3 + Lambda + Bedrock Agent + Frontend)' }],
+    parameters: [
+      { name: 'project_name', type: 'string', description: 'Project name prefix for all resources', required: false, default: 'merchant-onboarding' },
+      { name: 'aws_region', type: 'string', description: 'AWS region to deploy into', required: false, default: 'us-east-2' },
+      { name: 'sanctions_api_key', type: 'string', description: 'sanctions.network API key for OFAC screening (optional — mock used if not set)', required: false, default: '', input_type: 'password', help_url: 'https://sanctions.network' },
+    ],
+    tags: ['merchant-onboarding', 'payments', 'kyc', 'kyb', 'compliance', 'ofac', 'human-in-the-loop', 'bedrock', 'textract', 'cdk'],
+  },
+  {
+    id: 'agentcore-in-a-box',
+    name: 'AgentCore in a Box',
+    domain: 'Multi-Vertical Demo',
+    description: 'Grab-and-go Amazon Bedrock AgentCore demo. One command deploys four verticalized 11-agent desks (Capital Markets, Insurance, Banking, FinTech) on one shared platform, wiring 12 of the 13 AgentCore primitives live (Gateway, Policy, Identity, Browser, Code Interpreter, Memory, Runtime, Evaluations, Registry, Harness, Optimization, Observability). Includes a live admin RBAC governance layer enforced at four independent layers (Runtime pre-check, Gateway interceptor, Cedar policy, IAM Deny backstop).',
+    status: 'Available',
+    color: 'indigo',
+    features: [
+      '4 verticalized 11-agent desks',
+      '12 of 13 AgentCore primitives live',
+      'Admin RBAC + Cedar policy',
+      '3LO + M2M + API-key identity',
+      'Governance Graph + approval workflow',
+    ],
+    agents: ['Investment Committee', 'Underwriting Committee', 'Credit Committee', 'Risk & Growth Council', 'Meridian Express (config-only)'],
+    frameworks: [{ id: 'strands', name: 'Strands Agents SDK' }],
+    deployment_patterns: [{ id: 'cdk', name: 'AWS CDK', description: 'CDK (TypeScript) + AgentCore control-plane CLI orchestrated by deploy.sh; ARM64 agent container pushed to ECR' }],
+    parameters: [
+      { name: 'project_name', type: 'string', description: 'Project name prefix for all resources', required: false, default: 'agentcore-in-a-box' },
+      { name: 'aws_region', type: 'string', description: 'AWS region to deploy into (must be AgentCore-available)', required: true },
+    ],
+    tags: ['agentcore', 'multi-agent', 'governance', 'rbac', 'cedar', 'strands', 'cdk', 'cognito', 'demo', 'capital-markets', 'insurance', 'banking', 'fintech'],
+  },
 ];
 
 export default function ReferenceImplementations() {
   const navigate = useNavigate();
-  const { user } = useUser();
   const [search, setSearch] = useState('');
   const [deployments, setDeployments] = useState<Record<string, Deployment>>({});
 
@@ -116,9 +158,11 @@ export default function ReferenceImplementations() {
   }, []);
 
   const filtered = IMPLEMENTATIONS.filter(impl =>
-    !search || impl.name.toLowerCase().includes(search.toLowerCase())
-    || impl.description.toLowerCase().includes(search.toLowerCase())
-    || impl.domain.toLowerCase().includes(search.toLowerCase())
+    !impl.hidden && (
+      !search || impl.name.toLowerCase().includes(search.toLowerCase())
+      || impl.description.toLowerCase().includes(search.toLowerCase())
+      || impl.domain.toLowerCase().includes(search.toLowerCase())
+    )
   );
 
   return (
@@ -203,9 +247,8 @@ export default function ReferenceImplementations() {
                     <button onClick={() => navigate('/docs/ref-impl-overview')} className="btn-secondary text-xs flex-1 py-2">View Documentation</button>
                     <button
                       onClick={() => navigate(`/applications/reference-implementations/deploy/${impl.id}`, { state: { impl } })}
-                      disabled={!user?.can_deploy}
-                      title={!user?.can_deploy ? 'You do not have permission to deploy' : 'Deploy this reference implementation'}
-                      className="text-xs flex-1 py-2 px-4 rounded-lg bg-blue-600 text-white font-medium text-center hover:bg-blue-700 transition-colors disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed disabled:hover:bg-slate-100">
+                      title="Deploy this reference implementation"
+                      className="text-xs flex-1 py-2 px-4 rounded-lg bg-blue-600 text-white font-medium text-center hover:bg-blue-700 transition-colors">
                       Deploy
                     </button>
                   </div>
@@ -236,7 +279,7 @@ export default function ReferenceImplementations() {
                     </button>
                     {frontendUrl ? (
                       <>
-                        <button onClick={() => window.open(frontendUrl, '_blank')}
+                        <button onClick={() => openFsiApp(frontendUrl)}
                           className="text-[11px] py-2 rounded-lg font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors inline-flex items-center justify-center gap-1.5">
                           Open App
                           <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -246,8 +289,7 @@ export default function ReferenceImplementations() {
                         <button onClick={() => navigate('/docs/ref-impl-overview')} className="btn-secondary text-[11px] py-2">View Documentation</button>
                         <button
                           onClick={() => navigate(`/applications/reference-implementations/deploy/${impl.id}`, { state: { impl } })}
-                          disabled={!user?.can_deploy}
-                          title={!user?.can_deploy ? 'You do not have permission to deploy' : 'Redeploy this reference implementation'}
+                          title="Redeploy this reference implementation"
                           className="btn-primary text-[11px] py-2">Redeploy</button>
                       </>
                     ) : (
@@ -255,8 +297,7 @@ export default function ReferenceImplementations() {
                         <button onClick={() => navigate('/docs/ref-impl-overview')} className="btn-secondary text-[11px] py-2">View Documentation</button>
                         <button
                           onClick={() => navigate(`/applications/reference-implementations/deploy/${impl.id}`, { state: { impl } })}
-                          disabled={!user?.can_deploy}
-                          title={!user?.can_deploy ? 'You do not have permission to deploy' : 'Redeploy this reference implementation'}
+                          title="Redeploy this reference implementation"
                           className="btn-primary text-[11px] py-2">Redeploy</button>
                       </>
                     )}

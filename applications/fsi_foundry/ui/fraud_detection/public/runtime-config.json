@@ -20,11 +20,11 @@
       "description": "Specialized AI agent: Alert Generator"
     }
   ],
-  "api_endpoint": "https://<distribution>.cloudfront.net/api/invoke",
+  "api_endpoint": "https://d3lpkct86xye8x.cloudfront.net/api/invoke",
   "input_schema": {
     "id_field": "customer_id",
     "id_label": "Customer ID",
-    "id_placeholder": "e.g. FRD001",
+    "id_placeholder": "e.g. FRD001 (test entity)",
     "type_field": "monitoring_type",
     "type_options": [
       {
@@ -45,7 +45,7 @@
       }
     ],
     "test_entities": [
-      "ACCT001"
+      "FRD001"
     ]
   }
 }

@@ -95,7 +95,7 @@
       "name": "model_id",
       "type": "string",
       "required": false,
-      "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+      "default": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
       "description": "Bedrock model ID"
     }
   ]
