@@ -17,7 +17,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "@monaco-editor/react": "^4.7.0",
     "amazon-cognito-identity-js": "^6.3.16",
-    "axios": "^1.13.6",
+    "axios": "^1.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",
