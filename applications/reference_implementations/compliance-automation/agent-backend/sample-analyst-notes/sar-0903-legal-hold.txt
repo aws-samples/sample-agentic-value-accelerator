@@ -1,0 +1,15 @@
+2026-05-22 — Analyst: Maria Chen
+
+RE: Case #SAR-2026-0903
+
+Spoke with legal yesterday. They're reviewing whether the transaction pattern
+(multiple sub-$10K deposits across 3 branches over 2 weeks) meets the threshold
+for structuring. Legal says they need until at least Wednesday to give us a
+definitive answer.
+
+I haven't started drafting the SAR narrative yet because the legal determination
+will significantly change what we report. If they confirm structuring, this
+becomes a much more complex filing.
+
+Flagging: I'm also covering for Jake's cases this week since he's out sick,
+so bandwidth is tight.

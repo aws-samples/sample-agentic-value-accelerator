@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Regulatory Report Reviewer — S3 upload -> EventBridge -> API Destination (Cognito OAuth) -> AgentCore Runtime.
+  Agent reviews uploaded regulatory filings for completeness, language compliance, and quality.
+
+Parameters:
+  AgentCoreEndpoint:
+    Type: String
+    Description: AgentCore Runtime invocation URL
+  AgentName:
+    Type: String
+    Default: regulatory_report_reviewer_agent
+
+Resources:
+  # ── S3 Bucket ────────────────────────────────────────────────
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-uploads-${AWS::AccountId}'
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  # ── Cognito ──────────────────────────────────────────────────
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-pool'
+
+  CognitoDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub '${AWS::StackName}-${AWS::AccountId}'
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      Identifier: !Ref AgentName
+      Name: !Sub '${AgentName}-api'
+      UserPoolId: !Ref CognitoUserPool
+      Scopes:
+        - ScopeName: invoke
+          ScopeDescription: Invoke the AgentCore agent
+
+  CognitoAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: CognitoResourceServer
+    Properties:
+      ClientName: !Sub '${AWS::StackName}-client'
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - !Sub '${AgentName}/invoke'
+      SupportedIdentityProviders:
+        - COGNITO
+
+  # ── DLQ ──────────────────────────────────────────────────────
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-dlq'
+      MessageRetentionPeriod: 1209600
+
+Outputs:
+  BucketName:
+    Value: !Ref UploadBucket
+  CognitoUserPoolId:
+    Value: !Ref CognitoUserPool
+  CognitoAppClientId:
+    Value: !Ref CognitoAppClient
+  CognitoTokenEndpoint:
+    Value: !Sub
+      - 'https://${Domain}.auth.${AWS::Region}.amazoncognito.com/oauth2/token'
+      - Domain: !Sub '${AWS::StackName}-${AWS::AccountId}'
+  CognitoOIDCDiscovery:
+    Value: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}/.well-known/openid-configuration'
+  AgentCoreEndpoint:
+    Value: !Ref AgentCoreEndpoint
+  AgentName:
+    Value: !Ref AgentName
+  DLQUrl:
+    Value: !Ref DeadLetterQueue
