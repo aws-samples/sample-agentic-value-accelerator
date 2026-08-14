@@ -58,9 +58,9 @@ resource "aws_iam_role_policy" "glue_job" {
         ]
       },
       {
-        Sid    = "CloudWatchLogs"
-        Effect = "Allow"
-        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Sid      = "CloudWatchLogs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = ["arn:aws:logs:${local.region}:${local.account_id}:log-group:/aws-glue/*"]
       },
     ]
@@ -115,9 +115,9 @@ resource "aws_iam_role_policy" "datalake_reader" {
         ]
       },
       {
-        Sid    = "AthenaQuery"
-        Effect = "Allow"
-        Action = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults", "athena:StopQueryExecution", "athena:GetWorkGroup"]
+        Sid      = "AthenaQuery"
+        Effect   = "Allow"
+        Action   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults", "athena:StopQueryExecution", "athena:GetWorkGroup"]
         Resource = ["arn:aws:athena:${local.region}:${local.account_id}:workgroup/${var.name_prefix}-workgroup"]
       },
       {
@@ -136,9 +136,9 @@ resource "aws_iam_role_policy" "datalake_reader" {
         Resource = ["*"]
       },
       {
-        Sid    = "ECRImage"
-        Effect = "Allow"
-        Action = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+        Sid      = "ECRImage"
+        Effect   = "Allow"
+        Action   = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
         Resource = ["arn:aws:ecr:${local.region}:${local.account_id}:repository/*"]
       },
     ]

@@ -50,8 +50,14 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
+
+from ava_sso import (
+    AVA_SSO_ENABLED,
+    AVA_UI_LOGIN_URL,
+    verify_ava_session,
+)
 
 try:
     from jose import jwt, JWTError, jwk
@@ -299,9 +305,107 @@ async def origin_verify_middleware(request: Request, call_next):
     return response
 
 
+# ---------------------------------------------------------------------------
+# AVA FSI SSO middleware — runs BEFORE the Cognito auth middleware so a
+# valid AVA handoff short-circuits the Cognito redirect. Dual-mode:
+#
+#   AVA_FSI_APP_SIGNING_SECRET set  → AVA SSO is the primary path.
+#                                     Cognito middleware is bypassed for
+#                                     AVA-authenticated requests. Missing
+#                                     or invalid AVA cookie/token falls
+#                                     through to the Cognito middleware,
+#                                     which then applies its own logic
+#                                     (redirect to Cognito Hosted UI or,
+#                                     when AVA_UI_LOGIN_URL is set,
+#                                     redirect back to AVA to log in).
+#
+#   AVA_FSI_APP_SIGNING_SECRET empty → AVA SSO middleware is a passthrough,
+#                                     Cognito flow is unchanged. This is
+#                                     the standalone-deploy path
+#                                     (./deploy-all.sh from a laptop,
+#                                     no control-plane involvement).
+#
+# See ava_sso.py for the token format and verification logic.
+# ---------------------------------------------------------------------------
+
+
+@app.middleware("http")
+async def ava_sso_middleware(request: Request, call_next):
+    """Consume an AVA handoff token or an ava_session cookie, if present.
+
+    Three branches, mirroring case-management's jwt_auth_function.js:
+      1. `?ava_token=<blob>` in query string  → bootstrap: verify, set
+         httpOnly cookie, 302 to same URI without the token so the URL
+         bar stays clean.
+      2. `ava_session` cookie present         → verify, attach identity
+         to request.state.user_email / user_sub. Downstream Cognito
+         middleware sees state.ava_authenticated and skips its own check.
+      3. Neither present, or verification fails → passthrough. Cognito
+         middleware runs normally.
+    """
+    if not AVA_SSO_ENABLED:
+        return await call_next(request)
+
+    # Health path always bypasses auth (ALB probes).
+    if request.url.path == "/api/health":
+        return await call_next(request)
+
+    # (1) Bootstrap — first click from the AVA UI carries ?ava_token=.
+    ava_token_param = request.query_params.get("ava_token")
+    if ava_token_param:
+        claims = verify_ava_session(ava_token_param)
+        if claims is None:
+            # Bad or expired handoff — fall through to Cognito. Do NOT
+            # set the cookie; Cognito middleware will 401 or redirect.
+            return await call_next(request)
+        # Strip ava_token from the URL, keep any other params.
+        keep = [
+            (k, v) for k, v in request.query_params.multi_items()
+            if k != "ava_token"
+        ]
+        qs = "&".join(f"{k}={v}" for k, v in keep)
+        clean_url = request.url.path + (f"?{qs}" if qs else "")
+        resp = RedirectResponse(url=clean_url, status_code=302)
+        resp.set_cookie(
+            "ava_session",
+            ava_token_param,
+            max_age=3600,       # matches CloudFront Function Max-Age=3600
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            path="/",
+        )
+        return resp
+
+    # (2) Cookie — every subsequent request rides this branch.
+    cookie_token = request.cookies.get("ava_session")
+    if cookie_token:
+        claims = verify_ava_session(cookie_token)
+        if claims:
+            # Attach identity in the same shape the Cognito middleware
+            # would use, so any downstream code reading request.state
+            # sees a uniform contract regardless of auth path.
+            request.state.user_email = claims.get("email", "ava-user")
+            request.state.user_sub = claims.get("sub", "")
+            request.state.ava_authenticated = True
+            return await call_next(request)
+
+    # (3) No AVA session, or invalid one. Let the Cognito middleware
+    # (or fallback logic below) handle the request.
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    """Validate Cognito JWT on every request (when auth is enabled)."""
+    """Validate Cognito JWT on every request (when auth is enabled).
+
+    Skipped when the caller has already been authenticated by the
+    upstream AVA SSO middleware (request.state.ava_authenticated=True).
+    """
+    # Already authenticated by AVA SSO — pass through untouched.
+    if getattr(request.state, "ava_authenticated", False):
+        return await call_next(request)
+
     if not AUTH_ENABLED:
         # Auth disabled — pass through
         response = await call_next(request)
@@ -315,6 +419,13 @@ async def auth_middleware(request: Request, call_next):
     # Extract token from Authorization header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
+        # In AVA-federated mode with a login URL configured, redirect a
+        # top-level browser navigation back to AVA to authenticate. API
+        # (XHR) callers still get 401 so the frontend can react. We
+        # detect browser navigations by looking for a top-level Accept
+        # header containing text/html.
+        if AVA_SSO_ENABLED and AVA_UI_LOGIN_URL and "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(url=AVA_UI_LOGIN_URL, status_code=302)
         return JSONResponse(status_code=401, content={"detail": "Missing or invalid Authorization header"})
 
     token = auth_header[7:]  # Strip "Bearer "
@@ -330,6 +441,8 @@ async def auth_middleware(request: Request, call_next):
     return response
 
 
+if AVA_SSO_ENABLED:
+    logger.info("AVA SSO ENABLED — HMAC handoff via ava_session cookie is the primary auth path")
 if AUTH_ENABLED:
     logger.info(f"Cognito auth ENABLED: pool={COGNITO_USER_POOL_ID}, client={COGNITO_APP_CLIENT_ID}")
 else:
@@ -348,7 +461,25 @@ async def serve_dashboard():
 # ---------------------------------------------------------------------------
 @app.get("/api/auth/config")
 async def auth_config(request: Request):
-    """Return Cognito config for the frontend. No auth required."""
+    """Return Cognito config for the frontend. No auth required.
+
+    When AVA SSO is enabled we report `enabled: false` so index.html's
+    existing "auth disabled, show app immediately" branch fires. The
+    user still needs a valid `ava_session` cookie to hit any protected
+    endpoint — the AVA SSO middleware enforces that server-side — but
+    the frontend never tries to render the Cognito Hosted UI login,
+    which is what produces the visible login screen users don't want.
+    """
+    if AVA_SSO_ENABLED:
+        return {
+            "enabled": False,
+            "userPoolId": "",
+            "clientId": "",
+            "domain": "",
+            "region": COGNITO_REGION,
+            "redirectUri": "",
+            "avaSsoEnabled": True,
+        }
     # Auto-detect redirect URI from request if not set via env var
     # When behind CloudFront, the Host header is the ALB hostname (not CloudFront),
     # so we return empty and let the frontend use window.location.origin instead.
@@ -366,6 +497,7 @@ async def auth_config(request: Request):
         "domain": COGNITO_DOMAIN,
         "region": COGNITO_REGION,
         "redirectUri": redirect_uri,
+        "avaSsoEnabled": False,
     }
 
 
@@ -1516,7 +1648,51 @@ async def sync_registry_only():
 # ===================================================================
 
 @app.get("/api/health")
-async def health():
+async def health(request: Request):
+    """Health probe.
+
+    /api/health is on the AUTH_EXEMPT_PATHS list because ALB target-group
+    health checks need to reach it without a bearer token. That would
+    otherwise make the endpoint anonymous-reachable and expose internal
+    resource names via the `checks` body — which is exactly the finding
+    that prompted this hardening.
+
+    Posture: matches every other AVA-federated ref app (case-management,
+    merchant-onboarding, sales-recommend, Foundry UCs), which all return
+    302/401 to anonymous /health probes because their CloudFront edge
+    functions block anonymous access. Agent Safety sits behind an ALB
+    (not a static edge), so we enforce the same "no anonymous surface"
+    contract inline here:
+
+      - ALB target-group probes (User-Agent 'ELB-HealthChecker/...')
+        → allowed, get the full detailed body for load-balancer scoring.
+      - Authenticated dashboard users (valid AVA session cookie or
+        Cognito Bearer) → allowed, get the full detailed body for
+        operator observability.
+      - Everyone else (external internet, curl without auth, uptime
+        monitors without a token) → 401 Unauthorized. No body, no
+        confirmation that this is Agent Safety, no table names.
+    """
+    ua = request.headers.get("user-agent", "")
+    is_alb_probe = ua.startswith("ELB-HealthChecker")
+
+    is_authenticated = False
+    if not is_alb_probe:
+        # /api/health is exempt from the middleware, so re-verify auth
+        # in-line using the same order the ava_sso middleware uses.
+        cookie_token = request.cookies.get("ava_session")
+        if AVA_SSO_ENABLED and cookie_token and verify_ava_session(cookie_token):
+            is_authenticated = True
+        elif AUTH_ENABLED:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                claims = _verify_token(auth_header[7:])
+                is_authenticated = claims is not None
+
+    if not (is_alb_probe or is_authenticated):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # ALB probe or authenticated user — safe to include the detailed checks.
     checks = {}
     for tbl in (REGISTRY_TABLE, SESSION_TABLE, INTERVENTION_TABLE, COST_SIGNALS_TABLE, OBS_SIGNALS_TABLE, EVAL_SIGNALS_TABLE):
         checks[f"dynamodb:{tbl}"] = "ok" if _get_dynamo_table(tbl) else "not_found"

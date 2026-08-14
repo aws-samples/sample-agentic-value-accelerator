@@ -369,7 +369,38 @@ deploy_lambda "bedrock-chat" "bedrock_chat.lambda_handler" "/tmp/bedrock-chat.zi
   "bedrock-chat-lambda-role" \
   "Variables={TABLE_TXN_LOGS=txn_logs}" 60 256
 
-echo "  ✓ All 4 Lambdas deployed"
+# --- 3e: sar-api-ava-authorizer (AVA FSI SSO) ---
+# Only relevant when AVA_FSI_APP_SIGNING_SECRET is set (control-plane
+# deploy). We still deploy the Lambda unconditionally so re-deploying
+# without the secret keeps things consistent — the Step 4 authorizer-
+# attach block below decides whether to actually attach it to routes.
+# When the secret is empty the Lambda returns isAuthorized=false for
+# every call, which is exactly the fail-closed behavior we want if
+# someone attaches it manually and forgets the env var.
+echo "  [5/5] sar-api-ava-authorizer"
+create_role "sar-api-ava-authorizer-lambda-role"
+cat > /tmp/sar-api-ava-authorizer-policy.json << APOL
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/lambda/sar-api-ava-authorizer:*"
+    }
+  ]
+}
+APOL
+aws iam put-role-policy --role-name sar-api-ava-authorizer-lambda-role \
+  --policy-name sar-api-ava-authorizer-policy \
+  --policy-document file:///tmp/sar-api-ava-authorizer-policy.json
+
+zip -j /tmp/sar-api-ava-authorizer.zip "$ROOT/backend/ava_sso_authorizer.py"
+deploy_lambda "sar-api-ava-authorizer" "ava_sso_authorizer.handler" "/tmp/sar-api-ava-authorizer.zip" \
+  "sar-api-ava-authorizer-lambda-role" \
+  "Variables={AVA_FSI_APP_SIGNING_SECRET=${AVA_FSI_APP_SIGNING_SECRET:-}}" 10 128
+
+echo "  ✓ All 5 Lambdas deployed"
 echo ""
 
 # ────────────────────────────────────────────────────────────
@@ -448,6 +479,79 @@ if [ -z "$API_ID" ]; then
     --region "$REGION" >/dev/null 2>&1 || true
 else
   echo "  API Gateway exists: ${API_ID}"
+fi
+
+# ────────────────────────────────────────────────────────────
+# STEP 4b — AVA FSI SSO authorizer (idempotent, dual-mode)
+# ────────────────────────────────────────────────────────────
+# When AVA_FSI_APP_SIGNING_SECRET is set (deploy triggered by the AVA
+# control-plane CodeBuild), attach the ava_sso_authorizer Lambda to
+# every non-OPTIONS route on sar-api-gateway. This closes the public
+# exposure without changing the API shape.
+#
+# Runs on every deploy so an existing API (previously wide-open) gets
+# secured on the next redeploy — no delete-and-recreate needed.
+#
+# When AVA_FSI_APP_SIGNING_SECRET is empty (standalone laptop deploy),
+# skip the attach entirely. Standalone deployers keep the current
+# no-auth behavior; nothing regresses for them.
+if [ -n "${AVA_FSI_APP_SIGNING_SECRET:-}" ]; then
+  echo "  Attaching AVA FSI SSO authorizer to routes..."
+  AUTHORIZER_URI="arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:sar-api-ava-authorizer/invocations"
+  AUTHORIZER_ID=$(aws apigatewayv2 get-authorizers --region "$REGION" \
+    --api-id "$API_ID" \
+    --query "Items[?Name=='ava-sso-authorizer'].AuthorizerId | [0]" \
+    --output text 2>/dev/null || echo "")
+  if [ -z "$AUTHORIZER_ID" ] || [ "$AUTHORIZER_ID" = "None" ]; then
+    AUTHORIZER_ID=$(aws apigatewayv2 create-authorizer --region "$REGION" \
+      --api-id "$API_ID" \
+      --name ava-sso-authorizer \
+      --authorizer-type REQUEST \
+      --identity-source '$request.header.Authorization' \
+      --authorizer-uri "$AUTHORIZER_URI" \
+      --authorizer-payload-format-version "2.0" \
+      --enable-simple-responses \
+      --authorizer-result-ttl-in-seconds 60 \
+      --query "AuthorizerId" --output text)
+    echo "    Created authorizer: $AUTHORIZER_ID"
+  else
+    echo "    Authorizer exists: $AUTHORIZER_ID"
+  fi
+
+  # Grant API Gateway permission to invoke the authorizer Lambda.
+  # add-permission is not idempotent (fails on duplicate statement-id),
+  # so we suppress the failure — the second run is a no-op.
+  aws lambda add-permission --function-name sar-api-ava-authorizer \
+    --statement-id "apigateway-authorizer-invoke" \
+    --action "lambda:InvokeFunction" \
+    --principal "apigateway.amazonaws.com" \
+    --source-arn "arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/authorizers/${AUTHORIZER_ID}" \
+    --region "$REGION" >/dev/null 2>&1 || true
+
+  # Attach to every non-OPTIONS route. update-route only touches the
+  # auth fields; route target/integration are preserved.
+  #
+  # NOTE on iteration: `for VAR in $(cmd)` splits on any whitespace,
+  # which shreds RouteKey values like "POST /api/chat" into two words
+  # and passes "/api/chat" as the RouteId — the CLI then errors with
+  # `NotFoundException: Invalid route identifier specified`. Use a
+  # `while read` loop with a tab-only IFS so we iterate line by line
+  # and split each line only on the tab between RouteId and RouteKey.
+  aws apigatewayv2 get-routes --region "$REGION" \
+    --api-id "$API_ID" \
+    --query "Items[?!starts_with(RouteKey, 'OPTIONS')].[RouteId,RouteKey]" \
+    --output text | \
+  while IFS=$'\t' read -r ROUTE_ID ROUTE_KEY; do
+    [ -z "$ROUTE_ID" ] && continue
+    aws apigatewayv2 update-route --region "$REGION" \
+      --api-id "$API_ID" --route-id "$ROUTE_ID" \
+      --authorization-type CUSTOM \
+      --authorizer-id "$AUTHORIZER_ID" >/dev/null
+    echo "    Secured: $ROUTE_KEY"
+  done
+  echo "  ✓ AVA SSO authorizer attached"
+else
+  echo "  ⏭ AVA_FSI_APP_SIGNING_SECRET not set — leaving routes open (standalone mode)"
 fi
 
 API_URL="https://${API_ID}.execute-api.${REGION}.amazonaws.com/prod"

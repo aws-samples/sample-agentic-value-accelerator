@@ -123,6 +123,50 @@ class Settings(BaseSettings):
         default="",
         description="Step Functions state machine ARN for the Frontier Agents (AaaS) pipeline"
     )
+    HARNESS_EXECUTION_ROLE_ARN: str = Field(
+        default="",
+        description="AgentCore Harness execution role ARN. Backend passes this on CreateHarness so users don't have to hand-roll the docs-sample IAM policy. Auto-provisioned by the harness_execution_role Terraform module."
+    )
+    MCP_SERVERS_TABLE_NAME: str = Field(
+        default="",
+        description="DDB table for the MCP Servers registry (Build > MCP Servers page)."
+    )
+    A2A_AGENTS_TABLE_NAME: str = Field(
+        default="",
+        description="DDB table for the A2A Agents registry (Build > A2A Agents page)."
+    )
+    IDENTITY_PROVIDERS_TABLE_NAME: str = Field(
+        default="",
+        description="DDB table for the Identity Providers registry (Secure > Identity page)."
+    )
+    APPROVAL_POLICIES_TABLE_NAME: str = Field(
+        default="",
+        description="DDB table for Approval Policies (Secure > Approval Policies page)."
+    )
+    APPROVAL_REQUESTS_TABLE_NAME: str = Field(
+        default="",
+        description="DDB table for Approval Requests / Approval Queue (Operate > Approval Queue page)."
+    )
+
+    # AWS Agent Registry (control plane) — provisioned once per environment.
+    # The registry itself is owned in-account (not by Terraform yet — the
+    # `aws_agent_registry_registry` TF resource doesn't exist as of the
+    # boto3 1.43.67 release). Values here are wired via `AGENT_REGISTRY_*`
+    # env vars set by the ECS task definition after a one-off create-registry
+    # bootstrap. Backend routes wrap `agent-registry-control` boto3 calls
+    # against this ID for CRUD on registry records.
+    AGENT_REGISTRY_ID: str = Field(
+        default="",
+        description="AWS Agent Registry ID (e.g. '4h0JCw88RghhrH3v'). The 'AVA' registry that publishes managed AVA resources for cross-team discovery."
+    )
+    AGENT_REGISTRY_ARN: str = Field(
+        default="",
+        description="AWS Agent Registry ARN. Full ARN of the AVA registry — same resource as AGENT_REGISTRY_ID, ARN form for cross-account references and IAM policy conditions."
+    )
+    AGENT_REGISTRY_NAME: str = Field(
+        default="AVA",
+        description="Display name of the primary registry. Backend bootstrap creates the registry with this name if AGENT_REGISTRY_ID is empty."
+    )
 
     # Cognito
     COGNITO_USER_POOL_ID: str = Field(

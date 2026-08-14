@@ -16,7 +16,7 @@
 #
 # Optional:
 #   --admin-email <email>       Admin email (default: admin@agent-safety.local)
-#   --admin-password <pass>     Admin password (default: AgentSafety123!)
+#   --admin-password <pass>     Admin password (default: random-generated per deploy)
 #   --agent-name my_agent       Agent name (default: safety_demo_agent)
 #   --skip-agent                Skip agent deployment
 #   --skip-dashboard            Skip dashboard deployment
@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
       echo "Optional:"
       echo "  --profile <name>          AWS CLI profile (uses default credentials if not set)"
       echo "  --admin-email <email>     Admin email (default: admin@agent-safety.local)"
-      echo "  --admin-password <pass>   Admin password (default: AgentSafety123!)"
+      echo "  --admin-password <pass>   Admin password (default: random-generated per deploy)"
       echo "  --region <region>         AWS region (default: us-east-1)"
       echo "  --agent-name <name>       Sample agent name (default: safety_demo_agent)"
       echo "  --skip-dashboard          Skip dashboard deployment"
@@ -68,7 +68,15 @@ if [ -z "$ADMIN_EMAIL" ]; then
   ADMIN_EMAIL="admin@agent-safety.local"
 fi
 if [ -z "$ADMIN_PASSWORD" ]; then
-  ADMIN_PASSWORD="AgentSafety123!"
+  # No hardcoded fallback — a public repo reader must not be able to guess it.
+  # Generate a strong random password. Suffix Aa1! satisfies Cognito's default
+  # complexity policy (upper + lower + digit + symbol). Operator passing
+  # --admin-password takes precedence.
+  ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-20)Aa1!"
+  echo "ℹ️  No --admin-password provided; generated one for this deploy:"
+  echo "   ADMIN_PASSWORD=$ADMIN_PASSWORD"
+  echo "   Save this — you'll need it if you sign in via the Cognito Hosted UI."
+  echo "   (AVA SSO handoff bypasses this password; it's only for the fallback path.)"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

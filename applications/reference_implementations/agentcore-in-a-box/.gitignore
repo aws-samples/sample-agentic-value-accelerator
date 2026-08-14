@@ -1,6 +1,9 @@
 # Compiled CDK/TypeScript output (root + lib + bin only — NOT frontend source)
 /*.js
 /*.d.ts
+# jwt_auth_function.js is a SOURCE file (CloudFront Function code, not CDK output);
+# attach_cf_auth.py reads it at deploy time. Must be tracked in git.
+!jwt_auth_function.js
 lib/**/*.js
 lib/**/*.d.ts
 bin/**/*.js

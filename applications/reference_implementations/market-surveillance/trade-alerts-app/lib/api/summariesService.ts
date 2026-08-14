@@ -5,6 +5,7 @@
  */
 
 import { authService } from '../auth/authService';
+import { avaAuthHeaders, hasAvaSession } from '../auth/avaSso';
 
 export interface SummaryData {
     PK: string;
@@ -50,19 +51,24 @@ class SummariesService {
     }
 
     /**
-     * Get authentication headers
+     * Get authentication headers. Accepts either Cognito Amplify's
+     * id_token or the AVA SSO ava_session cookie — AVA-federated users
+     * won't have an idToken.
      */
     private async getAuthHeaders(): Promise<HeadersInit> {
         const session = await authService.getSession();
 
-        if (!session.idToken) {
+        if (!session.idToken && !hasAvaSession()) {
             throw new Error('No authentication token available');
         }
 
-        return {
+        const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.idToken}`,
         };
+        if (session.idToken) {
+            headers['Authorization'] = `Bearer ${session.idToken}`;
+        }
+        return { ...headers, ...avaAuthHeaders() };
     }
 
     /**

@@ -205,6 +205,19 @@ output "guardrail_version" {
 }
 
 # ============================================================================
+# DB Seeder Outputs
+# ============================================================================
+output "db_seeder_lambda_name" {
+  description = "Name of the DB seeder Lambda. deploy.sh Step 3 uses this with `aws lambda invoke`."
+  value       = module.db_seeder.lambda_function_name
+}
+
+output "db_seeder_lambda_arn" {
+  description = "ARN of the DB seeder Lambda."
+  value       = module.db_seeder.lambda_arn
+}
+
+# ============================================================================
 # General Outputs
 # ============================================================================
 output "aws_region" {

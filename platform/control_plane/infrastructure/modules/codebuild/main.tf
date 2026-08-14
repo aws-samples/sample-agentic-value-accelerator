@@ -193,6 +193,17 @@ resource "aws_iam_role_policy" "codebuild_iac_provisioning" {
         Action = [
           "bedrock:*",
           "bedrock-agentcore:*",
+          # OpenSearch Serverless — for reference implementations that
+          # self-provision a Bedrock Knowledge Base vector store (collection +
+          # encryption/network/data-access policies + aoss:APIAccessAll for
+          # Terraform's data-plane vector-index creation).
+          "aoss:*",
+          # CodeBuild — reference implementations that create their own build
+          # pipelines (e.g. sales-recommend's repo->profile wiki-generator).
+          "codebuild:*",
+          # EventBridge Scheduler — distinct service from events:* (EventBridge
+          # Rules); needed for aws_scheduler_schedule.
+          "scheduler:*",
           "ecr:*",
           "ecs:*",
           "ec2:*",

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/lib/auth/authService';
+import { hasAvaSession } from '@/lib/auth/avaSso';
 import { getAlerts, isApiConfigured, triggerInvestigation } from '@/lib/api/alertsService';
 import { summariesService } from '@/lib/api/summariesService';
 
@@ -40,6 +41,19 @@ export default function Home() {
 
   useEffect(() => {
     const checkAuth = async () => {
+      // AVA SSO short-circuit: if the CloudFront viewer-request
+      // Function set an ava_session cookie (user arrived from the AVA
+      // UI's Open-App button), treat as authenticated — don't push to
+      // /login, because the login page would just send us back here
+      // when it also sees the cookie, causing an infinite redirect
+      // loop. AVA users don't have a Cognito Amplify session, so the
+      // isAuthenticated() check would otherwise incorrectly report
+      // "not signed in."
+      if (hasAvaSession()) {
+        setIsCheckingAuth(false);
+        return;
+      }
+
       const isAuth = await authService.isAuthenticated();
 
       if (!isAuth) {

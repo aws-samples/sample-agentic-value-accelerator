@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { authService } from '@/lib/auth/authService';
 import { isAmplifyConfigured, initializeAmplify } from '@/lib/auth/amplifyConfig';
+import { hasAvaSession } from '@/lib/auth/avaSso';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -16,7 +17,19 @@ export default function LoginPage() {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        // Check if user is already signed in
+        // AVA SSO short-circuit: if the CloudFront Function set an
+        // ava_session cookie (user arrived from the AVA UI's Open-App
+        // button), skip the local Cognito login screen entirely and go
+        // straight to the app. The API client will forward the cookie as
+        // an Authorization header on subsequent XHR calls (see avaSso.ts).
+        if (hasAvaSession()) {
+            const params = new URLSearchParams(window.location.search);
+            const redirectTo = params.get('redirect') || '/';
+            router.push(redirectTo);
+            return;
+        }
+
+        // Check if user is already signed in (Cognito / Amplify path)
         const checkAuth = async () => {
             const isAuthenticated = await authService.isAuthenticated();
             if (isAuthenticated) {

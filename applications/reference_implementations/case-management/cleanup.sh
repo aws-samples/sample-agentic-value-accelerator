@@ -86,7 +86,7 @@ done
 
 echo ""
 echo "═══ Step 2/6: Lambda Functions ═══"
-for fn in fraud-scoring txn-reader sar-api bedrock-chat; do
+for fn in fraud-scoring txn-reader sar-api bedrock-chat sar-api-ava-authorizer; do
   if aws lambda get-function --function-name "$fn" --region "$REGION" >/dev/null 2>&1; then
     aws lambda delete-function --function-name "$fn" --region "$REGION"
     echo "  ✓ Deleted: $fn"
@@ -97,7 +97,7 @@ done
 
 echo ""
 echo "═══ Step 3/6: IAM Roles ═══"
-for role in fraud-scoring-lambda-role txn-reader-lambda-role sar-api-lambda-role bedrock-chat-lambda-role; do
+for role in fraud-scoring-lambda-role txn-reader-lambda-role sar-api-lambda-role bedrock-chat-lambda-role sar-api-ava-authorizer-lambda-role; do
   delete_role "$role"
 done
 

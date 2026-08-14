@@ -1,0 +1,15 @@
+[project]
+name = "sales-recommend-agent"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "strands-agents>=1.38.0,<2.0",
+    "strands-agents-tools>=0.1.0,<1.0",
+    "bedrock-agentcore>=1.9.0,<2.0",
+    "pydantic-settings>=2.0.0,<3.0",
+    "langfuse>=2.0.0,<3.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

@@ -1,3 +1,0 @@
-strands-agents
-bedrock-agentcore
-boto3

@@ -3,7 +3,7 @@ import { useRef, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useUser } from '../contexts/UserContext';
 
-type SectionKey = 'plan' | 'apps' | 'aaas' | 'capabilities' | 'secure' | 'observability' | 'govern';
+type SectionKey = 'plan' | 'apps' | 'aaas' | 'capabilities' | 'harness' | 'memory' | 'registry' | 'catalog' | 'secure' | 'operate' | 'govern';
 
 export default function Sidebar() {
   const location = useLocation();
@@ -14,11 +14,16 @@ export default function Sidebar() {
 
   // Collapsible state (expanded sidebar) — persisted to localStorage
   const [expanded, setExpanded] = useState<Record<SectionKey, boolean>>(() => {
+    // Note: old `mcp`/`a2a` keys are gone (they lived here as flat entries
+    // before the Registry rewire). If a returning user's localStorage still
+    // has them, the JSON.parse() spread below simply ignores unknown keys —
+    // TypeScript's Record<SectionKey,…> doesn't care about extras at runtime.
+    const defaults = { plan: true, apps: true, aaas: true, capabilities: true, harness: true, memory: true, registry: true, catalog: true, secure: true, operate: true, govern: true };
     try {
       const raw = localStorage.getItem('sidebar.expanded');
-      if (raw) return { plan: true, apps: true, aaas: true, capabilities: true, secure: true, observability: true, govern: true, ...JSON.parse(raw) };
+      if (raw) return { ...defaults, ...JSON.parse(raw) };
     } catch { /* noop */ }
-    return { plan: true, apps: true, aaas: true, capabilities: true, secure: true, observability: true, govern: true };
+    return defaults;
   });
   useEffect(() => {
     try { localStorage.setItem('sidebar.expanded', JSON.stringify(expanded)); } catch { /* noop */ }
@@ -28,7 +33,7 @@ export default function Sidebar() {
   const [flyout, setFlyout] = useState<SectionKey | null>(null);
   const [flyoutTop, setFlyoutTop] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
-  const iconRefs = useRef<Record<SectionKey, HTMLDivElement | null>>({ plan: null, apps: null, aaas: null, capabilities: null, secure: null, observability: null, govern: null });
+  const iconRefs = useRef<Record<SectionKey, HTMLDivElement | null>>({ plan: null, apps: null, aaas: null, capabilities: null, harness: null, memory: null, registry: null, catalog: null, secure: null, operate: null, govern: null });
   const flyoutRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname === path;
@@ -154,15 +159,39 @@ export default function Sidebar() {
       { to: '/capabilities/knowledge', label: 'Knowledge' },
       { to: '/capabilities/prompts', label: 'Prompts' },
     ],
-    secure: [
-      { to: '/secure/guardrails', label: 'Guardrails' },
-      { to: '/secure/policy', label: 'Policy' },
-      { to: '/secure/llm-gateway', label: 'LLM Gateway' },
+    harness: [
+      { to: '/harness', label: 'Harness' },
     ],
-    observability: [
-      { to: '/observability/langfuse', label: 'Langfuse' },
-      { to: '/observability/agentcore', label: 'AgentCore' },
-      { to: '/prompt-optimization', label: 'Prompt Optimization' },
+    memory: [
+      { to: '/memory', label: 'Memory' },
+    ],
+    // Registry — AWS Agent Registry (AVA) grouping. Five typed record kinds:
+    // agents + MCP servers + A2A servers cover the three call-shapes; skills
+    // and custom resources are placeholders until backend wrappers land.
+    registry: [
+      { to: '/registry',                   label: 'Overview' },
+      { to: '/registry/agents',            label: 'Agents' },
+      { to: '/mcp',                        label: 'MCP Servers' },
+      { to: '/a2a',                        label: 'A2A Agents' },
+      { to: '/registry/skills',            label: 'Skills' },
+      { to: '/registry/custom-resources',  label: 'Custom Resources' },
+    ],
+    catalog: [
+      { to: '/catalog', label: 'Catalog' },
+    ],
+    secure: [
+      { to: '/secure/llm-gateway', label: 'LLM Gateway' },
+      { to: '/secure/guardrails', label: 'Guardrails' },
+      { to: '/secure/identity', label: 'Identity' },
+      { to: '/secure/policy', label: 'Policy' },
+      { to: '/secure/approval-policies', label: 'Approval Policies' },
+    ],
+    operate: [
+      { to: '/deployments',             label: 'Deployments' },
+      { to: '/observability/agentcore', label: 'AgentCore Observability' },
+      { to: '/observability/langfuse',  label: 'Langfuse Observability' },
+      { to: '/prompt-optimization',     label: 'Prompt Optimization' },
+      { to: '/operate/approvals',       label: 'Approval Queue' },
     ],
     govern: [
       // Overview & Framework
@@ -275,6 +304,38 @@ export default function Sidebar() {
                 </div>
               )}
             </div>
+
+            <div className="mt-1">
+              {navLink('/harness', 'Harness', 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25', isActivePrefix('/harness'))}
+            </div>
+
+            <div className="mt-1">
+              {/* Memory — flat entry */}
+              {navLink('/memory', 'Memory', 'M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z', isActivePrefix('/memory'))}
+            </div>
+
+            <div className="mt-1">
+              {/* Registry — AWS Agent Registry (AVA). Groups Agents, MCP Servers,
+                  A2A Agents, Skills, and Custom Resources under one Build entry
+                  because they're all records in the same in-account registry. */}
+              {sectionHeader('registry', 'Registry', 'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25', '/registry', '/registry')}
+              {!isCollapsed && expanded.registry && (
+                <div className="mt-0.5 space-y-0.5">
+                  {subLink('/registry/agents',           'Agents',           isActive('/registry/agents'))}
+                  {subLink('/mcp',                       'MCP Servers',      isActivePrefix('/mcp'))}
+                  {subLink('/a2a',                       'A2A Agents',       isActivePrefix('/a2a'))}
+                  {subLink('/registry/skills',           'Skills',           isActive('/registry/skills'))}
+                  {subLink('/registry/custom-resources', 'Custom Resources', isActive('/registry/custom-resources'))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-1">
+              {/* Catalog — unified inventory across all Build resources.
+                  Placed last in Build so type-specific creators come first;
+                  Catalog is the read view over everything above it. */}
+              {navLink('/catalog', 'Catalog', 'M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z', isActive('/catalog'))}
+            </div>
           </div>
 
           <div className="pt-2">
@@ -282,23 +343,33 @@ export default function Sidebar() {
             {sectionHeader('secure', 'Secure', 'M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.285z', '/secure', '/secure')}
             {!isCollapsed && expanded.secure && (
               <div className="mt-0.5 space-y-0.5">
-                {subLink('/secure/guardrails', 'Guardrails', isActivePrefix('/secure/guardrails'))}
-                {subLink('/secure/policy', 'Policy', isActivePrefix('/secure/policy'))}
                 {subLink('/secure/llm-gateway', 'LLM Gateway', isActivePrefix('/secure/llm-gateway'))}
+                {subLink('/secure/guardrails', 'Guardrails', isActivePrefix('/secure/guardrails'))}
+                {subLink('/secure/identity', 'Identity', isActivePrefix('/secure/identity'))}
+                {subLink('/secure/policy', 'Policy', isActivePrefix('/secure/policy'))}
+                {subLink('/secure/approval-policies', 'Approval Policies', isActivePrefix('/secure/approval-policies'))}
               </div>
             )}
           </div>
 
           <div className="pt-2">
             {!isCollapsed && <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Operate</div>}
-            {sectionHeader('observability', 'Observability', 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z', '/observability', '/observability')}
-            {!isCollapsed && expanded.observability && (
+            {/* Single collapsible with 5 sub-items — Deployments, both
+                Observability views, Prompt Optimization, Approval Queue.
+                Consolidated Aug 2026: previously Deployments / Prompt
+                Optimization / Approval Queue were flat navLinks and
+                Observability was its own sub-tree, which made the
+                Operate group visually inconsistent with Secure / Build. */}
+            {sectionHeader('operate', 'Operate', 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z', '/operate', '/operate')}
+            {!isCollapsed && expanded.operate && (
               <div className="mt-0.5 space-y-0.5">
-                {subLink('/observability/langfuse', 'Langfuse', isActive('/observability/langfuse'))}
-                {subLink('/observability/agentcore', 'AgentCore', isActive('/observability/agentcore'))}
+                {subLink('/deployments',             'Deployments',              isActivePrefix('/deployments'))}
+                {subLink('/observability/agentcore', 'AgentCore Observability',  isActive('/observability/agentcore'))}
+                {subLink('/observability/langfuse',  'Langfuse Observability',   isActive('/observability/langfuse'))}
+                {subLink('/prompt-optimization',     'Prompt Optimization',      isActivePrefix('/prompt-optimization'))}
+                {subLink('/operate/approvals',       'Approval Queue',           isActivePrefix('/operate/approvals'))}
               </div>
             )}
-            {navLink('/deployments', 'Deployments', 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7', isActivePrefix('/deployments'))}
           </div>
 
           <div className="pt-2">

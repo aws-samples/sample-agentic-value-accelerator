@@ -15,7 +15,7 @@
       "description": "Generates executive summaries, identifies action items, and assesses customer sentiment"
     }
   ],
-  "api_endpoint": "https://placeholder.cloudfront.net/api/invoke",
+  "api_endpoint": "/api/invoke",
   "input_schema": {
     "id_field": "call_id",
     "id_label": "Call ID",

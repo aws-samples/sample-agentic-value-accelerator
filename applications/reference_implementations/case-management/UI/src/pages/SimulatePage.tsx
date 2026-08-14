@@ -16,6 +16,7 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { getConfig } from '../config.js';
+import { avaAuthHeaders } from '../services/avaSso';
 
 const GEOS = ['US-NY','US-CA','US-TX','CA-BC','GB-LN','AU-NS','DE-BE','FR-PA','IT-RM','JP-TK','BR-SP','IN-MH','SG-01'];
 
@@ -139,7 +140,7 @@ const SimulatePage: React.FC = () => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + txn.minuteOffset);
     const res = await fetch(getScoreUrl(), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...avaAuthHeaders() },
       body: JSON.stringify({
         txn_id: txn.txn_id + Date.now().toString().slice(-4),
         src: txn.src, dst: txn.dst, amount: txn.amount,

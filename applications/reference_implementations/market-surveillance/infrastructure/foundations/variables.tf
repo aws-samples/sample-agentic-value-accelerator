@@ -151,3 +151,25 @@ variable "alb_ssl_policy" {
   type        = string
   default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 }
+
+# ------------------------------------------------------------------------------
+# AVA FSI SSO (optional) — control-plane-provided secrets that flip the
+# CloudFront distribution's viewer-request function from pass-through to
+# AVA HMAC handoff verification. Populated via TF_VAR_fsi_app_signing_secret /
+# TF_VAR_ava_ui_login_url env vars by the AVA CodeBuild deploy pipeline
+# (deploy-backend.sh exports them if the parent deploy.sh received them).
+# Empty defaults preserve the current custom-Cognito-login UX for standalone
+# ./deploy.sh runs.
+# ------------------------------------------------------------------------------
+variable "fsi_app_signing_secret" {
+  description = "HMAC secret shared with the AVA control plane. Empty disables the AVA SSO edge gate on CloudFront."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ava_ui_login_url" {
+  description = "AVA UI URL used by the CloudFront Function to redirect on token failure. Only consulted when fsi_app_signing_secret is non-empty."
+  type        = string
+  default     = ""
+}

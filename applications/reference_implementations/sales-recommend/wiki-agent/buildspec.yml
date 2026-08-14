@@ -1,0 +1,23 @@
+version: 0.2
+
+# Runs the repo -> wiki capability-profile generator.
+# REPO_URL is supplied as an environment-variable override at start-build time:
+#   aws codebuild start-build --project-name <p> \
+#     --environment-variables-override name=REPO_URL,value=https://github.com/owner/repo
+#
+# All other configuration (KB_DATA_BUCKET, KNOWLEDGE_BASE_ID, DATA_SOURCE_ID,
+# BEDROCK_MODEL_ID, S3_PREFIX, AWS_REGION) is set on the CodeBuild project by
+# Terraform.
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - python --version
+      - pip install --quiet --upgrade pip
+      - pip install --quiet -r requirements.txt
+  build:
+    commands:
+      - echo "Generating wiki profile for ${REPO_URL}"
+      - python wiki_agent.py

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" role="img" aria-label="Approval Queue — live inbox of human sign-offs">
+  <defs>
+    <linearGradient id="oaq-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#065f46"/>
+      <stop offset="0.55" stop-color="#0891b2"/>
+      <stop offset="1" stop-color="#4338ca"/>
+    </linearGradient>
+    <linearGradient id="oaq-row" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ecfeff"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="240" fill="url(#oaq-bg)"/>
+  <ellipse cx="120" cy="60" rx="180" ry="70" fill="#a7f3d0" fill-opacity="0.12"/>
+
+  <!-- Inbox tray -->
+  <g transform="translate(60,50)">
+    <rect x="0" y="0" width="360" height="150" rx="18" fill="#ffffff" fill-opacity="0.94" stroke="#cbd5e1"/>
+    <rect x="0" y="0" width="360" height="30" rx="18" fill="#e0f2fe"/>
+    <text x="18" y="20" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="12" font-weight="800" fill="#0e7490" letter-spacing="1">APPROVAL QUEUE · 3 PENDING</text>
+
+    <!-- row 1 -->
+    <g transform="translate(12,40)">
+      <rect width="336" height="30" rx="8" fill="url(#oaq-row)" stroke="#cbd5e1"/>
+      <circle cx="16" cy="15" r="6" fill="#f59e0b"/>
+      <text x="30" y="19" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="11" font-weight="700" fill="#0f172a">MCP · Register: aws-docs</text>
+      <text x="230" y="19" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="10" fill="#475569">SLA 23h</text>
+      <rect x="290" y="6" width="40" height="18" rx="4" fill="#10b981"/>
+      <text x="310" y="19" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="10" font-weight="700" fill="#ecfdf5">OK</text>
+    </g>
+    <!-- row 2 -->
+    <g transform="translate(12,74)">
+      <rect width="336" height="30" rx="8" fill="url(#oaq-row)" stroke="#cbd5e1"/>
+      <circle cx="16" cy="15" r="6" fill="#f59e0b"/>
+      <text x="30" y="19" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="11" font-weight="700" fill="#0f172a">Agent · Deploy: sales-recommend</text>
+      <text x="248" y="19" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="10" fill="#475569">SLA 6h</text>
+      <rect x="290" y="6" width="40" height="18" rx="4" fill="#f43f5e"/>
+      <text x="310" y="19" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="10" font-weight="700" fill="#fff1f2">DENY</text>
+    </g>
+    <!-- row 3 -->
+    <g transform="translate(12,108)">
+      <rect width="336" height="30" rx="8" fill="url(#oaq-row)" stroke="#cbd5e1"/>
+      <circle cx="16" cy="15" r="6" fill="#f59e0b"/>
+      <text x="30" y="19" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="11" font-weight="700" fill="#0f172a">Identity · Add IdP: Okta-prod</text>
+      <text x="240" y="19" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="10" fill="#475569">SLA 12h</text>
+      <rect x="290" y="6" width="40" height="18" rx="4" fill="#e2e8f0"/>
+      <text x="310" y="19" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="10" font-weight="700" fill="#475569">…</text>
+    </g>
+  </g>
+
+  <!-- Approver on right — badge + check -->
+  <g transform="translate(460,50)">
+    <circle cx="60" cy="60" r="52" fill="#ffffff" fill-opacity="0.9" stroke="#a7f3d0"/>
+    <!-- head -->
+    <circle cx="60" cy="46" r="14" fill="#0f766e"/>
+    <!-- shoulders -->
+    <path d="M32 92 a28 28 0 0 1 56 0 z" fill="#0f766e"/>
+    <!-- check badge -->
+    <circle cx="102" cy="98" r="18" fill="#10b981" stroke="#ecfeff" stroke-width="2"/>
+    <path d="M94 98 l6 6 l12 -12" stroke="#ecfeff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="60" y="140" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="10" font-weight="700" fill="#ecfeff">On-call operator</text>
+  </g>
+
+  <!-- Arrow tray → approver -->
+  <path d="M424 130 L462 108" stroke="#a7f3d0" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <polygon points="462,102 462,114 472,108" fill="#a7f3d0"/>
+</svg>

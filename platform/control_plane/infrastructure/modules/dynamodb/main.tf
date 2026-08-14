@@ -527,3 +527,137 @@ resource "aws_dynamodb_table" "organization_design" {
     Name = "${var.name_prefix}-organization-design"
   })
 }
+
+# ============================================================================
+# MCP Servers registry — Build > MCP Servers page writes here
+# ============================================================================
+resource "aws_dynamodb_table" "mcp_servers" {
+  name         = "${var.name_prefix}-mcp-servers"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "server_id"
+
+  attribute {
+    name = "server_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-mcp-servers"
+  })
+}
+
+# ============================================================================
+# Identity Providers registry — Secure > Identity page writes here
+# ============================================================================
+resource "aws_dynamodb_table" "identity_providers" {
+  name         = "${var.name_prefix}-identity-providers"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "provider_id"
+
+  attribute {
+    name = "provider_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-identity-providers"
+  })
+}
+
+# ============================================================================
+# Approval Policies — Secure > Approval Policies page writes here.
+# Each row is a rule: "when action X hits resource Y, require sign-off from
+# role Z". Single-table, pk=policy_id. Low volume, PAY_PER_REQUEST.
+# ============================================================================
+resource "aws_dynamodb_table" "approval_policies" {
+  name         = "${var.name_prefix}-approval-policies"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "policy_id"
+
+  attribute {
+    name = "policy_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-approval-policies"
+  })
+}
+
+# ============================================================================
+# Approval Requests — Operate > Approval Queue page writes / reads here.
+# Live queue of pending sign-offs. Single-table, pk=request_id. Volume is
+# request-per-gated-action so PAY_PER_REQUEST fits until we outgrow it.
+# ============================================================================
+resource "aws_dynamodb_table" "approval_requests" {
+  name         = "${var.name_prefix}-approval-requests"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "request_id"
+
+  attribute {
+    name = "request_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-approval-requests"
+  })
+}
+
+# ============================================================================
+# A2A Agents registry — Build > A2A Agents page writes here
+# ============================================================================
+resource "aws_dynamodb_table" "a2a_agents" {
+  name         = "${var.name_prefix}-a2a-agents"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "agent_id"
+
+  attribute {
+    name = "agent_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-a2a-agents"
+  })
+}

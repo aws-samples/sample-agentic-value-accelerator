@@ -255,6 +255,90 @@ variable "frontier_agents_state_machine_arn" {
   default     = ""
 }
 
+variable "harness_execution_role_arn" {
+  description = "IAM execution role ARN that the backend hands to bedrock-agentcore-control:CreateHarness. Provisioned once per account/region by the harness_execution_role module."
+  type        = string
+  default     = ""
+}
+
+variable "mcp_servers_table_name" {
+  description = "MCP Servers registry DynamoDB table name"
+  type        = string
+  default     = ""
+}
+
+variable "mcp_servers_table_arn" {
+  description = "MCP Servers registry DynamoDB table ARN"
+  type        = string
+  default     = ""
+}
+
+variable "a2a_agents_table_name" {
+  description = "A2A Agents registry DynamoDB table name"
+  type        = string
+  default     = ""
+}
+
+variable "a2a_agents_table_arn" {
+  description = "A2A Agents registry DynamoDB table ARN"
+  type        = string
+  default     = ""
+}
+
+variable "identity_providers_table_name" {
+  description = "Identity Providers registry DynamoDB table name"
+  type        = string
+  default     = ""
+}
+
+variable "identity_providers_table_arn" {
+  description = "Identity Providers registry DynamoDB table ARN"
+  type        = string
+  default     = ""
+}
+
+variable "approval_policies_table_name" {
+  description = "Approval Policies (Secure) DynamoDB table name"
+  type        = string
+  default     = ""
+}
+
+variable "approval_policies_table_arn" {
+  description = "Approval Policies (Secure) DynamoDB table ARN"
+  type        = string
+  default     = ""
+}
+
+variable "approval_requests_table_name" {
+  description = "Approval Requests / Queue (Operate) DynamoDB table name"
+  type        = string
+  default     = ""
+}
+
+variable "approval_requests_table_arn" {
+  description = "Approval Requests / Queue (Operate) DynamoDB table ARN"
+  type        = string
+  default     = ""
+}
+
+variable "agent_registry_id" {
+  description = "AWS Agent Registry ID (e.g. '4h0JCw88RghhrH3v'). Primary AVA registry that publishes managed resources for cross-team discovery. Created via one-off `create-registry` call; TF resource doesn't exist yet in the aws provider."
+  type        = string
+  default     = ""
+}
+
+variable "agent_registry_arn" {
+  description = "AWS Agent Registry ARN — full ARN form of the AVA registry, used for IAM Resource conditions."
+  type        = string
+  default     = ""
+}
+
+variable "agent_registry_name" {
+  description = "Display name of the primary registry (default 'AVA'). Used only when the backend bootstrap needs to create the registry."
+  type        = string
+  default     = "AVA"
+}
+
 variable "service_approval_table_name" {
   description = "Service-approval DynamoDB table name"
   type        = string

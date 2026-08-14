@@ -1,6 +1,6 @@
 """Deployment CRUD API routes"""
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File as FastAPIFile
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File as FastAPIFile, Header
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import logging
@@ -79,7 +79,11 @@ def get_pipeline_svc():
 
 
 @router.post("", status_code=201, response_model=DeploymentResponse)
-async def create_deployment(req: DeploymentCreate, _=RBACDepends(require_role(Role.OPERATOR))):
+async def create_deployment(
+    req: DeploymentCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=RBACDepends(require_role(Role.OPERATOR)),
+):
     catalog = get_catalog()
     template = catalog.get_template(req.template_id)
     if not template:
@@ -89,6 +93,35 @@ async def create_deployment(req: DeploymentCreate, _=RBACDepends(require_role(Ro
     for param in template.metadata.parameters or []:
         if param.get("required") and param.get("name") not in req.parameters:
             raise HTTPException(status_code=400, detail=f"Required parameter missing: {param.get('name')}")
+
+    # Consult the Approval Policy engine BEFORE any state change so a
+    # `deny` verdict blocks the deploy cleanly and an `auto_approve`
+    # verdict creates an audit-only queue row. Failing this call is
+    # non-fatal — a broken policy engine shouldn't take down deploys
+    # (the resource_kind='application' + action='deploy' matches the
+    # `AVA Default: Application deploy auto-approves` seed).
+    try:
+        from services import approval_policy_engine as _policy
+        _deploy_verdict = _policy.evaluate(
+            kind="application",
+            resource_id=req.template_id,
+            action="deploy",
+        )
+        if _deploy_verdict.mode == _policy.MODE_DENY:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Approval Policy denies deploying '{req.template_id}': "
+                    f"{_deploy_verdict.reason or 'no reason given'}"
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Log and continue — deploy proceeds without a queue row rather
+        # than fail on a policy-engine outage.
+        logger.warning(f"Policy evaluate for deploy failed (continuing): {e}")
+        _deploy_verdict = None
 
     # Auto-inject control plane VPC for foundation stack
     if template.metadata.type == "foundation" and settings.CONTROL_PLANE_VPC_ID:
@@ -202,6 +235,41 @@ async def create_deployment(req: DeploymentCreate, _=RBACDepends(require_role(Ro
         logger.error(f"Pipeline start failed: {e}")
         svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
         raise HTTPException(status_code=500, detail=f"Pipeline start failed: {e}")
+
+    # Create an Approval Queue row for the deploy (audit trail).
+    # * If policy said auto_approve → row starts APPROVED (no human
+    #   blocking). The Queue's Approved tab gains an entry.
+    # * If policy said require_approval → row starts pending (v2:
+    #   deploy would block until an operator flips it; today we still
+    #   let CodeBuild run because gating the pipeline mid-flight
+    #   requires the Step Functions to consult the queue, which is a
+    #   larger refactor). Flag: v2 gap.
+    if _deploy_verdict is not None:
+        try:
+            from services import agent_registry_client as _reg
+            _initial = "approved" if _deploy_verdict.mode == "auto_approve" else "pending"
+            _reg.enqueue_approval(
+                # We don't have a registry record for the deploy — pass a
+                # synthetic dict so the queue row still carries useful
+                # display info. The registry_record_id stays empty; the
+                # queue's registry-status-flip hook will noop on it.
+                record={
+                    "recordId":    "",
+                    "recordArn":   "",
+                    "displayName": req.deployment_name,
+                    "name":        req.template_id,
+                },
+                kind="application",
+                requested_by=x_user_email or "unknown",
+                justification=(
+                    f"Deploy '{req.template_id}' → deployment_id={deployment.deployment_id}"
+                ),
+                verdict=_deploy_verdict,
+                initial_status=_initial,
+                action="deploy",
+            )
+        except Exception as e:
+            logger.warning(f"Approval queue row for deploy {deployment.deployment_id} failed: {e}")
 
     return DeploymentResponse(**deployment.dict())
 

@@ -53,6 +53,11 @@ Parameters:
     Default: agent-safety-dashboard
     Description: Name for the ECS Express Mode service
 
+  KillSwitchLambdaName:
+    Type: String
+    Default: agent-safety-kill-switch-KillSwitch
+    Description: Name of the Kill Switch Lambda function (deployed by kill-switch stack)
+
   ECSCpu:
     Type: String
     Default: '256'
@@ -84,6 +89,29 @@ Parameters:
     Type: String
     Default: ''
     Description: Comma-separated subnet IDs for ECS (leave empty to use VPC defaults)
+
+  # ------------------------------------------------------------------
+  # AVA FSI SSO (optional) — federate login through the AVA control plane
+  # ------------------------------------------------------------------
+  # When AvaFsiAppSigningSecret is non-empty, the FastAPI backend accepts
+  # AVA-issued HMAC handoff tokens (?ava_token=... on first hop, then an
+  # httpOnly `ava_session` cookie) and skips its own Cognito Hosted UI
+  # login screen. When empty, the dashboard behaves exactly as it does
+  # today — Cognito login screen, JWT auth. Zero-regression toggle.
+  #
+  # The signing secret is the same value used by the AVA backend's
+  # `/api/v1/fsi/sign-app-token` route and matches the CloudFront-Function
+  # verifier used by case-management / merchant-onboarding.
+  AvaFsiAppSigningSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Optional. HMAC secret shared with AVA control plane. Empty disables AVA SSO — dashboard uses its own Cognito login.
+
+  AvaUiLoginUrl:
+    Type: String
+    Default: ''
+    Description: Optional. AVA UI URL used to redirect unauthenticated browser navigations back to AVA (federated mode). Only consulted when AvaFsiAppSigningSecret is set.
 
 Conditions:
   HasCustomSubnets: !Not [!Equals [!Ref DashboardSubnets, '']]
@@ -513,10 +541,11 @@ Resources:
                   - cloudwatch:PutMetricAlarm
                   - cloudwatch:PutAnomalyDetector
                 Resource: '*'
-              # budgets:* — DescribeBudgets requires ViewBudget which is separate
               - Effect: Allow
                 Action:
-                  - budgets:*
+                  - budgets:ViewBudget
+                  - budgets:DescribeBudgets
+                  - budgets:DescribeBudgetActionsForBudget
                 Resource: '*'
               - Effect: Allow
                 Action:
@@ -525,7 +554,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:agent-safety-kill-switch-KillSwitch'
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${KillSwitchLambdaName}'
               - Effect: Allow
                 Action:
                   - sts:GetCallerIdentity
@@ -622,7 +651,7 @@ Resources:
           - Name: STOP_SESSIONS_LAMBDA
             Value: !Ref StopSessionsLambdaName
           - Name: KILL_SWITCH_LAMBDA
-            Value: agent-safety-kill-switch-KillSwitch
+            Value: !Ref KillSwitchLambdaName
           - Name: BUDGET_PREFIX
             Value: !Ref BudgetPrefix
           - Name: ALLOWED_ORIGINS
@@ -640,6 +669,13 @@ Resources:
               - UseCloudFront
               - !Sub '${AWS::StackName}-${AWS::AccountId}-origin-secret'
               - ''
+          # AVA FSI SSO — populated at deploy time when Agent Safety is
+          # deployed via the AVA control plane. Empty in standalone
+          # deploys; dashboard falls back to Cognito auth unchanged.
+          - Name: AVA_FSI_APP_SIGNING_SECRET
+            Value: !Ref AvaFsiAppSigningSecret
+          - Name: AVA_UI_LOGIN_URL
+            Value: !Ref AvaUiLoginUrl
           # COGNITO_REDIRECT_URI is set post-deploy by deploy.sh Phase 4b
           # because the ECS endpoint URL is not known until after creation.
           # The api.py code auto-detects from the request Host header when
@@ -728,11 +764,11 @@ Outputs:
     Description: Admin login email
     Value: !Ref AdminEmail
   DefaultAdminPassword:
-    Description: Admin login password (set by deploy.sh)
-    Value: 'AgentSafety123!'
+    Description: Admin login password (set by deploy.sh — random-generated per deploy, printed to the deploy log)
+    Value: 'see deploy.sh output'
   LoginInstructions:
     Description: How to log in
-    Value: !Sub 'Open the DashboardUrl, sign in with ${AdminEmail} / AgentSafety123!'
+    Value: !Sub 'Open the DashboardUrl, sign in with ${AdminEmail} and the password printed in the deploy.sh output (or --admin-password value if supplied). AVA SSO handoff bypasses this login.'
   StopSessionsLambdaArn:
     Value: !GetAtt StopSessionsLambda.Arn
   TaskRoleArn:

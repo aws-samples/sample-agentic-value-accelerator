@@ -53,7 +53,7 @@ Resources:
                   - iam:PutRolePolicy
                   - iam:DeleteRolePolicy
                   - iam:GetRolePolicy
-                Resource: '*'
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/AgentCore-*'
               - Sid: AgentCoreReadAccess
                 Effect: Allow
                 Action:

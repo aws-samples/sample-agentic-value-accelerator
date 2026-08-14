@@ -1,0 +1,10 @@
+# Build artifacts — regenerated on every `terraform apply` by the
+# `null_resource.install_deps` block in main.tf. The `build/` directory
+# contains:
+#   * `package/` — pip-installed boto3 + botocore + transitive deps,
+#     vendored into the Lambda zip because the AWS-managed Lambda runtime
+#     ships an older boto3 that doesn't yet know `agent-registry-control`.
+#   * `deployment_success_hook.zip` — the actual zip Terraform uploads.
+# Both are reproducible from `requirements.txt` + `lambda_src/index.py`
+# and would balloon the repo (~48 MB) with nothing worth versioning.
+build/

@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Approval Policies hero — human sign-off on sensitive actions">
+  <defs>
+    <linearGradient id="apbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#7c2d12" />
+      <stop offset="40%"  stop-color="#b45309" />
+      <stop offset="80%"  stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <linearGradient id="apglow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <radialGradient id="apspot" cx="0.75" cy="0.15" r="0.9">
+      <stop offset="0%"   stop-color="#fef3c7" stop-opacity="0.55" />
+      <stop offset="60%"  stop-color="#fef3c7" stop-opacity="0" />
+    </radialGradient>
+    <filter id="apblur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" />
+    </filter>
+  </defs>
+
+  <!-- background wash -->
+  <rect width="800" height="320" fill="url(#apbg)" />
+  <rect width="800" height="320" fill="url(#apspot)" />
+
+  <!-- ambient decorative circles -->
+  <g opacity="0.18" filter="url(#apblur)">
+    <circle cx="120" cy="80"  r="80" fill="#ffffff" />
+    <circle cx="680" cy="260" r="120" fill="#fde68a" />
+  </g>
+
+  <!-- Approval workflow motif: three stacked "request cards" being routed
+       to a check-badge on the right. The cards represent pending permission
+       requests; the badge on the right is the approver signing off. -->
+  <g transform="translate(120,80)" opacity="0.95">
+    <!-- card 1 (approved — solid) -->
+    <rect x="0"  y="0"  width="220" height="46" rx="10" fill="#fef3c7" opacity="0.95" />
+    <circle cx="24" cy="23" r="10" fill="#059669" />
+    <path d="M18 23 l4 4 l8 -8" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="44" y="13" width="130" height="6"  rx="3" fill="#7c2d12" opacity="0.7" />
+    <rect x="44" y="25" width="90"  height="6"  rx="3" fill="#7c2d12" opacity="0.4" />
+
+    <!-- card 2 (pending — dashed halo) -->
+    <rect x="20" y="60" width="220" height="46" rx="10" fill="#ffffff" opacity="0.94" />
+    <rect x="16" y="56" width="228" height="54" rx="12" fill="none" stroke="#fde68a" stroke-width="2" stroke-dasharray="6 4" />
+    <circle cx="44" cy="83" r="10" fill="#f59e0b" />
+    <text x="44" y="88" text-anchor="middle" font-family="ui-sans-serif,system-ui" font-size="13" font-weight="700" fill="#ffffff">?</text>
+    <rect x="64" y="73" width="150" height="6" rx="3" fill="#7c2d12" opacity="0.7" />
+    <rect x="64" y="85" width="110" height="6" rx="3" fill="#7c2d12" opacity="0.4" />
+
+    <!-- card 3 (denied — muted, red x) -->
+    <rect x="40" y="120" width="220" height="46" rx="10" fill="#ffffff" opacity="0.88" />
+    <circle cx="64" cy="143" r="10" fill="#dc2626" />
+    <path d="M59 138 l10 10 M69 138 l-10 10" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" />
+    <rect x="84" y="133" width="110" height="6" rx="3" fill="#7c2d12" opacity="0.55" />
+    <rect x="84" y="145" width="80"  height="6" rx="3" fill="#7c2d12" opacity="0.3" />
+  </g>
+
+  <!-- Approver: large stylized check-badge (approval seal) at right. -->
+  <g transform="translate(560,90)">
+    <!-- outer glow ring -->
+    <circle cx="70" cy="70" r="86" fill="#ffffff" opacity="0.1" />
+    <circle cx="70" cy="70" r="72" fill="#ffffff" opacity="0.16" />
+    <!-- badge body -->
+    <circle cx="70" cy="70" r="60" fill="#ffffff" opacity="0.94" />
+    <!-- checkmark -->
+    <path d="M46 70 l16 16 l32 -32" stroke="#059669" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- scalloped edge, subtle -->
+    <g stroke="#ffffff" stroke-width="2" opacity="0.7" fill="none">
+      <circle cx="70" cy="70" r="68" stroke-dasharray="3 6" />
+    </g>
+  </g>
+
+  <!-- Flow arrow from cards → badge -->
+  <g stroke="#ffffff" stroke-width="2.5" fill="none" opacity="0.55" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M400 160 Q470 130 550 160" />
+    <path d="M540 152 l14 6 l-10 12" />
+  </g>
+
+  <!-- top-left ribbon label with pillar name -->
+  <g transform="translate(28,28)" opacity="0.92">
+    <rect x="0" y="0" width="140" height="24" rx="12" fill="#ffffff" opacity="0.18" />
+    <text x="70" y="16" text-anchor="middle" font-family="ui-sans-serif,system-ui" font-size="10" font-weight="700" fill="#ffffff" letter-spacing="2">HITL · APPROVALS</text>
+  </g>
+
+  <!-- top-white sheen -->
+  <rect width="800" height="160" fill="url(#apglow)" />
+</svg>

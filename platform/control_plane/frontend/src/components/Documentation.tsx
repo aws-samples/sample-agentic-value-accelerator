@@ -454,1646 +454,24 @@ The Business Cases tool generates structured ROI models and narrative business c
 
 The tool produces a downloadable business case document in a format suitable for investment committee or budget approval workflows. Each business case links back to the Use Case Prioritization score so reviewers can see how the case ranked against alternatives.`,
       },
-    ],
-  },
-  {
-    id: 'capabilities',
-    title: 'Capabilities',
-    children: [
       {
-        id: 'capabilities-overview',
-        title: 'Overview',
-        content: `# Capabilities
+        id: 'plan-organization-design',
+        title: 'Organization Design',
+        content: `# Organization Design
 
-The **Capabilities** section manages the shared building blocks that agents consume at runtime: **Knowledge** sources, **Tools**, and **Prompts**. Navigate to \`/capabilities\` for the landing page.
+Navigate to \`/organization-design\`.
 
-| Capability | Route | Status |
-|---|---|---|
-| Knowledge | \`/capabilities/knowledge\` | Available |
-| Tools | \`/capabilities/tools\` | Coming Soon |
-| Prompts | \`/capabilities/prompts\` | Coming Soon |
+Once you have picked an Operating Model, Organization Design turns that pattern into a concrete plan for the team that will actually deliver — so Plan hands Build a team, not just a strategy.
 
-Knowledge is the only fully-operational capability today. Tools and Prompts are in the roadmap.`,
-      },
-      {
-        id: 'capabilities-knowledge',
-        title: 'Knowledge',
-        content: `# Knowledge
+## What it produces
 
-Navigate to \`/capabilities/knowledge\`.
+- **Org Chart** — roles and squads derived from the chosen TOM (Centralized CoE / Hub-and-Spoke / Federated)
+- **Reporting Lines** — who each squad rolls up into and where accountability sits
+- **RACI Matrix** — Responsibility / Accountability / Consulted / Informed across Build, Secure, Operate, and Govern activities
+- **Headcount Ramp** — hiring priorities and expected FTE growth quarter-by-quarter
+- **Skills & Roles** — the seniority mix, capability profiles, and internal-vs-hire recommendations for each role
 
-The Knowledge page lets you register data sources that agents can query at runtime. Two source types are supported:
-
-| Type | Description |
-|---|---|
-| **Data Lake** | S3-backed data lake with Lake Formation column-level grants, Athena workgroup, and Glue catalog |
-| **Knowledge Base** | Amazon Bedrock Knowledge Base with OpenSearch Serverless vector store |
-
-## Registration Flow
-
-1. Click **Register Knowledge Source** and fill in the drawer form (name, type, S3 URI or KB ID, description).
-2. The backend writes a DynamoDB record and starts a CodeBuild job that:
-   - Provisions an AgentCore MCP server pointed at the source
-   - Registers the server with the AgentCore Gateway
-   - Grants the AgentCore Runtime IAM role read access via Lake Formation (Data Lake) or KB permissions (Knowledge Base)
-3. The card on \`/capabilities/knowledge\` shows live status: **PROVISIONING → ACTIVE** (or **FAILED**).
-4. Once **ACTIVE**, any FSI Foundry use case or App Factory application can reference the source by ID in its system prompt.
-
-## MCP Server Details
-
-Each registered source gets its own Model Context Protocol (MCP) server running as an AgentCore Runtime endpoint. Agents call the MCP server via the AgentCore Gateway — no direct AWS SDK calls from agent code. The gateway handles authentication, request routing, and audit logging.
-
-## Polling
-
-The UI polls every 8 seconds while any registration is in PROVISIONING state. You can leave the page and return — status persists in DynamoDB.`,
-      },
-      {
-        id: 'capabilities-tools',
-        title: 'Tools',
-        content: `# Tools
-
-Navigate to \`/capabilities/tools\`.
-
-**Status: Coming Soon**
-
-The Tools capability will allow teams to register custom tool endpoints (Lambda functions, REST APIs, MCP servers) that can be attached to any agent deployment. Registered tools will appear in the Guardrails tool-coverage dashboard and in the AgentCore Policy builder.`,
-      },
-      {
-        id: 'capabilities-prompts',
-        title: 'Prompts',
-        content: `# Prompts
-
-Navigate to \`/capabilities/prompts\`.
-
-**Status: Coming Soon**
-
-The Prompts capability will provide a versioned prompt registry. Teams will be able to store, version, test, and promote system prompts. Prompts will link to guardrail assignments and observability traces so you can see exactly which prompt version was active for any given agent run.`,
-      },
-    ],
-  },
-  {
-    id: 'secure',
-    title: 'Secure',
-    children: [
-      {
-        id: 'secure-overview',
-        title: 'Overview',
-        content: `# Secure
-
-The **Secure** section provides two complementary layers of agent safety. Navigate to \`/secure\` for the landing page.
-
-## Two Layers of Defense
-
-| Layer | Component | What It Controls |
-|---|---|---|
-| **Content-level** | Guardrails | What agents say and receive — topic blocks, PII filtering, prompt injection guards, grounding checks |
-| **Resource-level** | AgentCore Policy | What agents can do and access — Cedar policies enforced by the AgentCore Policy Engine and Platform Gateway |
-
-Using both together gives you defense-in-depth: Guardrails intercept harmful content before it reaches or leaves the model; policies prevent agents from taking unauthorized actions regardless of what the model decides.
-
-## Navigation
-
-| Route | Description |
-|---|---|
-| \`/secure/guardrails\` | My Guardrails — list, manage, assign existing guardrails |
-| \`/secure/guardrails/create\` | Guardrail Builder — create a new guardrail from scratch |
-| \`/secure/guardrails/fsi-library\` | FSI Template Library — pre-built guardrails for FSI scenarios |
-| \`/secure/guardrails/playground\` | Live Preview — test a guardrail against sample inputs in real time |
-| \`/secure/guardrails/observability\` | Coverage & Audit — see which agents have guardrails and review triggered events |
-| \`/secure/guardrails/tools\` | Tool Utilities — version history, comparison, import/export, regex builder |
-| \`/secure/policy\` | My Policies — list and manage Cedar policies |
-| \`/secure/policy/create\` | Policy Builder — create a new Cedar policy |
-| \`/secure/policy/audit\` | Policy Audit Log — full history of policy evaluations |`,
-      },
-      {
-        id: 'secure-guardrails',
-        title: 'Guardrails',
-        content: `# Guardrails
-
-Guardrails are content-level safety filters applied at the Amazon Bedrock layer. They intercept both incoming prompts and outgoing model responses.
-
-## Tabs
-
-### My Guardrails (\`/secure/guardrails\`)
-Lists all guardrails you have created. Each card shows the guardrail's active status, assigned agents, and last triggered timestamp. Click a guardrail to view configuration detail or re-assign it.
-
-### Guardrail Builder (\`/secure/guardrails/create\`)
-Step-by-step builder for creating a new guardrail. Configure:
-- **Denied Topics** — subjects the agent must refuse to discuss
-- **Content Filters** — violence, hate speech, sexual content, and insults (each with adjustable threshold)
-- **PII Redaction** — detect and redact or block 20+ PII entity types (SSN, credit card, account number, etc.)
-- **Grounding Threshold** — minimum factual-grounding score before a response is blocked
-- **Prompt Attack Guard** — jailbreak and prompt injection detection
-
-### FSI Template Library (\`/secure/guardrails/fsi-library\`)
-Pre-built guardrail configurations covering common FSI scenarios: trading advice restrictions, MNPI handling, customer data PII, regulatory disclosure requirements, and more. Select a template to use it as a starting point in the builder.
-
-### Playground (\`/secure/guardrails/playground\`)
-Live Preview lets you test any guardrail configuration against sample inputs without deploying. Enter a prompt and see exactly which filter triggered, the action taken (blocked vs. redacted), and the confidence score.
-
-### Observability (\`/secure/guardrails/observability\`)
-The Observability tab inside Guardrails shows:
-- **Coverage Dashboard** — which deployed agents have guardrails assigned vs. unprotected
-- **Real-time Feed** — live stream of guardrail trigger events
-- **Metrics Dashboard** — trigger rates, top denied topics, PII hit rates over time
-- **Compliance Reports** — exportable summaries for audit
-- **Audit Trail** — immutable log of every guardrail event
-
-### Tools (\`/secure/guardrails/tools\`)
-Utility panel with: version history, side-by-side comparison of two guardrail versions, import/export (JSON), automated reasoning panel, regex pattern builder, denied-topics builder, and grounding threshold tuner.`,
-      },
-      {
-        id: 'secure-policy',
-        title: 'Policy Management',
-        content: `# Policy Management
-
-Policy Management provides resource-level access control for agents using Cedar policies enforced by the Amazon Bedrock AgentCore Policy Engine.
-
-## How It Works
-
-Policies define what actions an agent identity is **permitted** or **forbidden** to perform. At runtime, the AgentCore Gateway evaluates every tool call against the active policy set before forwarding it to the tool endpoint. A denied action returns a 403 and is logged.
-
-## Policy Language
-
-Policies are written in **Cedar** — a purpose-built policy language designed for application-level authorization. Cedar policies are:
-- Typed and statically analyzable
-- Fast to evaluate (microsecond latency)
-- Auditable — every evaluation produces a structured log entry
-
-## Tabs
-
-### My Policies (\`/secure/policy\`)
-Lists all policies in the system. Filter by principal (agent ID), resource (tool or knowledge source), or action. Each policy shows its effect (permit/forbid), principal, resource, and last evaluation timestamp.
-
-### Policy Builder (\`/secure/policy/create\`)
-Visual Cedar policy builder. Set:
-- **Principal** — which agent or role the policy applies to
-- **Action** — which tool call or operation is being controlled
-- **Resource** — which specific tool endpoint, knowledge source, or service
-- **Conditions** — optional attribute-based conditions (e.g., time of day, environment)
-
-FSI policy presets are available for common patterns: read-only market data access, PII handling restrictions, production environment isolation.
-
-### Audit Log (\`/secure/policy/audit\`)
-Immutable log of every policy evaluation — permit and deny. Each entry records: timestamp, agent ID, action, resource, policy that matched, and outcome. Exportable for compliance reporting.`,
-      },
-    ],
-  },
-  {
-    id: 'govern',
-    title: 'Govern',
-    children: [
-      {
-        id: 'govern-overview',
-        title: 'Overview',
-        content: `# Govern
-
-The **Govern** module is the AI GRC (Governance, Risk, Compliance) hub for the AVA platform. It provides visibility into your AI estate, control over what it can do, and evidence to demonstrate compliance to auditors and regulators.
-
-Navigate to \`/govern\` for the hub landing page.
-
-## Govern Core: See It, Govern It, Show It
-
-Nine foundational modules organized into three pillars that together provide ~66% coverage across 8 major AI governance frameworks.
-
-| Pillar | Question | Core Modules |
-|--------|----------|--------------|
-| **See It** | What AI do we have? What's it doing? What's it costing? | Command Center, Agent Registry, Agentic Fleet, Model Management, Cost & FinOps |
-| **Govern It** | Who can do what? What rules are enforced? | Compliance Center, Prompt Governance |
-| **Show It** | What happened? Can we demonstrate compliance? | Audit & Incidents, Data Governance |
-
-Core modules are marked with a star badge in the UI. Use the "Core Only" filter on the landing page to focus on foundational capabilities.
-
-## Regulatory Frameworks Supported
-
-| Framework | Coverage | Description |
-|---|---|---|
-| **OWASP LLM Top 10** | ~80% | LLM security risks (prompt injection, info disclosure, etc.) |
-| **FINOS AIR** | ~75% | FSI GenAI governance (operational, security, regulatory) |
-| **CRI FS AI RMF** | ~75% | Comprehensive FSI AI risk management |
-| **OSFI E-23** | ~75% | Canadian model risk management guideline |
-| **SR 26-2** | Full | Federal Reserve AI/ML model risk guidance |
-| **NIST AI RMF** | Full | NIST AI Risk Management Framework |
-| **ISO 42001** | ~75% | AI Management Systems standard |
-| **EU AI Act** | ~80% | Risk classification, conformity requirements, GPAI Model Cards |
-| **MITRE ATLAS** | ~65% | Adversarial AI threat tactics |
-| **NAIC AI** | ~70% | Insurance AI model bulletin, Unfair Discrimination Testing |
-
-## All Modules
-
-| Module | Route | Pillar |
-|--------|-------|--------|
-| Command Center | \`/govern/command-center\` | See It (Core) |
-| Agent Registry | \`/govern/agents\` | See It (Core) |
-| Agentic Fleet | \`/govern/fleet\` | See It (Core) |
-| Model Management | \`/govern/models\` | See It (Core) |
-| Cost & FinOps | \`/govern/finops\` | See It (Core) |
-| Compliance Center | \`/govern/compliance\` | Govern It (Core) |
-| Prompt Governance | \`/govern/prompt-governance\` | Govern It (Core) |
-| Audit & Incidents | \`/govern/audit\` | Show It (Core) |
-| Data Governance | \`/govern/data\` | Show It (Core) |
-| Risk Management | \`/govern/risk\` | Add-on |
-| AI Safety | \`/govern/safety\` | Add-on |
-| Shadow AI | \`/govern/shadow-ai\` | Add-on |
-| Developer AI | \`/govern/developer-ai\` | Add-on |
-| Governance Playbook | \`/govern/playbook\` | Add-on |
-| Multi-Cloud | \`/govern/multi-cloud\` | Add-on |
-| Agentic Coding | \`/govern/dev-tools\` | Add-on |
-| Trust Stack | \`/govern/trust-stack\` | Add-on |
-
-## Live Data Integration
-
-All Govern modules follow a cascading fallback pattern:
-
-1. **Live** — Real data from AWS APIs (Cost Explorer, Bedrock, CloudTrail, Security Hub)
-2. **Computed** — Derived from live data (e.g., risk scores from agent status)
-3. **Mock** — Illustrative data when backend is disconnected
-
-Visual indicators show data source: \`Live\` badge for real AWS data, \`Mock\` badge for illustrative data.`,
-      },
-      {
-        id: 'govern-command-center',
-        title: 'Command Center',
-        content: `# Command Center
-
-Navigate to \`/govern/command-center\`. **Core Module (See It)**
-
-The Command Center is the single pane of glass for AI governance, aggregating real-time signals from across the platform.
-
-## Features
-
-- **Trust Scores** — Composite governance scores across the agent fleet
-- **Compliance Posture** — Live compliance percentage with drill-down
-- **Risk Exposure** — Active incidents, findings, and alerts
-- **Real-Time Refresh** — Auto-updates every 60 seconds
-- **Module Deep Links** — Click any KPI to navigate to source module
-
-## Live Data Sources
-
-Aggregates from 9+ govern APIs: \`governAgentCoreApi\`, \`governGuardrailsApi\`, \`governSecurityApi\`, \`governCostApi\`, \`guardrailsApi\`, \`policiesApi\`, \`maturityApi\`, \`deploymentsApi\`, \`governAuditApi\`
-
-## Use Cases
-
-- Daily operations review for AI platform team
-- Executive reporting and board presentations
-- Incident triage starting point`,
-      },
-      {
-        id: 'govern-agent-registry',
-        title: 'Agent Registry',
-        content: `# Agent Registry
-
-Navigate to \`/govern/agents\`. **Core Module (See It)**
-
-Centralized inventory of all AI agents, tools, MCP servers, capabilities, and permissions across AWS, Azure, GCP, and SaaS platforms.
-
-## Tabs
-
-| Tab | Description |
-|-----|-------------|
-| **Agents** | Registry with capabilities, scope, owner, rate limits, incidents |
-| **Fleet Scale** | Registry at scale (10k+ agents) with filtering and search |
-| **Attack Surface** | Threat modeling view with agent-to-tool mappings |
-| **Tools** | Tool inventory with risk levels and authorized agents |
-| **MCP Servers** | Server inventory with auth method and health status |
-| **Permissions** | Agent-to-tool authorization matrix |
-| **Human Oversight** | HITL gate configuration per agent |
-| **A2A Governance** | Agent-to-agent trust policies |
-| **Evaluations** | AgentCore evaluation results |
-| **Providers** | Multi-cloud provider connectivity status |
-
-## Live Data Sources
-
-- \`governAgentCoreApi.agents()\` — Bedrock AgentCore discovery
-- \`deploymentsApi.list()\` — AVA deployments
-- \`frontierAgentsApi.list()\` — AWS-managed agents
-
-## Features
-
-- Automatic discovery of Bedrock agents
-- Multi-cloud support (AWS, Azure, GCP, SaaS)
-- Risk tier classification per agent
-- Autonomy level tracking (L0-L4)`,
-      },
-      {
-        id: 'govern-fleet',
-        title: 'Agentic Fleet',
-        content: `# Agentic Fleet
-
-Navigate to \`/govern/fleet\`. **Core Module (See It)**
-
-Fleet-wide governance dashboard with KPIs, risk heatmap, emergency controls, and guardrail observability.
-
-## Features
-
-- **5-Pillar Control Plane** — Registry, Access, Visualization, Interop, Security posture
-- **Fleet Risk Heatmap** — Risk scores by use case aligned to AWS Scoping Matrix
-- **Emergency Controls** — Kill, Throttle, LOG_ONLY, Restart actions
-- **Guardrail Observability** — Real-time guardrail intervention metrics
-- **OWASP Agentic Threats** — Alignment to OWASP threat model
-
-## Live Data Sources
-
-- \`governAgentCoreApi.agents()\` — Agent discovery and status
-- Computed risk heatmap from agent compliance status and platform type
-
-## Use Cases
-
-- Fleet-wide incident response
-- Governance posture reviews
-- Risk-based agent prioritization`,
-      },
-      {
-        id: 'govern-model-management',
-        title: 'Model Management',
-        content: `# Model Management
-
-Navigate to \`/govern/models\`. **Core Module (See It)**
-
-Comprehensive model governance hub with registry, evaluations, explainability, compliance, and operations.
-
-## Tabs
-
-| Tab | Description |
-|-----|-------------|
-| **Dashboard** | Live data, KPIs, cost alerts, drift indicators |
-| **Registry** | Model inventory with risk tiers and governance status |
-| **Evaluations** | Model evals, RAG evals, deployment gate |
-| **Explainability** | Attribution analysis, bias & fairness testing |
-| **Compliance** | Governance lifecycle, attestations |
-| **Operations** | Monitoring, dependency graph, analysis tools |
-
-## Sub-Features
-
-- **Hallucination Detection** — Ground truth comparison
-- **MRM Framework Explorer** — Model Risk Management alignment
-- **Model Comparison** — Side-by-side capability analysis
-- **Risk Scoring Calculator** — Interactive risk tier computation
-- **Dependency Graph** — Model-to-agent relationship visualization
-
-## Live Data Sources
-
-- \`governModelsApi.catalog()\` — Bedrock foundation model catalog
-- \`governModelsApi.runtimeMetrics()\` — Model invocation metrics
-- \`governCostApi.byModel()\` — Per-model cost breakdown
-- \`governEvalsApi.jobs()\` — Bedrock evaluation job results`,
-      },
-      {
-        id: 'govern-finops',
-        title: 'Cost & FinOps',
-        content: `# Cost & FinOps
-
-Navigate to \`/govern/finops\`. **Core Module (See It)**
-
-AI cost management with budget tracking, spend velocity, anomaly detection, and optimization recommendations.
-
-## Tabs
-
-| Tab | Description |
-|-----|-------------|
-| **Dashboard** | Real-time spend, KPIs, trend charts |
-| **Planning** | Use case cost editor and projections |
-| **ROI** | Agent ROI calculator with value metrics |
-| **Task Fit** | Task assessment for AI suitability |
-| **Business Metrics** | Business value tracking |
-| **Unit Economics** | Per-invocation cost analysis |
-| **Token Economics** | Token usage patterns and optimization |
-| **Chargeback** | Cost allocation by tag/business unit |
-| **Optimization** | Savings recommendations |
-
-## Live Data Sources
-
-- \`governCostApi.summary()\` — Aggregate AI spend
-- \`governCostApi.trend()\` — Historical spend trends
-- \`governCostApi.forecast()\` — Spend projections
-- \`governCostApi.byModel()\` — Per-model breakdown
-- \`governCostApi.byUseCase()\` — Per-use-case breakdown
-- \`governCostApi.byTag()\` — Cost allocation tag breakdown
-- \`governCostApi.tagKeys()\` — Available cost allocation tags
-- \`governCostApi.anomalies()\` — Spend anomaly detection
-- \`governCostApi.budgets()\` — AWS Budgets integration
-
-## Features
-
-- Real AWS Cost Explorer integration
-- Anomaly detection with alerts
-- Tag-based chargeback with selector
-- Budget vs actual variance tracking`,
-      },
-      {
-        id: 'govern-compliance',
-        title: 'Compliance Center',
-        content: `# Compliance Center
-
-Navigate to \`/govern/compliance\`. **Core Module (Govern It)**
-
-Interactive compliance framework management with checklists, attestations, and policy observability.
-
-## Features
-
-- **Compliance Posture Strip** — Live compliance percentage with breakdown
-- **Governance Program Builder** — 6-phase wizard for program setup
-- **Framework Checklists** — Interactive control tracking per framework
-- **Evidence Attachment** — Link documents and artifacts to controls
-- **Attestation Management** — Track control attestations and expiry
-- **Config Rules View** — AWS Config rule compliance
-- **Policy Observability** — Cedar ALLOW/DENY decision audit
-- **ISO 42001 Certification Tracker** — 7-phase certification journey (Gap Analysis to Certification Decision) with readiness tracking
-- **Conformity Assessment Workflow** — EU AI Act Article 43 multi-step workflow (see Conformity tab)
-- **FRIA Wizard** — EU AI Act Article 27 Fundamental Rights Impact Assessment (see FRIA tab)
-- **Compliance Gap Guidance** — "Beyond the Platform" guidance for non-technical gaps (see Gap Guidance tab)
-
-## Conformity Assessment Workflow (EU AI Act Article 43)
-
-Located in the **Conformity** tab. A 6-step workflow for EU AI Act conformity assessment:
-
-| Step | Description |
-|------|-------------|
-| **Risk Classification** | Determine AI system risk tier (Unacceptable, High-Risk, Limited, Minimal) |
-| **Technical Documentation** | Compile required technical documentation per Annex IV |
-| **QMS Verification** | Verify Quality Management System compliance per Article 17 |
-| **Post-Market Monitoring** | Establish post-market monitoring plan per Article 72 |
-| **Declaration of Conformity** | Prepare EU Declaration of Conformity per Article 47 |
-| **CE Marking Readiness** | Verify CE marking eligibility per Article 48 |
-
-**Features:**
-- Per-step tracking: status, evidence checklist, responsible party, target dates, notes
-- Visual workflow diagram with clickable nodes
-- Progress tracker with overall completion percentage
-
-## FRIA Wizard (EU AI Act Article 27)
-
-Located in the **FRIA** tab. Fundamental Rights Impact Assessment for high-risk AI systems.
-
-**8 Fundamental Rights Areas:**
-- Human dignity
-- Privacy and data protection
-- Non-discrimination
-- Gender equality
-- Right to effective remedy
-- Freedom of expression
-- Right to good administration
-- Workers' rights
-
-**Features:**
-- Per-right assessment: impact level, mitigation measures, residual risk rating, evidence links
-- Overall FRIA score calculation (0-100)
-- High-risk AI systems view (Annex III categories)
-- Export report capability
-- Auto-save drafts
-
-## Compliance Gap Guidance
-
-Located in the **Gap Guidance** tab. "Beyond the Platform" guidance for compliance gaps that require organizational (non-technical) remediation.
-
-**Features:**
-- **Platform vs Organization Split** — Shows what the platform provides vs what the organization must do
-- **Interactive Checklist** — Track progress on organizational gaps with completion status
-- **Framework-Specific Guidance** — Tailored guidance for EU AI Act, ISO 42001, NAIC AI, and other frameworks
-- **Progress Tracking** — Overall completion percentage for non-technical requirements
-
-Also integrated into EU AI Act, ISO 42001, and NAIC AI framework views for contextual gap guidance.
-
-## NAIC AI: Unfair Discrimination Testing
-
-Integrated into the NAIC AI framework view. Addresses NAIC Model Bulletin unfair discrimination requirements for insurance AI.
-
-**Features:**
-- **6 Protected Class Tests** — Age, Race, Gender, Religion, National Origin, Disability
-- **Disparate Impact Ratio** — Automated 4/5ths rule calculation per protected class
-- **Proxy Variable Correlation** — Analyze correlation between model features and protected classes
-- **Use Case Selector** — Context-specific testing for Underwriting, Claims, Pricing, Marketing
-- **Pass/Fail Status** — Clear compliance status per protected class with remediation guidance
-
-## EU AI Act: GPAI Model Cards
-
-Integrated into the EU AI Act framework view. Art. 53 transparency documentation for General-Purpose AI models.
-
-**8 Documentation Sections:**
-- **Identity** — Model name, version, provider identification
-- **Intended Use** — Designed use cases and deployment contexts
-- **Training Data** — Data sources, size, preprocessing methods
-- **Capabilities** — Model capabilities and performance characteristics
-- **Evaluations** — Benchmark results and evaluation methodology
-- **Compute** — Training compute resources and energy consumption
-- **Mitigations** — Safety measures and risk mitigations implemented
-- **Known Issues** — Known limitations, failure modes, and biases
-
-**Additional Features:**
-- **Systemic Risk Assessment** — Art. 51/55 systemic risk evaluation for high-capability models
-- **Export Capability** — Generate compliance-ready GPAI model card documents
-
-## Supported Frameworks
-
-SR 26-2, NIST AI RMF, EU AI Act, CRI FS AI RMF, OSFI E-23, ISO 42001, OWASP LLM Top 10, MITRE ATLAS, NAIC AI, FINOS AIR
-
-## Live Data Sources
-
-- \`governPostureApi.configRuleDetail()\` — AWS Config compliance
-- \`governConformanceApi\` — Conformance tracking
-- \`complianceApi\` — Attestation management
-- \`policiesApi.getObservability()\` — Cedar policy decisions
-- \`maturityApi\` — Plan maturity assessments`,
-      },
-      {
-        id: 'govern-prompt-governance',
-        title: 'Prompt Governance',
-        content: `# Prompt Governance
-
-Navigate to \`/govern/prompt-governance\`. **Core Module (Govern It)**
-
-AWS-native prompt compliance built on Bedrock Guardrails with 4-layer defense architecture.
-
-## 4-Layer Defense
-
-| Layer | Latency | Description |
-|-------|---------|-------------|
-| **Real-Time Guardrails** | <50ms | Bedrock native content filters |
-| **Contextual Evaluation** | 50-200ms | Grounding & relevance checks |
-| **Async Observability** | Background | Athena queries, trend analysis |
-| **Formal Verification** | Background | Automated Reasoning proofs |
-
-## Views
-
-| View | Description |
-|------|-------------|
-| **Live Guardrails** | Active guardrail configurations from Bedrock |
-| **Invocations** | Real-time invocation telemetry |
-| **Heatmap** | Violation patterns by category |
-| **Scorecard** | Metrics summary |
-| **AgentCore** | Agent-specific metrics |
-| **Analytics** | Trend analysis and reporting |
-
-## Live Data Sources
-
-- \`guardrailsApi.list()\` — Bedrock guardrail configurations
-- \`governGuardrailsApi.telemetry()\` — Guardrail intervention metrics
-- \`governInvocationSafetyApi.telemetry()\` — Invocation safety metrics
-
-## Guardrail Types
-
-- Content filters (hate, sexual, violence, misconduct)
-- PII detection and anonymization
-- Denied topic policies
-- Contextual grounding checks
-- Prompt attack detection`,
-      },
-      {
-        id: 'govern-audit',
-        title: 'Audit & Incidents',
-        content: `# Audit & Incidents
-
-Navigate to \`/govern/audit\`. **Core Module (Show It)**
-
-Guardrail activity feed, incident management, audit logs, and compliance evidence.
-
-## Views
-
-| View | Description |
-|------|-------------|
-| **Metrics** | Scorecard contribution (MTTR, open incidents, resolution rate) |
-| **Audit Trail** | Event log with filtering, search, and export |
-
-## Event Types Captured
-
-- Guardrail trigger events
-- Policy enforcement decisions (Cedar ALLOW/DENY)
-- Agent invocation logs
-- Configuration changes
-- Incident lifecycle events
-
-## Features
-
-- **Live AI Activity** — Real-time CloudTrail AI events
-- **Policy Observability** — Cedar decision audit trail
-- **Trace Viewer** — Debug individual invocations
-- **Evidence Export** — CSV/JSON for auditors
-- **Incident Lifecycle** — Detect → Investigate → Resolve workflow
-
-## Live Data Sources
-
-- \`governAuditApi.list()\` — Audit event log
-- \`governTrailApi.aiActivity()\` — CloudTrail Bedrock events
-- \`governTrailApi.aiCallers()\` — AI caller analysis`,
-      },
-      {
-        id: 'govern-data',
-        title: 'Data Governance',
-        content: `# Data Governance
-
-Navigate to \`/govern/data\`. **Core Module (Show It)**
-
-Data quality, lineage, provenance, domains, and access control for AI-ready data.
-
-## Tabs
-
-| Tab | Description |
-|-----|-------------|
-| **Dashboard** | KPIs, sensitivity breakdown, domain coverage |
-| **Lineage** | Data flow visualization |
-| **Quality** | Rule-based quality scoring |
-| **Knowledge** | Knowledge source registry with RAG Security Controls (OWASP LLM08 aligned, 8 controls) |
-| **Assessment** | Data maturity assessment |
-
-## Sub-Routes
-
-| Route | Description |
-|-------|-------------|
-| \`/govern/data/quality\` | Data quality rules and scores |
-| \`/govern/data/metadata\` | Metadata management |
-| \`/govern/data/maturity\` | Data maturity assessment |
-| \`/govern/data/readiness\` | AI readiness scoring |
-| \`/govern/data/lineage\` | Data lineage visualization |
-| \`/govern/data/agents\` | Agent data profiles |
-| \`/govern/data/access\` | Access control policies |
-| \`/govern/data/ontology\` | Data ontology editor |
-| \`/govern/data/taxonomy\` | Data taxonomy management |
-| \`/govern/data/glossary\` | Business glossary |
-| \`/govern/data/graphrag\` | GraphRAG visualization |
-
-## Live Data Sources
-
-- \`governDataCatalogApi\` — Glue Data Catalog integration
-- \`governDataSourcesApi\` — Registered data sources
-- \`knowledgeApi.list()\` — Knowledge registrations
-- \`knowledgeApi.listDatabases()\` — Glue databases
-- \`knowledgeApi.listKnowledgeBases()\` — Bedrock knowledge bases`,
-      },
-      {
-        id: 'govern-additional',
-        title: 'Additional Modules',
-        content: `# Additional Modules
-
-Beyond the 9 Core modules, Govern includes specialized capabilities for advanced use cases.
-
-## Risk Management
-\`/govern/risk\`
-
-Enterprise risk register with heatmaps, assessments, controls library, and issue tracking aligned to NIST AI RMF.
-
-**Tabs:** Dashboard, Risk Register, Assessments, Controls, Issues, Third-Party Risk, HRAIS, Outcomes
-
-**Outcome Monitoring Dashboard (Outcomes Tab):**
-- **Post-Deployment AI Impact Tracking** — Monitor AI system outcomes after deployment
-- **Decision Distribution Analysis** — Track how AI decisions are distributed across populations
-- **Demographic Parity Metrics** — Measure fairness across protected classes
-- **Appeal Rate Monitoring** — Track appeal rates and outcomes for AI decisions
-- **Drift Detection** — Detect model drift and outcome shifts over time
-- **Consumer Harm Indicators** — Aligned to CRI FS AI RMF harm categories
-
-**Third-Party Risk Tab Features:**
-- **Concentration Risk Analysis** — Vendor dependency breakdown showing % of agents/models per provider
-- **Single-Vendor Exposure Alerts** — Critical alerts (>70% concentration), High alerts (>50%)
-- **Exit Strategy Tracking** — Monitor portability plans for concentrated vendor dependencies
-
-## AI Safety
-\`/govern/safety\`
-
-Capability safety and assurance organized on AWS's 8 Responsible-AI dimensions.
-
-**Sub-routes:**
-- \`/govern/safety/evals\` — Safety evaluations
-- \`/govern/safety/redteam-pipeline\` — Red team testing
-- \`/govern/safety/capabilities\` — Frontier capability thresholds
-- \`/govern/safety/safety-cases\` — Safety case documentation
-- \`/govern/safety/incidents\` — Incident management
-- \`/govern/safety/runtime\` — Runtime safety controls
-- \`/govern/threat-modeling\` — MAESTRO threat modeling
-
-## Shadow AI
-\`/govern/shadow-ai\`
-
-Discover unapproved agents, models, tools, and API keys before they become incidents.
-
-**Live Data:** \`governDeveloperAiApi.usage()\` shadow_ai detection
-
-## Developer AI Usage
-\`/govern/developer-ai\`
-
-Monitor developer AI tool consumption (tokens, cost), detect anomalies and shadow usage.
-
-**Live Data:** \`governDeveloperAiApi.usage()\` team and user breakdown
-
-## Governance Playbook
-\`/govern/playbook\`
-
-Decision framework for autonomous agents with autonomy levels (L0-L4), HITL gates, and A2A trust policies.
-
-## Multi-Cloud
-\`/govern/multi-cloud\`
-
-Unified governance across AWS Bedrock, Azure AI Foundry, Google Vertex AI, and SaaS platforms.
-
-**Live Data:** \`governCostApi.providerConnectors()\` connectivity status
-
-## Agentic Coding
-\`/govern/dev-tools\`
-
-Governance for AI-powered coding assistants (Claude Code, Kiro, Copilot, Cursor).
-
-**Live Data:** \`governDeveloperAiApi.usage()\` developer tool metrics
-
-## Trust Stack
-\`/govern/trust-stack\`
-
-Visualizes the 3-layer governance architecture: Content Safety → Access Control → Audit & Observability.`,
-      },
-    ],
-  },
-  {
-    id: 'observability',
-    title: 'Observability',
-    children: [
-      {
-        id: 'observability-overview',
-        title: 'Overview',
-        content: `# Observability
-
-AVA provides two complementary observability options. Navigate to \`/observability\` for the landing page where both options are presented.
-
-## Two Options
-
-| Option | Route | Best For |
-|---|---|---|
-| **Langfuse** | \`/observability/langfuse\` | Deep LLM tracing — prompt versions, token costs, evaluations, multi-turn conversations |
-| **AgentCore Observability** | \`/observability/agentcore\` | Native AWS tracing — X-Ray spans + CloudWatch Logs, no extra infrastructure |
-
-You can enable both simultaneously. They emit different signals and complement each other: Langfuse adds evaluation pipelines and per-run cost analytics; AgentCore adds X-Ray latency histograms and CloudWatch log correlation.
-
-## Choosing Between Them
-
-Use **Langfuse** when you need:
-- Prompt version tracking across model experiments
-- LLM-as-judge evaluation runs
-- Per-session cost attribution and token analytics
-- OpenTelemetry export to third-party tools
-
-Use **AgentCore Observability** when you need:
-- Zero-setup observability (opt-in checkbox, no SDK changes)
-- X-Ray service map and latency percentiles
-- CloudWatch Logs Insights queries across agent logs
-- AWS-native integration with CloudWatch alarms and dashboards`,
-      },
-      {
-        id: 'observability-langfuse',
-        title: 'Langfuse',
-        content: `# Langfuse
-
-Navigate to \`/observability/langfuse\`.
-
-Langfuse is an open-source LLM observability platform. AVA deploys a self-hosted Langfuse instance as part of the **foundation-stack** Terraform module (ECS + Aurora + Redis). It is not provisioned by default — enable it by setting \`langfuse_enabled = true\` in \`terraform.tfvars\` before running \`deploy-full.sh\`.
-
-## What Langfuse Captures
-
-- **Traces** — full end-to-end trace for every agent run, including all LLM calls, tool invocations, and latency breakdowns
-- **Prompts** — versioned prompt registry linked to traces so you can see exactly which prompt version produced a given output
-- **Evaluations** — LLM-as-judge scoring pipeline; define a rubric and run batch evaluations against historical traces
-- **Costs** — token usage and estimated cost per trace, session, and model
-
-## Setup
-
-1. Set \`langfuse_enabled = true\` in \`terraform.tfvars\`
-2. Run \`./deploy-full.sh\` (or \`terraform apply\` in the foundation-stack module)
-3. Terraform outputs the Langfuse URL, API key, and secret key
-4. Set those values in the AVA backend environment variables (\`LANGFUSE_HOST\`, \`LANGFUSE_PUBLIC_KEY\`, \`LANGFUSE_SECRET_KEY\`)
-5. Navigate to \`/observability/langfuse\` to open the Langfuse UI embedded in AVA
-
-## OpenTelemetry Export
-
-Langfuse supports the OTLP HTTP exporter. To send traces to a third-party backend (Grafana, Jaeger, Datadog), configure the \`OTEL_EXPORTER_OTLP_ENDPOINT\` environment variable on the ECS task.`,
-      },
-      {
-        id: 'observability-agentcore',
-        title: 'AgentCore Observability',
-        content: `# AgentCore Observability
-
-Navigate to \`/observability/agentcore\`.
-
-AgentCore Observability provides native AWS tracing for agents deployed to Amazon Bedrock AgentCore Runtime. It uses **X-Ray Transaction Search** and **CloudWatch Logs** — no additional SDK instrumentation or infrastructure required.
-
-## Important: Opt-In Per Deployment
-
-AgentCore Observability is **opt-in per deployment**. It is NOT automatically enabled for all agents. When deploying an FSI Foundry use case via the pipeline, check the **"Enable AgentCore Observability"** checkbox in the deployment form. This sets the \`observability_enabled\` flag in the CodeBuild job environment, which instructs the AgentCore Runtime to emit X-Ray traces.
-
-Agents deployed without the checkbox will not appear in X-Ray Transaction Search. This is by design — some teams prefer to avoid the additional CloudWatch and X-Ray ingest costs.
-
-## What AgentCore Observability Captures
-
-- **X-Ray Transaction Search** — end-to-end spans for each agent invocation with \`agent_id\` annotation, latency breakdown, and error classification
-- **CloudWatch Logs** — structured JSON logs for every tool call, model invocation, and agent state transition
-
-## Prerequisites
-
-Before enabling AgentCore Observability in any AWS account, X-Ray Transaction Search must be turned on once at the account level:
-
-\`\`\`bash
-aws xray put-encryption-config --type NONE --region <your-region>
-# Then enable Transaction Search in the X-Ray console
-\`\`\`
-
-## Viewing Traces
-
-1. Navigate to \`/observability/agentcore\`
-2. The page embeds links to X-Ray Transaction Search filtered to your agent fleet
-3. Click any trace row to jump to the full X-Ray service map for that invocation
-4. Use the CloudWatch Logs tab to run Insights queries across all agent logs`,
-      },
-    ],
-  },
-  {
-    id: 'aaas-frontier',
-    title: 'AaaS — Frontier Agents',
-    children: [
-      {
-        id: 'aaas-overview',
-        title: 'Overview',
-        content: `# AaaS — Frontier Agents
-
-Navigate to \`/aaas\` for the Agents-as-a-Service landing page.
-
-AVA provides one-click deployment of **AWS-managed frontier agents** — fully operational, AWS-supported agent services that are deployed into your own account. These are not POC implementations; they are production-grade agents maintained by AWS service teams.
-
-## Available Agents
-
-| Agent | Route | Category |
-|---|---|---|
-| AWS DevOps Agent | \`/aaas/aws-agents/aws-devops\` | DevOps & Engineering |
-| AWS Security Agent | \`/aaas/aws-agents/aws-security\` | Security & Compliance |
-
-## Deployment
-
-Each agent supports three IaC options: **Terraform**, **AWS CDK**, and **CloudFormation**. Select your preferred IaC type, configure deployment parameters, and click Deploy. The platform submits a Step Functions deployment job that runs the selected IaC in CodeBuild.
-
-## RBAC
-
-**Viewer** users can see the catalog and read agent descriptions but the Deploy button returns an inline 403 message. **Operator** and **Admin** users can deploy agents.
-
-## Custom Agents
-
-Navigate to \`/aaas/custom\` to register, deploy, and manage custom agent configurations. The Custom Agents catalog supports bring-your-own agent containers deployed to AgentCore Runtime.`,
-      },
-      {
-        id: 'aaas-devops',
-        title: 'AWS DevOps Agent',
-        content: `# AWS DevOps Agent
-
-Navigate to \`/aaas/aws-agents/aws-devops\`.
-
-The AWS DevOps Agent automates common software development and operations tasks: code review, pipeline monitoring, incident response, and infrastructure change analysis.
-
-## Deployment
-
-**Supported IaC**: Terraform, AWS CDK, CloudFormation
-
-1. Navigate to \`/aaas/aws-agents/aws-devops\`
-2. Select your preferred IaC type (Terraform is recommended for first-time deployments)
-3. Set the deployment name and AWS region
-4. Configure required parameters (VPC ID, subnet IDs, etc.)
-5. Click **Deploy** — the platform launches a CodeBuild job that runs the selected IaC
-
-## Accessing the Agent
-
-Once deployed, the Operator App URL appears on the deployment detail page. Click **Open Operator App** to launch the agent's web interface in a new tab. The operator app uses AWS IAM federation via the platform's federation flow (console sign-in → session chaining → operator app URL).
-
-## Regions
-
-Supported: us-east-1, us-east-2, us-west-2. Check the AWS DevOps Agent service page for the latest regional availability.`,
-      },
-      {
-        id: 'aaas-security',
-        title: 'AWS Security Agent',
-        content: `# AWS Security Agent
-
-Navigate to \`/aaas/aws-agents/aws-security\`.
-
-The AWS Security Agent continuously monitors your AWS environment for security findings, correlates GuardDuty and Security Hub signals, and provides natural-language investigation workflows for security analysts.
-
-## Deployment
-
-**Supported IaC**: Terraform, AWS CDK, CloudFormation
-
-1. Navigate to \`/aaas/aws-agents/aws-security\`
-2. Select IaC type and region
-3. Configure required parameters
-4. Click **Deploy**
-
-## One-Time SSO Setup
-
-The Security Agent requires a one-time AWS IAM Identity Center (SSO) permission set assignment. After the initial Terraform/CDK/CFN deployment completes:
-
-1. Open the AWS IAM Identity Center console
-2. Assign the generated permission set to your SSO user or group
-3. Complete the federation flow: the platform opens the AWS console sign-in tab with temporary credentials, then redirects to the Security Agent Operator App
-
-Without the SSO setup step, the federation flow will succeed at the console but the Security Agent Operator App will return a 403 on the application-level authorization check.
-
-## RBAC Note
-
-**Viewer** role users will see the Deploy button but receive an inline 403 upon clicking. Only **Operator** or **Admin** users can deploy and access the agent.
-
-## Regions
-
-Supported: us-east-1, us-east-2, us-west-2.`,
-      },
-    ],
-  },
-  {
-    id: 'app-factory',
-    title: 'App Factory',
-    children: [
-      {
-        id: 'app-factory-overview',
-        title: 'Overview',
-        content: `# App Factory
-
-Navigate to \`/applications/app-factory\`.
-
-App Factory is a **5-step AI-powered wizard** that generates a complete, deployable agent application from a plain-language description of your use case. No templates to copy, no boilerplate to write — the platform uses Claude to generate agent code and Terraform, then automatically deploys the result to AgentCore Runtime via the existing CI/CD pipeline.
-
-## 5-Step Wizard
-
-| Step | Label | What You Provide |
-|---|---|---|
-| 1 | The Problem | Use case name, domain, problem statement, and current manual process |
-| 2 | The Users | Who uses the agent, what a successful interaction looks like |
-| 3 | The Workflow | High-level workflow steps, frequency, and human-in-the-loop requirements |
-| 4 | The Data | Input data sources, expected outputs, and compliance classification |
-| 5 | Constraints | Existing systems to integrate with, security and compliance constraints |
-
-## What Gets Generated
-
-After completing the wizard, the platform sends your answers to the backend which uses Claude to produce:
-- **Agent code** — Python agent with Strands or LangGraph framework, tool definitions, and memory configuration
-- **Terraform** — infrastructure module to deploy the agent to AgentCore Runtime including IAM, ECR, and endpoint configuration
-- **System prompt** — tailored system prompt based on your workflow and constraint inputs
-
-## Deployment
-
-Once code generation completes, you can review the generated files and click **Deploy**. The platform submits the generated Terraform and agent code to the same Step Functions + CodeBuild pipeline used by FSI Foundry deployments. The deployed application appears in **My Apps** (\`/applications/my-apps\`).
-
-## Use Case ID
-
-App Factory slugifies your use case name into a URL-safe, AWS-resource-safe ID (lowercase, hyphens, max 32 characters). This ID is used as the prefix for all provisioned AWS resources (S3 buckets, ECR repositories, IAM roles).`,
-      },
-    ],
-  },
-  {
-    id: 'ref-impl',
-    title: 'Reference Implementations',
-    children: [
-      {
-        id: 'ref-impl-overview',
-        title: 'Overview',
-        content: `# Reference Implementations
-
-Reference implementations are **deep, feature-rich full-stack solutions** for a specific niche FSI use case. Each includes a complete frontend, backend API, infrastructure-as-code, and deployment automation — designed to be deployed as a standalone application.
-
-## How They Differ from FSI Foundry
-
-| Dimension | Reference Implementations | FSI Foundry |
-|---|---|---|
-| **Scope** | Deep, end-to-end solution for one use case | Broad POC coverage across 34 use cases |
-| **Stack** | Full-stack: frontend + backend + infra + CI/CD | Agent backend only (orchestrator + agents + tools) |
-| **Deployment** | Standalone app with its own infrastructure | Deployed via shared FSI Foundry pipeline |
-| **Complexity** | Full-stack architecture | POC-level implementations |
-
-## Available Implementations
-
-| Implementation | Domain | Stack | Status |
-|---|---|---|---|
-| Market Surveillance | Capital Markets | Next.js + AgentCore + Terraform + RDS | Available |
-| Shopping Concierge Agent | Agentic Payments | React + Strands + CDK + Amplify | Available |
-| Case Management | Fraud & Compliance | React + Bedrock + Lambda + DynamoDB + CloudFront | Available |
-| Agent Safety Controls | Platform & Governance | ECS + CloudFront + Cognito + DynamoDB + Lambda | Available |`,
-      },
-      {
-        id: 'market-surveillance-ref',
-        title: 'Market Surveillance',
-        children: [
-          {
-            id: 'market-surveillance-ref-overview',
-            title: 'Overview',
-            content: `# Market Surveillance — Reference Implementation
-
-AI-powered market surveillance system for detecting and investigating suspicious trading patterns in Fixed Income markets using AWS Bedrock AgentCore.
-
-## Key Capabilities
-
-- **Multi-Agent Architecture** — Coordinator orchestrates specialized agents for data discovery, enrichment, and rule evaluation
-- **Trade Pattern Detection** — 29 decision tree rules for identifying suspicious trading patterns
-- **Configuration-Driven** — All workflows, rules, and schemas loaded from S3 for easy updates without code changes
-- **Audit Trail** — Complete logging of agent decisions, state transitions, and tool calls
-- **Enterprise Security** — Cognito authentication, VPC isolation, encrypted data at rest and in transit, read-only database access
-- **Conversation Memory** — DynamoDB-backed persistent conversation history across sessions
-
-## Architecture
-
-| Component | Technology | Details |
-|---|---|---|
-| Frontend | Next.js on EC2 with ALB | Served via CloudFront CDN with WAF protection |
-| Agent System | AWS Bedrock AgentCore Runtime | Strands SDK with MCP Gateway for tool access |
-| Data Layer | PostgreSQL (RDS Aurora) | Read-only access for trade and account data |
-| Config Storage | S3 | Workflow definitions, decision tree rules, agent schemas |
-| Conversation Store | DynamoDB | Persistent chat history and investigation state |
-| Auth | AWS Cognito | User pools with JWT-based authentication |
-| Networking | VPC | Private subnets, NAT gateway, security groups |
-| CDN | CloudFront | Edge caching with custom domain support |
-| Firewall | AWS WAF | Rate limiting and IP-based access control |
-
-## Agent System
-
-| Agent | Role | Tools |
-|---|---|---|
-| Coordinator | Main orchestrator — routes investigation workflow, manages state transitions | Workflow config loader, state manager |
-| Data Discovery | Retrieves trade data, account info, and counterparty details from RDS | SQL query tool via MCP Gateway (read-only) |
-| Data Enrichment | Augments raw trade data with market context, reference data, and historical patterns | S3 config reader, enrichment rules engine |
-| Trade Analyst | Evaluates 29 decision tree rules against enriched data, produces disposition | Rule engine, decision tree evaluator, report generator |
-
-## Investigation Workflow
-
-1. User submits a trade alert for investigation
-2. Coordinator loads workflow configuration from S3
-3. Data Discovery agent queries RDS for trade details, account history, and counterparty info
-4. Data Enrichment agent augments with market context and reference data
-5. Trade Analyst evaluates 29 decision tree rules against enriched data
-6. System produces an audit-ready disposition report with rule-by-rule findings
-7. Full investigation trail stored in DynamoDB for compliance review
-
-## Decision Tree Rules
-
-The system evaluates 29 configurable rules across categories:
-- **Price manipulation** — Unusual price movements relative to market
-- **Volume anomalies** — Abnormal trading volumes or patterns
-- **Timing patterns** — Suspicious timing relative to market events
-- **Counterparty risk** — Unusual counterparty relationships or concentrations
-- **Cross-market signals** — Correlated activity across instruments or venues
-
-All rules are loaded from S3 JSON configuration — no code changes needed to add, modify, or disable rules.
-
-## Project Structure
-
-\`\`\`
-market-surveillance/
-├── infrastructure/
-│   ├── modules/                 # 12+ shared Terraform modules
-│   │   ├── agentcore-runtime/   # AgentCore deployment
-│   │   ├── agentcore-memory/    # Persistent memory
-│   │   ├── agentcore-gateway/   # MCP Gateway for tools
-│   │   ├── ec2-webapp/          # Web app hosting
-│   │   ├── alb/                 # Load balancer
-│   │   ├── cloudfront/          # CDN distribution
-│   │   ├── rds/                 # PostgreSQL database
-│   │   ├── lambda/              # API functions
-│   │   ├── cognito/             # Authentication
-│   │   └── ...                  # kms, acm, firewall, etc.
-│   ├── foundations/             # Root module 1 — VPC, RDS, Cognito, ALB
-│   └── app-infra/              # Root module 2 — ECR, AgentCore, API GW, webapp
-├── agent-backend/               # Python agent system
-│   ├── agents/                  # Coordinator, discovery, enrichment, analyst
-│   ├── configs/                 # Workflow and rule configurations
-│   └── Dockerfile
-├── trade-alerts-app/            # Next.js frontend
-├── seeding_scripts/             # Database seeding pipeline
-└── scripts/                     # Deployment utilities
-\`\`\``,
-          },
-          {
-            id: 'market-surveillance-ref-deploy',
-            title: 'Deployment',
-            content: `# Market Surveillance — Deployment
-
-## Infrastructure
-
-Two Terraform root modules with a one-way dependency:
-
-| Stack | Contains | Order |
-|---|---|---|
-| **foundations** | VPC, KMS, RDS, Cognito, ALB, CloudFront, WAF, DynamoDB, Bastion | First |
-| **app-infra** | ECR, Lambda, AgentCore, API Gateway, S3 configs, EC2 webapp | Second (reads foundations outputs via remote state) |
-
-## Prerequisites
-
-- AWS CLI configured with credentials
-- Terraform >= 1.0
-- Docker with buildx support (for multi-arch container builds)
-- Node.js >= 18 (for frontend build)
-- Make (recommended for simplified commands)
-
-## Deploy with Make (Recommended)
-
-\`\`\`bash
-cd applications/reference_implementations/market-surveillance
-
-# Deploy full stack (infrastructure + webapp + database seeding)
-make deploy ENV=dev
-
-# Deploy infrastructure only
-make deploy-infra ENV=dev
-
-# Deploy foundations only
-make deploy-foundations ENV=dev
-
-# Deploy app-infra only (requires foundations)
-make deploy-app-infra ENV=dev
-\`\`\`
-
-## Deploy with Scripts
-
-\`\`\`bash
-# Deploy full stack with auto-approve
-scripts/deploy-backend.sh --environment dev --auto-approve
-
-# Deploy only foundations
-scripts/deploy-backend.sh --environment dev --foundation-only
-
-# Deploy only app-infra
-scripts/deploy-backend.sh --environment dev --app-infra-only
-\`\`\`
-
-## Infrastructure Provisioned
-
-| Resource | Purpose |
-|---|---|
-| VPC + Subnets | Network isolation with public/private subnets |
-| RDS Aurora PostgreSQL | Trade and account data storage |
-| Cognito User Pool | Authentication for frontend and API |
-| ALB + Target Groups | Load balancing for webapp and API |
-| CloudFront Distribution | CDN for frontend with WAF |
-| ECR Repository | Container images for agent and webapp |
-| AgentCore Runtime | Bedrock agent execution environment |
-| AgentCore Memory | Persistent conversation storage |
-| AgentCore MCP Gateway | Tool access gateway for database queries |
-| Lambda Functions | API endpoints for conversation management |
-| API Gateway | HTTP API for frontend-to-backend communication |
-| S3 Buckets | Agent configs, workflow rules, Terraform state |
-| DynamoDB Tables | Conversation history, Terraform locks |
-| KMS Keys | Encryption for RDS, S3, and DynamoDB |
-| WAF Web ACL | Rate limiting and IP filtering |
-
-## Database Seeding
-
-After infrastructure deployment, seed the database with sample trade data:
-
-\`\`\`bash
-# Generate and load sample data
-make seed-db ENV=dev
-
-# Or use the seeding scripts directly
-cd seeding_scripts
-python generate_data.py
-python load_data.py
-\`\`\`
-
-## Cleanup
-
-\`\`\`bash
-# Destroy all resources
-make destroy ENV=dev
-
-# Or destroy in reverse order
-scripts/deploy-backend.sh --environment dev --destroy
-\`\`\``,
-          },
-        ],
-      },
-      {
-        id: 'shopping-concierge-ref',
-        title: 'Shopping Concierge Agent',
-        children: [
-          {
-            id: 'shopping-concierge-ref-overview',
-            title: 'Overview',
-            content: `# Shopping Concierge Agent — Reference Implementation
-
-AI-powered concierge with shopping assistance, product search, cart management, and mock payment support. Built with Strands SDK, MCP tools, and AWS Bedrock AgentCore.
-
-## Features
-
-- **Shopping Assistant** — Product search and personalized recommendations via SERP API integration
-- **Cart & Payment** — Full cart management with mock payment processing flow
-- **Conversation Memory** — Persistent chat history across sessions via DynamoDB
-- **Real-time Streaming** — Live agent responses with tool usage indicators in the UI
-- **Secure Authentication** — AWS Cognito with JWT-based auth and session management
-- **MCP Tool Integration** — Agent tools exposed via Model Context Protocol servers
-- **Product Comparison** — Side-by-side feature and price comparison across products
-- **User Preferences** — Personalized recommendations based on user profile and constraints
-
-## Architecture
-
-| Component | Technology | Details |
-|---|---|---|
-| Frontend | React web application | Real-time streaming UI with tool usage indicators |
-| Agent Runtime | AWS Bedrock AgentCore | Strands SDK with MCP tool integration |
-| Tools | MCP Servers | Product search (SERP API), cart management, payment mock |
-| Auth | AWS Cognito via Amplify | User pools, JWT tokens, session management |
-| Memory | DynamoDB via Amplify | Conversation history, user preferences, cart state |
-| Infrastructure | AWS CDK | Multi-stack deployment (Amplify + MCP + Agent + Frontend) |
-| Observability | CloudWatch | Logs, metrics, and agent execution traces |
-
-## Agent System
-
-| Agent | Role | Tools |
-|---|---|---|
-| Shopping Assistant | Product search, recommendations, feature comparison, reviews research | SERP API search, product database, review aggregator |
-| Payment Agent | Cart management, checkout flow, mock payment processing | Cart state manager, payment mock, order tracker |
-
-## User Interaction Flow
-
-1. User authenticates via Cognito
-2. User describes what they are looking for (natural language)
-3. Shopping Assistant searches products via SERP API, filters by user preferences
-4. Agent presents options with prices, reviews, and feature comparisons
-5. User adds items to cart, agent manages cart state
-6. Payment Agent handles checkout with mock payment flow
-7. Full conversation history persisted for future sessions
-
-## Project Structure
-
-\`\`\`
-shopping-concierge-agent/
-├── amplify/                    # AWS Amplify backend
-│   ├── auth/                   # Cognito configuration
-│   ├── data/                   # DynamoDB tables and GraphQL schema
-│   └── storage/                # S3 storage configuration
-├── concierge_agent/           # Agent code and Docker container
-│   ├── Dockerfile
-│   └── code/                  # Python agent implementation
-│       ├── agent.py           # Main agent logic
-│       ├── tools/             # MCP tool definitions
-│       └── prompts/           # System prompts and templates
-├── infrastructure/            # CDK infrastructure
-│   ├── lib/                   # CDK stack definitions
-│   └── bin/                   # CDK app entry point
-├── documents/                 # Knowledge base documents
-├── web-ui/                    # React frontend
-│   ├── src/
-│   │   ├── components/        # UI components
-│   │   ├── hooks/             # Custom React hooks
-│   │   └── services/          # API client and auth
-│   └── public/
-└── scripts/                   # Deployment and setup scripts
-\`\`\``,
-          },
-          {
-            id: 'shopping-concierge-ref-deploy',
-            title: 'Deployment',
-            content: `# Shopping Concierge Agent — Deployment
-
-## Prerequisites
-
-- AWS Account with Bedrock access (Claude models enabled)
-- AWS CDK CLI installed and bootstrapped
-- Docker (for container builds)
-- Node.js >= 18
-- Python >= 3.11
-- SERP API key (optional — enables live product search; without it, agent uses mock data)
-
-## Deployment Steps
-
-The Shopping Concierge uses AWS CDK with multiple stacks:
-
-\`\`\`bash
-cd applications/reference_implementations/shopping-concierge-agent
-
-# 1. Install dependencies
-npm install
-pip install -r concierge_agent/code/requirements.txt
-
-# 2. Bootstrap CDK (if not already done)
-cdk bootstrap
-
-# 3. Deploy all stacks
-cdk deploy --all
-
-# Or deploy individual stacks:
-cdk deploy AmplifyStack        # Cognito, DynamoDB, GraphQL
-cdk deploy McpServerStack      # MCP tool servers
-cdk deploy AgentStack          # AgentCore runtime
-cdk deploy FrontendStack       # React web UI
-\`\`\`
-
-## Infrastructure Provisioned
-
-| Resource | Purpose |
-|---|---|
-| Amplify Backend | Cognito user pools, DynamoDB tables, GraphQL API |
-| AgentCore Runtime | Bedrock agent execution with Strands SDK |
-| MCP Servers | Tool servers for product search, cart, and payment |
-| ECR Repository | Container images for agent and MCP servers |
-| S3 Bucket | Frontend hosting and knowledge base documents |
-| CloudWatch | Logs, metrics, and agent execution traces |
-| IAM Roles | Least-privilege access for each component |
-
-## Configuration
-
-### SERP API Key (Optional)
-
-For live product search, set the SERP API key:
-
-\`\`\`bash
-# Via environment variable
-export SERP_API_KEY=your_key_here
-
-# Or via CDK context
-cdk deploy --context serpApiKey=your_key_here
-\`\`\`
-
-Without a SERP API key, the agent falls back to mock product data for demonstration.
-
-### Mock Payment Mode
-
-The payment system uses a mock implementation by default. See the [Frontend Mock Mode documentation](docs/FRONTEND_MOCK_MODE.md) for details on the mock payment flow.
-
-## Cleanup
-
-\`\`\`bash
-# Destroy all stacks
-cdk destroy --all
-\`\`\``,
-          },
-        ],
-      },
-      {
-        id: 'case-management-ref',
-        title: 'Case Management',
-        children: [
-          {
-            id: 'case-management-ref-overview',
-            title: 'Overview',
-            content: `# Case Management — Reference Implementation
-
-AI-powered fraud detection and case management platform built with AWS serverless architecture, React, and Claude AI on Bedrock.
-
-## Key Capabilities
-
-- **Real-time Fraud Detection** — Analyze transactions with ML-based scoring and pattern detection
-- **AI-Powered Investigation** — Natural language chat interface powered by Claude Sonnet 4 on Bedrock
-- **Pattern Recognition** — Automatically detects smurfing, high-velocity patterns, mule accounts, and large transaction anomalies
-- **Decision Engine** — Three-tier fraud response: APPROVE, STEP_UP_REVIEW, HOLD_AND_CASE
-- **Secure Architecture** — CloudFront CDN with Origin Access Control for enterprise security
-- **DynamoDB Storage** — 5 tables for transaction data, features, patterns, and actor state
-
-## Architecture
-
-| Component | Technology | Details |
-|---|---|---|
-| Frontend | React UI | Hosted on S3, served via CloudFront with OAC |
-| API | API Gateway + 4 Lambdas | Python backend with fraud scoring and Bedrock chat |
-| Storage | 5 DynamoDB Tables | Transaction logs, features, pair statistics, destination tracking, actor state |
-| AI | Amazon Bedrock | Claude Sonnet 4 for conversational investigation |
-| CDN | CloudFront | Secure HTTPS delivery with Origin Access Control |
-| Optional | AgentCore SAR Stack | Advanced SAR report generation |
-
-## Agents
-
-- **Fraud Scoring Agent** — Lambda function for ML-based transaction scoring and pattern detection
-- **Transaction Reader Agent** — Lambda for DynamoDB queries and transaction history retrieval
-- **Bedrock Chat Agent** — Conversational investigation interface with Claude Sonnet 4
-- **Optional SAR Agent** — AgentCore integration for advanced Suspicious Activity Report generation
-
-## Investigation Workflow
-
-1. Real-time transaction analysis with ML scoring
-2. Automated pattern detection for fraud risk indicators
-3. Interactive natural language investigation with Claude AI
-4. Three-tier decision framework for response actions
-5. Complete audit trail for compliance review`,
-          },
-          {
-            id: 'case-management-ref-deploy',
-            title: 'Deployment',
-            content: `# Case Management — Deployment
-
-## Prerequisites
-
-**AWS Account Requirements:**
-- Bedrock access with Claude Sonnet 4 model enabled
-- IAM permissions for Lambda, DynamoDB, API Gateway, S3, CloudFront
-- Sufficient service quotas for 4 Lambda functions and 5 DynamoDB tables
-
-**Local Tools:**
-\`\`\`bash
-# AWS CLI configured with credentials
-aws --version
-
-# Node.js 18+ for React build
-node --version
-
-# jq for JSON processing (cleanup script)
-brew install jq  # macOS
-\`\`\`
-
-**AWS Credentials:**
-Create \`.env\` file in project root:
-\`\`\`bash
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
-\`\`\`
-
-## Deployment
-
-Deploy everything with a single command:
-
-\`\`\`bash
-cd applications/reference_implementations/case-management
-bash deploy.sh
-\`\`\`
-
-This command provisions:
-- 5 DynamoDB tables (txn_logs, txn_features, pair_stats, dst_src_window, actor_state)
-- 4 Lambda functions with IAM roles (fraud scoring, transaction reader, SAR API, bedrock chat)
-- API Gateway with CORS enabled
-- React UI build and S3 upload
-- CloudFront distribution with HTTPS and Origin Access Control
-- Optional AgentCore stack (skipped if CLI not installed)
-
-**Output:**
-\`\`\`
-Frontend:   https://xxxxx.cloudfront.net
-API:        https://xxxxx.execute-api.us-east-1.amazonaws.com/prod
-\`\`\`
-
-CloudFront deployment takes 5–10 minutes to propagate globally.
-
-## What Gets Provisioned
-
-| Resource | Purpose |
-|---|---|
-| DynamoDB Tables | Transaction logs, feature store, pattern tracking, actor state |
-| Lambda Functions | Fraud scoring engine, query interface, SAR reports, Bedrock chat |
-| API Gateway | REST endpoints for frontend communication |
-| S3 Bucket | Frontend assets and CloudFront origin |
-| CloudFront Distribution | CDN with OAC for secure S3 access |
-| IAM Roles & Policies | Least-privilege access for each component |
-| KMS Keys | Optional encryption for sensitive data |
-
-## Cleanup
-
-**WARNING: This permanently deletes all resources and data.**
-
-\`\`\`bash
-bash cleanup.sh
-\`\`\`
-
-Removes:
-- All DynamoDB tables (data is lost)
-- All Lambda functions and IAM roles
-- API Gateway
-- S3 bucket and CloudFront distribution
-- AgentCore resources (if deployed)
-
-The script will prompt for confirmation before deletion.`,
-          },
-        ],
-      },
-      {
-        id: 'agent-safety-ref',
-        title: 'Agent Safety Controls',
-        children: [
-          {
-            id: 'agent-safety-ref-overview',
-            title: 'Overview',
-            content: `# Agent Safety Controls — Reference Implementation
-
-Modular toolkit for monitoring and managing AI agents running on Amazon Bedrock AgentCore. Provides human-in-the-loop safety controls with centralized dashboard, automated cost management, evaluation monitoring, observability, and session-level intervention.
-
-## Key Capabilities
-
-- **Web Dashboard** — ECS Express Mode + CloudFront + Cognito authentication with agent monitoring UI
-- **Automated Budget Controls** — AWS Budgets created per agent with SNS email alerts at 80% and 100% thresholds
-- **Automated Evaluation Setup** — 7 built-in evaluators with CloudWatch alarms for quality issues
-- **Observability Alarms** — Anomaly detection for latency, errors, token usage, and invocation count
-- **Kill Switch** — Revoke Bedrock access for single agent or all agents instantly via IAM deny policy
-- **Session Management** — Stop individual sessions or all sessions from dashboard
-- **Audit Trail** — Complete logging of interventions with identity and reason
-
-## Architecture
-
-| Component | Technology | Details |
-|---|---|---|
-| Dashboard | ECS Express Mode | FastAPI backend with HTML/CSS/JS single-file frontend |
-| Authentication | AWS Cognito | User pools with JWT validation on every API request |
-| Data Store | 6 DynamoDB Tables | Single source of truth for registry, sessions, interventions, signals |
-| CDN | CloudFront | Distribution with origin verification header for security |
-| Cost Controls | AWS Budgets + SNS | Event-driven budget automation per agent |
-| Evaluation | CloudWatch Alarms | AgentCore Online Evaluation configs with alarm thresholds |
-| Observability | CloudWatch | Anomaly detection alarms for performance metrics |
-| Kill Switch | Lambda + IAM | On-demand policy attachment for access revocation |
-
-## Agents & Automation
-
-- **Auto Budget Lambda** — EventBridge-triggered, creates AWS Budgets on agent deployment
-- **Auto Eval Lambda** — Sets up AgentCore evaluation configs with CloudWatch alarms
-- **Auto Obs Lambda** — Creates anomaly detection alarms for latency, errors, tokens, invocations
-- **Session Reporter Lambda** — Heartbeat-based session tracking to DynamoDB
-- **Kill Switch Lambda** — IAM deny policy management for emergency shutdown (reversible)
-- **Stop Sessions Lambda** — Tier 1 intervention for stopping active sessions
-
-## Intervention Model
-
-| Tier | Action | Scope | Reversible |
-|---|---|---|---|
-| Tier 1 | Stop Sessions | All active sessions for one agent | No (sessions terminated) |
-| Tier 2 | Revoke IAM | Single agent or all agents Bedrock access | Yes (restore from dashboard) |`,
-          },
-          {
-            id: 'agent-safety-ref-deploy',
-            title: 'Deployment',
-            content: `# Agent Safety Controls — Deployment
-
-## Prerequisites
-
-- AWS CLI v2 configured with admin-level IAM permissions (assumed role recommended)
-- Python 3.11+ with boto3
-- Docker (for dashboard container)
-- Amazon Bedrock model access enabled (Claude Sonnet 4)
-- AgentCore access enabled in your AWS account
-
-## Quick Start — Deploy Everything
-
-Deploy the full stack with one command:
-
-\`\`\`bash
-cd applications/reference_implementations/agent-safety
-
-./deploy-all.sh \\
-  --profile <your-aws-profile> \\
-  --region us-east-1 \\
-  --admin-email you@company.com \\
-  --admin-password 'YourPassword123!'
-\`\`\`
-
-This takes 15–20 minutes and deploys all components in phases.
-
-## What Gets Provisioned
-
-| Phase | Resources | Time |
-|---|---|---|
-| 1. Dashboard | ECR, Docker image, 6 DynamoDB tables, Cognito, ECS Express Mode, CloudFront, Stop Sessions Lambda | ~10 min |
-| 2. Cost Controls | SNS topic, email subscription, EventBridge rule, Auto Budget Lambda | ~3 min |
-| 2b. Evaluation Controls | Auto Eval Lambda, CloudWatch alarms, EventBridge rule | ~2 min |
-| 2c. Kill Switch | Kill Switch Lambda with IAM deny policy management | ~2 min |
-| 2d. Observability Controls | Auto Obs Lambda, CloudWatch anomaly detection alarms | ~2 min |
-| 3. Sample Agent | Inference Profile, S3 package, IAM role, AgentCore Runtime | ~5 min |
-
-**Output:**
-CloudFront dashboard URL for immediate sign-in with Cognito credentials.
-
-## DynamoDB Tables (6 total)
-
-| Table | Purpose |
-|---|---|
-| safety-dashboard-registry | Agent metadata, runtime info, settings |
-| safety-dashboard-sessions | Live session tracking with heartbeats |
-| safety-dashboard-interventions | Audit trail of all interventions |
-| safety-dashboard-cost-signals | Per-agent budget data from AWS Budgets |
-| safety-dashboard-obs-signals | Per-agent observability metrics |
-| safety-dashboard-eval-signals | Per-agent evaluation scores |
-
-## Deploy Components Individually
-
-Each component is independent. Deploy in this order:
-
-\`\`\`bash
-# 1. Dashboard (includes DynamoDB tables)
-cd dashboard && ./deploy.sh --profile <profile> --region us-east-1 \\
-  --admin-email you@company.com --admin-password 'YourPassword123!'
-
-# 2. Cost Controls
-cd cost-controls && ./deploy.sh --profile <profile> --region us-east-1 \\
-  --notification-email you@company.com
-
-# 3. Sample Agent (stateless)
-cd sample-agent && python deploy.py --name my_agent --region us-east-1 --profile <profile>
-
-# 3b. Sample Agent (with memory)
-cd sample-agent && python deploy.py --name my_agent --region us-east-1 --profile <profile> --create-memory
-
-# Invoke the agent
-python sample-agent/invoke_agent.py --arn <AGENT_ARN> --prompt "Hello!" --region us-east-1
-\`\`\`
-
-## Cleanup
-
-**WARNING: This permanently deletes all resources and data.**
-
-\`\`\`bash
-./destroy-all.sh --profile <profile> --region us-east-1 --agent-name my_agent
-\`\`\`
-
-Removes:
-- All DynamoDB tables (data is lost)
-- ECR repositories and container images
-- Cognito user pools
-- ECS task definitions and CloudWatch log groups
-- CloudFront distribution
-- Lambda functions, EventBridge rules, SNS topics
-- IAM roles and policies
-- All CloudWatch alarms`,
-          },
-        ],
+The design persists to DynamoDB and can be exported as a shareable document for HR or leadership review.`,
       },
     ],
   },
@@ -12527,6 +10905,798 @@ cat output.json | jq '.'
     ],
   },
   {
+    id: 'ref-impl',
+    title: 'Reference Implementations',
+    children: [
+      {
+        id: 'ref-impl-overview',
+        title: 'Overview',
+        content: `# Reference Implementations
+
+Reference implementations are **deep, feature-rich full-stack solutions** for a specific niche FSI use case. Each includes a complete frontend, backend API, infrastructure-as-code, and deployment automation — designed to be deployed as a standalone application.
+
+## How They Differ from FSI Foundry
+
+| Dimension | Reference Implementations | FSI Foundry |
+|---|---|---|
+| **Scope** | Deep, end-to-end solution for one use case | Broad POC coverage across 34 use cases |
+| **Stack** | Full-stack: frontend + backend + infra + CI/CD | Agent backend only (orchestrator + agents + tools) |
+| **Deployment** | Standalone app with its own infrastructure | Deployed via shared FSI Foundry pipeline |
+| **Complexity** | Full-stack architecture | POC-level implementations |
+
+## Available Implementations
+
+| Implementation | Domain | Stack | Status |
+|---|---|---|---|
+| Market Surveillance | Capital Markets | Next.js + AgentCore + Terraform + RDS | Available |
+| Shopping Concierge Agent | Agentic Payments | React + Strands + CDK + Amplify | Available |
+| Case Management | Fraud & Compliance | React + Bedrock + Lambda + DynamoDB + CloudFront | Available |
+| Agent Safety Controls | Platform & Governance | ECS + CloudFront + Cognito + DynamoDB + Lambda | Available |
+| Payments Fraud | Payments & Fraud | Next.js + Strands (supervisor + 3 specialists) + Terraform | Available |
+| Merchant Onboarding | Payments & Risk | React + Multi-agent + OFAC + HITL approvals | Available |
+| Investment Research and Risk Accelerator | Capital Markets | AI research and risk-analysis assistant on Bedrock AgentCore | Available |
+| AgentCore-in-a-Box | Field Demo | Grab-and-go multi-agent FS platform with every AgentCore primitive | Available |`,
+      },
+      {
+        id: 'market-surveillance-ref',
+        title: 'Market Surveillance',
+        children: [
+          {
+            id: 'market-surveillance-ref-overview',
+            title: 'Overview',
+            content: `# Market Surveillance — Reference Implementation
+
+AI-powered market surveillance system for detecting and investigating suspicious trading patterns in Fixed Income markets using AWS Bedrock AgentCore.
+
+## Key Capabilities
+
+- **Multi-Agent Architecture** — Coordinator orchestrates specialized agents for data discovery, enrichment, and rule evaluation
+- **Trade Pattern Detection** — 29 decision tree rules for identifying suspicious trading patterns
+- **Configuration-Driven** — All workflows, rules, and schemas loaded from S3 for easy updates without code changes
+- **Audit Trail** — Complete logging of agent decisions, state transitions, and tool calls
+- **Enterprise Security** — Cognito authentication, VPC isolation, encrypted data at rest and in transit, read-only database access
+- **Conversation Memory** — DynamoDB-backed persistent conversation history across sessions
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Frontend | Next.js on EC2 with ALB | Served via CloudFront CDN with WAF protection |
+| Agent System | AWS Bedrock AgentCore Runtime | Strands SDK with MCP Gateway for tool access |
+| Data Layer | PostgreSQL (RDS Aurora) | Read-only access for trade and account data |
+| Config Storage | S3 | Workflow definitions, decision tree rules, agent schemas |
+| Conversation Store | DynamoDB | Persistent chat history and investigation state |
+| Auth | AWS Cognito | User pools with JWT-based authentication |
+| Networking | VPC | Private subnets, NAT gateway, security groups |
+| CDN | CloudFront | Edge caching with custom domain support |
+| Firewall | AWS WAF | Rate limiting and IP-based access control |
+
+## Agent System
+
+| Agent | Role | Tools |
+|---|---|---|
+| Coordinator | Main orchestrator — routes investigation workflow, manages state transitions | Workflow config loader, state manager |
+| Data Discovery | Retrieves trade data, account info, and counterparty details from RDS | SQL query tool via MCP Gateway (read-only) |
+| Data Enrichment | Augments raw trade data with market context, reference data, and historical patterns | S3 config reader, enrichment rules engine |
+| Trade Analyst | Evaluates 29 decision tree rules against enriched data, produces disposition | Rule engine, decision tree evaluator, report generator |
+
+## Investigation Workflow
+
+1. User submits a trade alert for investigation
+2. Coordinator loads workflow configuration from S3
+3. Data Discovery agent queries RDS for trade details, account history, and counterparty info
+4. Data Enrichment agent augments with market context and reference data
+5. Trade Analyst evaluates 29 decision tree rules against enriched data
+6. System produces an audit-ready disposition report with rule-by-rule findings
+7. Full investigation trail stored in DynamoDB for compliance review
+
+## Decision Tree Rules
+
+The system evaluates 29 configurable rules across categories:
+- **Price manipulation** — Unusual price movements relative to market
+- **Volume anomalies** — Abnormal trading volumes or patterns
+- **Timing patterns** — Suspicious timing relative to market events
+- **Counterparty risk** — Unusual counterparty relationships or concentrations
+- **Cross-market signals** — Correlated activity across instruments or venues
+
+All rules are loaded from S3 JSON configuration — no code changes needed to add, modify, or disable rules.
+
+## Project Structure
+
+\`\`\`
+market-surveillance/
+├── infrastructure/
+│   ├── modules/                 # 12+ shared Terraform modules
+│   │   ├── agentcore-runtime/   # AgentCore deployment
+│   │   ├── agentcore-memory/    # Persistent memory
+│   │   ├── agentcore-gateway/   # MCP Gateway for tools
+│   │   ├── ec2-webapp/          # Web app hosting
+│   │   ├── alb/                 # Load balancer
+│   │   ├── cloudfront/          # CDN distribution
+│   │   ├── rds/                 # PostgreSQL database
+│   │   ├── lambda/              # API functions
+│   │   ├── cognito/             # Authentication
+│   │   └── ...                  # kms, acm, firewall, etc.
+│   ├── foundations/             # Root module 1 — VPC, RDS, Cognito, ALB
+│   └── app-infra/              # Root module 2 — ECR, AgentCore, API GW, webapp
+├── agent-backend/               # Python agent system
+│   ├── agents/                  # Coordinator, discovery, enrichment, analyst
+│   ├── configs/                 # Workflow and rule configurations
+│   └── Dockerfile
+├── trade-alerts-app/            # Next.js frontend
+├── seeding_scripts/             # Database seeding pipeline
+└── scripts/                     # Deployment utilities
+\`\`\``,
+          },
+          {
+            id: 'market-surveillance-ref-deploy',
+            title: 'Deployment',
+            content: `# Market Surveillance — Deployment
+
+## Infrastructure
+
+Two Terraform root modules with a one-way dependency:
+
+| Stack | Contains | Order |
+|---|---|---|
+| **foundations** | VPC, KMS, RDS, Cognito, ALB, CloudFront, WAF, DynamoDB, Bastion | First |
+| **app-infra** | ECR, Lambda, AgentCore, API Gateway, S3 configs, EC2 webapp | Second (reads foundations outputs via remote state) |
+
+## Prerequisites
+
+- AWS CLI configured with credentials
+- Terraform >= 1.0
+- Docker with buildx support (for multi-arch container builds)
+- Node.js >= 18 (for frontend build)
+- Make (recommended for simplified commands)
+
+## Deploy with Make (Recommended)
+
+\`\`\`bash
+cd applications/reference_implementations/market-surveillance
+
+# Deploy full stack (infrastructure + webapp + database seeding)
+make deploy ENV=dev
+
+# Deploy infrastructure only
+make deploy-infra ENV=dev
+
+# Deploy foundations only
+make deploy-foundations ENV=dev
+
+# Deploy app-infra only (requires foundations)
+make deploy-app-infra ENV=dev
+\`\`\`
+
+## Deploy with Scripts
+
+\`\`\`bash
+# Deploy full stack with auto-approve
+scripts/deploy-backend.sh --environment dev --auto-approve
+
+# Deploy only foundations
+scripts/deploy-backend.sh --environment dev --foundation-only
+
+# Deploy only app-infra
+scripts/deploy-backend.sh --environment dev --app-infra-only
+\`\`\`
+
+## Infrastructure Provisioned
+
+| Resource | Purpose |
+|---|---|
+| VPC + Subnets | Network isolation with public/private subnets |
+| RDS Aurora PostgreSQL | Trade and account data storage |
+| Cognito User Pool | Authentication for frontend and API |
+| ALB + Target Groups | Load balancing for webapp and API |
+| CloudFront Distribution | CDN for frontend with WAF |
+| ECR Repository | Container images for agent and webapp |
+| AgentCore Runtime | Bedrock agent execution environment |
+| AgentCore Memory | Persistent conversation storage |
+| AgentCore MCP Gateway | Tool access gateway for database queries |
+| Lambda Functions | API endpoints for conversation management |
+| API Gateway | HTTP API for frontend-to-backend communication |
+| S3 Buckets | Agent configs, workflow rules, Terraform state |
+| DynamoDB Tables | Conversation history, Terraform locks |
+| KMS Keys | Encryption for RDS, S3, and DynamoDB |
+| WAF Web ACL | Rate limiting and IP filtering |
+
+## Database Seeding
+
+After infrastructure deployment, seed the database with sample trade data:
+
+\`\`\`bash
+# Generate and load sample data
+make seed-db ENV=dev
+
+# Or use the seeding scripts directly
+cd seeding_scripts
+python generate_data.py
+python load_data.py
+\`\`\`
+
+## Cleanup
+
+\`\`\`bash
+# Destroy all resources
+make destroy ENV=dev
+
+# Or destroy in reverse order
+scripts/deploy-backend.sh --environment dev --destroy
+\`\`\``,
+          },
+        ],
+      },
+      {
+        id: 'shopping-concierge-ref',
+        title: 'Shopping Concierge Agent',
+        children: [
+          {
+            id: 'shopping-concierge-ref-overview',
+            title: 'Overview',
+            content: `# Shopping Concierge Agent — Reference Implementation
+
+AI-powered concierge with shopping assistance, product search, cart management, and mock payment support. Built with Strands SDK, MCP tools, and AWS Bedrock AgentCore.
+
+## Features
+
+- **Shopping Assistant** — Product search and personalized recommendations via SERP API integration
+- **Cart & Payment** — Full cart management with mock payment processing flow
+- **Conversation Memory** — Persistent chat history across sessions via DynamoDB
+- **Real-time Streaming** — Live agent responses with tool usage indicators in the UI
+- **Secure Authentication** — AWS Cognito with JWT-based auth and session management
+- **MCP Tool Integration** — Agent tools exposed via Model Context Protocol servers
+- **Product Comparison** — Side-by-side feature and price comparison across products
+- **User Preferences** — Personalized recommendations based on user profile and constraints
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Frontend | React web application | Real-time streaming UI with tool usage indicators |
+| Agent Runtime | AWS Bedrock AgentCore | Strands SDK with MCP tool integration |
+| Tools | MCP Servers | Product search (SERP API), cart management, payment mock |
+| Auth | AWS Cognito via Amplify | User pools, JWT tokens, session management |
+| Memory | DynamoDB via Amplify | Conversation history, user preferences, cart state |
+| Infrastructure | AWS CDK | Multi-stack deployment (Amplify + MCP + Agent + Frontend) |
+| Observability | CloudWatch | Logs, metrics, and agent execution traces |
+
+## Agent System
+
+| Agent | Role | Tools |
+|---|---|---|
+| Shopping Assistant | Product search, recommendations, feature comparison, reviews research | SERP API search, product database, review aggregator |
+| Payment Agent | Cart management, checkout flow, mock payment processing | Cart state manager, payment mock, order tracker |
+
+## User Interaction Flow
+
+1. User authenticates via Cognito
+2. User describes what they are looking for (natural language)
+3. Shopping Assistant searches products via SERP API, filters by user preferences
+4. Agent presents options with prices, reviews, and feature comparisons
+5. User adds items to cart, agent manages cart state
+6. Payment Agent handles checkout with mock payment flow
+7. Full conversation history persisted for future sessions
+
+## Project Structure
+
+\`\`\`
+shopping-concierge-agent/
+├── amplify/                    # AWS Amplify backend
+│   ├── auth/                   # Cognito configuration
+│   ├── data/                   # DynamoDB tables and GraphQL schema
+│   └── storage/                # S3 storage configuration
+├── concierge_agent/           # Agent code and Docker container
+│   ├── Dockerfile
+│   └── code/                  # Python agent implementation
+│       ├── agent.py           # Main agent logic
+│       ├── tools/             # MCP tool definitions
+│       └── prompts/           # System prompts and templates
+├── infrastructure/            # CDK infrastructure
+│   ├── lib/                   # CDK stack definitions
+│   └── bin/                   # CDK app entry point
+├── documents/                 # Knowledge base documents
+├── web-ui/                    # React frontend
+│   ├── src/
+│   │   ├── components/        # UI components
+│   │   ├── hooks/             # Custom React hooks
+│   │   └── services/          # API client and auth
+│   └── public/
+└── scripts/                   # Deployment and setup scripts
+\`\`\``,
+          },
+          {
+            id: 'shopping-concierge-ref-deploy',
+            title: 'Deployment',
+            content: `# Shopping Concierge Agent — Deployment
+
+## Prerequisites
+
+- AWS Account with Bedrock access (Claude models enabled)
+- AWS CDK CLI installed and bootstrapped
+- Docker (for container builds)
+- Node.js >= 18
+- Python >= 3.11
+- SERP API key (optional — enables live product search; without it, agent uses mock data)
+
+## Deployment Steps
+
+The Shopping Concierge uses AWS CDK with multiple stacks:
+
+\`\`\`bash
+cd applications/reference_implementations/shopping-concierge-agent
+
+# 1. Install dependencies
+npm install
+pip install -r concierge_agent/code/requirements.txt
+
+# 2. Bootstrap CDK (if not already done)
+cdk bootstrap
+
+# 3. Deploy all stacks
+cdk deploy --all
+
+# Or deploy individual stacks:
+cdk deploy AmplifyStack        # Cognito, DynamoDB, GraphQL
+cdk deploy McpServerStack      # MCP tool servers
+cdk deploy AgentStack          # AgentCore runtime
+cdk deploy FrontendStack       # React web UI
+\`\`\`
+
+## Infrastructure Provisioned
+
+| Resource | Purpose |
+|---|---|
+| Amplify Backend | Cognito user pools, DynamoDB tables, GraphQL API |
+| AgentCore Runtime | Bedrock agent execution with Strands SDK |
+| MCP Servers | Tool servers for product search, cart, and payment |
+| ECR Repository | Container images for agent and MCP servers |
+| S3 Bucket | Frontend hosting and knowledge base documents |
+| CloudWatch | Logs, metrics, and agent execution traces |
+| IAM Roles | Least-privilege access for each component |
+
+## Configuration
+
+### SERP API Key (Optional)
+
+For live product search, set the SERP API key:
+
+\`\`\`bash
+# Via environment variable
+export SERP_API_KEY=your_key_here
+
+# Or via CDK context
+cdk deploy --context serpApiKey=your_key_here
+\`\`\`
+
+Without a SERP API key, the agent falls back to mock product data for demonstration.
+
+### Mock Payment Mode
+
+The payment system uses a mock implementation by default. See the [Frontend Mock Mode documentation](docs/FRONTEND_MOCK_MODE.md) for details on the mock payment flow.
+
+## Cleanup
+
+\`\`\`bash
+# Destroy all stacks
+cdk destroy --all
+\`\`\``,
+          },
+        ],
+      },
+      {
+        id: 'case-management-ref',
+        title: 'Case Management',
+        children: [
+          {
+            id: 'case-management-ref-overview',
+            title: 'Overview',
+            content: `# Case Management — Reference Implementation
+
+AI-powered fraud detection and case management platform built with AWS serverless architecture, React, and Claude AI on Bedrock.
+
+## Key Capabilities
+
+- **Real-time Fraud Detection** — Analyze transactions with ML-based scoring and pattern detection
+- **AI-Powered Investigation** — Natural language chat interface powered by Claude Sonnet 4 on Bedrock
+- **Pattern Recognition** — Automatically detects smurfing, high-velocity patterns, mule accounts, and large transaction anomalies
+- **Decision Engine** — Three-tier fraud response: APPROVE, STEP_UP_REVIEW, HOLD_AND_CASE
+- **Secure Architecture** — CloudFront CDN with Origin Access Control for enterprise security
+- **DynamoDB Storage** — 5 tables for transaction data, features, patterns, and actor state
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Frontend | React UI | Hosted on S3, served via CloudFront with OAC |
+| API | API Gateway + 4 Lambdas | Python backend with fraud scoring and Bedrock chat |
+| Storage | 5 DynamoDB Tables | Transaction logs, features, pair statistics, destination tracking, actor state |
+| AI | Amazon Bedrock | Claude Sonnet 4 for conversational investigation |
+| CDN | CloudFront | Secure HTTPS delivery with Origin Access Control |
+| Optional | AgentCore SAR Stack | Advanced SAR report generation |
+
+## Agents
+
+- **Fraud Scoring Agent** — Lambda function for ML-based transaction scoring and pattern detection
+- **Transaction Reader Agent** — Lambda for DynamoDB queries and transaction history retrieval
+- **Bedrock Chat Agent** — Conversational investigation interface with Claude Sonnet 4
+- **Optional SAR Agent** — AgentCore integration for advanced Suspicious Activity Report generation
+
+## Investigation Workflow
+
+1. Real-time transaction analysis with ML scoring
+2. Automated pattern detection for fraud risk indicators
+3. Interactive natural language investigation with Claude AI
+4. Three-tier decision framework for response actions
+5. Complete audit trail for compliance review`,
+          },
+          {
+            id: 'case-management-ref-deploy',
+            title: 'Deployment',
+            content: `# Case Management — Deployment
+
+## Prerequisites
+
+**AWS Account Requirements:**
+- Bedrock access with Claude Sonnet 4 model enabled
+- IAM permissions for Lambda, DynamoDB, API Gateway, S3, CloudFront
+- Sufficient service quotas for 4 Lambda functions and 5 DynamoDB tables
+
+**Local Tools:**
+\`\`\`bash
+# AWS CLI configured with credentials
+aws --version
+
+# Node.js 18+ for React build
+node --version
+
+# jq for JSON processing (cleanup script)
+brew install jq  # macOS
+\`\`\`
+
+**AWS Credentials:**
+Create \`.env\` file in project root:
+\`\`\`bash
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
+\`\`\`
+
+## Deployment
+
+Deploy everything with a single command:
+
+\`\`\`bash
+cd applications/reference_implementations/case-management
+bash deploy.sh
+\`\`\`
+
+This command provisions:
+- 5 DynamoDB tables (txn_logs, txn_features, pair_stats, dst_src_window, actor_state)
+- 4 Lambda functions with IAM roles (fraud scoring, transaction reader, SAR API, bedrock chat)
+- API Gateway with CORS enabled
+- React UI build and S3 upload
+- CloudFront distribution with HTTPS and Origin Access Control
+- Optional AgentCore stack (skipped if CLI not installed)
+
+**Output:**
+\`\`\`
+Frontend:   https://xxxxx.cloudfront.net
+API:        https://xxxxx.execute-api.us-east-1.amazonaws.com/prod
+\`\`\`
+
+CloudFront deployment takes 5–10 minutes to propagate globally.
+
+## What Gets Provisioned
+
+| Resource | Purpose |
+|---|---|
+| DynamoDB Tables | Transaction logs, feature store, pattern tracking, actor state |
+| Lambda Functions | Fraud scoring engine, query interface, SAR reports, Bedrock chat |
+| API Gateway | REST endpoints for frontend communication |
+| S3 Bucket | Frontend assets and CloudFront origin |
+| CloudFront Distribution | CDN with OAC for secure S3 access |
+| IAM Roles & Policies | Least-privilege access for each component |
+| KMS Keys | Optional encryption for sensitive data |
+
+## Cleanup
+
+**WARNING: This permanently deletes all resources and data.**
+
+\`\`\`bash
+bash cleanup.sh
+\`\`\`
+
+Removes:
+- All DynamoDB tables (data is lost)
+- All Lambda functions and IAM roles
+- API Gateway
+- S3 bucket and CloudFront distribution
+- AgentCore resources (if deployed)
+
+The script will prompt for confirmation before deletion.`,
+          },
+        ],
+      },
+      {
+        id: 'agent-safety-ref',
+        title: 'Agent Safety Controls',
+        children: [
+          {
+            id: 'agent-safety-ref-overview',
+            title: 'Overview',
+            content: `# Agent Safety Controls — Reference Implementation
+
+Modular toolkit for monitoring and managing AI agents running on Amazon Bedrock AgentCore. Provides human-in-the-loop safety controls with centralized dashboard, automated cost management, evaluation monitoring, observability, and session-level intervention.
+
+## Key Capabilities
+
+- **Web Dashboard** — ECS Express Mode + CloudFront + Cognito authentication with agent monitoring UI
+- **Automated Budget Controls** — AWS Budgets created per agent with SNS email alerts at 80% and 100% thresholds
+- **Automated Evaluation Setup** — 7 built-in evaluators with CloudWatch alarms for quality issues
+- **Observability Alarms** — Anomaly detection for latency, errors, token usage, and invocation count
+- **Kill Switch** — Revoke Bedrock access for single agent or all agents instantly via IAM deny policy
+- **Session Management** — Stop individual sessions or all sessions from dashboard
+- **Audit Trail** — Complete logging of interventions with identity and reason
+
+## Architecture
+
+| Component | Technology | Details |
+|---|---|---|
+| Dashboard | ECS Express Mode | FastAPI backend with HTML/CSS/JS single-file frontend |
+| Authentication | AWS Cognito | User pools with JWT validation on every API request |
+| Data Store | 6 DynamoDB Tables | Single source of truth for registry, sessions, interventions, signals |
+| CDN | CloudFront | Distribution with origin verification header for security |
+| Cost Controls | AWS Budgets + SNS | Event-driven budget automation per agent |
+| Evaluation | CloudWatch Alarms | AgentCore Online Evaluation configs with alarm thresholds |
+| Observability | CloudWatch | Anomaly detection alarms for performance metrics |
+| Kill Switch | Lambda + IAM | On-demand policy attachment for access revocation |
+
+## Agents & Automation
+
+- **Auto Budget Lambda** — EventBridge-triggered, creates AWS Budgets on agent deployment
+- **Auto Eval Lambda** — Sets up AgentCore evaluation configs with CloudWatch alarms
+- **Auto Obs Lambda** — Creates anomaly detection alarms for latency, errors, tokens, invocations
+- **Session Reporter Lambda** — Heartbeat-based session tracking to DynamoDB
+- **Kill Switch Lambda** — IAM deny policy management for emergency shutdown (reversible)
+- **Stop Sessions Lambda** — Tier 1 intervention for stopping active sessions
+
+## Intervention Model
+
+| Tier | Action | Scope | Reversible |
+|---|---|---|---|
+| Tier 1 | Stop Sessions | All active sessions for one agent | No (sessions terminated) |
+| Tier 2 | Revoke IAM | Single agent or all agents Bedrock access | Yes (restore from dashboard) |`,
+          },
+          {
+            id: 'agent-safety-ref-deploy',
+            title: 'Deployment',
+            content: `# Agent Safety Controls — Deployment
+
+## Prerequisites
+
+- AWS CLI v2 configured with admin-level IAM permissions (assumed role recommended)
+- Python 3.11+ with boto3
+- Docker (for dashboard container)
+- Amazon Bedrock model access enabled (Claude Sonnet 4)
+- AgentCore access enabled in your AWS account
+
+## Quick Start — Deploy Everything
+
+Deploy the full stack with one command:
+
+\`\`\`bash
+cd applications/reference_implementations/agent-safety
+
+./deploy-all.sh \\
+  --profile <your-aws-profile> \\
+  --region us-east-1 \\
+  --admin-email you@company.com \\
+  --admin-password 'YourPassword123!'
+\`\`\`
+
+This takes 15–20 minutes and deploys all components in phases.
+
+## What Gets Provisioned
+
+| Phase | Resources | Time |
+|---|---|---|
+| 1. Dashboard | ECR, Docker image, 6 DynamoDB tables, Cognito, ECS Express Mode, CloudFront, Stop Sessions Lambda | ~10 min |
+| 2. Cost Controls | SNS topic, email subscription, EventBridge rule, Auto Budget Lambda | ~3 min |
+| 2b. Evaluation Controls | Auto Eval Lambda, CloudWatch alarms, EventBridge rule | ~2 min |
+| 2c. Kill Switch | Kill Switch Lambda with IAM deny policy management | ~2 min |
+| 2d. Observability Controls | Auto Obs Lambda, CloudWatch anomaly detection alarms | ~2 min |
+| 3. Sample Agent | Inference Profile, S3 package, IAM role, AgentCore Runtime | ~5 min |
+
+**Output:**
+CloudFront dashboard URL for immediate sign-in with Cognito credentials.
+
+## DynamoDB Tables (6 total)
+
+| Table | Purpose |
+|---|---|
+| safety-dashboard-registry | Agent metadata, runtime info, settings |
+| safety-dashboard-sessions | Live session tracking with heartbeats |
+| safety-dashboard-interventions | Audit trail of all interventions |
+| safety-dashboard-cost-signals | Per-agent budget data from AWS Budgets |
+| safety-dashboard-obs-signals | Per-agent observability metrics |
+| safety-dashboard-eval-signals | Per-agent evaluation scores |
+
+## Deploy Components Individually
+
+Each component is independent. Deploy in this order:
+
+\`\`\`bash
+# 1. Dashboard (includes DynamoDB tables)
+cd dashboard && ./deploy.sh --profile <profile> --region us-east-1 \\
+  --admin-email you@company.com --admin-password 'YourPassword123!'
+
+# 2. Cost Controls
+cd cost-controls && ./deploy.sh --profile <profile> --region us-east-1 \\
+  --notification-email you@company.com
+
+# 3. Sample Agent (stateless)
+cd sample-agent && python deploy.py --name my_agent --region us-east-1 --profile <profile>
+
+# 3b. Sample Agent (with memory)
+cd sample-agent && python deploy.py --name my_agent --region us-east-1 --profile <profile> --create-memory
+
+# Invoke the agent
+python sample-agent/invoke_agent.py --arn <AGENT_ARN> --prompt "Hello!" --region us-east-1
+\`\`\`
+
+## Cleanup
+
+**WARNING: This permanently deletes all resources and data.**
+
+\`\`\`bash
+./destroy-all.sh --profile <profile> --region us-east-1 --agent-name my_agent
+\`\`\`
+
+Removes:
+- All DynamoDB tables (data is lost)
+- ECR repositories and container images
+- Cognito user pools
+- ECS task definitions and CloudWatch log groups
+- CloudFront distribution
+- Lambda functions, EventBridge rules, SNS topics
+- IAM roles and policies
+- All CloudWatch alarms`,
+          },
+        ],
+      },
+      {
+        id: 'payments-fraud-ref',
+        title: 'Payments Fraud',
+        content: `# Payments Fraud — Reference Implementation
+
+Agent-native fraud scoring, natural-language investigation, and FinCEN-structured SAR drafting. A supervisor + 3 specialist agents on Bedrock AgentCore (Strands), with a Next.js UI and Cognito auth.
+
+## Architecture
+
+| Component | Details |
+|-----------|---------|
+| Frontend | Next.js + MUI with a BFF proxy for signed calls into AgentCore |
+| Agent System | Bedrock AgentCore Runtime; Strands supervisor coordinates Scorer / Investigation / SAR agents |
+| Auth | Cognito user pool + hosted UI |
+| Data | Bundled synthetic sample data for hands-off demos |
+| IaC | Terraform, composed from \`agent-runtime-agentcore\` + \`auth-cognito\` templates |
+
+## Agents
+
+- **Supervisor** — routes each request to the right specialist and manages state.
+- **Fraud Scorer** — computes risk scores for individual transactions.
+- **Investigation** — surfaces smurfing, velocity, and mule-network patterns via natural-language queries.
+- **SAR** — drafts FinCEN-structured Suspicious Activity Reports.
+
+## Deployment
+
+Reachable from the Control Plane's Reference Implementations page. The Terraform stack provisions the AgentCore runtime, Cognito user pool, S3 sample-data bucket, and the Next.js frontend on CloudFront.`,
+      },
+      {
+        id: 'merchant-onboarding-ref',
+        title: 'Merchant Onboarding',
+        content: `# Merchant Onboarding — Reference Implementation
+
+AI-powered merchant onboarding with document processing, OFAC sanctions screening, fraud detection, and human-in-the-loop approvals. Multi-agent orchestration that cuts onboarding from 5–7 days to 1–2.
+
+## Key capabilities
+
+- **Document processing** — extract structured fields from KYC / business-registration docs.
+- **OFAC sanctions screening** — check the applicant + beneficial owners against sanctions lists.
+- **Fraud detection** — score risk based on device, address, and behavioral signals.
+- **HITL approvals** — flagged cases route through the AVA Approval Queue.
+- **Multi-agent orchestration** — a supervisor coordinates the specialists into an audit-ready case file.
+
+## Deployment
+
+Reachable from the Control Plane's Reference Implementations page. Backed by DynamoDB (application state + audit), Bedrock AgentCore (runtime), and Cognito (auth).`,
+      },
+      {
+        id: 'sales-recommend-ref',
+        title: 'Investment Research and Risk Accelerator',
+        content: `# Investment Research and Risk Accelerator — Reference Implementation
+
+**Investment Research and Risk Accelerator.** An AI research and risk-analysis assistant for capital-markets teams, running on Bedrock AgentCore.
+
+## What it does
+
+Given a plain-language description of a business problem, the agent recommends the right AWS services and reference architectures — a Solutions Architect on demand. Useful as a first-touch tool for pre-sales, partner enablement, or internal solutioning.
+
+## Architecture
+
+- **Bedrock AgentCore Runtime** — hosts the recommendation agent.
+- **Frontend** — served via CloudFront (behind HTTP Basic Auth in the current deploy).
+- **Retrieval** — grounded on curated AWS docs and reference architectures.
+
+Reachable from the Control Plane's Reference Implementations page.`,
+      },
+      {
+        id: 'agentcore-in-a-box-ref',
+        title: 'AgentCore-in-a-Box',
+        content: `# AgentCore-in-a-Box — Reference Implementation
+
+Grab-and-go Bedrock AgentCore demo. **One command** deploys a governed multi-agent FS platform with every AgentCore primitive wired up, live and traceable in CloudWatch.
+
+## Primitives wired up
+
+- **AgentCore Runtime** — the hosting layer.
+- **AgentCore Gateway** — governed tool access with Cedar policies.
+- **AgentCore Memory** — semantic + episodic + summary strategies.
+- **AgentCore Identity** — federated identity + IAM scoping.
+- **AgentCore Observability** — CloudWatch GenAI Observability + X-Ray Transaction Search.
+- **Bedrock Guardrails** — content filters + PII + denied topics.
+
+## Why it exists
+
+The other reference implementations demonstrate a single FSI use case in depth. AgentCore-in-a-Box demonstrates the **platform primitives** — a live, minimal reference for what "every AgentCore primitive wired up" looks like in one deployable stack. Ideal for field demos and quick internal training.
+
+Reachable from the Control Plane's Reference Implementations page.`,
+      },
+    ],
+  },
+  {
+    id: 'app-factory',
+    title: 'App Factory',
+    children: [
+      {
+        id: 'app-factory-overview',
+        title: 'Overview',
+        content: `# App Factory
+
+Navigate to \`/applications/app-factory\`.
+
+App Factory is a **5-step AI-powered wizard** that generates a complete, deployable agent application from a plain-language description of your use case. No templates to copy, no boilerplate to write — the platform uses Claude to generate agent code and Terraform, then automatically deploys the result to AgentCore Runtime via the existing CI/CD pipeline.
+
+## 5-Step Wizard
+
+| Step | Label | What You Provide |
+|---|---|---|
+| 1 | The Problem | Use case name, domain, problem statement, and current manual process |
+| 2 | The Users | Who uses the agent, what a successful interaction looks like |
+| 3 | The Workflow | High-level workflow steps, frequency, and human-in-the-loop requirements |
+| 4 | The Data | Input data sources, expected outputs, and compliance classification |
+| 5 | Constraints | Existing systems to integrate with, security and compliance constraints |
+
+## What Gets Generated
+
+After completing the wizard, the platform sends your answers to the backend which uses Claude to produce:
+- **Agent code** — Python agent with Strands or LangGraph framework, tool definitions, and memory configuration
+- **Terraform** — infrastructure module to deploy the agent to AgentCore Runtime including IAM, ECR, and endpoint configuration
+- **System prompt** — tailored system prompt based on your workflow and constraint inputs
+
+## Deployment
+
+Once code generation completes, you can review the generated files and click **Deploy**. The platform submits the generated Terraform and agent code to the same Step Functions + CodeBuild pipeline used by FSI Foundry deployments. The deployed application appears in **My Apps** (\`/applications/my-apps\`).
+
+## Use Case ID
+
+App Factory slugifies your use case name into a URL-safe, AWS-resource-safe ID (lowercase, hyphens, max 32 characters). This ID is used as the prefix for all provisioned AWS resources (S3 buckets, ECR repositories, IAM roles).`,
+      },
+    ],
+  },
+  {
     id: 'templates',
     title: 'Templates',
     children: [
@@ -12645,6 +11815,1418 @@ docker build -t my-agent .
 aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_URL
 docker push $ECR_URL:v1.0.0
 \`\`\``,
+      },
+    ],
+  },
+  {
+    id: 'aaas-frontier',
+    title: 'AaaS — Frontier Agents',
+    children: [
+      {
+        id: 'aaas-overview',
+        title: 'Overview',
+        content: `# AaaS — Frontier Agents
+
+Navigate to \`/aaas\` for the Agents-as-a-Service landing page.
+
+AVA provides one-click deployment of **AWS-managed frontier agents** — fully operational, AWS-supported agent services that are deployed into your own account. These are not POC implementations; they are production-grade agents maintained by AWS service teams.
+
+## Available Agents
+
+| Agent | Route | Category |
+|---|---|---|
+| AWS DevOps Agent | \`/aaas/aws-agents/aws-devops\` | DevOps & Engineering |
+| AWS Security Agent | \`/aaas/aws-agents/aws-security\` | Security & Compliance |
+
+## Deployment
+
+Each agent supports three IaC options: **Terraform**, **AWS CDK**, and **CloudFormation**. Select your preferred IaC type, configure deployment parameters, and click Deploy. The platform submits a Step Functions deployment job that runs the selected IaC in CodeBuild.
+
+## RBAC
+
+**Viewer** users can see the catalog and read agent descriptions but the Deploy button returns an inline 403 message. **Operator** and **Admin** users can deploy agents.
+
+## Custom Agents
+
+Navigate to \`/aaas/custom\` to register, deploy, and manage custom agent configurations. The Custom Agents catalog supports bring-your-own agent containers deployed to AgentCore Runtime.`,
+      },
+      {
+        id: 'aaas-devops',
+        title: 'AWS DevOps Agent',
+        content: `# AWS DevOps Agent
+
+Navigate to \`/aaas/aws-agents/aws-devops\`.
+
+The AWS DevOps Agent automates common software development and operations tasks: code review, pipeline monitoring, incident response, and infrastructure change analysis.
+
+## Deployment
+
+**Supported IaC**: Terraform, AWS CDK, CloudFormation
+
+1. Navigate to \`/aaas/aws-agents/aws-devops\`
+2. Select your preferred IaC type (Terraform is recommended for first-time deployments)
+3. Set the deployment name and AWS region
+4. Configure required parameters (VPC ID, subnet IDs, etc.)
+5. Click **Deploy** — the platform launches a CodeBuild job that runs the selected IaC
+
+## Accessing the Agent
+
+Once deployed, the Operator App URL appears on the deployment detail page. Click **Open Operator App** to launch the agent's web interface in a new tab. The operator app uses AWS IAM federation via the platform's federation flow (console sign-in → session chaining → operator app URL).
+
+## Regions
+
+Supported: us-east-1, us-east-2, us-west-2. Check the AWS DevOps Agent service page for the latest regional availability.`,
+      },
+      {
+        id: 'aaas-security',
+        title: 'AWS Security Agent',
+        content: `# AWS Security Agent
+
+Navigate to \`/aaas/aws-agents/aws-security\`.
+
+The AWS Security Agent continuously monitors your AWS environment for security findings, correlates GuardDuty and Security Hub signals, and provides natural-language investigation workflows for security analysts.
+
+## Deployment
+
+**Supported IaC**: Terraform, AWS CDK, CloudFormation
+
+1. Navigate to \`/aaas/aws-agents/aws-security\`
+2. Select IaC type and region
+3. Configure required parameters
+4. Click **Deploy**
+
+## One-Time SSO Setup
+
+The Security Agent requires a one-time AWS IAM Identity Center (SSO) permission set assignment. After the initial Terraform/CDK/CFN deployment completes:
+
+1. Open the AWS IAM Identity Center console
+2. Assign the generated permission set to your SSO user or group
+3. Complete the federation flow: the platform opens the AWS console sign-in tab with temporary credentials, then redirects to the Security Agent Operator App
+
+Without the SSO setup step, the federation flow will succeed at the console but the Security Agent Operator App will return a 403 on the application-level authorization check.
+
+## RBAC Note
+
+**Viewer** role users will see the Deploy button but receive an inline 403 upon clicking. Only **Operator** or **Admin** users can deploy and access the agent.
+
+## Regions
+
+Supported: us-east-1, us-east-2, us-west-2.`,
+      },
+    ],
+  },
+  {
+    id: 'capabilities',
+    title: 'Capabilities',
+    children: [
+      {
+        id: 'capabilities-overview',
+        title: 'Overview',
+        content: `# Capabilities
+
+The **Capabilities** section manages the shared building blocks that agents consume at runtime: **Knowledge** sources, **Tools**, and **Prompts**. Navigate to \`/capabilities\` for the landing page.
+
+| Capability | Route | Status |
+|---|---|---|
+| Knowledge | \`/capabilities/knowledge\` | Available |
+| Tools | \`/capabilities/tools\` | Coming Soon |
+| Prompts | \`/capabilities/prompts\` | Coming Soon |
+
+Knowledge is the only fully-operational capability today. Tools and Prompts are in the roadmap.`,
+      },
+      {
+        id: 'capabilities-knowledge',
+        title: 'Knowledge',
+        content: `# Knowledge
+
+Navigate to \`/capabilities/knowledge\`.
+
+The Knowledge page lets you register data sources that agents can query at runtime. Two source types are supported:
+
+| Type | Description |
+|---|---|
+| **Data Lake** | S3-backed data lake with Lake Formation column-level grants, Athena workgroup, and Glue catalog |
+| **Knowledge Base** | Amazon Bedrock Knowledge Base with OpenSearch Serverless vector store |
+
+## Registration Flow
+
+1. Click **Register Knowledge Source** and fill in the drawer form (name, type, S3 URI or KB ID, description).
+2. The backend writes a DynamoDB record and starts a CodeBuild job that:
+   - Provisions an AgentCore MCP server pointed at the source
+   - Registers the server with the AgentCore Gateway
+   - Grants the AgentCore Runtime IAM role read access via Lake Formation (Data Lake) or KB permissions (Knowledge Base)
+3. The card on \`/capabilities/knowledge\` shows live status: **PROVISIONING → ACTIVE** (or **FAILED**).
+4. Once **ACTIVE**, any FSI Foundry use case or App Factory application can reference the source by ID in its system prompt.
+
+## MCP Server Details
+
+Each registered source gets its own Model Context Protocol (MCP) server running as an AgentCore Runtime endpoint. Agents call the MCP server via the AgentCore Gateway — no direct AWS SDK calls from agent code. The gateway handles authentication, request routing, and audit logging.
+
+## Polling
+
+The UI polls every 8 seconds while any registration is in PROVISIONING state. You can leave the page and return — status persists in DynamoDB.`,
+      },
+      {
+        id: 'capabilities-tools',
+        title: 'Tools',
+        content: `# Tools
+
+Navigate to \`/capabilities/tools\`.
+
+**Status: Coming Soon**
+
+The Tools capability will allow teams to register custom tool endpoints (Lambda functions, REST APIs, MCP servers) that can be attached to any agent deployment. Registered tools will appear in the Guardrails tool-coverage dashboard and in the AgentCore Policy builder.`,
+      },
+      {
+        id: 'capabilities-prompts',
+        title: 'Prompts',
+        content: `# Prompts
+
+Navigate to \`/capabilities/prompts\`.
+
+**Status: Coming Soon**
+
+The Prompts capability will provide a versioned prompt registry. Teams will be able to store, version, test, and promote system prompts. Prompts will link to guardrail assignments and observability traces so you can see exactly which prompt version was active for any given agent run.`,
+      },
+    ],
+  },
+  {
+    id: 'harness',
+    title: 'Harness',
+    children: [
+      {
+        id: 'harness-overview',
+        title: 'Overview',
+        content: `# Harness
+
+Navigate to \`/harness\`.
+
+**Harness** is a managed agent-loop-as-a-service that wraps AWS Bedrock AgentCore Harness. Declare the model, system prompt, tools, skills, and memory as configuration — AWS runs the orchestration loop in an isolated microVM with filesystem, shell, observability, and versioning built in. No orchestration infrastructure to run.
+
+## Why it exists
+
+Every agent needs the same core loop: read a prompt → call a model → parse tool calls → execute tools → feed results back → repeat until done. Writing that loop yourself (LangGraph, custom Python, etc.) means you own the retry logic, tool-call parsing, memory management, and observability plumbing. Harness delivers that loop as a managed AWS service.
+
+## Quick start
+
+1. Click **Create Harness** on the Harness landing page.
+2. Pick a model — Claude Sonnet, Haiku, or any AgentCore-enabled Bedrock model.
+3. Paste a system prompt describing the agent's role.
+4. Attach tools (MCP servers), skills, memory namespaces, and (optionally) an AgentCore Gateway for governed tool access.
+5. Click **Test** to stream a live conversation. Every message streams via SSE.
+
+## Built-in features
+
+- **Managed memory** — attach a memory namespace and the loop persists context across sessions.
+- **Guardrails** — Bedrock Guardrails run as \`during_call\` hooks on every model turn.
+- **Session isolation** — each run gets its own microVM with a scratch filesystem.
+- **Versioning + endpoints** — every save is versioned; a stable invoke endpoint follows the latest \`v\` you pick.
+- **Observability** — spans + logs flow to CloudWatch and (if wired) Langfuse.
+
+## Publishing to the Registry
+
+A deployed Harness can be published as an AGENT record in the AVA registry so it becomes discoverable in Registry → Agents (\`recordType=AGENT\`, tag \`Kind=agent\`). Downstream agents can then call it via MCP without hardcoding an ARN.`,
+      },
+    ],
+  },
+  {
+    id: 'memory',
+    title: 'Memory',
+    children: [
+      {
+        id: 'memory-overview',
+        title: 'Overview',
+        content: `# Memory
+
+Navigate to \`/memory\`.
+
+**Memory** is the managed persistent-context layer for agents, backed by Bedrock AgentCore Memory. Attach a memory namespace to any agent at deploy time and the agent can read and write across turns without you managing the underlying store, embeddings, or vector index.
+
+## Extraction strategies
+
+Each memory namespace declares how new turns are distilled into stored records. Three strategies are supported out of the box:
+
+- **Semantic** — extract facts about entities (user preferences, account details, past decisions) and store them keyed by entity ID for retrieval on future turns.
+- **Episodic** — store full conversation turns with time and session metadata; retrieval returns the most relevant prior episodes.
+- **Summary** — periodically summarize older turns so the working context stays bounded even in long-running sessions.
+
+You can mix strategies within one namespace — e.g. semantic + summary for a customer-service agent that needs both structured facts and rolling context.
+
+## Attaching memory to an agent
+
+Memory namespaces show up in the Harness create form and in every Foundry use case's runtime configuration. Attaching one wires the agent's tool-call loop to \`bedrock-agentcore-memory:*\` calls on your behalf. IAM is scoped per namespace.
+
+## Cross-agent memory
+
+Multiple agents can share a namespace, which is how you build teams of agents that recall the same customer history without a hand-rolled sync mechanism. Access control is enforced at the namespace level via IAM.`,
+      },
+    ],
+  },
+  {
+    id: 'registry',
+    title: 'Registry',
+    children: [
+      {
+        id: 'registry-overview',
+        title: 'Overview',
+        content: `# Registry
+
+Navigate to \`/registry\`.
+
+**One registry. Every resource.** The AVA namespace on AWS Agent Registry is the discovery layer for everything an agent might reach for at runtime — other agents, MCP servers, A2A peers, skills, and free-form custom resources.
+
+## Five typed record kinds
+
+- **Agents** — recordType=AGENT with tag \`Kind=agent\`. Runtime-bound / MCP-callable peers.
+- **MCP Servers** — recordType=MCP with descriptor \`mcpServer\` v2025-12-11.
+- **A2A Agents** — recordType=AGENT with tag \`Kind=a2a\`, descriptor \`a2aAgentCard\` v0.3. A2A-protocol peers with AgentCards.
+- **Skills** — recordType=SKILL with descriptor \`agentSkillsDefinition\` v0.1.0.
+- **Custom Resources** — recordType=CUSTOM with a free-form descriptor for anything not modeled natively.
+
+Every kind shares one control-plane surface, one approval flow, and one audit trail.
+
+## Approval-aware publish flow
+
+Every registration consults the Approval Policy engine before writing. If a matching policy has \`mode=auto_approve\`, the record is created + submitted + approved in one transaction. If \`mode=require_approval\`, the record lands as \`PENDING_APPROVAL\` and an Approval Queue row opens. Deny returns 403 with the denying policy's reason.
+
+## Auto-publish on deploy
+
+Every Foundry / reference app that deploys through the Control Plane becomes an AGENT record automatically. An EventBridge rule on the deployment Step Function's SUCCEEDED events fires a Lambda that publishes the record with tag \`Source=foundry-deploy\` and \`DeploymentId=<uuid>\`. Idempotent — re-runs skip if the DeploymentId is already published.`,
+      },
+      {
+        id: 'registry-agents',
+        title: 'Agents',
+        content: `# Registry → Agents
+
+Navigate to \`/registry/agents\`.
+
+Autonomous peer agents catalogued in the AVA registry — the runtime-bound / MCP-callable / auto-registered agents your applications delegate to. Distinct from **A2A Agents** (see next), which are A2A-protocol peers with AgentCards.
+
+## Curated tab
+
+Ships with 4 curated frontier agents:
+
+- **AWS DevOps Agent** — troubleshoots pipeline failures, rollbacks, and CloudFormation drift.
+- **AWS Security Agent** — investigates GuardDuty / Security Hub / IAM Access Analyzer findings.
+- **Kiro (Dev Agent)** — code review, unit-test drafting, refactor suggestions.
+- **Sample FSI KYC Agent** — deployable FSI Foundry KYC triage reference.
+
+Click **Deploy to Registry** on any curated card to publish it as an AGENT record (recordType=AGENT + tag Kind=agent) — the policy engine decides whether it auto-approves or routes through the Approval Queue.
+
+## My Agents tab
+
+Every registered agent (curated deploys + custom registrations + auto-published Foundry deploys) shows here with Name / Runtime / Capabilities / Status / Source / Updated. Deprecate any record inline — it stays in the registry as DEPRECATED for audit.
+
+## Auto-published deploys
+
+Successful Foundry / reference-app deploys auto-publish here via the EventBridge → Lambda hook. Look for the \`Source=foundry-deploy\` tag on the record.`,
+      },
+      {
+        id: 'registry-mcp',
+        title: 'MCP Servers',
+        content: `# Registry → MCP Servers
+
+Navigate to \`/mcp\`.
+
+Register MCP-compliant tool servers — hosted or self-hosted. Publish once; every agent in your organization can consume them without re-configuring endpoints or credentials.
+
+## Fields
+
+- **Name / URL** — display label and MCP endpoint (\`https://.../mcp\`).
+- **Auth hint** — none / api_key / oauth2 / bearer / sigv4. Tells consuming agents how to authenticate.
+- **Delegation mode** — m2m (machine-to-machine) or obo (on-behalf-of).
+- **Category / Tags** — free-form for filtering.
+
+## Curated tab
+
+Ships with a set of well-known MCP servers (AWS Documentation, GitLab, and others) that any user can deploy to the registry with one click.
+
+## Descriptor
+
+The record's descriptor is \`mcpServer\` v2025-12-11 — matches AWS Agent Registry's canonical MCP server schema. AVA-specific extras (\`curated_id\`, \`auth_hint\`, \`header_name\`, \`header_value\`) live under \`_meta.ava\` so top-level fields stay schema-valid.`,
+      },
+      {
+        id: 'registry-a2a',
+        title: 'A2A Agents',
+        content: `# Registry → A2A Agents
+
+Navigate to \`/a2a\`.
+
+Register A2A-protocol agents — the peers your agents delegate to via the A2A protocol. Distinct from Registry → Agents (which are runtime-bound / MCP-callable). A2A peers ship with an **AgentCard** — a JSON manifest of capabilities, input/output modes, and skills — that consuming agents fetch at plan time.
+
+## Fields
+
+- **Name / Endpoint** — display label and A2A base URL. The AgentCard is fetched from \`/.well-known/agent.json\` at register time.
+- **Description / Category / Tags** — free-form.
+- **Auth hint** — none / api_key / oauth2 / bearer / sigv4.
+- **Delegation mode** — m2m or obo.
+
+## Curated tab
+
+Ships with reference A2A peers from AWS, Google, and Anthropic — vetted starting points for common patterns (research, extraction, evaluation).
+
+## AgentCard preview
+
+The Create form fetches the AgentCard from your endpoint's well-known URL and previews it inline before registration. That way you know exactly what capabilities you're publishing.
+
+## Descriptor
+
+The record's descriptor is \`a2aAgentCard\` v0.3 — the full AgentCard JSON travels inside the record's \`data\` field. AVA extras live under \`_meta.ava\` so the top-level AgentCard schema passes validation.`,
+      },
+      {
+        id: 'registry-skills',
+        title: 'Skills',
+        content: `# Registry → Skills
+
+Navigate to \`/registry/skills\`.
+
+Reusable capabilities agents can equip — evaluation rubrics, extraction schemas, workflow templates, guardrail clauses. Distinct from **Tools** (MCP endpoints): skills carry *procedural knowledge*, not endpoint access.
+
+## Curated tab
+
+Ships with 6 canonical skills covering the most common agentic patterns:
+
+- **1-to-5 Scoring Rubric** — general-purpose LLM-as-judge grading.
+- **KYC Triage Decision** — multi-step KYC screening with sanctions/PEP lookup and regulation citation.
+- Extraction schemas, workflow templates, guardrail templates — deployable with one click.
+
+## Kinds
+
+- **evaluation** — scoring rubrics for LLM-as-judge or human review.
+- **extraction** — structured-output schemas.
+- **workflow** — multi-step procedural knowledge.
+- **guardrail** — content / behavior clauses.
+
+## Descriptor
+
+The record's descriptor is \`agentSkillsDefinition\` v0.1.0. Because the AWS schema allows only \`{_meta?, repository?, websiteUrl?, packages?}\`, AVA extras (name, kind, description, input variables, output schema, tags, posture) live under \`_meta.ava\` so the top-level payload passes validation.`,
+      },
+      {
+        id: 'registry-custom-resources',
+        title: 'Custom Resources',
+        content: `# Registry → Custom Resources
+
+Navigate to \`/registry/custom-resources\`.
+
+The escape hatch. Register anything worth cataloging that doesn't fit the four typed shapes — knowledge bases, prompt libraries, eval harnesses, agent-invokable Lambdas, deployment templates, dataset catalogs.
+
+## Descriptor
+
+Records use the \`custom\` descriptor — a single \`data\` field carrying free-form JSON. Unlike the four typed descriptors, \`custom\` does NOT accept a \`dataSchemaVersion\` field — the AVA UI reconstructs the metadata (name, kind, description, tags, arbitrary metadata) from the payload on read.
+
+## Metadata
+
+- **Name / Kind** — display label and a free-form category label (e.g. \`knowledge-base\`, \`prompt-lib\`, \`eval-suite\`).
+- **Description / Tags** — free-form for discovery.
+- **Metadata** — arbitrary JSON blob.
+
+## Approval flow
+
+Custom records route through the same approval flow as typed records — the default policy \`AVA Default: Custom Resource register requires OPERATOR\` gates registration through the Approval Queue.`,
+      },
+    ],
+  },
+  {
+    id: 'catalog',
+    title: 'Catalog',
+    children: [
+      {
+        id: 'catalog-overview',
+        title: 'Overview',
+        content: `# Catalog
+
+Navigate to \`/catalog\`.
+
+The unified inventory of every resource across Build. One page to answer: "what's actually running, and is it approved?"
+
+## Sections (locked display order)
+
+Resources are grouped and rendered in this exact order:
+
+1. **Applications** — deployed FSI Foundry apps, reference implementations, app-factory outputs.
+2. **Harnesses** — deployed AgentCore Harnesses.
+3. **Memory** — registered AgentCore Memory namespaces.
+4. **Agents** — Registry → Agents (recordType=AGENT + tag \`Kind=agent\`).
+5. **Frontier Agents** — deployed AaaS Frontier Agents.
+6. **MCP Servers** — recordType=MCP.
+7. **A2A Agents** — recordType=AGENT + tag \`Kind=a2a\`.
+8. **Custom Agents** — deployed AaaS Custom Agents.
+9. **Templates** — deployed app templates.
+10. **AgentCore Runtimes** — every AgentCore Runtime in the account.
+
+## Registry column
+
+Every row shows its AWS Agent Registry state as a colored pill:
+
+- **✓ Active** — record is APPROVED in the registry.
+- **⧗ Pending** — DRAFT or PENDING_APPROVAL — waiting on a queue decision.
+- **✕ Rejected** — REJECTED by an approver.
+- **· Deprecated** — DEPRECATED (kept for audit but not in discovery).
+- **– Not in Registry** — deployed but not published (older deploys, pre-hook resources).
+- **n/a** — the resource kind doesn't participate in the registry (e.g. Templates).
+
+## Filters
+
+Filter by section, by registry state, or by name. The one place to audit what's live end-to-end.`,
+      },
+    ],
+  },
+  {
+    id: 'secure',
+    title: 'Secure',
+    children: [
+      {
+        id: 'secure-overview',
+        title: 'Overview',
+        content: `# Secure
+
+The **Secure** section provides two complementary layers of agent safety. Navigate to \`/secure\` for the landing page.
+
+## Two Layers of Defense
+
+| Layer | Component | What It Controls |
+|---|---|---|
+| **Content-level** | Guardrails | What agents say and receive — topic blocks, PII filtering, prompt injection guards, grounding checks |
+| **Resource-level** | AgentCore Policy | What agents can do and access — Cedar policies enforced by the AgentCore Policy Engine and Platform Gateway |
+
+Using both together gives you defense-in-depth: Guardrails intercept harmful content before it reaches or leaves the model; policies prevent agents from taking unauthorized actions regardless of what the model decides.
+
+## Navigation
+
+| Route | Description |
+|---|---|
+| \`/secure/guardrails\` | My Guardrails — list, manage, assign existing guardrails |
+| \`/secure/guardrails/create\` | Guardrail Builder — create a new guardrail from scratch |
+| \`/secure/guardrails/fsi-library\` | FSI Template Library — pre-built guardrails for FSI scenarios |
+| \`/secure/guardrails/playground\` | Live Preview — test a guardrail against sample inputs in real time |
+| \`/secure/guardrails/observability\` | Coverage & Audit — see which agents have guardrails and review triggered events |
+| \`/secure/guardrails/tools\` | Tool Utilities — version history, comparison, import/export, regex builder |
+| \`/secure/policy\` | My Policies — list and manage Cedar policies |
+| \`/secure/policy/create\` | Policy Builder — create a new Cedar policy |
+| \`/secure/policy/audit\` | Policy Audit Log — full history of policy evaluations |`,
+      },
+      {
+        id: 'secure-guardrails',
+        title: 'Guardrails',
+        content: `# Guardrails
+
+Guardrails are content-level safety filters applied at the Amazon Bedrock layer. They intercept both incoming prompts and outgoing model responses.
+
+## Tabs
+
+### My Guardrails (\`/secure/guardrails\`)
+Lists all guardrails you have created. Each card shows the guardrail's active status, assigned agents, and last triggered timestamp. Click a guardrail to view configuration detail or re-assign it.
+
+### Guardrail Builder (\`/secure/guardrails/create\`)
+Step-by-step builder for creating a new guardrail. Configure:
+- **Denied Topics** — subjects the agent must refuse to discuss
+- **Content Filters** — violence, hate speech, sexual content, and insults (each with adjustable threshold)
+- **PII Redaction** — detect and redact or block 20+ PII entity types (SSN, credit card, account number, etc.)
+- **Grounding Threshold** — minimum factual-grounding score before a response is blocked
+- **Prompt Attack Guard** — jailbreak and prompt injection detection
+
+### FSI Template Library (\`/secure/guardrails/fsi-library\`)
+Pre-built guardrail configurations covering common FSI scenarios: trading advice restrictions, MNPI handling, customer data PII, regulatory disclosure requirements, and more. Select a template to use it as a starting point in the builder.
+
+### Playground (\`/secure/guardrails/playground\`)
+Live Preview lets you test any guardrail configuration against sample inputs without deploying. Enter a prompt and see exactly which filter triggered, the action taken (blocked vs. redacted), and the confidence score.
+
+### Observability (\`/secure/guardrails/observability\`)
+The Observability tab inside Guardrails shows:
+- **Coverage Dashboard** — which deployed agents have guardrails assigned vs. unprotected
+- **Real-time Feed** — live stream of guardrail trigger events
+- **Metrics Dashboard** — trigger rates, top denied topics, PII hit rates over time
+- **Compliance Reports** — exportable summaries for audit
+- **Audit Trail** — immutable log of every guardrail event
+
+### Tools (\`/secure/guardrails/tools\`)
+Utility panel with: version history, side-by-side comparison of two guardrail versions, import/export (JSON), automated reasoning panel, regex pattern builder, denied-topics builder, and grounding threshold tuner.`,
+      },
+      {
+        id: 'secure-policy',
+        title: 'Policy Management',
+        content: `# Policy Management
+
+Policy Management provides resource-level access control for agents using Cedar policies enforced by the Amazon Bedrock AgentCore Policy Engine.
+
+## How It Works
+
+Policies define what actions an agent identity is **permitted** or **forbidden** to perform. At runtime, the AgentCore Gateway evaluates every tool call against the active policy set before forwarding it to the tool endpoint. A denied action returns a 403 and is logged.
+
+## Policy Language
+
+Policies are written in **Cedar** — a purpose-built policy language designed for application-level authorization. Cedar policies are:
+- Typed and statically analyzable
+- Fast to evaluate (microsecond latency)
+- Auditable — every evaluation produces a structured log entry
+
+## Tabs
+
+### My Policies (\`/secure/policy\`)
+Lists all policies in the system. Filter by principal (agent ID), resource (tool or knowledge source), or action. Each policy shows its effect (permit/forbid), principal, resource, and last evaluation timestamp.
+
+### Policy Builder (\`/secure/policy/create\`)
+Visual Cedar policy builder. Set:
+- **Principal** — which agent or role the policy applies to
+- **Action** — which tool call or operation is being controlled
+- **Resource** — which specific tool endpoint, knowledge source, or service
+- **Conditions** — optional attribute-based conditions (e.g., time of day, environment)
+
+FSI policy presets are available for common patterns: read-only market data access, PII handling restrictions, production environment isolation.
+
+### Audit Log (\`/secure/policy/audit\`)
+Immutable log of every policy evaluation — permit and deny. Each entry records: timestamp, agent ID, action, resource, policy that matched, and outcome. Exportable for compliance reporting.`,
+      },
+      {
+        id: 'secure-llm-gateway',
+        title: 'LLM Gateway',
+        content: `# LLM Gateway
+
+Navigate to \`/secure/llm-gateway\`.
+
+The **LLM Gateway** is the single chokepoint every Bedrock model call passes through — built on [LiteLLM](https://github.com/BerriAI/litellm), deployed on ECS Fargate with Aurora PostgreSQL and ElastiCache Valkey. Every agent points at one \`LITELLM_BASE_URL\` and Govern reads live FinOps + Audit data from here.
+
+## Tabs
+
+- **Overview** — health at a glance: gateway status, aggregate spend, rate-limit hits, top models.
+- **Config** — SSM-backed live \`config.yaml\`. Add or remove models without redeploying the container.
+- **Models** — the catalog fronted by the gateway. Attach Bedrock Guardrails per model as a \`during_call\` hook.
+- **Virtual Keys** — issue per-agent / per-team API keys with individual budgets and rate limits.
+- **Spend** — live token / cost breakdown per key, per model, per day.
+- **Audit** — every model call recorded — prompt, response, latency, cost, guardrail verdict.
+- **Playground** — hit the gateway inline to test a virtual key + prompt.
+
+## Why it matters
+
+Any agent that talks to Bedrock through this proxy inherits observability, budget enforcement, guardrails, and audit for free. If it doesn't go through the gateway, Govern can't see it — that's why the recommended baseline is: every agent, every call, one \`LITELLM_BASE_URL\`.`,
+      },
+      {
+        id: 'secure-identity',
+        title: 'Identity',
+        content: `# Identity
+
+Navigate to \`/secure/identity\`.
+
+Federate external identity providers — Microsoft Entra ID, Okta, Auth0, or any generic OIDC provider — and map their group claims to AVA roles. Enterprise SSO drops in without a Cognito rebuild.
+
+## Flow
+
+1. Click **Register provider** and pick a preset (Entra / Okta / Auth0 / OIDC).
+2. Enter the OIDC issuer URL. AVA fetches the discovery document (\`/.well-known/openid-configuration\`) inline so you can verify authorization / token / JWKS endpoints before saving.
+3. Configure Auth Code + PKCE — client ID, redirect URI, scopes.
+4. Map group claims to AVA roles: which claim carries group membership (\`groups\`, \`roles\`, \`cognito:groups\`) and which group values map to \`ADMIN\` / \`OPERATOR\` / \`VIEWER\`.
+
+## Discovery Test
+
+The Register form has a **Test discovery** button that fetches the issuer's discovery endpoint and shows the parsed metadata inline. Use it before saving to confirm the endpoint is reachable and returns the expected shape.
+
+## Approval flow
+
+Identity Provider registrations route through the Approval Queue by default (AVA Default: Identity provider register requires ADMIN). The record lives in DynamoDB (\`identity_providers\` table), not the AWS Agent Registry — but the approval flow uses the same queue-row shape for consistency.`,
+      },
+      {
+        id: 'secure-approval-policies',
+        title: 'Approval Policies',
+        content: `# Approval Policies
+
+Navigate to \`/secure/approval-policies\`.
+
+Human-in-the-loop rules for sensitive actions. Declare which resource + action combinations require a human sign-off, from whom, and by when. Requests appear in the **Operate → Approval Queue** for on-call operators.
+
+## Policy shape
+
+Each policy has:
+
+- **Resource kind** — \`application\` / \`harness\` / \`memory\` / \`mcp\` / \`a2a\` / \`agent\` / \`skill\` / \`custom\` / \`identity\` (or \`*\` for any).
+- **Resource pattern** — glob-style match against the resource id (e.g. \`prod-*\`, \`fsi-*\`, \`*\`).
+- **Action verb** — \`deploy\` / \`delete\` / \`invoke\` / \`update\` / \`register\` (or \`*\`).
+- **Mode** — \`auto_approve\` / \`require_approval\` / \`deny\`.
+- **Required role** — \`ADMIN\` / \`OPERATOR\` (for require_approval).
+- **Quorum** — how many approvers are required (v1 flips on the first vote).
+- **SLA hours** — auto-expire request if not decided by then.
+
+## Priority resolution
+
+If multiple policies match, the engine resolves by (in order): mode strictness (deny > require_approval > auto_approve) → pattern specificity (fewer wildcards wins) → required-role strictness (ADMIN > OPERATOR). The winning policy's mode and role are what the queue row carries.
+
+## AVA Default policies
+
+Eight policies seed on backend boot. Display order matches the seed script:
+
+1. Agent register requires OPERATOR
+2. MCP register requires OPERATOR
+3. A2A register requires OPERATOR
+4. Skills register requires OPERATOR
+5. Custom Resource register requires OPERATOR
+6. Application deploy auto-approves
+7. Application delete requires ADMIN
+8. Identity provider register requires ADMIN
+
+## Live enforcement
+
+Registrations for MCP Servers, A2A Agents, Agents, Skills, Custom Resources, and Identity Providers all consult the engine before writing. Application deploy is enforced by the deployment route; delete is currently informational. Live queue rows land in **Operate → Approval Queue**.`,
+      },
+    ],
+  },
+  {
+    id: 'operate',
+    title: 'Operate',
+    children: [
+      {
+        id: 'operate-overview',
+        title: 'Overview',
+        content: `# Operate
+
+Five operational surfaces, one platform. Every deployed agent lands here for launch tracking, dual observability, prompt iteration, and human sign-off.
+
+- **Deployments** — every CodeBuild + CloudFormation run in one queue.
+- **AgentCore Observability** — AWS-native traces via CloudWatch GenAI Observability + X-Ray. See the [Observability](#observability) section.
+- **Langfuse Observability** — self-hosted Langfuse v3 with prompt versioning, evaluations, cost analytics. See the [Observability](#observability) section.
+- **Prompt Optimization** — Bedrock Advanced Prompt Optimization: seed → variants → winner → promote to Harness.
+- **Approval Queue** — live inbox of HITL sign-offs from the Approval Policy engine.
+
+Navigate to \`/operate\` for the 5-tile landing page.`,
+      },
+      {
+        id: 'operate-deployments',
+        title: 'Deployments',
+        content: `# Deployments
+
+Navigate to \`/deployments\`.
+
+Every CodeBuild + CloudFormation run kicked off from AVA — reference apps, harness updates, FSI Foundry deploys — in one queue. No jumping between AWS consoles.
+
+## Row detail
+
+Each row shows the deployment name, template, status, and last updated timestamp. Statuses come from the deployment Step Function's DDB rows: \`created\` → \`packaged\` → \`delivered\` → \`deploying\` → \`deployed\` / \`failed\`.
+
+## Deployment detail page
+
+Click any row for the full detail view:
+
+- **Streamed logs** — live tail from CodeBuild via CloudWatch Logs.
+- **Artifact URLs** — deployed frontend, backend, or AgentCore runtime endpoints.
+- **Outputs** — every IaC output captured (agent_runtime_arn, ui_url, guardrail_id, etc.).
+- **Actions** — Redeploy / Destroy from the same page.
+
+## Auto-publish to Registry
+
+On successful DEPLOY, the deployment Step Function's \`SUCCEEDED\` event fires an EventBridge rule that invokes a Lambda. The Lambda reads the deployment record from DDB and publishes it as an AGENT record in the AVA Registry (\`recordType=AGENT\`, tag \`Kind=agent\`, \`Source=foundry-deploy\`). Idempotent — a re-run skips if a record with the same \`DeploymentId\` tag exists.`,
+      },
+      {
+        id: 'operate-prompt-optimization',
+        title: 'Prompt Optimization',
+        content: `# Prompt Optimization
+
+Navigate to \`/prompt-optimization\`.
+
+Bedrock **Advanced Prompt Optimization** wrapped in a Control Plane workflow. Submit a seed prompt + labeled evaluation dataset; Bedrock generates candidate variants, scores each, and returns the winner. One-click promote to your Harness.
+
+## Workflow
+
+1. **Dataset Builder** — upload JSONL with \`{input, expected_output}\` pairs, or point at an existing dataset.
+2. **Optimization Job** — submit a seed prompt + the model + the dataset. Job runs asynchronously.
+3. **Candidate Compare** — side-by-side comparison of each variant against the same dataset row, with per-row and aggregate scores.
+4. **Promote to Harness** — one-click write of the winning variant to the target Harness's system prompt.
+
+## Backing services
+
+Backed by \`api/routes/advpo.py\` and the \`infrastructure/modules/advanced_prompt_optimization/\` TF module — S3 bucket for datasets + jobs, IAM role, Bedrock permissions.
+
+## Closing the loop
+
+Feed evaluation datasets from Langfuse into Prompt Optimization to improve prompts against your own scoring, then promote back to Harness. That's the "improve" leg of the Ship → Watch → Improve loop.`,
+      },
+      {
+        id: 'operate-approval-queue',
+        title: 'Approval Queue',
+        content: `# Approval Queue
+
+Navigate to \`/operate/approvals\`.
+
+Live inbox of pending HITL sign-offs produced by the Approval Policy engine (see **Secure → Approval Policies**). Every row shows the requester, target resource, action, matched policy, and time remaining under the SLA.
+
+## Actions
+
+- **Approve** / **Deny** — per-row inline actions. Comment on each decision.
+- **Batch approve / batch deny** — select up to 200 rows with the checkbox column and decide them in one call.
+- **Simulate** — open a synthetic request to end-to-end-test the flow without registering anything real.
+
+## What happens on Approve
+
+For queue rows created by registry publishes (\`resource_kind = registry_record:{mcp,a2a,agent,skill,custom}\`), approving flips the linked AWS Agent Registry record's status:
+
+- \`DRAFT\` → \`PENDING_APPROVAL\` → \`APPROVED\` (auto-recovers if the record is stuck in DRAFT because \`submit-for-approval\` races with CREATING).
+- If it's an Identity Provider row, the DDB record's \`status\` flips to \`active\`.
+
+## SLA + expiry
+
+Each row carries an \`expires_at\` computed from the matching policy's \`sla_hours\`. Rows past their SLA can be swept to \`expired\` via a scheduled task (v2).
+
+## History
+
+Approved / denied / expired rows stay in the table for audit — filter by status to see the full history.`,
+      },
+    ],
+  },
+  {
+    id: 'observability',
+    title: 'Observability',
+    children: [
+      {
+        id: 'observability-overview',
+        title: 'Overview',
+        content: `# Observability
+
+AVA provides two complementary observability options. Navigate to \`/observability\` for the landing page where both options are presented.
+
+## Two Options
+
+| Option | Route | Best For |
+|---|---|---|
+| **Langfuse** | \`/observability/langfuse\` | Deep LLM tracing — prompt versions, token costs, evaluations, multi-turn conversations |
+| **AgentCore Observability** | \`/observability/agentcore\` | Native AWS tracing — X-Ray spans + CloudWatch Logs, no extra infrastructure |
+
+You can enable both simultaneously. They emit different signals and complement each other: Langfuse adds evaluation pipelines and per-run cost analytics; AgentCore adds X-Ray latency histograms and CloudWatch log correlation.
+
+## Choosing Between Them
+
+Use **Langfuse** when you need:
+- Prompt version tracking across model experiments
+- LLM-as-judge evaluation runs
+- Per-session cost attribution and token analytics
+- OpenTelemetry export to third-party tools
+
+Use **AgentCore Observability** when you need:
+- Zero-setup observability (opt-in checkbox, no SDK changes)
+- X-Ray service map and latency percentiles
+- CloudWatch Logs Insights queries across agent logs
+- AWS-native integration with CloudWatch alarms and dashboards`,
+      },
+      {
+        id: 'observability-langfuse',
+        title: 'Langfuse',
+        content: `# Langfuse
+
+Navigate to \`/observability/langfuse\`.
+
+Langfuse is an open-source LLM observability platform. AVA deploys a self-hosted Langfuse instance as part of the **foundation-stack** Terraform module (ECS + Aurora + Redis). It is not provisioned by default — enable it by setting \`langfuse_enabled = true\` in \`terraform.tfvars\` before running \`deploy-full.sh\`.
+
+## What Langfuse Captures
+
+- **Traces** — full end-to-end trace for every agent run, including all LLM calls, tool invocations, and latency breakdowns
+- **Prompts** — versioned prompt registry linked to traces so you can see exactly which prompt version produced a given output
+- **Evaluations** — LLM-as-judge scoring pipeline; define a rubric and run batch evaluations against historical traces
+- **Costs** — token usage and estimated cost per trace, session, and model
+
+## Setup
+
+1. Set \`langfuse_enabled = true\` in \`terraform.tfvars\`
+2. Run \`./deploy-full.sh\` (or \`terraform apply\` in the foundation-stack module)
+3. Terraform outputs the Langfuse URL, API key, and secret key
+4. Set those values in the AVA backend environment variables (\`LANGFUSE_HOST\`, \`LANGFUSE_PUBLIC_KEY\`, \`LANGFUSE_SECRET_KEY\`)
+5. Navigate to \`/observability/langfuse\` to open the Langfuse UI embedded in AVA
+
+## OpenTelemetry Export
+
+Langfuse supports the OTLP HTTP exporter. To send traces to a third-party backend (Grafana, Jaeger, Datadog), configure the \`OTEL_EXPORTER_OTLP_ENDPOINT\` environment variable on the ECS task.`,
+      },
+      {
+        id: 'observability-agentcore',
+        title: 'AgentCore Observability',
+        content: `# AgentCore Observability
+
+Navigate to \`/observability/agentcore\`.
+
+AgentCore Observability provides native AWS tracing for agents deployed to Amazon Bedrock AgentCore Runtime. It uses **X-Ray Transaction Search** and **CloudWatch Logs** — no additional SDK instrumentation or infrastructure required.
+
+## Important: Opt-In Per Deployment
+
+AgentCore Observability is **opt-in per deployment**. It is NOT automatically enabled for all agents. When deploying an FSI Foundry use case via the pipeline, check the **"Enable AgentCore Observability"** checkbox in the deployment form. This sets the \`observability_enabled\` flag in the CodeBuild job environment, which instructs the AgentCore Runtime to emit X-Ray traces.
+
+Agents deployed without the checkbox will not appear in X-Ray Transaction Search. This is by design — some teams prefer to avoid the additional CloudWatch and X-Ray ingest costs.
+
+## What AgentCore Observability Captures
+
+- **X-Ray Transaction Search** — end-to-end spans for each agent invocation with \`agent_id\` annotation, latency breakdown, and error classification
+- **CloudWatch Logs** — structured JSON logs for every tool call, model invocation, and agent state transition
+
+## Prerequisites
+
+Before enabling AgentCore Observability in any AWS account, X-Ray Transaction Search must be turned on once at the account level:
+
+\`\`\`bash
+aws xray put-encryption-config --type NONE --region <your-region>
+# Then enable Transaction Search in the X-Ray console
+\`\`\`
+
+## Viewing Traces
+
+1. Navigate to \`/observability/agentcore\`
+2. The page embeds links to X-Ray Transaction Search filtered to your agent fleet
+3. Click any trace row to jump to the full X-Ray service map for that invocation
+4. Use the CloudWatch Logs tab to run Insights queries across all agent logs`,
+      },
+    ],
+  },
+  {
+    id: 'govern',
+    title: 'Govern',
+    children: [
+      {
+        id: 'govern-overview',
+        title: 'Overview',
+        content: `# Govern
+
+The **Govern** module is the AI GRC (Governance, Risk, Compliance) hub for the AVA platform. It provides visibility into your AI estate, control over what it can do, and evidence to demonstrate compliance to auditors and regulators.
+
+Navigate to \`/govern\` for the hub landing page.
+
+## Govern Core: See It, Govern It, Show It
+
+Nine foundational modules organized into three pillars that together provide ~66% coverage across 8 major AI governance frameworks.
+
+| Pillar | Question | Core Modules |
+|--------|----------|--------------|
+| **See It** | What AI do we have? What's it doing? What's it costing? | Command Center, Agent Registry, Agentic Fleet, Model Management, Cost & FinOps |
+| **Govern It** | Who can do what? What rules are enforced? | Compliance Center, Prompt Governance |
+| **Show It** | What happened? Can we demonstrate compliance? | Audit & Incidents, Data Governance |
+
+Core modules are marked with a star badge in the UI. Use the "Core Only" filter on the landing page to focus on foundational capabilities.
+
+## Regulatory Frameworks Supported
+
+| Framework | Coverage | Description |
+|---|---|---|
+| **OWASP LLM Top 10** | ~80% | LLM security risks (prompt injection, info disclosure, etc.) |
+| **FINOS AIR** | ~75% | FSI GenAI governance (operational, security, regulatory) |
+| **CRI FS AI RMF** | ~75% | Comprehensive FSI AI risk management |
+| **OSFI E-23** | ~75% | Canadian model risk management guideline |
+| **SR 26-2** | Full | Federal Reserve AI/ML model risk guidance |
+| **NIST AI RMF** | Full | NIST AI Risk Management Framework |
+| **ISO 42001** | ~75% | AI Management Systems standard |
+| **EU AI Act** | ~80% | Risk classification, conformity requirements, GPAI Model Cards |
+| **MITRE ATLAS** | ~65% | Adversarial AI threat tactics |
+| **NAIC AI** | ~70% | Insurance AI model bulletin, Unfair Discrimination Testing |
+
+## All Modules
+
+| Module | Route | Pillar |
+|--------|-------|--------|
+| Command Center | \`/govern/command-center\` | See It (Core) |
+| Agent Registry | \`/govern/agents\` | See It (Core) |
+| Agentic Fleet | \`/govern/fleet\` | See It (Core) |
+| Model Management | \`/govern/models\` | See It (Core) |
+| Cost & FinOps | \`/govern/finops\` | See It (Core) |
+| Compliance Center | \`/govern/compliance\` | Govern It (Core) |
+| Prompt Governance | \`/govern/prompt-governance\` | Govern It (Core) |
+| Audit & Incidents | \`/govern/audit\` | Show It (Core) |
+| Data Governance | \`/govern/data\` | Show It (Core) |
+| Risk Management | \`/govern/risk\` | Add-on |
+| AI Safety | \`/govern/safety\` | Add-on |
+| Shadow AI | \`/govern/shadow-ai\` | Add-on |
+| Developer AI | \`/govern/developer-ai\` | Add-on |
+| Governance Playbook | \`/govern/playbook\` | Add-on |
+| Multi-Cloud | \`/govern/multi-cloud\` | Add-on |
+| Agentic Coding | \`/govern/dev-tools\` | Add-on |
+| Trust Stack | \`/govern/trust-stack\` | Add-on |
+
+## Live Data Integration
+
+All Govern modules follow a cascading fallback pattern:
+
+1. **Live** — Real data from AWS APIs (Cost Explorer, Bedrock, CloudTrail, Security Hub)
+2. **Computed** — Derived from live data (e.g., risk scores from agent status)
+3. **Mock** — Illustrative data when backend is disconnected
+
+Visual indicators show data source: \`Live\` badge for real AWS data, \`Mock\` badge for illustrative data.`,
+      },
+      {
+        id: 'govern-command-center',
+        title: 'Command Center',
+        content: `# Command Center
+
+Navigate to \`/govern/command-center\`. **Core Module (See It)**
+
+The Command Center is the single pane of glass for AI governance, aggregating real-time signals from across the platform.
+
+## Features
+
+- **Trust Scores** — Composite governance scores across the agent fleet
+- **Compliance Posture** — Live compliance percentage with drill-down
+- **Risk Exposure** — Active incidents, findings, and alerts
+- **Real-Time Refresh** — Auto-updates every 60 seconds
+- **Module Deep Links** — Click any KPI to navigate to source module
+
+## Live Data Sources
+
+Aggregates from 9+ govern APIs: \`governAgentCoreApi\`, \`governGuardrailsApi\`, \`governSecurityApi\`, \`governCostApi\`, \`guardrailsApi\`, \`policiesApi\`, \`maturityApi\`, \`deploymentsApi\`, \`governAuditApi\`
+
+## Use Cases
+
+- Daily operations review for AI platform team
+- Executive reporting and board presentations
+- Incident triage starting point`,
+      },
+      {
+        id: 'govern-agent-registry',
+        title: 'Agent Registry',
+        content: `# Agent Registry
+
+Navigate to \`/govern/agents\`. **Core Module (See It)**
+
+Centralized inventory of all AI agents, tools, MCP servers, capabilities, and permissions across AWS, Azure, GCP, and SaaS platforms.
+
+## Tabs
+
+| Tab | Description |
+|-----|-------------|
+| **Agents** | Registry with capabilities, scope, owner, rate limits, incidents |
+| **Fleet Scale** | Registry at scale (10k+ agents) with filtering and search |
+| **Attack Surface** | Threat modeling view with agent-to-tool mappings |
+| **Tools** | Tool inventory with risk levels and authorized agents |
+| **MCP Servers** | Server inventory with auth method and health status |
+| **Permissions** | Agent-to-tool authorization matrix |
+| **Human Oversight** | HITL gate configuration per agent |
+| **A2A Governance** | Agent-to-agent trust policies |
+| **Evaluations** | AgentCore evaluation results |
+| **Providers** | Multi-cloud provider connectivity status |
+
+## Live Data Sources
+
+- \`governAgentCoreApi.agents()\` — Bedrock AgentCore discovery
+- \`deploymentsApi.list()\` — AVA deployments
+- \`frontierAgentsApi.list()\` — AWS-managed agents
+
+## Features
+
+- Automatic discovery of Bedrock agents
+- Multi-cloud support (AWS, Azure, GCP, SaaS)
+- Risk tier classification per agent
+- Autonomy level tracking (L0-L4)`,
+      },
+      {
+        id: 'govern-fleet',
+        title: 'Agentic Fleet',
+        content: `# Agentic Fleet
+
+Navigate to \`/govern/fleet\`. **Core Module (See It)**
+
+Fleet-wide governance dashboard with KPIs, risk heatmap, emergency controls, and guardrail observability.
+
+## Features
+
+- **5-Pillar Control Plane** — Registry, Access, Visualization, Interop, Security posture
+- **Fleet Risk Heatmap** — Risk scores by use case aligned to AWS Scoping Matrix
+- **Emergency Controls** — Kill, Throttle, LOG_ONLY, Restart actions
+- **Guardrail Observability** — Real-time guardrail intervention metrics
+- **OWASP Agentic Threats** — Alignment to OWASP threat model
+
+## Live Data Sources
+
+- \`governAgentCoreApi.agents()\` — Agent discovery and status
+- Computed risk heatmap from agent compliance status and platform type
+
+## Use Cases
+
+- Fleet-wide incident response
+- Governance posture reviews
+- Risk-based agent prioritization`,
+      },
+      {
+        id: 'govern-model-management',
+        title: 'Model Management',
+        content: `# Model Management
+
+Navigate to \`/govern/models\`. **Core Module (See It)**
+
+Comprehensive model governance hub with registry, evaluations, explainability, compliance, and operations.
+
+## Tabs
+
+| Tab | Description |
+|-----|-------------|
+| **Dashboard** | Live data, KPIs, cost alerts, drift indicators |
+| **Registry** | Model inventory with risk tiers and governance status |
+| **Evaluations** | Model evals, RAG evals, deployment gate |
+| **Explainability** | Attribution analysis, bias & fairness testing |
+| **Compliance** | Governance lifecycle, attestations |
+| **Operations** | Monitoring, dependency graph, analysis tools |
+
+## Sub-Features
+
+- **Hallucination Detection** — Ground truth comparison
+- **MRM Framework Explorer** — Model Risk Management alignment
+- **Model Comparison** — Side-by-side capability analysis
+- **Risk Scoring Calculator** — Interactive risk tier computation
+- **Dependency Graph** — Model-to-agent relationship visualization
+
+## Live Data Sources
+
+- \`governModelsApi.catalog()\` — Bedrock foundation model catalog
+- \`governModelsApi.runtimeMetrics()\` — Model invocation metrics
+- \`governCostApi.byModel()\` — Per-model cost breakdown
+- \`governEvalsApi.jobs()\` — Bedrock evaluation job results`,
+      },
+      {
+        id: 'govern-finops',
+        title: 'Cost & FinOps',
+        content: `# Cost & FinOps
+
+Navigate to \`/govern/finops\`. **Core Module (See It)**
+
+AI cost management with budget tracking, spend velocity, anomaly detection, and optimization recommendations.
+
+## Tabs
+
+| Tab | Description |
+|-----|-------------|
+| **Dashboard** | Real-time spend, KPIs, trend charts |
+| **Planning** | Use case cost editor and projections |
+| **ROI** | Agent ROI calculator with value metrics |
+| **Task Fit** | Task assessment for AI suitability |
+| **Business Metrics** | Business value tracking |
+| **Unit Economics** | Per-invocation cost analysis |
+| **Token Economics** | Token usage patterns and optimization |
+| **Chargeback** | Cost allocation by tag/business unit |
+| **Optimization** | Savings recommendations |
+
+## Live Data Sources
+
+- \`governCostApi.summary()\` — Aggregate AI spend
+- \`governCostApi.trend()\` — Historical spend trends
+- \`governCostApi.forecast()\` — Spend projections
+- \`governCostApi.byModel()\` — Per-model breakdown
+- \`governCostApi.byUseCase()\` — Per-use-case breakdown
+- \`governCostApi.byTag()\` — Cost allocation tag breakdown
+- \`governCostApi.tagKeys()\` — Available cost allocation tags
+- \`governCostApi.anomalies()\` — Spend anomaly detection
+- \`governCostApi.budgets()\` — AWS Budgets integration
+
+## Features
+
+- Real AWS Cost Explorer integration
+- Anomaly detection with alerts
+- Tag-based chargeback with selector
+- Budget vs actual variance tracking`,
+      },
+      {
+        id: 'govern-compliance',
+        title: 'Compliance Center',
+        content: `# Compliance Center
+
+Navigate to \`/govern/compliance\`. **Core Module (Govern It)**
+
+Interactive compliance framework management with checklists, attestations, and policy observability.
+
+## Features
+
+- **Compliance Posture Strip** — Live compliance percentage with breakdown
+- **Governance Program Builder** — 6-phase wizard for program setup
+- **Framework Checklists** — Interactive control tracking per framework
+- **Evidence Attachment** — Link documents and artifacts to controls
+- **Attestation Management** — Track control attestations and expiry
+- **Config Rules View** — AWS Config rule compliance
+- **Policy Observability** — Cedar ALLOW/DENY decision audit
+- **ISO 42001 Certification Tracker** — 7-phase certification journey (Gap Analysis to Certification Decision) with readiness tracking
+- **Conformity Assessment Workflow** — EU AI Act Article 43 multi-step workflow (see Conformity tab)
+- **FRIA Wizard** — EU AI Act Article 27 Fundamental Rights Impact Assessment (see FRIA tab)
+- **Compliance Gap Guidance** — "Beyond the Platform" guidance for non-technical gaps (see Gap Guidance tab)
+
+## Conformity Assessment Workflow (EU AI Act Article 43)
+
+Located in the **Conformity** tab. A 6-step workflow for EU AI Act conformity assessment:
+
+| Step | Description |
+|------|-------------|
+| **Risk Classification** | Determine AI system risk tier (Unacceptable, High-Risk, Limited, Minimal) |
+| **Technical Documentation** | Compile required technical documentation per Annex IV |
+| **QMS Verification** | Verify Quality Management System compliance per Article 17 |
+| **Post-Market Monitoring** | Establish post-market monitoring plan per Article 72 |
+| **Declaration of Conformity** | Prepare EU Declaration of Conformity per Article 47 |
+| **CE Marking Readiness** | Verify CE marking eligibility per Article 48 |
+
+**Features:**
+- Per-step tracking: status, evidence checklist, responsible party, target dates, notes
+- Visual workflow diagram with clickable nodes
+- Progress tracker with overall completion percentage
+
+## FRIA Wizard (EU AI Act Article 27)
+
+Located in the **FRIA** tab. Fundamental Rights Impact Assessment for high-risk AI systems.
+
+**8 Fundamental Rights Areas:**
+- Human dignity
+- Privacy and data protection
+- Non-discrimination
+- Gender equality
+- Right to effective remedy
+- Freedom of expression
+- Right to good administration
+- Workers' rights
+
+**Features:**
+- Per-right assessment: impact level, mitigation measures, residual risk rating, evidence links
+- Overall FRIA score calculation (0-100)
+- High-risk AI systems view (Annex III categories)
+- Export report capability
+- Auto-save drafts
+
+## Compliance Gap Guidance
+
+Located in the **Gap Guidance** tab. "Beyond the Platform" guidance for compliance gaps that require organizational (non-technical) remediation.
+
+**Features:**
+- **Platform vs Organization Split** — Shows what the platform provides vs what the organization must do
+- **Interactive Checklist** — Track progress on organizational gaps with completion status
+- **Framework-Specific Guidance** — Tailored guidance for EU AI Act, ISO 42001, NAIC AI, and other frameworks
+- **Progress Tracking** — Overall completion percentage for non-technical requirements
+
+Also integrated into EU AI Act, ISO 42001, and NAIC AI framework views for contextual gap guidance.
+
+## NAIC AI: Unfair Discrimination Testing
+
+Integrated into the NAIC AI framework view. Addresses NAIC Model Bulletin unfair discrimination requirements for insurance AI.
+
+**Features:**
+- **6 Protected Class Tests** — Age, Race, Gender, Religion, National Origin, Disability
+- **Disparate Impact Ratio** — Automated 4/5ths rule calculation per protected class
+- **Proxy Variable Correlation** — Analyze correlation between model features and protected classes
+- **Use Case Selector** — Context-specific testing for Underwriting, Claims, Pricing, Marketing
+- **Pass/Fail Status** — Clear compliance status per protected class with remediation guidance
+
+## EU AI Act: GPAI Model Cards
+
+Integrated into the EU AI Act framework view. Art. 53 transparency documentation for General-Purpose AI models.
+
+**8 Documentation Sections:**
+- **Identity** — Model name, version, provider identification
+- **Intended Use** — Designed use cases and deployment contexts
+- **Training Data** — Data sources, size, preprocessing methods
+- **Capabilities** — Model capabilities and performance characteristics
+- **Evaluations** — Benchmark results and evaluation methodology
+- **Compute** — Training compute resources and energy consumption
+- **Mitigations** — Safety measures and risk mitigations implemented
+- **Known Issues** — Known limitations, failure modes, and biases
+
+**Additional Features:**
+- **Systemic Risk Assessment** — Art. 51/55 systemic risk evaluation for high-capability models
+- **Export Capability** — Generate compliance-ready GPAI model card documents
+
+## Supported Frameworks
+
+SR 26-2, NIST AI RMF, EU AI Act, CRI FS AI RMF, OSFI E-23, ISO 42001, OWASP LLM Top 10, MITRE ATLAS, NAIC AI, FINOS AIR
+
+## Live Data Sources
+
+- \`governPostureApi.configRuleDetail()\` — AWS Config compliance
+- \`governConformanceApi\` — Conformance tracking
+- \`complianceApi\` — Attestation management
+- \`policiesApi.getObservability()\` — Cedar policy decisions
+- \`maturityApi\` — Plan maturity assessments`,
+      },
+      {
+        id: 'govern-prompt-governance',
+        title: 'Prompt Governance',
+        content: `# Prompt Governance
+
+Navigate to \`/govern/prompt-governance\`. **Core Module (Govern It)**
+
+AWS-native prompt compliance built on Bedrock Guardrails with 4-layer defense architecture.
+
+## 4-Layer Defense
+
+| Layer | Latency | Description |
+|-------|---------|-------------|
+| **Real-Time Guardrails** | <50ms | Bedrock native content filters |
+| **Contextual Evaluation** | 50-200ms | Grounding & relevance checks |
+| **Async Observability** | Background | Athena queries, trend analysis |
+| **Formal Verification** | Background | Automated Reasoning proofs |
+
+## Views
+
+| View | Description |
+|------|-------------|
+| **Live Guardrails** | Active guardrail configurations from Bedrock |
+| **Invocations** | Real-time invocation telemetry |
+| **Heatmap** | Violation patterns by category |
+| **Scorecard** | Metrics summary |
+| **AgentCore** | Agent-specific metrics |
+| **Analytics** | Trend analysis and reporting |
+
+## Live Data Sources
+
+- \`guardrailsApi.list()\` — Bedrock guardrail configurations
+- \`governGuardrailsApi.telemetry()\` — Guardrail intervention metrics
+- \`governInvocationSafetyApi.telemetry()\` — Invocation safety metrics
+
+## Guardrail Types
+
+- Content filters (hate, sexual, violence, misconduct)
+- PII detection and anonymization
+- Denied topic policies
+- Contextual grounding checks
+- Prompt attack detection`,
+      },
+      {
+        id: 'govern-audit',
+        title: 'Audit & Incidents',
+        content: `# Audit & Incidents
+
+Navigate to \`/govern/audit\`. **Core Module (Show It)**
+
+Guardrail activity feed, incident management, audit logs, and compliance evidence.
+
+## Views
+
+| View | Description |
+|------|-------------|
+| **Metrics** | Scorecard contribution (MTTR, open incidents, resolution rate) |
+| **Audit Trail** | Event log with filtering, search, and export |
+
+## Event Types Captured
+
+- Guardrail trigger events
+- Policy enforcement decisions (Cedar ALLOW/DENY)
+- Agent invocation logs
+- Configuration changes
+- Incident lifecycle events
+
+## Features
+
+- **Live AI Activity** — Real-time CloudTrail AI events
+- **Policy Observability** — Cedar decision audit trail
+- **Trace Viewer** — Debug individual invocations
+- **Evidence Export** — CSV/JSON for auditors
+- **Incident Lifecycle** — Detect → Investigate → Resolve workflow
+
+## Live Data Sources
+
+- \`governAuditApi.list()\` — Audit event log
+- \`governTrailApi.aiActivity()\` — CloudTrail Bedrock events
+- \`governTrailApi.aiCallers()\` — AI caller analysis`,
+      },
+      {
+        id: 'govern-data',
+        title: 'Data Governance',
+        content: `# Data Governance
+
+Navigate to \`/govern/data\`. **Core Module (Show It)**
+
+Data quality, lineage, provenance, domains, and access control for AI-ready data.
+
+## Tabs
+
+| Tab | Description |
+|-----|-------------|
+| **Dashboard** | KPIs, sensitivity breakdown, domain coverage |
+| **Lineage** | Data flow visualization |
+| **Quality** | Rule-based quality scoring |
+| **Knowledge** | Knowledge source registry with RAG Security Controls (OWASP LLM08 aligned, 8 controls) |
+| **Assessment** | Data maturity assessment |
+
+## Sub-Routes
+
+| Route | Description |
+|-------|-------------|
+| \`/govern/data/quality\` | Data quality rules and scores |
+| \`/govern/data/metadata\` | Metadata management |
+| \`/govern/data/maturity\` | Data maturity assessment |
+| \`/govern/data/readiness\` | AI readiness scoring |
+| \`/govern/data/lineage\` | Data lineage visualization |
+| \`/govern/data/agents\` | Agent data profiles |
+| \`/govern/data/access\` | Access control policies |
+| \`/govern/data/ontology\` | Data ontology editor |
+| \`/govern/data/taxonomy\` | Data taxonomy management |
+| \`/govern/data/glossary\` | Business glossary |
+| \`/govern/data/graphrag\` | GraphRAG visualization |
+
+## Live Data Sources
+
+- \`governDataCatalogApi\` — Glue Data Catalog integration
+- \`governDataSourcesApi\` — Registered data sources
+- \`knowledgeApi.list()\` — Knowledge registrations
+- \`knowledgeApi.listDatabases()\` — Glue databases
+- \`knowledgeApi.listKnowledgeBases()\` — Bedrock knowledge bases`,
+      },
+      {
+        id: 'govern-additional',
+        title: 'Additional Modules',
+        content: `# Additional Modules
+
+Beyond the 9 Core modules, Govern includes specialized capabilities for advanced use cases.
+
+## Risk Management
+\`/govern/risk\`
+
+Enterprise risk register with heatmaps, assessments, controls library, and issue tracking aligned to NIST AI RMF.
+
+**Tabs:** Dashboard, Risk Register, Assessments, Controls, Issues, Third-Party Risk, HRAIS, Outcomes
+
+**Outcome Monitoring Dashboard (Outcomes Tab):**
+- **Post-Deployment AI Impact Tracking** — Monitor AI system outcomes after deployment
+- **Decision Distribution Analysis** — Track how AI decisions are distributed across populations
+- **Demographic Parity Metrics** — Measure fairness across protected classes
+- **Appeal Rate Monitoring** — Track appeal rates and outcomes for AI decisions
+- **Drift Detection** — Detect model drift and outcome shifts over time
+- **Consumer Harm Indicators** — Aligned to CRI FS AI RMF harm categories
+
+**Third-Party Risk Tab Features:**
+- **Concentration Risk Analysis** — Vendor dependency breakdown showing % of agents/models per provider
+- **Single-Vendor Exposure Alerts** — Critical alerts (>70% concentration), High alerts (>50%)
+- **Exit Strategy Tracking** — Monitor portability plans for concentrated vendor dependencies
+
+## AI Safety
+\`/govern/safety\`
+
+Capability safety and assurance organized on AWS's 8 Responsible-AI dimensions.
+
+**Sub-routes:**
+- \`/govern/safety/evals\` — Safety evaluations
+- \`/govern/safety/redteam-pipeline\` — Red team testing
+- \`/govern/safety/capabilities\` — Frontier capability thresholds
+- \`/govern/safety/safety-cases\` — Safety case documentation
+- \`/govern/safety/incidents\` — Incident management
+- \`/govern/safety/runtime\` — Runtime safety controls
+- \`/govern/threat-modeling\` — MAESTRO threat modeling
+
+## Shadow AI
+\`/govern/shadow-ai\`
+
+Discover unapproved agents, models, tools, and API keys before they become incidents.
+
+**Live Data:** \`governDeveloperAiApi.usage()\` shadow_ai detection
+
+## Developer AI Usage
+\`/govern/developer-ai\`
+
+Monitor developer AI tool consumption (tokens, cost), detect anomalies and shadow usage.
+
+**Live Data:** \`governDeveloperAiApi.usage()\` team and user breakdown
+
+## Governance Playbook
+\`/govern/playbook\`
+
+Decision framework for autonomous agents with autonomy levels (L0-L4), HITL gates, and A2A trust policies.
+
+## Multi-Cloud
+\`/govern/multi-cloud\`
+
+Unified governance across AWS Bedrock, Azure AI Foundry, Google Vertex AI, and SaaS platforms.
+
+**Live Data:** \`governCostApi.providerConnectors()\` connectivity status
+
+## Agentic Coding
+\`/govern/dev-tools\`
+
+Governance for AI-powered coding assistants (Claude Code, Kiro, Copilot, Cursor).
+
+**Live Data:** \`governDeveloperAiApi.usage()\` developer tool metrics
+
+## Trust Stack
+\`/govern/trust-stack\`
+
+Visualizes the 3-layer governance architecture: Content Safety → Access Control → Audit & Observability.`,
       },
     ],
   },

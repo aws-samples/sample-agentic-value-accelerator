@@ -56,3 +56,29 @@ variable "kms_key_arn" {
   type        = string
   default     = ""
 }
+
+# ------------------------------------------------------------------------------
+# Cognito App Client ID (audience) — passed to the dual-token Lambda authorizer
+# so it can verify the `aud` claim on Cognito id_tokens. Empty disables the
+# audience check (any client from the pool passes). The pool ID is derived
+# from the ARN so it doesn't need a separate variable.
+# ------------------------------------------------------------------------------
+variable "cognito_app_client_id" {
+  description = "Cognito App Client ID — expected `aud` claim on id_tokens. Empty disables audience check."
+  type        = string
+  default     = ""
+}
+
+# ------------------------------------------------------------------------------
+# AVA FSI SSO (optional) — when set, the Lambda authorizer also accepts
+# HMAC-signed handoff tokens minted by the AVA control plane. Empty means
+# the authorizer only accepts Cognito tokens (standalone-mode behavior).
+# When BOTH this and cognito_user_pool_arn are empty, the authorizer denies
+# every request (fail-closed).
+# ------------------------------------------------------------------------------
+variable "fsi_app_signing_secret" {
+  description = "HMAC secret shared with the AVA control plane. Empty disables the AVA SSO branch of the authorizer."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

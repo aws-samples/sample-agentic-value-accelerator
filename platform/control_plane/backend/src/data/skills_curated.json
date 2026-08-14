@@ -1,0 +1,71 @@
+{
+  "note": "Curated skills — reusable agent procedures. No public skills catalog exists yet (unlike MCP with modelcontextprotocol.io or A2A with the awslabs samples), so this list is AVA-hand-curated. Entries can be published into the AVA registry as `SKILL` records via the Registry → Skills page once the backend wrappers land.",
+  "skills": [
+    {
+      "id": "eval-scoring-rubric-1to5",
+      "name": "1-to-5 Scoring Rubric",
+      "posture": "official",
+      "kind": "evaluation",
+      "description": "General-purpose 1-to-5 evaluation rubric for LLM-as-judge scoring. Grades response quality against a reference, with explicit anchor points (5 = perfect, 3 = acceptable with issues, 1 = wrong or harmful). Used across Prompt Optimization, Langfuse evals, and Approval-gated agent responses.",
+      "input_variables": ["prompt", "response", "referenceResponse"],
+      "output_schema": {"score": "integer 1-5", "rationale": "string"},
+      "tags": ["evaluation", "llm-judge", "scoring"],
+      "source": "AVA curated"
+    },
+    {
+      "id": "extract-structured-fields",
+      "name": "Structured Field Extraction",
+      "posture": "official",
+      "kind": "extraction",
+      "description": "Given unstructured text and a JSON schema, extract fields conforming to the schema. Enforces field types, marks missing values as null, and refuses to hallucinate. Works with any Bedrock/Anthropic/OpenAI-compatible model that supports JSON mode or tool-calling.",
+      "input_variables": ["text", "schema"],
+      "output_schema": "object matching the input schema",
+      "tags": ["extraction", "structured-output", "json-schema"],
+      "source": "AVA curated"
+    },
+    {
+      "id": "kyc-triage-decision",
+      "name": "KYC Triage Decision",
+      "posture": "community",
+      "kind": "workflow",
+      "description": "Multi-step KYC (Know Your Customer) triage — screens against sanctions/PEP lists, cites the exact regulation on ESCALATE decisions, produces a CLEAR/ESCALATE verdict with rationale. Modeled on the FCA/OFSI/HM Treasury workflow. Skill embodies the procedure; underlying data sources come from MCP servers registered separately.",
+      "input_variables": ["customerName", "context"],
+      "output_schema": {"decision": "CLEAR|ESCALATE", "rationale": "string", "regulation_citation": "string|null"},
+      "tags": ["fsi", "kyc", "compliance", "workflow"],
+      "source": "AVA curated"
+    },
+    {
+      "id": "disclosure-plain-english",
+      "name": "Plain-English Product Disclosure",
+      "posture": "community",
+      "kind": "workflow",
+      "description": "Draft a two-sentence retail product risk disclosure ending in 'Capital at risk.'. Enforces sentence count, forbids jargon, always closes with the mandated phrase. Includes an evaluator that scores against a reference disclosure.",
+      "input_variables": ["productName", "riskProfile", "audience"],
+      "output_schema": {"disclosure": "string"},
+      "tags": ["fsi", "customer-comms", "compliance"],
+      "source": "AVA curated"
+    },
+    {
+      "id": "prompt-refusal-clause",
+      "name": "Refusal Clause Template",
+      "posture": "official",
+      "kind": "guardrail",
+      "description": "Standard refusal clause an agent splices into its system prompt to establish what it will and won't do. Categories: financial advice, medical advice, legal advice, sensitive personal data. Each category has a canonical refusal phrasing so responses are consistent across agents in the fleet.",
+      "input_variables": ["categories"],
+      "output_schema": "string (system-prompt fragment)",
+      "tags": ["guardrail", "refusal", "prompt-engineering"],
+      "source": "AVA curated"
+    },
+    {
+      "id": "cot-plan-execute-observe",
+      "name": "Plan → Execute → Observe",
+      "posture": "official",
+      "kind": "workflow",
+      "description": "Classic ReAct-style planning skill. Agent decomposes a goal into ordered sub-tasks, executes each (calling tools as needed), observes results, and updates the plan if reality diverged from expectations. Produces an execution trace suitable for audit and cost accounting.",
+      "input_variables": ["goal", "available_tools"],
+      "output_schema": {"trace": "array of {step, action, observation}"},
+      "tags": ["react", "planning", "reasoning"],
+      "source": "AVA curated"
+    }
+  ]
+}

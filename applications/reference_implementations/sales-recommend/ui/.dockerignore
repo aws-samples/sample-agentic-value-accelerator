@@ -1,0 +1,18 @@
+# Keep the build context clean so `COPY . .` never clobbers the node_modules
+# that `npm ci` installs inside the image. The host's node_modules (built with
+# a different Node version / platform) breaks `next` with
+# "Cannot find module '../server/require-hook'".
+node_modules
+.next
+out
+
+# VCS / tooling
+.git
+.gitignore
+Dockerfile
+.dockerignore
+
+# Local env + logs (provided at runtime, not build time)
+.env*.local
+npm-debug.log*
+yarn-error.log*
