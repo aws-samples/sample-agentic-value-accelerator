@@ -12,7 +12,7 @@
     "@aws-sdk/client-bedrock-agentcore": "^3.700.0",
     "highlight.js": "^11.10.0",
     "lucide-react": "^0.456.0",
-    "next": "14.2.18",
+    "next": "15.5.21",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
