@@ -1,6 +1,7 @@
 // API service for fetching real transaction data
 // Using CORS proxies since direct API access is blocked
 import { getConfig } from '../config.js';
+import { avaAuthHeaders } from './avaSso';
 
 export type Decision = 'APPROVE' | 'STEP_UP_REVIEW' | 'HOLD_AND_CASE' | 'REJECT';
 
@@ -161,7 +162,7 @@ export const fetchTransactions = async () => {
       const res = await fetch(url, {
         method: 'GET',
         mode: 'cors',
-        headers: { 'Accept': 'application/json' },
+        headers: { 'Accept': 'application/json', ...avaAuthHeaders() },
         signal: controller.signal,
       });
       if (!res.ok) {
@@ -242,7 +243,7 @@ export const generateSarsReport = async (transactions: any[], options?: { report
 
   const res = await fetch(`${sarApiBase}/api/sars-report`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...avaAuthHeaders() },
     body: JSON.stringify({
       src: transaction?.accountId,
       transaction: {

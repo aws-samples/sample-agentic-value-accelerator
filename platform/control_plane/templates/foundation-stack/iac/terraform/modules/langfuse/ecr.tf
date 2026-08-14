@@ -1,13 +1,13 @@
 variable "langfuse_version" {
   description = "Langfuse image version to pull and push"
   type        = string
-  default     = "3.174.1"
+  default     = "3.225.1"
 }
 
 variable "clickhouse_version" {
   description = "ClickHouse image version to pull and push"
   type        = string
-  default     = "25.8.28.1"
+  default     = "25.8.29.51"
 }
 
 locals {

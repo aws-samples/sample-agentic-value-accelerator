@@ -71,6 +71,17 @@ async def startup_event():
         logger.error(f"Failed to initialize database: {e}")
         raise
 
+    # Seed Approval Policies defaults — turns Approval Policies from
+    # UI-only into operational. Idempotent by name; safe to run every
+    # boot. Failures are logged, not raised, so a partial DDB outage
+    # doesn't block the whole API surface.
+    try:
+        from services.approval_policy_bootstrap import seed_defaults
+        result = seed_defaults()
+        logger.info(f"approval_policy_bootstrap result: {result}")
+    except Exception as e:
+        logger.warning(f"approval_policy_bootstrap failed (non-fatal): {e}")
+
     logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} started")
 
 
@@ -156,7 +167,7 @@ async def global_exception_handler(request: Request, exc):
 
 
 # Import and include routers
-from api.routes import projects_router, langfuse_router, health_router, templates_router, bootstrap_router, deployments_router, applications_router, app_factory_router, users_router, codecommit_router, frontier_agents_router, guardrails_router, policies_router, llm_gateway_router, prioritization_router, maturity_router, business_cases_router, knowledge_router, operating_model_router, organization_design_router, service_approval_router, advpo_router, govern_audit_router, govern_conformance_router, govern_graduation_router, govern_sr26_router, govern_enforcement_router, govern_a2a_trust_router, govern_cost_router, govern_models_router, govern_posture_router, govern_evals_router, govern_risk_posture_router, govern_trail_router, govern_security_router, govern_agentcore_router, govern_guardrails_router, govern_invocation_safety_router, govern_data_sources_router, govern_data_catalog_router, fsi_sso_router, govern_fleet_router, govern_compliance_router, govern_sagemaker_router, govern_controls_router, govern_developer_ai_router, govern_guardduty_ai_router
+from api.routes import projects_router, langfuse_router, health_router, templates_router, bootstrap_router, deployments_router, applications_router, app_factory_router, users_router, codecommit_router, frontier_agents_router, harness_router, catalog_router, memory_router, mcp_router, a2a_router, identity_providers_router, approval_policies_router, approval_requests_router, skills_router, agents_router, custom_resources_router, guardrails_router, policies_router, llm_gateway_router, prioritization_router, maturity_router, business_cases_router, knowledge_router, operating_model_router, organization_design_router, service_approval_router, advpo_router, govern_audit_router, govern_conformance_router, govern_graduation_router, govern_sr26_router, govern_enforcement_router, govern_a2a_trust_router, govern_cost_router, govern_models_router, govern_posture_router, govern_evals_router, govern_risk_posture_router, govern_trail_router, govern_security_router, govern_agentcore_router, govern_guardrails_router, govern_invocation_safety_router, govern_data_sources_router, govern_data_catalog_router, fsi_sso_router, govern_fleet_router, govern_compliance_router, govern_sagemaker_router, govern_controls_router, govern_developer_ai_router, govern_guardduty_ai_router
 
 # Include routers
 app.include_router(projects_router, prefix=settings.API_PREFIX)
@@ -171,6 +182,17 @@ app.include_router(users_router, prefix=settings.API_PREFIX)
 app.include_router(fsi_sso_router, prefix=settings.API_PREFIX)
 app.include_router(codecommit_router, prefix=settings.API_PREFIX)
 app.include_router(frontier_agents_router, prefix=settings.API_PREFIX)
+app.include_router(harness_router, prefix=settings.API_PREFIX)
+app.include_router(catalog_router, prefix=settings.API_PREFIX)
+app.include_router(memory_router, prefix=settings.API_PREFIX)
+app.include_router(mcp_router, prefix=settings.API_PREFIX)
+app.include_router(a2a_router, prefix=settings.API_PREFIX)
+app.include_router(identity_providers_router, prefix=settings.API_PREFIX)
+app.include_router(approval_policies_router, prefix=settings.API_PREFIX)
+app.include_router(approval_requests_router, prefix=settings.API_PREFIX)
+app.include_router(skills_router, prefix=settings.API_PREFIX)
+app.include_router(agents_router, prefix=settings.API_PREFIX)
+app.include_router(custom_resources_router, prefix=settings.API_PREFIX)
 app.include_router(guardrails_router, prefix=settings.API_PREFIX)
 app.include_router(policies_router, prefix=settings.API_PREFIX)
 app.include_router(llm_gateway_router, prefix=settings.API_PREFIX)
@@ -221,6 +243,17 @@ if settings.ROOT_PATH:
     app.include_router(fsi_sso_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
     app.include_router(codecommit_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
     app.include_router(frontier_agents_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(harness_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(catalog_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(memory_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(mcp_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(a2a_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(identity_providers_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(approval_policies_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(approval_requests_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(skills_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(agents_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
+    app.include_router(custom_resources_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
     app.include_router(guardrails_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
     app.include_router(policies_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")
     app.include_router(llm_gateway_router, prefix=f"{settings.ROOT_PATH}{settings.API_PREFIX}")

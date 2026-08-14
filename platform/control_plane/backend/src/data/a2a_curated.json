@@ -1,0 +1,54 @@
+{
+  "$comment": "Reference A2A agents surfaced under Build > A2A Agents > Browse References. These are DEMO / REFERENCE implementations, not production endpoints. AVA has not vetted their behavior. Users must review every reference agent before enabling — an A2A agent has its own reasoning loop and acts on your behalf when delegated to.",
+  "warning": "Reference agents only. These A2A endpoints are educational demos. They are not vetted for production use, may go offline without notice, and may act on their own goals. Do not connect them to sensitive workflows.",
+  "agents": [
+    {
+      "id": "google-a2a-currency",
+      "name": "Currency Conversion Agent",
+      "publisher": "google-a2a",
+      "category": "reference",
+      "posture": "reference-only",
+      "agent_card_url": "https://a2a-samples.googleapis.com/currency/.well-known/agent.json",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Reference A2A agent from Google's samples — converts currencies via an external rate API.",
+      "docs_url": "https://github.com/google/A2A"
+    },
+    {
+      "id": "google-a2a-reimbursement",
+      "name": "Reimbursement Agent",
+      "publisher": "google-a2a",
+      "category": "reference",
+      "posture": "reference-only",
+      "agent_card_url": "https://a2a-samples.googleapis.com/reimbursement/.well-known/agent.json",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Reference A2A agent from Google's samples — handles employee reimbursement workflows.",
+      "docs_url": "https://github.com/google/A2A"
+    },
+    {
+      "id": "anthropic-a2a-sample",
+      "name": "Anthropic A2A Sample",
+      "publisher": "anthropic",
+      "category": "reference",
+      "posture": "reference-only",
+      "agent_card_url": "https://a2a-samples.anthropic.com/sample/.well-known/agent.json",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Reference A2A agent from Anthropic's SDK samples. Educational only.",
+      "docs_url": "https://docs.anthropic.com"
+    },
+    {
+      "id": "aws-agentcore-sample",
+      "name": "AgentCore A2A Sample",
+      "publisher": "aws",
+      "category": "reference",
+      "posture": "official",
+      "agent_card_url": "https://agentcore-samples.aws.amazon.com/a2a/.well-known/agent.json",
+      "auth_hint": "sigv4",
+      "delegation_mode": "m2m",
+      "description": "Reference A2A agent from AWS's AgentCore documentation. Uses SigV4 auth from AVA's execution role.",
+      "docs_url": "https://docs.aws.amazon.com/bedrock-agentcore/"
+    }
+  ]
+}

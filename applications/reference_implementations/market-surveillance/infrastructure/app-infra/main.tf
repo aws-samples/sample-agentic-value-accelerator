@@ -151,7 +151,14 @@ module "api_gateway" {
   alert_api_lambda_invoke_arn = module.lambda.alert_api_invoke_arn
   data_api_lambda_invoke_arn  = module.lambda.data_api_invoke_arn
   cognito_user_pool_arn       = local.f.cognito_user_pool_arn
+  cognito_app_client_id       = local.f.cognito_web_app_client_id
   kms_key_arn                 = local.f.kms_logs_key_arn
+
+  # AVA FSI SSO — populated by the AVA control-plane deploy via
+  # TF_VAR_fsi_app_signing_secret (bridged in deploy.sh from the
+  # AVA_FSI_APP_SIGNING_SECRET CodeBuild env var). Empty in standalone
+  # deploys, which keeps the authorizer as Cognito-only.
+  fsi_app_signing_secret = var.fsi_app_signing_secret
 
   depends_on = [module.lambda]
 }
@@ -366,6 +373,40 @@ module "bedrock_guardrail" {
 }
 
 # =============================================================================
+# db-seeder — In-VPC Lambda that populates Aurora on first deploy.
+#
+# Replaces the previous CodeBuild-via-bastion port-forward seeding path, which
+# silently skipped seeding when the SSM tunnel didn't open. The Lambda sits in
+# the same private subnets as Aurora, reads DB creds from Secrets Manager, and
+# runs the existing seeding_scripts package in-process. deploy.sh Step 3 now
+# calls `aws lambda invoke` and fails loudly on any error.
+# =============================================================================
+module "db_seeder" {
+  source = "../modules/db-seeder"
+
+  name_prefix = "market-surveillance-${var.environment}"
+  environment = var.environment
+
+  # Same subnets + security group the Lambda module uses. The Lambda SG is
+  # already allowed in by Aurora's SG on port 5432 (wired by foundations).
+  vpc_subnet_ids         = local.f.private_subnet_ids
+  vpc_security_group_ids = [local.f.lambda_security_group_id]
+
+  db_secret_arn = local.f.rds_db_secret_arn
+
+  # Path to the market-surveillance seeding_scripts package on the
+  # Terraform runner's filesystem. During CodeBuild the whole app tree is
+  # under /tmp/workspace, so relative to `infrastructure/app-infra` the
+  # seeding_scripts dir is at ../../seeding_scripts.
+  seeding_scripts_dir = "${path.root}/../../seeding_scripts"
+
+  tags = {
+    Service = "market-surveillance"
+    Layer   = "app-infra"
+  }
+}
+
+# =============================================================================
 # SSM Parameter Store — Publish app-infra outputs for script/cross-layer consumption
 # =============================================================================
 module "output_params" {
@@ -378,5 +419,7 @@ module "output_params" {
     "ecr/webapp-repository-url" = module.ecr_webapp.repository_url
     "api-gateway/endpoint"      = module.api_gateway.api_endpoint
     "ec2/webapp-asg-name"       = module.ec2_webapp.autoscaling_group_name
+    "db-seeder/lambda-name"     = module.db_seeder.lambda_function_name
+    "db-seeder/lambda-arn"      = module.db_seeder.lambda_arn
   }
 }

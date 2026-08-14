@@ -20,7 +20,7 @@
       "description": "Synthesizes analytical findings into actionable business insights with visualization recommendations"
     }
   ],
-  "api_endpoint": "https://PLACEHOLDER.cloudfront.net/api/invoke",
+  "api_endpoint": "/api/invoke",
   "input_schema": {
     "id_field": "entity_id",
     "id_label": "Entity ID",

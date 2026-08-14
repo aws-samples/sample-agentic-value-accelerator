@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -101,7 +102,6 @@ def package_and_upload(
 ) -> str:
     """Package agent code WITH dependencies and upload to S3. Returns S3 key."""
     s3 = session.client("s3", region_name=region)
-    s3_key = f"{agent_name}/deployment.zip"
 
     tmp_dir = tempfile.mkdtemp()
     pkg_dir = os.path.join(tmp_dir, "package")
@@ -130,6 +130,16 @@ def package_and_upload(
 
         req_file = AGENTS_DIR / "requirements.txt"
         shutil.copy2(req_file, os.path.join(pkg_dir, "requirements.txt"))
+
+        # Content-addressed S3 key: hash the source files so a code change produces a
+        # new key. This makes the S3Prefix parameter change, so CloudFormation actually
+        # updates the AgentCore runtime instead of reporting "No updates to perform".
+        _hasher = hashlib.sha256()
+        for _fname in sorted(os.listdir(pkg_dir)):
+            with open(os.path.join(pkg_dir, _fname), "rb") as _fh:
+                _hasher.update(_fname.encode())
+                _hasher.update(_fh.read())
+        s3_key = f"{agent_name}/deployment-{_hasher.hexdigest()[:12]}.zip"
 
         # Install dependencies for Linux ARM64 (AgentCore runtime platform)
         print("  Installing dependencies for Linux ARM64 (this may take a minute)...")
@@ -242,6 +252,16 @@ def deploy_stack(
     try:
         resp = cf.describe_stacks(StackName=stack_name)
         stack_status = resp["Stacks"][0]["StackStatus"]
+        # A stack stuck in UPDATE_ROLLBACK_FAILED cannot be updated or deleted until
+        # its rollback is completed. Recover it first so a redeploy doesn't hard-fail.
+        if stack_status == "UPDATE_ROLLBACK_FAILED":
+            print(f"  Stack in {stack_status} — running continue-update-rollback...")
+            cf.continue_update_rollback(StackName=stack_name)
+            cf.get_waiter("stack_rollback_complete").wait(
+                StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 60}
+            )
+            stack_status = "UPDATE_ROLLBACK_COMPLETE"
+
         # Stacks in terminal failure states can't be updated — treat as new
         if stack_status in (
             "ROLLBACK_COMPLETE", "DELETE_COMPLETE", "CREATE_FAILED",

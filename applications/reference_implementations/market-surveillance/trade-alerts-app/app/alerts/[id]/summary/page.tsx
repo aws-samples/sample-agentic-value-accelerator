@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { summariesService, type SummaryData } from '@/lib/api';
 import { authService } from '@/lib/auth/authService';
+import { hasAvaSession } from '@/lib/auth/avaSso';
 
 export default function AlertSummaryPage() {
     const params = useParams();
@@ -55,6 +56,11 @@ export default function AlertSummaryPage() {
     // Check authentication on mount
     useEffect(() => {
         const checkAuth = async () => {
+            // AVA SSO short-circuit — see app/page.tsx for context.
+            if (hasAvaSession()) {
+                setIsCheckingAuth(false);
+                return;
+            }
             const isAuthenticated = await authService.isAuthenticated();
             if (!isAuthenticated) {
                 // Redirect to login with current page as redirect target

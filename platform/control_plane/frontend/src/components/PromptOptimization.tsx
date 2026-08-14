@@ -47,6 +47,27 @@ const SCOPE_ORDER: AdvPOModelScope[] = ["global", "regional", "in_region"];
 // Best-effort label for a model ID (used where we don't have the catalog).
 const modelLabel = (id: string) => id;
 
+// Restrict the AdvPO model picker to Amazon (Nova) and Anthropic (Claude
+// Haiku + Sonnet only) families. Frontier / premium Anthropic tiers
+// (Opus, Mythos, Fable) are deliberately excluded — per-token pricing on
+// AdvPO jobs multiplies fast, and prompt tuning against those tiers isn't
+// meaningful for teams that will deploy to Haiku or Sonnet anyway.
+//
+// Matches on lowercase substrings of the model ID because that's the field
+// present on every AdvPO catalog entry (provider is optional). Adjust the
+// allow/deny lists here if the pricing story changes.
+const ADVPO_ALLOWED_PROVIDER_TOKENS = ["anthropic", "amazon"] as const;
+const ADVPO_DENIED_TIER_TOKENS = ["opus", "mythos", "fable"] as const;
+
+function filterAdvPOModels<T extends { id: string; provider?: string }>(models: T[]): T[] {
+  return models.filter((m) => {
+    const hay = `${m.id} ${m.provider ?? ""}`.toLowerCase();
+    if (!ADVPO_ALLOWED_PROVIDER_TOKENS.some((tok) => hay.includes(tok))) return false;
+    if (ADVPO_DENIED_TIER_TOKENS.some((tok) => hay.includes(tok))) return false;
+    return true;
+  });
+}
+
 // Optional per-model inference settings captured in the Create form. All fields
 // are strings (raw input) and only forwarded to the API when non-empty/valid.
 interface ModelCfgForm {
@@ -1667,7 +1688,7 @@ function CreateTab({ onCancel, onCreate }: { onCancel: () => void; onCreate: (jo
       .listModels()
       .then((res) => {
         if (!active) return;
-        setCatalog(res.models);
+        setCatalog(filterAdvPOModels(res.models));
         setCatalogRegion(res.region);
         setCatalogError("");
       })

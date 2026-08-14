@@ -113,19 +113,31 @@ except Exception:
     print('')
 " 2>/dev/null || echo "")
   fi
-  if [ -n "$CF_DOMAIN" ]; then
-    CF_DIST_ID=$(aws cloudfront list-distributions \
-      --query "DistributionList.Items[?DomainName=='${CF_DOMAIN}'].Id | [0]" \
-      --output text 2>/dev/null || echo "")
-    if [ -n "$CF_DIST_ID" ] && [ "$CF_DIST_ID" != "None" ] && [ -f attach_cf_auth.py ]; then
-      python3 ./attach_cf_auth.py "$CF_DIST_ID" "$PROJECT_NAME" \
-        || echo "  ⚠️  attach_cf_auth.py failed — proceeding without SSO edge auth"
-    else
-      echo "  ⚠️  CF distribution id not resolvable (domain=$CF_DOMAIN) — skipping SSO edge auth attach"
-    fi
-  else
-    echo "  ⚠️  CloudFront domain not found in $OUTPUTS_FILE — skipping SSO edge auth attach"
+  # Fail-loud: when AVA SSO is on (signing secret set), a missing attach is a
+  # security regression — the CloudFront URL would be world-open. Prior version
+  # swallowed all three failure paths with `|| echo`, which is exactly how the
+  # jwt_auth_function.js file went missing in a "successful" build. Any skip
+  # here now aborts the deploy so the AVA UI records it as failed.
+  if [ -z "$CF_DOMAIN" ]; then
+    echo "ERROR: CloudFront domain not found in $OUTPUTS_FILE — cannot attach SSO edge auth" >&2
+    exit 1
   fi
+  CF_DIST_ID=$(aws cloudfront list-distributions \
+    --query "DistributionList.Items[?DomainName=='${CF_DOMAIN}'].Id | [0]" \
+    --output text 2>/dev/null || echo "")
+  if [ -z "$CF_DIST_ID" ] || [ "$CF_DIST_ID" = "None" ]; then
+    echo "ERROR: CF distribution id not resolvable (domain=$CF_DOMAIN)" >&2
+    exit 1
+  fi
+  if [ ! -f attach_cf_auth.py ]; then
+    echo "ERROR: attach_cf_auth.py not found — cannot attach SSO edge auth" >&2
+    exit 1
+  fi
+  if [ ! -f jwt_auth_function.js ]; then
+    echo "ERROR: jwt_auth_function.js not found — attach_cf_auth.py would fail silently" >&2
+    exit 1
+  fi
+  python3 ./attach_cf_auth.py "$CF_DIST_ID" "$PROJECT_NAME"
 else
   echo "  AVA_FSI_APP_SIGNING_SECRET not set — skipping SSO edge auth (Cognito Hosted UI login path)"
 fi

@@ -93,3 +93,17 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
+# ------------------------------------------------------------------------------
+# AVA FSI SSO — populated at deploy time by the AVA control plane via
+# TF_VAR_fsi_app_signing_secret (bridged in the parent deploy.sh from
+# AVA_FSI_APP_SIGNING_SECRET). Empty in standalone deploys, which keeps
+# the API Gateway authorizer as Cognito-only. See modules/api-gateway/main.tf
+# for the dual-token Lambda authorizer that consumes this.
+# ------------------------------------------------------------------------------
+variable "fsi_app_signing_secret" {
+  description = "HMAC secret shared with the AVA control plane. Empty disables the AVA branch of the API Gateway authorizer."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+

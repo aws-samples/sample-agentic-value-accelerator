@@ -25,6 +25,12 @@ resource "aws_bedrockagentcore_memory_strategy" "semantic" {
 }
 
 # User Preferences Strategy - Tracks user preferences and interaction patterns
+#
+# depends_on chains the three memory strategies so Terraform issues
+# UpdateMemory serially. AgentCore Control's UpdateMemory rejects
+# concurrent calls with `Memory is in transitional state UPDATING.`
+# (CloudTrail: 2026-08-09T00:01:12Z, three parallel calls, all three
+# ValidationException). Serializing is the documented workaround.
 resource "aws_bedrockagentcore_memory_strategy" "user_preferences" {
   count = var.enable_user_preferences ? 1 : 0
 
@@ -33,6 +39,8 @@ resource "aws_bedrockagentcore_memory_strategy" "user_preferences" {
   type        = "USER_PREFERENCE"
   description = "User preferences for alert filtering, display settings, and investigation workflows"
   namespaces  = ["preferences"]
+
+  depends_on = [aws_bedrockagentcore_memory_strategy.semantic]
 }
 
 # Summarization Strategy - Creates summaries of long conversations and investigations
@@ -44,4 +52,6 @@ resource "aws_bedrockagentcore_memory_strategy" "summarization" {
   type        = "SUMMARIZATION"
   description = "Summarizes investigation conversations and findings"
   namespaces  = ["{sessionId}"]
+
+  depends_on = [aws_bedrockagentcore_memory_strategy.user_preferences]
 }

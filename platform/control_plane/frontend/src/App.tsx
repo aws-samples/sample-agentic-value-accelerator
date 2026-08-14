@@ -37,6 +37,24 @@ import Tools from './components/capabilities/Tools';
 import Knowledge from './components/capabilities/Knowledge';
 import Prompts from './components/capabilities/Prompts';
 import CapabilitiesLanding from './components/CapabilitiesLanding';
+import OperateLanding from './components/OperateLanding';
+import ApprovalPoliciesLanding from './components/approvals/ApprovalPoliciesLanding';
+import ApprovalQueueLanding from './components/approvals/ApprovalQueueLanding';
+import HarnessLanding from './components/harness/HarnessLanding';
+import HarnessCreate from './components/harness/HarnessCreate';
+import HarnessDetail from './components/harness/HarnessDetail';
+import CatalogLanding from './components/catalog/CatalogLanding';
+import MemoryLanding from './components/memory/MemoryLanding';
+import MemoryCreate from './components/memory/MemoryCreate';
+import McpLanding from './components/mcp/McpLanding';
+import McpCreate from './components/mcp/McpCreate';
+import A2aLanding from './components/a2a/A2aLanding';
+import A2aCreate from './components/a2a/A2aCreate';
+import RegistryLanding from './components/registry/RegistryLanding';
+import AgentsLanding from './components/agents/AgentsLanding';
+import SkillsLanding from './components/skills/SkillsLanding';
+import CustomResourcesLanding from './components/customresources/CustomResourcesLanding';
+import IdentityLanding from './components/identity/IdentityLanding';
 import SecureLanding from './components/SecureLanding';
 import GovernLanding from './components/GovernLanding';
 import GovernWrapper from './components/govern/GovernWrapper';
@@ -134,6 +152,41 @@ function AuthGate() {
         <Route path="/capabilities/tools" element={<Tools />} />
         <Route path="/capabilities/knowledge" element={<Knowledge />} />
         <Route path="/capabilities/prompts" element={<Prompts />} />
+
+        {/* Build > Harness — Bedrock AgentCore Harness (managed agent-loop-as-a-service) */}
+        <Route path="/harness" element={<HarnessLanding />} />
+        <Route path="/harness/create" element={<HarnessCreate />} />
+        <Route path="/harness/:harnessId/edit" element={<HarnessCreate editMode />} />
+        <Route path="/harness/:harnessId" element={<HarnessDetail />} />
+        <Route path="/harness/:harnessId/test" element={<HarnessDetail initialTab="test" />} />
+
+        {/* Build > Catalog — unified inventory across every Build resource */}
+        <Route path="/catalog" element={<CatalogLanding />} />
+
+        {/* Build > Memory — AgentCore Memory instances */}
+        <Route path="/memory" element={<MemoryLanding />} />
+        <Route path="/memory/create" element={<MemoryCreate />} />
+        <Route path="/memory/:memoryId/edit" element={<MemoryCreate editMode />} />
+
+        {/* Build > MCP Servers — registered MCP endpoints */}
+        <Route path="/mcp" element={<McpLanding />} />
+        <Route path="/mcp/create" element={<McpCreate />} />
+
+        {/* Build > A2A Agents — peer agents via Agent-to-Agent protocol.
+            Kept mounted at /a2a for backwards-compatibility with any deep
+            links; sidebar labels it "A2A Agents" now that it lives under
+            the Registry umbrella. */}
+        <Route path="/a2a" element={<A2aLanding />} />
+        <Route path="/a2a/create" element={<A2aCreate />} />
+
+        {/* Build > Registry — AWS Agent Registry (AVA). Landing shows the
+            five typed record kinds; each links to its own page. MCP and A2A
+            already have full pages; Agents / Skills / Custom Resources are
+            placeholder pages until the agent-registry-control wrappers land. */}
+        <Route path="/registry" element={<RegistryLanding />} />
+        <Route path="/registry/agents" element={<AgentsLanding />} />
+        <Route path="/registry/skills" element={<SkillsLanding />} />
+        <Route path="/registry/custom-resources" element={<CustomResourcesLanding />} />
         {/* Govern: hub landing + dedicated pages for each capability */}
         <Route path="/govern" element={<GovernWrapper><GovernLanding /></GovernWrapper>} />
         <Route path="/govern/command-center" element={<GovernWrapper><CommandCenter /></GovernWrapper>} />
@@ -183,11 +236,15 @@ function AuthGate() {
         <Route path="/govern/cost-tracking" element={<Navigate to="/govern/finops" replace />} />
         <Route path="/applications/my-apps" element={<MyApps />} />
         <Route path="/templates" element={<TemplateCatalog />} />
+        <Route path="/operate" element={<OperateLanding />} />
+        <Route path="/operate/approvals" element={<ApprovalQueueLanding />} />
+        <Route path="/secure/approval-policies" element={<ApprovalPoliciesLanding />} />
         <Route path="/observability" element={<ObservabilityLanding />} />
         <Route path="/observability/langfuse" element={<Observability />} />
         <Route path="/observability/agentcore" element={<AgentCoreObservability />} />
         <Route path="/prompt-optimization" element={<PromptOptimization />} />
         <Route path="/secure" element={<SecureLanding />} />
+        <Route path="/secure/identity" element={<IdentityLanding />} />
         <Route path="/secure/guardrails" element={<Guardrails initialTab="templates" />} />
         <Route path="/secure/guardrails/create" element={<Guardrails initialTab="builder" />} />
         <Route path="/secure/guardrails/observability" element={<Guardrails initialTab="observability" />} />

@@ -20,7 +20,7 @@
       "description": "Converts legacy code to modern frameworks with confidence scoring and manual review flags"
     }
   ],
-  "api_endpoint": "https://placeholder.cloudfront.net/api/invoke",
+  "api_endpoint": "/api/invoke",
   "input_schema": {
     "id_field": "project_id",
     "id_label": "Project ID",

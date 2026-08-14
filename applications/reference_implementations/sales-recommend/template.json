@@ -1,0 +1,37 @@
+{
+  "id": "sales-recommend",
+  "name": "Investment Research and Risk Accelerator",
+  "description": "AI-powered AWS solution recommendation agent for non-technical business leaders. Uses RAG against a curated solution catalog with interactive clarifying questions and business-outcome-first highlights. Fully self-contained: the stack creates its own Bedrock Knowledge Base (OpenSearch Serverless + S3) and auto-populates the catalog from a repo list via a CodeBuild pipeline. Single Strands agent on Bedrock AgentCore; Next.js UI on ECS Fargate behind CloudFront basic auth.",
+  "version": "1.1.0",
+  "pattern_type": "rag",
+  "type": "reference",
+  "hidden": false,
+  "jobs": [
+    {"name": "onboarding", "incoming_event": "sales_recommend_onboarding_request", "outgoing_event": "sales_recommend_onboarding_success"},
+    {"name": "offboarding", "incoming_event": "sales_recommend_offboarding_request", "outgoing_event": "sales_recommend_offboarding_success"}
+  ],
+  "frameworks": [
+    {"id": "strands", "name": "Strands Agents SDK", "path": "agent", "description": "Single Strands agent (Solutions Advisor) on Bedrock AgentCore with a Knowledge Base retrieval tool"}
+  ],
+  "deployment_patterns": [
+    {"id": "terraform", "name": "Terraform", "description": "Single-root Terraform (knowledge-base + wiki-generator + ECR + networking + IAM + SSM + AgentCore + ECS Fargate + CloudFront + observability), driven by the headless root deploy.sh", "path": "."}
+  ],
+  "parameters": [
+    {"name": "project_name", "type": "string", "description": "Project name prefix for all resources", "required": false, "default": "sales-recommend"},
+    {"name": "aws_region", "type": "string", "description": "AWS region", "required": false, "default": "us-east-1", "enum": ["us-east-1", "us-east-2", "us-west-2"]}
+  ],
+  "example_use_cases": [
+    "Guided AWS solution discovery for non-technical business leaders",
+    "Business-outcome-first recommendations from a curated solution catalog",
+    "Interactive, RAG-grounded advisory conversation with structured highlights"
+  ],
+  "author": "Ronny Rodriguez",
+  "license": "Apache-2.0",
+  "tags": ["sales", "rag", "streaming", "interactive", "strands", "agentcore", "knowledge-base", "opensearch-serverless", "auto-catalog", "ecs-fargate", "cloudfront", "nextjs"],
+  "outputs": {
+    "cloudfront_url": "CloudFront distribution URL (access the app here)",
+    "agent_runtime_arn": "Bedrock AgentCore Runtime ARN",
+    "knowledge_base_id": "Bedrock Knowledge Base ID created by the stack"
+  },
+  "dependencies": []
+}

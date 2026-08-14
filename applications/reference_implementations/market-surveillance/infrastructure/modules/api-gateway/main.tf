@@ -79,7 +79,157 @@ resource "aws_api_gateway_request_validator" "request_validator" {
 
 
 
-# Cognito Authorizer
+# ─────────────────────────────────────────────────────────────────────────────
+# Dual-token Lambda authorizer — accepts either an AVA HMAC handoff (users
+# coming from the AVA UI's Open-App button) or a Cognito RS256 id_token
+# (users who logged in via the app's own /login form). Replaces the previous
+# COGNITO_USER_POOLS authorizer.
+#
+# Behavior matrix:
+#   AVA secret set  + Cognito pool set  → both paths accepted (federated deploy)
+#   AVA secret set  + Cognito pool empty → AVA-only
+#   AVA secret empty + Cognito pool set  → Cognito-only (standalone deploy)
+#   Both empty                           → fail-closed (denies everything)
+#
+# The old `cognito` authorizer resource is kept for reference under the same
+# variable-gated `count = var.cognito_user_pool_arn != "" ? 1 : 0` pattern
+# but is no longer referenced by any method — the switch below points every
+# authorized method at `dual_token.id`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+locals {
+  # Whether we should create the dual-token authorizer at all. The old
+  # cognito_user_pool_arn variable stays as the toggle so existing callers
+  # (foundations/main.tf) don't need to change to still get an authorizer.
+  enable_authorizer = var.cognito_user_pool_arn != "" || var.fsi_app_signing_secret != ""
+
+  # Extract user-pool ID from ARN: arn:aws:cognito-idp:us-east-1:acct:userpool/<id>
+  cognito_pool_id = var.cognito_user_pool_arn != "" ? element(split("/", var.cognito_user_pool_arn), length(split("/", var.cognito_user_pool_arn)) - 1) : ""
+
+  authorizer_build_dir = "${path.module}/.authorizer-build"
+}
+
+# Build the Lambda deployment zip at apply time — vendor python-jose[cryptography]
+# next to the handler. Small (~5 MB) so this is quick.
+resource "null_resource" "authorizer_build" {
+  count = local.enable_authorizer ? 1 : 0
+
+  triggers = {
+    handler_hash = filesha256("${path.module}/lambda/ava_sso_authorizer.py")
+    reqs_hash    = filesha256("${path.module}/lambda/requirements.txt")
+    # Rebuild once per apply — pip is incremental, so re-runs are fast.
+    always_rebuild = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -euo pipefail
+      BUILD_DIR="${local.authorizer_build_dir}"
+      rm -rf "$BUILD_DIR"
+      mkdir -p "$BUILD_DIR"
+      cp "${path.module}/lambda/ava_sso_authorizer.py" "$BUILD_DIR/ava_sso_authorizer.py"
+      python3 -m pip install \
+        --quiet \
+        --target "$BUILD_DIR" \
+        --platform manylinux2014_x86_64 \
+        --only-binary=:all: \
+        --python-version 3.12 \
+        -r "${path.module}/lambda/requirements.txt"
+      find "$BUILD_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+      find "$BUILD_DIR" -type d -name '*.dist-info' -exec rm -rf {} + 2>/dev/null || true
+    EOT
+  }
+}
+
+data "archive_file" "authorizer_zip" {
+  count = local.enable_authorizer ? 1 : 0
+
+  type        = "zip"
+  source_dir  = local.authorizer_build_dir
+  output_path = "${path.module}/.authorizer-build/authorizer-lambda.zip"
+  depends_on  = [null_resource.authorizer_build]
+}
+
+resource "aws_iam_role" "authorizer" {
+  count = local.enable_authorizer ? 1 : 0
+
+  name = "${var.environment}-market-surveillance-api-authorizer"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "authorizer_logs" {
+  count = local.enable_authorizer ? 1 : 0
+
+  role       = aws_iam_role.authorizer[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_cloudwatch_log_group" "authorizer" {
+  count = local.enable_authorizer ? 1 : 0
+
+  name              = "/aws/lambda/${var.environment}-market-surveillance-api-authorizer"
+  retention_in_days = 14
+}
+
+resource "aws_lambda_function" "authorizer" {
+  count = local.enable_authorizer ? 1 : 0
+
+  function_name    = "${var.environment}-market-surveillance-api-authorizer"
+  filename         = data.archive_file.authorizer_zip[0].output_path
+  source_code_hash = data.archive_file.authorizer_zip[0].output_base64sha256
+  handler          = "ava_sso_authorizer.handler"
+  runtime          = "python3.12"
+  role             = aws_iam_role.authorizer[0].arn
+  timeout          = 10
+  memory_size      = 256
+
+  environment {
+    variables = {
+      AVA_FSI_APP_SIGNING_SECRET = var.fsi_app_signing_secret
+      COGNITO_USER_POOL_ID       = local.cognito_pool_id
+      COGNITO_APP_CLIENT_ID      = var.cognito_app_client_id
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.authorizer_logs,
+    aws_cloudwatch_log_group.authorizer,
+  ]
+}
+
+# API Gateway permission to invoke the authorizer Lambda.
+resource "aws_lambda_permission" "authorizer_invoke" {
+  count = local.enable_authorizer ? 1 : 0
+
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.authorizer[0].function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/authorizers/*"
+}
+
+resource "aws_api_gateway_authorizer" "dual_token" {
+  count = local.enable_authorizer ? 1 : 0
+
+  name                             = "ava-sso-dual-token-${var.environment}"
+  rest_api_id                      = aws_api_gateway_rest_api.this.id
+  type                             = "TOKEN"
+  identity_source                  = "method.request.header.Authorization"
+  authorizer_uri                   = aws_lambda_function.authorizer[0].invoke_arn
+  authorizer_credentials           = null
+  authorizer_result_ttl_in_seconds = 60
+}
+
+# Legacy Cognito authorizer — retained but no longer referenced by any
+# method (all methods point at dual_token above). Kept for a release cycle
+# in case rollback is needed, then can be removed in a follow-up.
 resource "aws_api_gateway_authorizer" "cognito" {
   count = var.cognito_user_pool_arn != "" ? 1 : 0
 
@@ -298,8 +448,8 @@ resource "aws_api_gateway_method" "conversations_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.conversations_user.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -318,8 +468,8 @@ resource "aws_api_gateway_method" "conversations_post" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.conversations.id
   http_method          = "POST"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -359,8 +509,8 @@ resource "aws_api_gateway_method" "summaries_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.summaries_alert.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -379,8 +529,8 @@ resource "aws_api_gateway_method" "summaries_history_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.summaries_history.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -399,8 +549,8 @@ resource "aws_api_gateway_method" "summaries_post" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.summaries.id
   http_method          = "POST"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -675,8 +825,8 @@ resource "aws_api_gateway_method" "investigations_trigger_post" {
   rest_api_id   = aws_api_gateway_rest_api.this.id
   resource_id   = aws_api_gateway_resource.investigations_trigger.id
   http_method   = "POST"
-  authorization = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
 }
 
 # POST /investigations/trigger Integration (uses alert_api Lambda)
@@ -789,8 +939,8 @@ resource "aws_api_gateway_method" "alerts_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.alerts.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -808,8 +958,8 @@ resource "aws_api_gateway_method" "alerts_id_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.alerts_id.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -827,8 +977,8 @@ resource "aws_api_gateway_method" "alerts_account_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.alerts_account.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -846,8 +996,8 @@ resource "aws_api_gateway_method" "alerts_product_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.alerts_product.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -865,8 +1015,8 @@ resource "aws_api_gateway_method" "alerts_customer_trade_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.alerts_customer_trade.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 
@@ -884,8 +1034,8 @@ resource "aws_api_gateway_method" "alerts_related_trades_get" {
   rest_api_id          = aws_api_gateway_rest_api.this.id
   resource_id          = aws_api_gateway_resource.alerts_related_trades.id
   http_method          = "GET"
-  authorization        = var.cognito_user_pool_arn != "" ? "COGNITO_USER_POOLS" : "NONE"
-  authorizer_id        = var.cognito_user_pool_arn != "" ? aws_api_gateway_authorizer.cognito[0].id : null
+  authorization        = local.enable_authorizer ? "CUSTOM" : "NONE"
+  authorizer_id        = local.enable_authorizer ? aws_api_gateway_authorizer.dual_token[0].id : null
   request_validator_id = aws_api_gateway_request_validator.request_validator.id
 }
 

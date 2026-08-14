@@ -117,3 +117,58 @@ output "organization_design_table_arn" {
   description = "ARN of the organization design DynamoDB table"
   value       = aws_dynamodb_table.organization_design.arn
 }
+
+# ─── MCP Servers registry ────────────────────────────────────────────────
+output "mcp_servers_table_name" {
+  description = "Name of the MCP Servers registry DynamoDB table"
+  value       = aws_dynamodb_table.mcp_servers.name
+}
+
+output "mcp_servers_table_arn" {
+  description = "ARN of the MCP Servers registry DynamoDB table"
+  value       = aws_dynamodb_table.mcp_servers.arn
+}
+
+# ─── Identity Providers registry ─────────────────────────────────────────
+output "identity_providers_table_name" {
+  description = "Name of the Identity Providers registry DynamoDB table"
+  value       = aws_dynamodb_table.identity_providers.name
+}
+
+output "identity_providers_table_arn" {
+  description = "ARN of the Identity Providers registry DynamoDB table"
+  value       = aws_dynamodb_table.identity_providers.arn
+}
+
+# ─── Approval Policies (Secure) ─────────────────────────────────────────
+output "approval_policies_table_name" {
+  description = "Name of the Approval Policies DynamoDB table"
+  value       = aws_dynamodb_table.approval_policies.name
+}
+
+output "approval_policies_table_arn" {
+  description = "ARN of the Approval Policies DynamoDB table"
+  value       = aws_dynamodb_table.approval_policies.arn
+}
+
+# ─── Approval Requests / Queue (Operate) ─────────────────────────────────
+output "approval_requests_table_name" {
+  description = "Name of the Approval Requests DynamoDB table"
+  value       = aws_dynamodb_table.approval_requests.name
+}
+
+output "approval_requests_table_arn" {
+  description = "ARN of the Approval Requests DynamoDB table"
+  value       = aws_dynamodb_table.approval_requests.arn
+}
+
+# ─── A2A Agents registry ─────────────────────────────────────────────────
+output "a2a_agents_table_name" {
+  description = "Name of the A2A Agents registry DynamoDB table"
+  value       = aws_dynamodb_table.a2a_agents.name
+}
+
+output "a2a_agents_table_arn" {
+  description = "ARN of the A2A Agents registry DynamoDB table"
+  value       = aws_dynamodb_table.a2a_agents.arn
+}

@@ -67,3 +67,23 @@ variable "log_bucket" {
   type        = string
   default     = ""
 }
+
+# ------------------------------------------------------------------------------
+# AVA FSI SSO (optional) — when set, adds a viewer-request CloudFront Function
+# that verifies AVA-signed HMAC handoff tokens and drops an ava_session cookie
+# for the Next.js UI to forward as Authorization: Bearer. Empty string
+# preserves today's behavior (custom Cognito login page, no edge gate) so
+# standalone laptop deploys keep working with no AVA control-plane wiring.
+# ------------------------------------------------------------------------------
+variable "fsi_app_signing_secret" {
+  description = "HMAC secret shared with the AVA control plane (fsi_sso.py). Empty disables the AVA SSO edge gate."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "ava_ui_login_url" {
+  description = "AVA UI URL to redirect unauthenticated users to. Only consulted when fsi_app_signing_secret is non-empty. Currently unused — the market-surveillance CloudFront Function passes through unauthenticated hits so the app's own Cognito login can render. Reserved for future strict-mode."
+  type        = string
+  default     = ""
+}

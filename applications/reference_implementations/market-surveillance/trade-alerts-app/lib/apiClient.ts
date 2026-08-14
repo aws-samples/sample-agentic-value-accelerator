@@ -6,6 +6,7 @@
  */
 
 import { authService } from './auth/authService';
+import { avaAuthHeaders } from './auth/avaSso';
 import { Alert, Investigation } from '@/types/alert';
 
 export interface ApiResponse<T> {
@@ -38,7 +39,12 @@ class ApiClient {
     }
 
     /**
-     * Get authentication headers with Cognito token
+     * Get authentication headers. Prefers the AVA SSO handoff token
+     * (ava_session cookie set by the CloudFront viewer-request Function)
+     * when present; falls back to the Cognito id_token from Amplify's
+     * session. This ordering matters: users arriving from the AVA UI are
+     * already authenticated at the edge and haven't gone through the
+     * local Cognito login form, so they only have the cookie.
      */
     private async getAuthHeaders(): Promise<HeadersInit> {
         const headers: HeadersInit = {
@@ -47,7 +53,7 @@ class ApiClient {
 
         try {
             const session = await authService.getSession();
-            
+
             if (session.idToken) {
                 headers['Authorization'] = `Bearer ${session.idToken}`;
             } else if (session.error) {
@@ -57,7 +63,11 @@ class ApiClient {
             console.error('Error getting auth headers:', error);
         }
 
-        return headers;
+        // AVA SSO wins when the cookie is present — the CloudFront edge
+        // has already verified the HMAC, and downstream will forward the
+        // token to the (future dual-token) API-Gateway authorizer. When
+        // absent, this spread is a no-op.
+        return { ...headers, ...avaAuthHeaders() };
     }
 
     /**

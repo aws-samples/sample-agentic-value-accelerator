@@ -6,6 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY api.py .
+COPY ava_sso.py .
 COPY index.html .
 
 EXPOSE 8000

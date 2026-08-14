@@ -1,0 +1,57 @@
+{
+  "$comment": "Curated Agents surfaced under Build > Registry > Agents. These are 'Agents' in the AVA sense — MCP-callable / runtime-bound / auto-registered — NOT A2A-protocol peers (those live in A2A Servers). Records write to AWS Agent Registry with recordType=AGENT and tag Kind=agent to distinguish from A2A (Kind=a2a).",
+  "agents": [
+    {
+      "id": "aws-devops-agent",
+      "name": "AWS DevOps Agent",
+      "publisher": "AWS",
+      "category": "operations",
+      "posture": "official",
+      "runtime": "bedrock-agentcore-runtime",
+      "runtime_ref": "arn:aws:bedrock-agentcore:us-east-1:aws:agent-runtime/devops-agent-managed",
+      "description": "AWS-managed DevOps agent — troubleshoots pipeline failures, deployment rollbacks, and CloudFormation drift. Callable via AgentCore Runtime endpoint. No user-hosted infrastructure.",
+      "capabilities": ["pipeline-triage", "deployment-fix", "cfn-drift"],
+      "docs_url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/frontier-agents.html",
+      "auth_hint": "aws-sigv4"
+    },
+    {
+      "id": "aws-security-agent",
+      "name": "AWS Security Agent",
+      "publisher": "AWS",
+      "category": "security",
+      "posture": "official",
+      "runtime": "bedrock-agentcore-runtime",
+      "runtime_ref": "arn:aws:bedrock-agentcore:us-east-1:aws:agent-runtime/security-agent-managed",
+      "description": "AWS-managed security agent — investigates findings from GuardDuty, Security Hub, and IAM Access Analyzer; proposes remediation. Read-mostly; requires explicit approval before applying changes.",
+      "capabilities": ["security-findings", "iam-remediation", "gd-analysis"],
+      "docs_url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/frontier-agents.html",
+      "auth_hint": "aws-sigv4"
+    },
+    {
+      "id": "kiro-dev-agent",
+      "name": "Kiro (Dev Agent)",
+      "publisher": "AWS",
+      "category": "development",
+      "posture": "official",
+      "runtime": "bedrock-agentcore-runtime",
+      "runtime_ref": "arn:aws:bedrock-agentcore:us-east-1:aws:agent-runtime/kiro",
+      "description": "AWS-managed development agent — code review, unit test drafting, refactor suggestions. IDE-integrated; also callable as a peer from other agents when a code-question step is needed.",
+      "capabilities": ["code-review", "test-drafting", "refactor"],
+      "docs_url": "https://kiro.dev/",
+      "auth_hint": "oauth2"
+    },
+    {
+      "id": "sample-fsi-kyc-agent",
+      "name": "Sample FSI KYC Agent (reference)",
+      "publisher": "AVA FSI Foundry",
+      "category": "financial-services",
+      "posture": "community",
+      "runtime": "bedrock-agentcore-harness",
+      "runtime_ref": "harness/kyc-triage",
+      "description": "Reference implementation of a KYC triage agent — screens applicant profiles against sanctions/PEP lists, escalates with regulation citations. Ships as a deployable FSI Foundry use case; register it here if you want other agents to delegate to it.",
+      "capabilities": ["kyc-triage", "sanctions-check", "regulation-citation"],
+      "docs_url": "https://docs.hub.amazon.dev/",
+      "auth_hint": "aws-sigv4"
+    }
+  ]
+}

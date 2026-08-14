@@ -7,6 +7,7 @@
  */
 
 import { authService } from '../auth/authService';
+import { avaAuthHeaders } from '../auth/avaSso';
 import { Alert, AlertApiResponse, mapAlertFromApi } from '../../types/alert';
 
 const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || '';
@@ -82,7 +83,10 @@ async function getAuthHeaders(): Promise<HeadersInit> {
         console.error('Error getting auth headers:', error);
     }
 
-    return headers;
+    // AVA SSO wins when the ava_session cookie is present (user arrived
+    // from AVA UI via the CloudFront viewer-request Function). No-op when
+    // absent — Cognito idToken from Amplify's session stays.
+    return { ...headers, ...avaAuthHeaders() };
 }
 
 /**

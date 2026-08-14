@@ -222,6 +222,12 @@ module "cloudfront" {
   alb_dns_name = module.alb.alb_dns_name
   web_acl_arn  = module.firewall.web_acl_arn
 
+  # AVA FSI SSO edge gate — populated by the AVA control-plane deploy via
+  # TF_VAR_fsi_app_signing_secret / TF_VAR_ava_ui_login_url. Empty in
+  # standalone deploys keeps today's behavior (custom Cognito login page).
+  fsi_app_signing_secret = var.fsi_app_signing_secret
+  ava_ui_login_url       = var.ava_ui_login_url
+
   depends_on = [module.alb]
 }
 

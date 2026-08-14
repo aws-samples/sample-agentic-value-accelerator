@@ -120,8 +120,81 @@ class DeploymentService:
         # Auto-provision a gateway when deployment succeeds
         if new_status == DeploymentStatus.DEPLOYED:
             self._provision_gateway(deployment)
+            # Auto-publish the deployed app as an AGENT record in the AVA
+            # registry (recordType=AGENT, tag Kind=agent + Source=foundry-deploy)
+            # so it becomes discoverable in Registry → Agents. Best-effort —
+            # registry outage doesn't block the deploy from being reported as
+            # successful.
+            self._auto_publish_as_agent(deployment)
 
         return deployment
+
+    def _auto_publish_as_agent(self, deployment):
+        """Best-effort AGENT-record publication on successful deploy.
+
+        Runtime_ref preference (in order):
+          1. `ui_url` / `app_url` / `AmplifyUrl` / `dashboard_url`
+             — user-facing URL, if the app has one.
+          2. `agent_runtime_arn` — AgentCore Runtime ARN, if the deploy
+             created one (any Foundry template that emits it).
+          3. `agentcore_runtime_id` — bare id fallback.
+          4. Deployment id — last-resort opaque handle.
+
+        Runtime kind is derived from the outputs shape.
+        """
+        try:
+            outputs = deployment.outputs or {}
+            # Skip re-publishing if a prior deploy of the same template already
+            # produced an agent record. We could dedupe by tag, but for v1 we
+            # publish once per deployment_id and let the registry accumulate —
+            # matches how MCP/A2A behave.
+            frontend_url = (
+                outputs.get("ui_url")
+                or outputs.get("app_url")
+                or outputs.get("AmplifyUrl")
+                or outputs.get("dashboard_url")
+                or ""
+            )
+            runtime_arn = outputs.get("agent_runtime_arn") or outputs.get("agentcore_runtime_arn") or ""
+            runtime_id  = outputs.get("agentcore_runtime_id") or ""
+            if frontend_url:
+                runtime = "web-app"
+                runtime_ref = frontend_url
+            elif runtime_arn:
+                runtime = "bedrock-agentcore-runtime"
+                runtime_ref = runtime_arn
+            elif runtime_id:
+                runtime = "bedrock-agentcore-runtime"
+                runtime_ref = runtime_id
+            else:
+                runtime = "deployment"
+                runtime_ref = deployment.deployment_id
+
+            display_name = getattr(deployment, "deployment_name", None) or deployment.template_id
+            from services import agent_registry_client as _reg
+            _reg.publish_deployed_app_as_agent(
+                display_name=display_name,
+                runtime=runtime,
+                runtime_ref=runtime_ref,
+                description=(
+                    f"Auto-published on successful deploy of {deployment.template_id} "
+                    f"(deployment_id={deployment.deployment_id})."
+                ),
+                capabilities=[],
+                deployment_id=deployment.deployment_id,
+                template_id=deployment.template_id,
+                final_status="APPROVED",
+            )
+            logger.info(
+                f"Auto-published agent record for deployment {deployment.deployment_id} "
+                f"(runtime={runtime}, ref={runtime_ref[:60]}...)"
+            )
+        except Exception as e:
+            # Registry may be unavailable / policy engine may deny — either
+            # way this shouldn't fail the deploy status update.
+            logger.warning(
+                f"Auto-publish as agent failed for deployment {deployment.deployment_id}: {e}"
+            )
 
     def _provision_gateway(self, deployment: Deployment):
         """Auto-create a dedicated gateway for the use case and point the runtime at it.

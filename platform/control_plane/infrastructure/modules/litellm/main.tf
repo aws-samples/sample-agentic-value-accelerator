@@ -208,9 +208,9 @@ resource "aws_ecs_task_definition" "litellm" {
           name      = "LANGFUSE_SECRET_KEY"
           valueFrom = "${aws_secretsmanager_secret.langfuse_keys.arn}:secret_key::"
         }
-      ], var.bedrock_mantle_api_key != "" ? [{
-        name      = "BEDROCK_MANTLE_API_KEY"
-        valueFrom = aws_secretsmanager_secret.bedrock_mantle_api_key[0].arn
+        ], var.bedrock_mantle_api_key != "" ? [{
+          name      = "BEDROCK_MANTLE_API_KEY"
+          valueFrom = aws_secretsmanager_secret.bedrock_mantle_api_key[0].arn
       }] : [])
 
       logConfiguration = {

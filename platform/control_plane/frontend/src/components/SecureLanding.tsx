@@ -70,7 +70,63 @@ const LLM_GATEWAY: Item = {
   ],
 };
 
-const ITEMS = [GUARDRAILS, POLICY, LLM_GATEWAY];
+// Identity Providers — federate external IdPs (Entra, Okta, Auth0, generic OIDC)
+// and map their group claims to AVA roles. Distinct icon: user + check inside a
+// shield, evoking "verified identity" without duplicating Guardrails' shield.
+const IDENTITY: Item = {
+  id: 'identity',
+  path: '/secure/identity',
+  name: 'Identity',
+  tagline: 'Federate external identity, map claims to AVA roles.',
+  description:
+    'Register third-party identity providers — Microsoft Entra ID, Okta, Auth0, or any generic OIDC provider — and map group claims to AVA roles. Auth Code + PKCE, discovery-URL testing, and per-provider claim mapping so enterprise SSO drops in without a Cognito rebuild.',
+  iconBg: 'from-emerald-500 to-teal-600',
+  // Heroicon "users" (outline, 24×24). Three overlapping people silhouettes.
+  // Rounded organic curves — categorically distinct from the LLM Gateway
+  // lightning bolt's angular strokes, and unambiguously signals "identity /
+  // users / federation" at any size.
+  iconPath:
+    'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z',
+  image: '/images/secure-identity-hero.svg',
+  tags: ['Entra ID', 'Okta', 'Auth0', 'OIDC', 'PKCE', 'Claim Mapping'],
+  subItems: [
+    { name: 'Providers',      badge: 'Register', note: 'Entra · Okta · Auth0 · OIDC' },
+    { name: 'Discovery Test', badge: 'Validate', note: 'Verify OIDC endpoint' },
+    { name: 'Claim Mapping',  badge: 'Route',    note: 'Groups → AVA roles' },
+  ],
+};
+
+// Human-in-the-loop policies. Sibling of Policy — while Policy answers
+// "is this allowed?", Approval Policies answers "who has to sign off?".
+// Live queue of the requests these produce lives under Operate.
+const APPROVAL_POLICIES: Item = {
+  id: 'approval-policies',
+  path: '/secure/approval-policies',
+  name: 'Approval Policies',
+  tagline: 'Human-in-the-loop rules for sensitive actions.',
+  description:
+    'Declare which resource + action combinations require a human sign-off, from whom, and by when. Requests appear in the Operate → Approval Queue for on-call operators. v1 authors + evaluates policies; full enforcement into deploy/delete/invoke is a v2 follow-up.',
+  iconBg: 'from-amber-500 to-rose-600',
+  // Heroicon "hand-raised" (outline, 24×24). Chosen so the tile doesn't
+  // collide visually with Identity's ID-card icon; a raised hand is the
+  // universal "I'll approve this" gesture and reads unmistakably at 44px.
+  iconPath:
+    'M10.05 4.575a1.575 1.575 0 10-3.15 0v3m3.15-3v-1.5a1.575 1.575 0 013.15 0v1.5m-3.15 0l.075 5.925m3.075.75V4.575m0 0a1.575 1.575 0 013.15 0V15M6.9 7.575a1.575 1.575 0 10-3.15 0v8.175a6.75 6.75 0 006.75 6.75h2.018a5.25 5.25 0 003.712-1.538l1.732-1.732a5.25 5.25 0 001.538-3.712l.003-2.024a.668.668 0 01.198-.471 1.575 1.575 0 10-2.228-2.228 3.818 3.818 0 00-1.12 2.687M6.9 7.575V12m6.27 4.318A4.49 4.49 0 0116.35 15m.002 0h-.002',
+  // Bespoke Approval Policies hero — amber → rose → violet, showing the
+  // "cards routed to an approver" motif (three request cards, one approved
+  // one pending one denied, arrow into a large check-badge). Distinct from
+  // secure-identity-hero.svg and secure-llm-gateway-hero.svg.
+  image: '/images/secure-approval-policies-hero.svg',
+  tags: ['HITL', 'Approvals', 'Quorum', 'SLA'],
+  subItems: [
+    { name: 'Policy rules',       badge: 'Rules', note: 'resource + action + role + quorum' },
+    { name: 'Match test',         badge: 'Debug', note: 'Which policies gate a given call?' },
+    { name: 'Approval Queue →',   badge: 'Ops',   note: 'Live inbox in Operate' },
+  ],
+};
+
+// Order matters — matches the Secure sidebar and the "layers of defense" story.
+const ITEMS = [LLM_GATEWAY, GUARDRAILS, IDENTITY, POLICY, APPROVAL_POLICIES];
 
 export default function SecureLanding() {
   const navigate = useNavigate();
@@ -104,17 +160,17 @@ export default function SecureLanding() {
               color: 'transparent',
             }}
           >
-            Three layers of defense for every agent.
+            Five layers of defense for every agent.
           </h1>
           <p className="text-slate-500 mt-4 max-w-3xl">
+            <span className="font-semibold text-slate-700">LLM Gateway</span> is the single chokepoint every model call passes through — virtual keys, budgets, rate limits, audit.{' '}
             <span className="font-semibold text-slate-700">Guardrails</span> handle the content the agent emits.{' '}
-            <span className="font-semibold text-slate-700">Policies</span> govern what the agent is allowed to do.{' '}
-            <span className="font-semibold text-slate-700">LLM Gateway</span> is the single chokepoint every model call passes through —
-            virtual keys, budgets, rate limits, audit. Together, they make autonomous agents safe to ship.
+            <span className="font-semibold text-slate-700">Identity</span> federates external IdPs and maps claims to AVA roles.{' '}
+            <span className="font-semibold text-slate-700">Policies</span> govern what the agent is allowed to do. Together, they make autonomous agents safe to ship.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-fade-in stagger-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 animate-fade-in stagger-2">
           {ITEMS.map((item) => (
             <FeaturedCard key={item.id} item={item} onClick={() => navigate(item.path)} />
           ))}

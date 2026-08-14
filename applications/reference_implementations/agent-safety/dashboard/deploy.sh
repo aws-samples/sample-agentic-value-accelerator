@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: ./deploy.sh [options]"
       echo "  --profile <name>          AWS CLI profile"
       echo "  --admin-email <email>     Admin user email (default: admin@agent-safety.local)"
-      echo "  --admin-password <pass>   Admin password (default: AgentSafety123!)"
+      echo "  --admin-password <pass>   Admin password (default: random-generated per deploy)"
       echo "  --allowed-cidr <cidr>     CIDR allowed to access dashboard (default: auto-detect your IP)"
       echo "  --region <region>         AWS region (default: us-east-1)"
       echo "  --stack-name <name>       Main stack name (default: agent-safety-dashboard)"
@@ -50,8 +50,15 @@ if [ -z "$ADMIN_EMAIL" ]; then
 fi
 
 if [ -z "$ADMIN_PASSWORD" ]; then
-  ADMIN_PASSWORD="AgentSafety123!"
-  echo "ℹ️  Using default admin password"
+  # No hardcoded fallback — a public repo reader must not be able to guess it.
+  # Generate a strong random password. Suffix Aa1! satisfies Cognito's default
+  # complexity policy (upper + lower + digit + symbol). Operator passing
+  # --admin-password takes precedence.
+  ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-20)Aa1!"
+  echo "ℹ️  No --admin-password provided; generated one for this deploy:"
+  echo "   ADMIN_PASSWORD=$ADMIN_PASSWORD"
+  echo "   Save this — you'll need it if you sign in via the Cognito Hosted UI."
+  echo "   (AVA SSO handoff bypasses this password; it's only for the fallback path.)"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -65,7 +72,9 @@ fi
 ACCOUNT_ID=$(aws sts get-caller-identity $AWS_OPTS --query Account --output text 2>/dev/null) || {
   echo "❌ Cannot get AWS credentials."; exit 1
 }
-IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${ECR_REPO}:latest"
+# Unique image tag per build so CloudFormation sees a changed ImageUri and ECS rolls out.
+IMAGE_TAG=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
+IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
 
 # Auto-detect deployer's public IP if no CIDR was provided
 if [ -z "$ALLOWED_CIDR" ]; then
@@ -118,6 +127,40 @@ aws logs put-resource-policy \
 aws xray update-trace-segment-destination --destination CloudWatchLogs \
   $AWS_OPTS --no-cli-pager > /dev/null 2>&1 || true
 echo "   ✅ Transaction Search enabled"
+
+# Check for Cognito domain cooldown (domains take ~30min to release after deletion)
+echo "   Checking Cognito domain availability..."
+COGNITO_DOMAIN="${STACK_NAME}-${ACCOUNT_ID}"
+DOMAIN_STATUS=$(aws cognito-idp describe-user-pool-domain --domain "$COGNITO_DOMAIN" \
+  $AWS_OPTS --query 'DomainDescription.Status' --output text 2>/dev/null) || true
+if [ -n "$DOMAIN_STATUS" ] && [ "$DOMAIN_STATUS" != "None" ] && [ "$DOMAIN_STATUS" != "" ]; then
+  # Domain exists — check if it belongs to a different user pool (stale)
+  DOMAIN_POOL=$(aws cognito-idp describe-user-pool-domain --domain "$COGNITO_DOMAIN" \
+    $AWS_OPTS --query 'DomainDescription.UserPoolId' --output text 2>/dev/null) || true
+  EXISTING_POOL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" $AWS_OPTS \
+    --query 'Stacks[0].Outputs[?OutputKey==`CognitoUserPoolId`].OutputValue' --output text 2>/dev/null) || true
+  if [ "$DOMAIN_POOL" != "$EXISTING_POOL" ] && [ -n "$DOMAIN_POOL" ] && [ "$DOMAIN_POOL" != "None" ]; then
+    echo "   ⏳ Cognito domain '$COGNITO_DOMAIN' is in cooldown (owned by pool: $DOMAIN_POOL)."
+    echo "      Waiting up to 5 minutes for release..."
+    for i in $(seq 1 30); do
+      sleep 10
+      CHECK=$(aws cognito-idp describe-user-pool-domain --domain "$COGNITO_DOMAIN" \
+        $AWS_OPTS --query 'DomainDescription.Status' --output text 2>/dev/null) || true
+      if [ -z "$CHECK" ] || [ "$CHECK" = "None" ] || [ "$CHECK" = "" ]; then
+        echo "   ✅ Cognito domain released"
+        break
+      fi
+      if [ $i -eq 30 ]; then
+        echo "   ⚠️  Cognito domain still not released after 5 min. Deploy may fail on UserPoolDomain resource."
+        echo "      If it does, wait ~30 minutes and retry."
+      fi
+    done
+  else
+    echo "   ✅ Cognito domain available (or belongs to current stack)"
+  fi
+else
+  echo "   ✅ Cognito domain available"
+fi
 
 # Phase 0b: VPC — ensure a VPC with IGW exists
 echo ""
@@ -174,8 +217,8 @@ echo "🐳 Phase 2: Building and pushing Docker image (linux/amd64)..."
 cd "$SCRIPT_DIR"
 PROFILE_FLAG=""
 if [ -n "$PROFILE" ]; then PROFILE_FLAG="--profile $PROFILE"; fi
-python3 deploy.py --region "$REGION" --repo-name "$ECR_REPO" $PROFILE_FLAG || {
-  echo "❌ Docker build/push failed. Is Docker running?"; exit 1
+python3 deploy.py --region "$REGION" --repo-name "$ECR_REPO" --image-tag "$IMAGE_TAG" $PROFILE_FLAG || {
+  echo "❌ Container image build/push failed. Is your container runtime (docker/finch) running?"; exit 1
 }
 echo "   ✅ Image pushed"
 
@@ -193,10 +236,28 @@ if [[ "$STACK_STATUS" == *"IN_PROGRESS"* ]]; then
   echo "   Stack ready."
 fi
 
+# ECS Express Mode keeps INACTIVE services registered indefinitely after deletion.
+# A short hash ensures each deployment gets a unique service name, avoiding collisions.
+ECS_SVC_HASH=$(echo "${STACK_NAME}-${ACCOUNT_ID}-${REGION}" | shasum | cut -c1-6)
+
+# Note: DynamoDB tables (and all other resources) are deleted with the stack — no
+# DeletionPolicy: Retain — so a teardown leaves no orphaned tables to import. A fresh
+# deploy simply recreates everything cleanly.
+
 # Build parameter overrides
-CF_PARAMS="ImageUri=$IMAGE_URI AdminEmail=$ADMIN_EMAIL AllowedIngressCidr=$ALLOWED_CIDR DashboardVpcId=$DASHBOARD_VPC_ID"
+CF_PARAMS="ImageUri=$IMAGE_URI AdminEmail=$ADMIN_EMAIL AllowedIngressCidr=$ALLOWED_CIDR DashboardVpcId=$DASHBOARD_VPC_ID ECSServiceName=${STACK_NAME}-${ECS_SVC_HASH}"
 if [ -n "$DASHBOARD_SUBNETS" ]; then
   CF_PARAMS="$CF_PARAMS DashboardSubnets=$DASHBOARD_SUBNETS"
+fi
+
+# AVA FSI SSO — pipe through when the AVA control plane's CodeBuild
+# exports these env vars. When empty (standalone deploy from a laptop),
+# the FastAPI backend falls back to its Cognito login flow unchanged.
+if [ -n "${AVA_FSI_APP_SIGNING_SECRET:-}" ]; then
+  CF_PARAMS="$CF_PARAMS AvaFsiAppSigningSecret=${AVA_FSI_APP_SIGNING_SECRET}"
+fi
+if [ -n "${AVA_UI_LOGIN_URL:-}" ]; then
+  CF_PARAMS="$CF_PARAMS AvaUiLoginUrl=${AVA_UI_LOGIN_URL}"
 fi
 
 aws cloudformation deploy \

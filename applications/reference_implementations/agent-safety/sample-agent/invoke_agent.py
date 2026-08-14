@@ -11,10 +11,12 @@ import argparse
 import json
 import uuid
 
+from typing import Optional
+
 import boto3
 
 
-def invoke(agent_arn: str, prompt: str, session_id: str | None = None, region: str = "us-east-1", profile: str | None = None):
+def invoke(agent_arn: str, prompt: str, session_id: Optional[str] = None, region: str = "us-east-1", profile: Optional[str] = None):
     session = boto3.Session(profile_name=profile, region_name=region)
     client = session.client("bedrock-agentcore")
 

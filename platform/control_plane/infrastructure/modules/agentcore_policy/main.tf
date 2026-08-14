@@ -35,8 +35,8 @@ locals {
   policy_engine_name = "${replace(var.name_prefix, "-", "_")}_policy_engine"
   # AgentCore Gateway name regex: ([0-9a-zA-Z][-]?){1,48} — hyphens OK, no underscores.
   # Trim to <=48 chars by using a short suffix.
-  gateway_name       = "${var.name_prefix}-gw"
-  gateway_role_name  = "${var.name_prefix}-agentcore-gateway-role"
+  gateway_name      = "${var.name_prefix}-gw"
+  gateway_role_name = "${var.name_prefix}-agentcore-gateway-role"
 }
 
 # ----------------------------------------------------------------------------
@@ -91,9 +91,9 @@ resource "aws_iam_role_policy" "gateway" {
         #   GetPolicyEngine, ListPolicies, AuthorizeAction,
         #   PartiallyAuthorizeActions, etc. AWS may add more over time —
         #   wildcard the namespace on the policy engine resource.
-        Sid    = "PolicyEngineFullAccess"
-        Effect = "Allow"
-        Action = ["bedrock-agentcore:*"]
+        Sid      = "PolicyEngineFullAccess"
+        Effect   = "Allow"
+        Action   = ["bedrock-agentcore:*"]
         Resource = ["*"]
       },
     ]

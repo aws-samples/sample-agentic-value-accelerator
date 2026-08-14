@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAgentChat, type ChartImage as ChartImageData } from '@/lib/hooks/useAgentChat';
 import { authService } from '@/lib/auth/authService';
+import { hasAvaSession } from '@/lib/auth/avaSso';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -58,6 +59,11 @@ export default function AlertChatPage() {
     // Check authentication on mount
     useEffect(() => {
         const checkAuth = async () => {
+            // AVA SSO short-circuit — see app/page.tsx for context.
+            if (hasAvaSession()) {
+                setIsCheckingAuth(false);
+                return;
+            }
             const isAuthenticated = await authService.isAuthenticated();
             if (!isAuthenticated) {
                 // Redirect to login with current page as redirect target

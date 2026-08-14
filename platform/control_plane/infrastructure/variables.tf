@@ -346,3 +346,6 @@ variable "service_approval_agent_runtime_arn" {
   type        = string
   default     = ""
 }
+
+# AWS Agent Registry values are sourced from `module.agent_registry`
+# (see infrastructure/modules/agent_registry/). No top-level variables here.

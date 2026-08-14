@@ -14,6 +14,17 @@ from api.routes.users import router as users_router
 from api.routes.fsi_sso import router as fsi_sso_router
 from api.routes.codecommit import router as codecommit_router
 from api.routes.frontier_agents import router as frontier_agents_router
+from api.routes.harness import router as harness_router
+from api.routes.catalog import router as catalog_router
+from api.routes.memory import router as memory_router
+from api.routes.mcp import router as mcp_router
+from api.routes.a2a import router as a2a_router
+from api.routes.identity_providers import router as identity_providers_router
+from api.routes.approval_policies import router as approval_policies_router
+from api.routes.approval_requests import router as approval_requests_router
+from api.routes.skills import router as skills_router
+from api.routes.agents import router as agents_router
+from api.routes.custom_resources import router as custom_resources_router
 from api.routes.guardrails import router as guardrails_router
 from api.routes.prioritization import router as prioritization_router
 from api.routes.maturity import router as maturity_router
@@ -62,6 +73,17 @@ __all__ = [
     "users_router",
     "codecommit_router",
     "frontier_agents_router",
+    "harness_router",
+    "catalog_router",
+    "memory_router",
+    "mcp_router",
+    "a2a_router",
+    "identity_providers_router",
+    "approval_policies_router",
+    "approval_requests_router",
+    "skills_router",
+    "agents_router",
+    "custom_resources_router",
     "guardrails_router",
     "policies_router",
     "llm_gateway_router",

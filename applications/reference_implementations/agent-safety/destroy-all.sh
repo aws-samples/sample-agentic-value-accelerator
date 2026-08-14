@@ -89,25 +89,54 @@ delete_stack "agent-safety-kill-switch"
 # 2d. Delete Observability Controls stack
 delete_stack "agent-safety-observability-controls"
 
+# 2e. Delete Event-Driven Signals stack
+delete_stack "agent-safety-event-driven-signals"
+
 # 3. Delete Cognito domain (must be done before dashboard stack if pool deletion fails)
 echo ""
 echo "🔐 Removing Cognito domain..."
+ACCOUNT_ID=$(aws sts get-caller-identity $AWS_OPTS --query Account --output text)
 POOL_ID=$(aws cloudformation describe-stacks --stack-name "$DASHBOARD_STACK" $AWS_OPTS \
   --query 'Stacks[0].Outputs[?OutputKey==`CognitoUserPoolId`].OutputValue' --output text 2>/dev/null) || true
 if [ -n "$POOL_ID" ] && [ "$POOL_ID" != "None" ]; then
-  DOMAIN="${DASHBOARD_STACK}-$(aws sts get-caller-identity $AWS_OPTS --query Account --output text)"
+  DOMAIN="${DASHBOARD_STACK}-${ACCOUNT_ID}"
   aws cognito-idp delete-user-pool-domain --domain "$DOMAIN" --user-pool-id "$POOL_ID" $AWS_OPTS 2>/dev/null || true
-  echo "   ✅ Cognito domain removed"
+  echo "   Waiting for Cognito domain to release (up to 60s)..."
+  for i in $(seq 1 12); do
+    CHECK=$(aws cognito-idp describe-user-pool-domain --domain "$DOMAIN" $AWS_OPTS \
+      --query 'DomainDescription.Status' --output text 2>/dev/null) || true
+    if [ -z "$CHECK" ] || [ "$CHECK" = "None" ] || [ "$CHECK" = "" ]; then
+      break
+    fi
+    sleep 5
+  done
+  echo "   ✅ Cognito domain released"
 fi
 
-# 3b. Delete ECS Express Mode service (if exists outside CF — belt and suspenders)
+# 3b. Delete ECS Express Mode service explicitly and wait for full removal
 echo ""
-echo "🧹 Cleaning up ECS Express Mode service..."
+echo "🧹 Deleting ECS Express Mode service..."
 ECS_SERVICE_ARN=$(aws cloudformation describe-stacks --stack-name "$DASHBOARD_STACK" $AWS_OPTS \
   --query 'Stacks[0].Outputs[?OutputKey==`DashboardServiceArn`].OutputValue' --output text 2>/dev/null) || true
 if [ -n "$ECS_SERVICE_ARN" ] && [ "$ECS_SERVICE_ARN" != "None" ]; then
-  aws ecs delete-express-gateway-service --service-arn "$ECS_SERVICE_ARN" $AWS_OPTS 2>/dev/null || true
-  echo "   ✅ ECS Express Mode service cleanup initiated"
+  aws ecs delete-express-gateway-service --service "$ECS_SERVICE_ARN" $AWS_OPTS 2>/dev/null || true
+  echo "   Waiting for ECS service to be fully removed (up to 5 min)..."
+  for i in $(seq 1 30); do
+    SVC_STATUS=$(aws ecs describe-express-gateway-service --service "$ECS_SERVICE_ARN" $AWS_OPTS \
+      --query 'service.status.statusCode' --output text 2>/dev/null) || true
+    if [ -z "$SVC_STATUS" ] || [ "$SVC_STATUS" = "None" ] || [ "$SVC_STATUS" = "" ]; then
+      echo "   ✅ ECS Express service fully removed"
+      break
+    fi
+    if [ "$SVC_STATUS" = "INACTIVE" ]; then
+      # INACTIVE is the terminal state for ECS Express — it won't be fully removed
+      echo "   ✅ ECS Express service is INACTIVE (terminal state)"
+      break
+    fi
+    sleep 10
+  done
+else
+  echo "   No ECS service found — skipping"
 fi
 
 # 4. Delete Dashboard stack
@@ -135,6 +164,31 @@ for LAYER_NAME in "${DASHBOARD_STACK}-boto3-agentcore" "${COST_STACK}-boto3-agen
   done
 done
 echo "   ✅ Layers cleaned"
+
+# 8. Safety-net cleanup of DynamoDB tables. Tables are now deleted with the stack
+#    (no DeletionPolicy: Retain), so this normally finds nothing — it only removes
+#    a table if a prior stack deletion left one behind.
+echo ""
+echo "🗄️  Verifying DynamoDB tables are removed..."
+for TABLE in safety-dashboard-registry safety-dashboard-sessions safety-dashboard-interventions \
+             safety-dashboard-cost-signals safety-dashboard-obs-signals safety-dashboard-eval-signals; do
+  if aws dynamodb describe-table --table-name "$TABLE" $AWS_OPTS > /dev/null 2>&1; then
+    aws dynamodb delete-table --table-name "$TABLE" $AWS_OPTS --no-cli-pager > /dev/null 2>&1 || true
+    echo "   Deleting: $TABLE"
+  fi
+done
+# Wait for all tables to be fully deleted
+echo "   Waiting for table deletions to complete..."
+for TABLE in safety-dashboard-registry safety-dashboard-sessions safety-dashboard-interventions \
+             safety-dashboard-cost-signals safety-dashboard-obs-signals safety-dashboard-eval-signals; do
+  for i in $(seq 1 30); do
+    if ! aws dynamodb describe-table --table-name "$TABLE" $AWS_OPTS > /dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+done
+echo "   ✅ DynamoDB tables deleted"
 
 echo ""
 echo "============================================================"

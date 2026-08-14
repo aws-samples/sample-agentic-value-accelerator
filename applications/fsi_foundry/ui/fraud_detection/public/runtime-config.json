@@ -20,7 +20,7 @@
       "description": "Specialized AI agent: Alert Generator"
     }
   ],
-  "api_endpoint": "https://d3lpkct86xye8x.cloudfront.net/api/invoke",
+  "api_endpoint": "/api/invoke",
   "input_schema": {
     "id_field": "customer_id",
     "id_label": "Customer ID",

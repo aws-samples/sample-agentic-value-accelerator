@@ -48,7 +48,7 @@ resource "aws_ecr_lifecycle_policy" "backend" {
 resource "aws_ecr_repository" "datalake_mcp" {
   name                 = "${var.name_prefix}-datalake-mcp"
   image_tag_mutability = "MUTABLE"
-  force_delete = true
+  force_delete         = true
   image_scanning_configuration {
     scan_on_push = true
   }

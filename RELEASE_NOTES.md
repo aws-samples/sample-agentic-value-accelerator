@@ -1,5 +1,62 @@
 # Release Notes
 
+## v4.0 — Build pillar completes: Harness, Memory, Registry, Catalog, Approvals; Secure adds Identity + Policy; Operate becomes a full surface
+
+Release date: August 2026
+
+Feature release building on v3.1. Completes the **Build** pillar (Harness, Memory, Registry with five typed record kinds, Catalog), adds two new **Secure** surfaces (Identity federation, Approval Policies), turns **Operate** into a five-tile surface with a dedicated Approval Queue, adds one new reference implementation (Investment Research and Risk Accelerator), and hardens the field-demo reference apps with AVA SSO edge auth.
+
+### 🧱 Build — the pillar is now complete
+
+- **Harness** — managed Bedrock AgentCore Harness scaffold. Pick a model, paste a system prompt, attach tools, hit **Test**, and stream the response in the Control Plane. Live SSE console per session; deployed harnesses can publish to Registry → Agents. Backed by a new `harness_execution_role` Terraform module. — _Bikash Behera_
+- **Memory** — AgentCore Memory namespaces with configurable extraction strategies (semantic, episodic, summary). Attach a namespace to any agent at deploy time; agent reads/writes across turns without you managing the store. — _Bikash Behera_
+- **Registry** — five typed record kinds on AWS Agent Registry under the **AVA** namespace: Agents, MCP Servers, A2A Servers, Skills, and Custom Resources, each with a curated catalog on its subpage. A shared boto3 client handles the async CREATING → DRAFT → PENDING_APPROVAL → APPROVED lifecycle. — _Bikash Behera_
+- **Auto-publish on successful deploy** — additive `deployment_success_hook` Terraform module: an EventBridge rule on the deployment Step Function's `SUCCEEDED` events fires a Lambda that publishes the deployment as an `AGENT` record (idempotent; skips if a record with the same `DeploymentId` tag exists). The Step Function itself is untouched. — _Bikash Behera_
+- **Catalog** — unified cross-cutting inventory of every Build resource (Applications, Frontier Agents, Custom Agents, Harness, Memory, MCP Servers, A2A Agents, AgentCore Runtimes, Templates) with a single Registry column (Active / Pending / Deprecated / Not in Registry) and filters. — _Bikash Behera_
+
+### 🔐 Secure — federate identity, gate registrations
+
+- **Identity** — register external OIDC providers (Microsoft Entra ID, Okta, Auth0, generic OIDC) with Auth Code + PKCE, discovery-URL testing, and per-provider claim mapping to AVA roles. Enterprise SSO drops in without a Cognito rebuild; provider registration routes through the Approval Queue by policy. — _Bikash Behera_
+- **Approval Policies** — human-in-the-loop rules for sensitive actions. Declare which `resource_kind + action` combinations require sign-off, from whom (`ADMIN` / `OPERATOR`), by when (SLA hours), and how many approvers (quorum). Eight `AVA Default` policies seed on backend boot; live enforcement is wired into MCP / A2A / Skills / Agents / Custom Resources / Identity / Deployments flows. — _Bikash Behera_
+
+### 🚦 Operate — a full surface, not just observability
+
+- **Operate landing page** — five tiles: Deployments, AgentCore Observability, Langfuse Observability, Prompt Optimization, Approval Queue. Replaces the v3.1 single-page Observability landing. — _Bikash Behera_
+- **Approval Queue** — live inbox of pending HITL sign-offs from the Approval Policy Engine. Each row shows requester, target resource, action, matched policy, and SLA countdown. Approve/deny inline or bulk (up to 200 per call); every decision advances the corresponding AWS Agent Registry record. — _Bikash Behera_
+
+### 📦 New reference implementation
+
+- **Investment Research and Risk Accelerator** — AI research and risk-analysis assistant for capital-markets teams. Bedrock AgentCore + self-provisioned Knowledge Base + RAG, Next.js UI on ECS Fargate behind CloudFront. — _Ronny Rodriguez & Boris Litvin_
+
+### 🔐 AVA SSO — CloudFront edge auth across reference apps
+
+CloudFront-URL protection for the reference-app surfaces so field demos can be shared without exposing raw endpoints:
+
+- **Market Surveillance** — CloudFront Function + client + Lambda authorizer + DB seeder. — _Alseny Diallo & Mark Paguay_
+- **Agent Safety** — dashboard authorizer.
+- **Case Management** — backend authorizer + frontend client. — _Sudhir Kalidindi_
+- **AgentCore-in-a-Box** — CloudFront JWT auth function. — _Charles Meruwoma & Adeleke Coker_
+- **Control Plane UI** — SSO integration hardening across landings.
+
+### 📖 Documentation
+
+- README refreshed with the new Build tabs (Harness, Memory, Registry, Catalog), new Secure surfaces (Identity, Approval Policies), and the new Operate five-tile layout, plus new home screenshots.
+- Contributor table refreshed to reflect v4.0 authors.
+
+### Upgrade notes
+
+- The v3.1 single-page Observability landing is replaced by the new **Operate** landing at `/operate` with five tiles. Deep links to `/observability` continue to work; new deep links live at `/deployments`, `/observability`, `/prompt-optimization`, `/approvals`.
+- Eight `AVA Default` approval policies seed on first backend boot after upgrading. To auto-approve everything during a bring-up, write your own higher-priority policies before the first request.
+- Auto-publish is opt-out via Terraform: set `enable_deployment_success_hook = false` on the Control Plane infra module (default enabled).
+- The AWS Agent Registry integration expects the AVA namespace to exist; first backend boot creates it via the new `agent_registry` Terraform module — no manual step.
+- Registry create flows consult the Approval Policy Engine before writing. A matching `require_approval` policy lands the record as `PENDING_APPROVAL` and opens an Approval Queue row; `deny` returns 403 with the policy's reason.
+
+### Contributors to v4.0
+
+- **Bikash Behera** — Harness, Memory, Registry (Agents / MCP Servers / A2A Servers / Skills / Custom Resources), Catalog, Identity, Approval Policies, Approval Queue, Operate landing, SSO hardening of all apps
+- **Ronny Rodriguez & Boris Litvin** — Investment Research and Risk Accelerator reference implementation
+- **Adarsh Parakh & Vivian Bui** — release management
+
 ## v3.1 — Secure, Govern expansion, and new reference apps
 
 Release date: August 2026

@@ -1,0 +1,74 @@
+{
+  "$schema": "ava-deployment-manifest-v1",
+  "id": "sales-recommend",
+  "name": "Investment Research and Risk Accelerator",
+  "description": "AI-powered solution recommendation agent for business leaders",
+  "version": "1.0.0",
+  "type": "reference_implementation",
+
+  "deployment": {
+    "engine": "terraform",
+    "buildspec": "buildspec.yml",
+    "source_type": "s3",
+    "infrastructure_dir": "infrastructure",
+    "requires_docker": true
+  },
+
+  "parameters": [
+    {
+      "key": "aws_region",
+      "label": "AWS Region",
+      "type": "string",
+      "default": "us-east-1",
+      "required": true
+    },
+    {
+      "key": "knowledge_base_id",
+      "label": "Bedrock Knowledge Base ID (deprecated)",
+      "type": "string",
+      "default": "",
+      "required": false,
+      "description": "DEPRECATED / UNUSED. The stack now creates and populates its own Bedrock Knowledge Base (OpenSearch Serverless + S3). Leave blank — any value is ignored."
+    },
+    {
+      "key": "model_id",
+      "label": "Bedrock Model ID",
+      "type": "string",
+      "default": "global.anthropic.claude-sonnet-4-6",
+      "required": true
+    },
+    {
+      "key": "basic_auth_username",
+      "label": "Basic Auth Username",
+      "type": "string",
+      "default": "admin",
+      "required": true,
+      "description": "Username for CloudFront basic auth"
+    },
+    {
+      "key": "basic_auth_password",
+      "label": "Basic Auth Password",
+      "type": "secret",
+      "required": true,
+      "description": "Password for CloudFront basic auth"
+    }
+  ],
+
+  "outputs": [
+    {
+      "key": "cloudfront_url",
+      "label": "Application URL",
+      "type": "url"
+    },
+    {
+      "key": "agent_runtime_arn",
+      "label": "AgentCore Runtime ARN",
+      "type": "string"
+    }
+  ],
+
+  "prerequisites": {
+    "bedrock_models": ["anthropic.claude-sonnet-4-6"],
+    "notes": "Self-contained: the stack creates its own Bedrock Knowledge Base (OpenSearch Serverless + S3) and auto-populates the catalog from infrastructure/repos.txt via a CodeBuild pipeline (~15 min after deploy). No Knowledge Base needs to be pre-provisioned."
+  }
+}

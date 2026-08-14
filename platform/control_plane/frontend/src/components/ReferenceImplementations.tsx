@@ -43,7 +43,7 @@ const IMPLEMENTATIONS: RefImplConfig[] = [
     deployment_patterns: [{ id: 'bash', name: 'Bash orchestration', description: 'Modular deploy-all.sh across dashboard, cost/eval/obs controls, and sample agent' }],
     parameters: [],
     tags: ['safety', 'governance', 'hil', 'agentcore', 'cognito', 'cloudfront'],
-    hidden: true,
+    hidden: false,
   },
   {
     id: 'market-surveillance',
@@ -114,6 +114,21 @@ const IMPLEMENTATIONS: RefImplConfig[] = [
       { name: 'sanctions_api_key', type: 'string', description: 'sanctions.network API key for OFAC screening (optional — mock used if not set)', required: false, default: '', input_type: 'password', help_url: 'https://sanctions.network' },
     ],
     tags: ['merchant-onboarding', 'payments', 'kyc', 'kyb', 'compliance', 'ofac', 'human-in-the-loop', 'bedrock', 'textract', 'cdk'],
+  },
+  {
+    id: 'sales-recommend',
+    name: 'Investment Research and Risk Accelerator',
+    domain: 'Capital Markets',
+    description: 'AI-powered AWS solution recommendation agent for non-technical business leaders. RAG against a curated solution catalog with interactive clarifying questions and business-outcome-first highlights. Self-contained: the stack creates its own Bedrock Knowledge Base (OpenSearch Serverless + S3) and auto-populates the catalog from a repo list via CodeBuild. Single Strands agent on Bedrock AgentCore, Next.js UI on ECS Fargate behind CloudFront basic auth.',
+    status: 'Available',
+    color: 'teal',
+    features: ['Self-provisioned Knowledge Base', 'Auto-generated catalog (repo → profile)', 'RAG over solution catalog', 'Interactive clarifying questions', 'CloudFront basic auth'],
+    agents: ['Solutions Advisor', 'Wiki Generator (catalog builder)'],
+    frameworks: [{ id: 'strands', name: 'Strands Agents SDK' }],
+    deployment_patterns: [{ id: 'terraform', name: 'Terraform', description: 'Single-root Terraform (KB + wiki-generator + AgentCore + ECS Fargate + CloudFront), driven by the headless root deploy.sh' }],
+    parameters: [],
+    tags: ['sales', 'rag', 'streaming', 'interactive', 'strands', 'agentcore', 'knowledge-base', 'opensearch-serverless', 'ecs-fargate', 'cloudfront'],
+    hidden: false,
   },
   {
     id: 'agentcore-in-a-box',
@@ -262,7 +277,19 @@ export default function ReferenceImplementations() {
                   </div>
                 );
               }
-              const frontendUrl = dep.outputs?.ui_url || dep.outputs?.app_url || dep.outputs?.AmplifyUrl;
+              // Reference apps advertise their frontend URL under a few different
+              // keys depending on how their template declares outputs:
+              //   - ui_url / app_url            — the modern FSI Foundry standard
+              //   - AmplifyUrl                  — Amplify-hosted apps (legacy)
+              //   - dashboard_url               — agent-safety's bash-orchestrated deploy
+              //   - cloudfront_url / frontend_url — occasional variants
+              // We accept any of them so the "Open App" button appears for every
+              // app that actually has a URL to open.
+              const o = dep.outputs || {};
+              const frontendUrl =
+                o.ui_url || o.app_url || o.AmplifyUrl
+                || o.dashboard_url
+                || o.cloudfront_url || o.frontend_url;
               const diff = Date.now() - new Date(dep.updated_at).getTime();
               const mins = Math.floor(diff / 60000);
               const deployedAgo = mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`;

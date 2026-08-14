@@ -6,6 +6,7 @@
  */
 
 import { authService } from '../auth/authService';
+import { avaAuthHeaders, hasAvaSession } from '../auth/avaSso';
 import { AgentMessageWithAudit } from '../hooks/useAgentChat';
 
 export interface SaveMessageImageRef {
@@ -44,19 +45,27 @@ class MessagesService {
     }
 
     /**
-     * Get authentication headers
+     * Get authentication headers. Accepts either an AVA SSO session
+     * (ava_session cookie, set by the CloudFront edge Function) OR a
+     * Cognito Amplify session — whichever the user has. AVA-federated
+     * users won't have a Cognito idToken, so we can't throw on its
+     * absence anymore.
      */
     private async getAuthHeaders(): Promise<HeadersInit> {
         const session = await authService.getSession();
 
-        if (!session.idToken) {
+        if (!session.idToken && !hasAvaSession()) {
             throw new Error('No authentication token available');
         }
 
-        return {
+        const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.idToken}`,
         };
+        if (session.idToken) {
+            headers['Authorization'] = `Bearer ${session.idToken}`;
+        }
+        // AVA cookie wins when present.
+        return { ...headers, ...avaAuthHeaders() };
     }
 
     /**

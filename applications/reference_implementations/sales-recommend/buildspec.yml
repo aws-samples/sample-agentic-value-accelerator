@@ -1,0 +1,44 @@
+########################################################################
+# Sales Recommend — App Buildspec (thin delegator)
+#
+# IMPORTANT: When deployed through the AVA Control Plane, AVA runs its OWN
+# CodeBuild buildspec, which extracts this app and invokes the ROOT
+# `deploy.sh` (deploy) / `destroy.sh` (destroy). This app-level buildspec is
+# therefore NOT on the AVA critical path.
+#
+# It is kept only as a faithful standalone entrypoint (e.g. a hand-rolled
+# CodeBuild project) and simply delegates to the exact same scripts AVA uses,
+# so the two paths can never drift. The deploy is a single self-contained
+# Terraform run:
+#   - Knowledge Base is self-provisioned (no pre-provisioned KB)
+#   - the agent ships via AgentCore *code* deploy (an S3 zip), not a container
+#     (so there is no agent ECR repo and no separate runtime-creation step)
+#
+# AVA injects: DEPLOYMENT_ID, AWS_TARGET_REGION, STATE_BUCKET, LOCK_TABLE, ACTION
+########################################################################
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - |
+        if ! command -v terraform >/dev/null 2>&1; then
+          curl -fsSL https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip -o tf.zip
+          unzip -o tf.zip -d /usr/local/bin && rm tf.zip
+        fi
+      - terraform --version
+
+  build:
+    commands:
+      - chmod +x deploy.sh destroy.sh
+      - |
+        if [ "${ACTION:-deploy}" = "destroy" ]; then
+          ./destroy.sh
+        else
+          ./deploy.sh
+        fi
+
+artifacts:
+  files:
+    - /tmp/outputs.json
+  discard-paths: yes

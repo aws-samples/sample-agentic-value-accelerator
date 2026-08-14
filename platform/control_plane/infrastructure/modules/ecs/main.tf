@@ -122,7 +122,17 @@ resource "aws_iam_role_policy" "ecs_task_dynamodb" {
           var.organization_design_table_arn,
           "${var.organization_design_table_arn}/index/*",
           var.service_approval_table_arn,
-          "${var.service_approval_table_arn}/index/*"
+          "${var.service_approval_table_arn}/index/*",
+          var.mcp_servers_table_arn,
+          "${var.mcp_servers_table_arn}/index/*",
+          var.a2a_agents_table_arn,
+          "${var.a2a_agents_table_arn}/index/*",
+          var.identity_providers_table_arn,
+          "${var.identity_providers_table_arn}/index/*",
+          var.approval_policies_table_arn,
+          "${var.approval_policies_table_arn}/index/*",
+          var.approval_requests_table_arn,
+          "${var.approval_requests_table_arn}/index/*"
         ]
       }
     ]
@@ -216,6 +226,168 @@ resource "aws_iam_role_policy" "ecs_task_agentcore_invoke" {
       Resource = "arn:aws:bedrock-agentcore:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:runtime/*"
     }]
   })
+}
+
+# Harness — control plane + data plane. Backend's /api/v1/harness routes wrap
+# these actions. iam:PassRole is required so CreateHarness can attach the
+# harness_execution_role. bedrock:ListFoundationModels powers the dynamic
+# model dropdown in the Create wizard.
+#
+# NOTE: This is a *customer-managed policy* (attached via
+# aws_iam_role_policy_attachment) rather than an inline policy. The role
+# already has ~9.5 KB of inline policies and IAM caps role-inline policy
+# aggregate at 10240 bytes. Managed policies have a per-policy 6 KB cap that
+# does NOT count against the role's inline budget. See LimitExceeded
+# regression 2026-08-07.
+resource "aws_iam_policy" "ecs_task_harness" {
+  name        = "${var.name_prefix}-harness-control-and-data"
+  description = "Bedrock AgentCore Harness CRUD + invoke + iam:PassRole for the AVA backend task role."
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "HarnessControlPlane"
+        Effect = "Allow"
+        Action = [
+          "bedrock-agentcore:CreateHarness",
+          "bedrock-agentcore:GetHarness",
+          "bedrock-agentcore:UpdateHarness",
+          "bedrock-agentcore:DeleteHarness",
+          "bedrock-agentcore:ListHarnesses",
+          "bedrock-agentcore:ListHarnessVersions",
+          "bedrock-agentcore:CreateHarnessEndpoint",
+          "bedrock-agentcore:GetHarnessEndpoint",
+          "bedrock-agentcore:UpdateHarnessEndpoint",
+          "bedrock-agentcore:DeleteHarnessEndpoint",
+          "bedrock-agentcore:ListHarnessEndpoints",
+          # Docs: harness APIs also require the AgentRuntime action of the
+          # same shape (harness is a managed abstraction over runtime).
+          "bedrock-agentcore:CreateAgentRuntime",
+          "bedrock-agentcore:UpdateAgentRuntime",
+          "bedrock-agentcore:DeleteAgentRuntime",
+          "bedrock-agentcore:CreateMemory",
+          "bedrock-agentcore:UpdateMemory",
+          "bedrock-agentcore:DeleteMemory",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "HarnessDataPlane"
+        Effect = "Allow"
+        Action = [
+          "bedrock-agentcore:InvokeHarness",
+          "bedrock-agentcore:InvokeAgentRuntime",
+          "bedrock-agentcore:InvokeAgentRuntimeCommand",
+        ]
+        Resource = "arn:aws:bedrock-agentcore:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:harness/*"
+      },
+      {
+        Sid      = "HarnessPassRole"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = var.harness_execution_role_arn != "" ? var.harness_execution_role_arn : "*"
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "bedrock-agentcore.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "HarnessListFoundationModels"
+        Effect   = "Allow"
+        Action   = ["bedrock:ListFoundationModels"]
+        Resource = "*"
+      },
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_harness" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.ecs_task_harness.arn
+}
+
+# Cognito IdP read-only — used by the Identity page's "system" provider row
+# (Secure > Identity). Reads pool metadata, hosted UI domain, and groups.
+# Same rationale as ecs_task_harness — customer-managed policy so it doesn't
+# count against the role's 10KB inline-policy budget.
+resource "aws_iam_policy" "ecs_task_cognito_idp" {
+  name        = "${var.name_prefix}-cognito-idp-read"
+  description = "Read-only Cognito IdP access for the Identity page's system provider row."
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "CognitoIdpRead"
+      Effect = "Allow"
+      Action = [
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:DescribeUserPoolDomain",
+        "cognito-idp:ListGroups",
+        "cognito-idp:ListUserPoolClients",
+      ]
+      # Scoped to the pool ARN pattern in this account/region.
+      Resource = "arn:aws:cognito-idp:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:userpool/*"
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_cognito_idp" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.ecs_task_cognito_idp.arn
+}
+
+# AWS Agent Registry (control + data plane) — used by the Build > Registry
+# module. Control-plane wraps Create/Get/List/Update/Delete for registries +
+# records + approval workflows; data-plane covers Search / GetRecordDetails
+# for discovery. Customer-managed policy (not inline) so it doesn't consume
+# the ECS task role's 10 KB inline-policy quota.
+resource "aws_iam_policy" "ecs_task_agent_registry" {
+  name        = "${var.name_prefix}-agent-registry"
+  description = "AWS Agent Registry access — control plane (registries + records + approval) plus data plane (search + discovery)."
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AgentRegistryControl"
+        Effect = "Allow"
+        Action = [
+          # Registry lifecycle — one registry per environment; kept broad
+          # because backend bootstrap may need to create the registry the
+          # first time it starts if AGENT_REGISTRY_ID env is empty.
+          "agent-registry:CreateRegistry",
+          "agent-registry:GetRegistry",
+          "agent-registry:ListRegistries",
+          "agent-registry:UpdateRegistry",
+          "agent-registry:DeleteRegistry",
+          # Registry records — CRUD, approval workflow, and tag ops for
+          # governance surfaces.
+          "agent-registry:CreateRegistryRecord",
+          "agent-registry:GetRegistryRecord",
+          "agent-registry:ListRegistryRecords",
+          "agent-registry:UpdateRegistryRecord",
+          "agent-registry:DeleteRegistryRecord",
+          "agent-registry:SubmitRegistryRecordForApproval",
+          "agent-registry:UpdateRegistryRecordStatus",
+          "agent-registry:ListTagsForResource",
+          "agent-registry:TagResource",
+          "agent-registry:UntagResource",
+          # Data plane — search + fetch record details for the Discovery UX.
+          "agent-registry:SearchRegistry",
+          "agent-registry:GetRegistryRecords",
+        ]
+        # Scoped to registries owned by this account. Registry ARN pattern:
+        #   arn:aws:agent-registry:<region>:<account>:registry/<id>
+        Resource = "arn:aws:agent-registry:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:registry/*"
+      },
+    ]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_agent_registry" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.ecs_task_agent_registry.arn
 }
 
 # Policy for CloudWatch Logs access (CodeBuild logs + AgentCore runtime logs)
@@ -584,6 +756,55 @@ resource "aws_ecs_task_definition" "main" {
           value = var.frontier_agents_federation_role_arn
         },
         {
+          # AgentCore Harness execution role — backend passes this on CreateHarness
+          # so users never have to hand-roll the IAM policy. See modules/harness_execution_role.
+          name  = "HARNESS_EXECUTION_ROLE_ARN"
+          value = var.harness_execution_role_arn
+        },
+        {
+          # MCP Servers registry (Build > MCP Servers page)
+          name  = "MCP_SERVERS_TABLE_NAME"
+          value = var.mcp_servers_table_name
+        },
+        {
+          # A2A Agents registry (Build > A2A Agents page)
+          name  = "A2A_AGENTS_TABLE_NAME"
+          value = var.a2a_agents_table_name
+        },
+        {
+          # Identity Providers registry (Secure > Identity page)
+          name  = "IDENTITY_PROVIDERS_TABLE_NAME"
+          value = var.identity_providers_table_name
+        },
+        {
+          # Approval Policies (Secure > Approval Policies page)
+          name  = "APPROVAL_POLICIES_TABLE_NAME"
+          value = var.approval_policies_table_name
+        },
+        {
+          # Approval Requests / Queue (Operate > Approval Queue page)
+          name  = "APPROVAL_REQUESTS_TABLE_NAME"
+          value = var.approval_requests_table_name
+        },
+        {
+          # AWS Agent Registry — primary AVA registry ID + ARN for the
+          # backend's `agent-registry-control` API wrappers. The registry
+          # itself is provisioned via one-off create-registry (no TF resource
+          # yet in the aws provider as of boto3 1.43.67). Empty defaults are
+          # OK — backend bootstrap will create the registry on first startup
+          # if AGENT_REGISTRY_ID is blank.
+          name  = "AGENT_REGISTRY_ID"
+          value = var.agent_registry_id
+        },
+        {
+          name  = "AGENT_REGISTRY_ARN"
+          value = var.agent_registry_arn
+        },
+        {
+          name  = "AGENT_REGISTRY_NAME"
+          value = var.agent_registry_name
+        },
+        {
           name  = "AWS_DEFAULT_REGION"
           value = data.aws_region.current.name
         },
@@ -907,9 +1128,9 @@ resource "aws_iam_role_policy" "ecs_task_agentcore_policy" {
         # AgentCore's UpdateGateway validates the gateway's execution role by
         # Passing it — the task role must be allowed to PassRole the gateway
         # role, or attach-gateway fails with iam:PassRole AccessDenied.
-        Sid    = "PassGatewayRole"
-        Effect = "Allow"
-        Action = "iam:PassRole"
+        Sid      = "PassGatewayRole"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
         Resource = "arn:aws:iam::*:role/${var.name_prefix}-agentcore-gateway-role"
         Condition = {
           StringEquals = {

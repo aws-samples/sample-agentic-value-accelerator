@@ -165,44 +165,64 @@ module "ecs" {
   advpo_bucket_name = module.advanced_prompt_optimization.prompt_optimization_bucket_name
 
   # Deployments
-  deployments_table_name = module.dynamodb.deployments_table_name
-  deployments_table_arn  = module.dynamodb.deployments_table_arn
-  deployments_bucket_arn = module.s3.deployments_bucket_arn
-  state_machine_arn                 = module.step_functions.state_machine_arn
+  deployments_table_name              = module.dynamodb.deployments_table_name
+  deployments_table_arn               = module.dynamodb.deployments_table_arn
+  deployments_bucket_arn              = module.s3.deployments_bucket_arn
+  state_machine_arn                   = module.step_functions.state_machine_arn
   frontier_agents_state_machine_arn   = module.frontier_agents_pipeline.state_machine_arn
   frontier_agents_federation_role_arn = aws_iam_role.frontier_agents_federation.arn
-  app_factory_table_name              = module.dynamodb.app_factory_table_name
-  app_factory_table_arn  = module.dynamodb.app_factory_table_arn
-  guardrails_table_name     = module.dynamodb.guardrails_table_name
-  guardrails_table_arn      = module.dynamodb.guardrails_table_arn
-  policies_table_name       = module.dynamodb.policies_table_name
-  policies_table_arn        = module.dynamodb.policies_table_arn
-  policy_engine_id          = module.agentcore_policy.policy_engine_id
-  policy_gateway_arn        = module.agentcore_policy.gateway_arn
-  prioritization_table_name = module.dynamodb.prioritization_table_name
-  prioritization_table_arn  = module.dynamodb.prioritization_table_arn
-  maturity_table_name       = module.dynamodb.maturity_table_name
-  maturity_table_arn        = module.dynamodb.maturity_table_arn
-  business_cases_table_name = module.dynamodb.business_cases_table_name
-  knowledge_table_name      = module.dynamodb.knowledge_table_name
-  knowledge_table_arn       = module.dynamodb.knowledge_table_arn
-  datalake_mcp_image_uri    = "${module.ecr.datalake_mcp_repository_url}:latest"
-  kb_mcp_image_uri          = "${module.ecr.kb_mcp_repository_url}:latest"
-  business_cases_table_arn  = module.dynamodb.business_cases_table_arn
-  operating_model_table_name = module.dynamodb.operating_model_table_name
-  operating_model_table_arn  = module.dynamodb.operating_model_table_arn
+  harness_execution_role_arn          = module.harness_execution_role.role_arn
+  mcp_servers_table_name              = module.dynamodb.mcp_servers_table_name
+  mcp_servers_table_arn               = module.dynamodb.mcp_servers_table_arn
+  a2a_agents_table_name               = module.dynamodb.a2a_agents_table_name
+  a2a_agents_table_arn                = module.dynamodb.a2a_agents_table_arn
+  identity_providers_table_name       = module.dynamodb.identity_providers_table_name
+  identity_providers_table_arn        = module.dynamodb.identity_providers_table_arn
+  approval_policies_table_name        = module.dynamodb.approval_policies_table_name
+  approval_policies_table_arn         = module.dynamodb.approval_policies_table_arn
+  approval_requests_table_name        = module.dynamodb.approval_requests_table_name
+  approval_requests_table_arn         = module.dynamodb.approval_requests_table_arn
+
+  # AWS Agent Registry — sourced from the `agent_registry` module, which
+  # runs a null_resource + local-exec to `create-registry` (or `list` then
+  # skip) idempotently by name. The module owns the ARN; we thread it here
+  # so the backend gets AGENT_REGISTRY_ID / AGENT_REGISTRY_ARN env vars
+  # for its `agent-registry-control` API wrappers.
+  agent_registry_id              = module.agent_registry.registry_id
+  agent_registry_arn             = module.agent_registry.registry_arn
+  agent_registry_name            = module.agent_registry.registry_name
+  app_factory_table_name         = module.dynamodb.app_factory_table_name
+  app_factory_table_arn          = module.dynamodb.app_factory_table_arn
+  guardrails_table_name          = module.dynamodb.guardrails_table_name
+  guardrails_table_arn           = module.dynamodb.guardrails_table_arn
+  policies_table_name            = module.dynamodb.policies_table_name
+  policies_table_arn             = module.dynamodb.policies_table_arn
+  policy_engine_id               = module.agentcore_policy.policy_engine_id
+  policy_gateway_arn             = module.agentcore_policy.gateway_arn
+  prioritization_table_name      = module.dynamodb.prioritization_table_name
+  prioritization_table_arn       = module.dynamodb.prioritization_table_arn
+  maturity_table_name            = module.dynamodb.maturity_table_name
+  maturity_table_arn             = module.dynamodb.maturity_table_arn
+  business_cases_table_name      = module.dynamodb.business_cases_table_name
+  knowledge_table_name           = module.dynamodb.knowledge_table_name
+  knowledge_table_arn            = module.dynamodb.knowledge_table_arn
+  datalake_mcp_image_uri         = "${module.ecr.datalake_mcp_repository_url}:latest"
+  kb_mcp_image_uri               = "${module.ecr.kb_mcp_repository_url}:latest"
+  business_cases_table_arn       = module.dynamodb.business_cases_table_arn
+  operating_model_table_name     = module.dynamodb.operating_model_table_name
+  operating_model_table_arn      = module.dynamodb.operating_model_table_arn
   organization_design_table_name = module.dynamodb.organization_design_table_name
   organization_design_table_arn  = module.dynamodb.organization_design_table_arn
-  service_approval_table_name        = module.service_approval.table_name
-  service_approval_table_arn         = module.service_approval.table_arn
-  service_approval_bucket            = module.service_approval.bucket_name
-  service_approval_bucket_arn        = module.service_approval.bucket_arn
+  service_approval_table_name    = module.service_approval.table_name
+  service_approval_table_arn     = module.service_approval.table_arn
+  service_approval_bucket        = module.service_approval.bucket_name
+  service_approval_bucket_arn    = module.service_approval.bucket_arn
   # Service-approval Path B: backend invokes AgentCore directly. The
   # runtime ARN is owned by platform/control_plane/service_approval/runtime/
   # (not a peer of this stack) — capture its terraform output and pass
   # via tfvars to wire the backend's create_run path.
   service_approval_agent_runtime_arn = var.service_approval_agent_runtime_arn
-  cors_origins           = concat(["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"], ["https://${module.cloudfront.distribution_domain_name}"], var.domain_name != "" ? ["https://${var.domain_name}"] : [])
+  cors_origins                       = concat(["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"], ["https://${module.cloudfront.distribution_domain_name}"], var.domain_name != "" ? ["https://${var.domain_name}"] : [])
 
   # Cognito wiring — without these the backend's RBAC layer falls into a
   # dev-mode bypass that returns Role.ADMIN for every JWT. See modules/ecs/main.tf.
@@ -375,6 +395,20 @@ module "agent_registry" {
 # Docker builds, Langfuse wiring, or Foundry-specific env vars — keeping them
 # on a slim pipeline avoids coupling the two schemas.
 
+# ============================================================================
+# Bedrock AgentCore Harness — shared execution role
+# One IAM role per account/region, auto-provisioned so users don't have to
+# hand-roll the ~40-line policy from the AWS docs. Backend passes this ARN
+# on CreateHarness. See modules/harness_execution_role/ for the full policy.
+# ============================================================================
+
+module "harness_execution_role" {
+  source = "./modules/harness_execution_role"
+
+  name_prefix = local.name_prefix
+  tags        = var.tags
+}
+
 module "frontier_agents_pipeline" {
   source = "./modules/frontier_agents_pipeline"
 
@@ -403,6 +437,33 @@ module "eventbridge" {
 
   bus_name           = var.eventbridge_bus_name
   step_functions_arn = module.step_functions.state_machine_arn
+
+  tags = var.tags
+}
+
+# ============================================================================
+# Deployment Success Hook — additive to the deployment pipeline.
+#
+# Listens for the deployment Step Function's SUCCEEDED events on the
+# AWS-managed `aws.states` event bus and invokes a Lambda that publishes
+# the deployed application as an AGENT record in AWS Agent Registry.
+# The Step Function itself is untouched — removing this module reverts
+# to the pre-hook behavior (deploys still succeed; they just won't
+# auto-register in Registry → Agents).
+# ============================================================================
+
+module "deployment_success_hook" {
+  source = "./modules/deployment_success_hook"
+
+  name_prefix                  = local.name_prefix
+  state_machine_arn            = module.step_functions.state_machine_arn
+  deployments_table_arn        = module.dynamodb.deployments_table_arn
+  deployments_table_name       = module.dynamodb.deployments_table_name
+  approval_requests_table_arn  = module.dynamodb.approval_requests_table_arn
+  approval_requests_table_name = module.dynamodb.approval_requests_table_name
+  agent_registry_id            = module.agent_registry.registry_id
+  agent_registry_arn           = module.agent_registry.registry_arn
+  aws_region                   = var.aws_region
 
   tags = var.tags
 }

@@ -6,6 +6,7 @@
  */
 
 import { authService } from '../auth/authService';
+import { avaAuthHeaders, hasAvaSession } from '../auth/avaSso';
 
 export interface AgentMessage {
     role: 'user' | 'agent' | 'system';
@@ -33,21 +34,32 @@ export interface SendMessageOptions {
 
 class AgentService {
     /**
-     * Get authentication headers for API requests
+     * Get authentication headers for API requests. Accepts either
+     * Cognito Amplify's id_token or the AVA SSO ava_session cookie
+     * (set by the CloudFront viewer-request Function when the user
+     * arrives from the AVA UI). AVA-federated users don't have a Cognito
+     * session, so we can't throw on missing idToken.
+     *
+     * NOTE: this handler proxies to the AgentCore Runtime through a
+     * Next.js server route which is Cognito-authorized today. If we want
+     * AVA-federated users to reach AgentCore, the server route will need
+     * to accept the AVA HMAC token as well (Phase 2 — deferred to the
+     * backend authorizer swap).
      */
     private async getAuthHeaders(): Promise<HeadersInit> {
         const session = await authService.getSession();
 
-        // Use ID token (not access token) for AgentCore Runtime authentication
-        // ID token has aud claim set to client ID, which AgentCore validates
-        if (!session.idToken) {
+        if (!session.idToken && !hasAvaSession()) {
             throw new Error('No authentication token available');
         }
 
-        return {
+        const headers: Record<string, string> = {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.idToken}`,
         };
+        if (session.idToken) {
+            headers['Authorization'] = `Bearer ${session.idToken}`;
+        }
+        return { ...headers, ...avaAuthHeaders() };
     }
 
     /**

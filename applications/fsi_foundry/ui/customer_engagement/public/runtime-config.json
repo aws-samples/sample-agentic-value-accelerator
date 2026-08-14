@@ -20,7 +20,7 @@
       "description": "Identifies coverage adjustments, bundling opportunities, estimated savings, and value improvements"
     }
   ],
-  "api_endpoint": "https://example.cloudfront.net/api/invoke",
+  "api_endpoint": "/api/invoke",
   "input_schema": {
     "id_field": "customer_id",
     "id_label": "Customer ID",

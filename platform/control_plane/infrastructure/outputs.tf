@@ -122,6 +122,20 @@ output "frontier_agents_codebuild_project_name" {
 }
 
 # ============================================================================
+# AgentCore Harness Outputs
+# ============================================================================
+
+output "harness_execution_role_arn" {
+  description = "IAM execution role ARN used by CreateHarness. Auto-provisioned per account/region."
+  value       = module.harness_execution_role.role_arn
+}
+
+output "harness_execution_role_name" {
+  description = "IAM execution role name used by CreateHarness."
+  value       = module.harness_execution_role.role_name
+}
+
+# ============================================================================
 # Cognito Outputs
 # ============================================================================
 
@@ -155,7 +169,7 @@ output "cloudfront_distribution_id" {
 }
 
 output "cloudfront_domain_name" {
-  description = "CloudFront distribution domain (e.g. d1v3ehii7cdiog.cloudfront.net). Feeds bootstrap/hosted_zone as the apex alias target so the demo zone points at the same distribution this terraform creates."
+  description = "CloudFront distribution domain (e.g. dXXXXXXXXXXXX.cloudfront.net). Feeds bootstrap/hosted_zone as the apex alias target so the demo zone points at the same distribution this terraform creates."
   value       = module.cloudfront.distribution_domain_name
 }
 
@@ -321,4 +335,13 @@ output "datalake_mcp_repository_url" {
 output "kb_mcp_repository_url" {
   description = "ECR repository URL for knowledge base MCP server"
   value       = module.ecr.kb_mcp_repository_url
+}
+
+# AWS Agent Registry — `agent_registry_arn` and `agent_registry_name` are
+# defined above in the section titled "Agent Registry Outputs". Add
+# `agent_registry_id` alongside them so downstream stacks can grab the raw
+# ID without parsing the ARN.
+output "agent_registry_id" {
+  description = "AWS Agent Registry ID (last path segment of the ARN) for the primary AVA registry"
+  value       = module.agent_registry.registry_id
 }

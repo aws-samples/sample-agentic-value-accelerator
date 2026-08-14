@@ -33,6 +33,7 @@ import {
   governAgentCoreApi,
   type AwsDiscoveredAgentsResponse,
 } from '../../api/client';
+import { harnessApi, type HarnessSummary } from '../harness/api';
 import type { UseCase, BusinessCase, OperatingModel, FrontierAgentCatalogEntry, PolicyRecord } from '../../api/client';
 import type { GuardrailTemplate, Deployment, ServiceApprovalRun, GuardrailMetrics, GuardrailValidationSummary } from '../../types';
 import {
@@ -87,6 +88,10 @@ export interface GovernanceSummary {
   deploymentsActive: number;
   deploymentsPending: number;
   deploymentsFailed: number;
+
+  // Harnesses (REAL DATA — Bedrock AgentCore Harness)
+  harnessCount: number;
+  harnessesReady: number;
 
   // Compliance (mock for now)
   frameworksCovered: number;
@@ -199,6 +204,7 @@ export interface GovernanceAggregatorResult {
   operatingModels: OperatingModel[];
   serviceApprovalRuns: ServiceApprovalRun[];
   frontierAgents: FrontierAgentSummary[];
+  harnesses: HarnessSummary[];
   guardrailMetricsTotal: {
     totalInvocations: number;
     blockedCount: number;
@@ -326,6 +332,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
   const [guardrailValidation, setGuardrailValidation] = useState<GuardrailValidationSummary | null>(null);
   const [policyRecords, setPolicyRecords] = useState<PolicyRecord[]>([]);
   const [awsAgents, setAwsAgents] = useState<AwsDiscoveredAgentsResponse | null>(null);
+  const [harnesses, setHarnesses] = useState<HarnessSummary[]>([]);
 
   // Load all data from AVA APIs
   useEffect(() => {
@@ -347,6 +354,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
           validationRes,
           policiesRes,
           awsAgentsRes,
+          harnessesRes,
         ] = await Promise.allSettled([
           guardrailsApi.list(),
           deploymentsApi.list(),
@@ -359,6 +367,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
           guardrailValidationApi.getSummary(),
           policiesApi.list(),
           governAgentCoreApi.agents(),
+          harnessApi.list(),
         ]);
 
         // Process results (handle failures gracefully)
@@ -393,6 +402,9 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
         }
         if (awsAgentsRes.status === 'fulfilled') {
           setAwsAgents(awsAgentsRes.value);
+        }
+        if (harnessesRes.status === 'fulfilled') {
+          setHarnesses(harnessesRes.value.harnesses || []);
         }
 
         // Fetch metrics for active guardrails (in parallel, non-blocking)
@@ -563,7 +575,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       totalModels: 5, // Mock - would come from Bedrock ListFoundationModels
       modelsInProduction: 4,
       modelsPendingReview: 1,
-      totalAgents: (awsAgents?.total ?? 0) + frontierAgentsList.length + deployments.filter(d => d.template_id?.toLowerCase().includes('agent')).length,
+      totalAgents: (awsAgents?.total ?? 0) + frontierAgentsList.length + harnesses.length + deployments.filter(d => d.template_id?.toLowerCase().includes('agent')).length,
       bedrockAgents: awsAgents?.bedrock_agents ?? 0,
       agentcoreRuntimes: awsAgents?.agentcore_runtimes ?? 0,
       agentsWithPolicies: guardrailsActive,
@@ -577,6 +589,10 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       deploymentsActive,
       deploymentsPending,
       deploymentsFailed,
+
+      // Harnesses (REAL — from list_harnesses)
+      harnessCount: harnesses.length,
+      harnessesReady: harnesses.filter((h) => h.status === 'READY').length,
 
       // Compliance (MOCK)
       frameworksCovered: COMPLIANCE_FRAMEWORKS.filter(f => f.status === 'on-track').length,
@@ -607,7 +623,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       validationCriticalFailures: guardrailValidation?.criticalFailures24h ?? 0,
       validationLastRun: guardrailValidation?.lastRunTimestamp,
     };
-  }, [guardrailTemplates, deployments, useCases, frontierAgentsList, businessCases, serviceApprovalRuns, guardrailMetricsTotal, guardrailValidation, awsAgents]);
+  }, [guardrailTemplates, deployments, useCases, frontierAgentsList, businessCases, serviceApprovalRuns, guardrailMetricsTotal, guardrailValidation, awsAgents, harnesses]);
 
   // Pipeline health from real use case data
   const pipeline = useMemo<PipelineHealth>(() => {
@@ -1013,6 +1029,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
     operatingModels,
     serviceApprovalRuns,
     frontierAgents,
+    harnesses,
     guardrailMetricsTotal,
     policyMetricsTotal,
 

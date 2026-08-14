@@ -44,6 +44,15 @@ rm -f infrastructure/app-infra/deploy.auto.tfvars.json
 # Step 1: Deploy backend infrastructure (Terraform foundations + app-infra)
 echo "=== Step 1/3: Deploying backend infrastructure ==="
 chmod +x scripts/*.sh 2>/dev/null || true
+
+# Bridge AVA control-plane env vars into TF_VAR_* so the foundations layer
+# picks them up when it configures the CloudFront viewer-request Function.
+# When these are empty (standalone laptop deploy without AVA), the CloudFront
+# module skips the AVA SSO Function entirely and the custom Cognito login
+# page keeps working — zero regression for standalone deploys.
+export TF_VAR_fsi_app_signing_secret="${AVA_FSI_APP_SIGNING_SECRET:-}"
+export TF_VAR_ava_ui_login_url="${AVA_UI_LOGIN_URL:-}"
+
 scripts/deploy-backend.sh --environment "$ENVIRONMENT" --auto-approve || {
   echo "ERROR: Backend infrastructure deployment failed"
   exit 1
@@ -56,147 +65,87 @@ scripts/deploy-webapp-ec2.sh --environment "$ENVIRONMENT" || {
   exit 1
 }
 
-# Step 3: Seed Database (if tables don't exist)
-echo "=== Step 3/3: Seeding database ==="
+# Step 3: Seed Database via in-VPC Lambda
+# ─────────────────────────────────────────────────────────────────────────
+# The DB seeder is a Lambda inside Aurora's VPC (see
+# infrastructure/modules/db-seeder). It reads DB creds from Secrets Manager
+# and runs the existing seeding_scripts package in-process:
+#   1. Table-count idempotency probe — skips if the schema already exists.
+#   2. `db_ops.db_init` creates the schema from schema.yaml.
+#   3. `data_gen` generates synthetic CSVs into /tmp.
+#   4. `database_seeding.seed` loads the CSVs in FK order.
+#
+# Replaces the previous CodeBuild-via-SSM-port-forward path, which
+# silently skipped seeding whenever the tunnel didn't open (port-forward
+# depends on `nc`, `session-manager-plugin`, and CodeBuild IAM perms —
+# any one missing quietly turned seeding into a no-op while the build
+# still reported success).
+#
+# Fail-loud contract:
+#   - If the Lambda name isn't in Terraform outputs → fail.
+#   - If `aws lambda invoke` returns non-zero → fail.
+#   - If the Lambda response contains "errorMessage" → fail.
+#   - Only "seeded" or "already_seeded" in the response body counts as
+#     success. Anything else aborts Step 3.
+echo "=== Step 3/3: Seeding database (via in-VPC Lambda) ==="
 
-# Ensure session-manager-plugin is installed for the SSM port-forward to RDS
-# through the bastion. Not bundled with the AL2 CodeBuild image; the
-# .deb/.rpm installer is idempotent (no-op if already present).
-if ! command -v session-manager-plugin >/dev/null 2>&1; then
-  echo "Installing session-manager-plugin..."
-  arch=$(uname -m)
-  case "$arch" in
-    aarch64|arm64) sm_url="https://s3.amazonaws.com/session-manager-downloads/plugin/latest/linux_arm64/session-manager-plugin.rpm" ;;
-    x86_64|amd64)  sm_url="https://s3.amazonaws.com/session-manager-downloads/plugin/latest/linux_64/session-manager-plugin.rpm" ;;
-    *)             echo "  ⚠️  Unsupported arch $arch — skipping seeding" ; sm_url="" ;;
-  esac
-  if [ -n "$sm_url" ]; then
-    curl -fsSL "$sm_url" -o /tmp/smp.rpm && \
-      (rpm -i /tmp/smp.rpm 2>/dev/null || yum install -y /tmp/smp.rpm >/dev/null 2>&1 || sudo rpm -i /tmp/smp.rpm 2>/dev/null || true)
-    command -v session-manager-plugin >/dev/null 2>&1 \
-      && echo "  ✓ session-manager-plugin installed" \
-      || echo "  ⚠️  session-manager-plugin install failed — seeding will skip"
-  fi
+SEEDER_NAME=$(cd infrastructure/app-infra && terraform output -raw db_seeder_lambda_name 2>/dev/null || true)
+if [ -z "$SEEDER_NAME" ]; then
+  echo "ERROR: db_seeder_lambda_name not found in app-infra terraform outputs."
+  echo "       The db-seeder module may not have applied — check Step 1 logs."
+  exit 1
 fi
+echo "  Seeder: $SEEDER_NAME"
 
-echo "Checking if database needs seeding..."
+# Response written to /tmp/seed-response.json. `aws lambda invoke` sets
+# FunctionError=Handled/Unhandled if the Lambda raised; we surface that
+# and fail explicitly. Timeouts and network errors also propagate.
+SEED_RESPONSE=/tmp/seed-response.json
+rm -f "$SEED_RESPONSE"
 
-# Get database credentials from Secrets Manager
-DB_SECRET=$(aws secretsmanager get-secret-value \
-  --secret-id "market-surveillance-db-${ENVIRONMENT}" \
+INVOKE_META=$(aws lambda invoke \
+  --function-name "$SEEDER_NAME" \
   --region "$AWS_REGION" \
-  --query SecretString --output text 2>/dev/null) || {
-  echo "Warning: Could not retrieve database credentials. Skipping seeding."
-  DB_SECRET=""
+  --payload '{}' \
+  --cli-binary-format raw-in-base64-out \
+  --log-type Tail \
+  "$SEED_RESPONSE" \
+  --output json 2>&1) || {
+  echo "ERROR: aws lambda invoke failed:"
+  echo "$INVOKE_META"
+  exit 1
 }
 
-if [ -n "$DB_SECRET" ]; then
-  DB_USERNAME=$(echo "$DB_SECRET" | python3 -c "import sys, json; print(json.load(sys.stdin)['USERNAME'])")
-  DB_PASSWORD=$(echo "$DB_SECRET" | python3 -c "import sys, json; print(json.load(sys.stdin)['PASSWORD'])")
-  DB_NAME=$(echo "$DB_SECRET" | python3 -c "import sys, json; print(json.load(sys.stdin)['DBNAME'])")
-  DB_HOST=$(echo "$DB_SECRET" | python3 -c "import sys, json; print(json.load(sys.stdin)['HOST'])")
+echo "  Invoke metadata: $INVOKE_META"
+echo "  Response:"
+cat "$SEED_RESPONSE"
+echo ""
 
-  # Get bastion instance ID
-  BASTION_INSTANCE=$(aws ec2 describe-instances \
-    --region "$AWS_REGION" \
-    --filters "Name=tag:Name,Values=market-surveillance-${ENVIRONMENT}-bastion-host" "Name=instance-state-name,Values=running" \
-    --query "Reservations[0].Instances[0].InstanceId" --output text 2>/dev/null)
+# Parse the response: success if it contains "seeded" or "already_seeded".
+# Failure if it contains "errorMessage" (Lambda's convention for handled
+# exceptions).
+python3 - <<PY || { echo "ERROR: seeder returned failure — see response above."; exit 1; }
+import json, sys
+with open("$SEED_RESPONSE") as f:
+    body = json.load(f)
+if "errorMessage" in body:
+    print(f"Seeder raised: {body.get('errorType')}: {body.get('errorMessage')}")
+    sys.exit(1)
+if body.get("already_seeded"):
+    print(f"  Idempotent: DB already has {body.get('existing_tables', '?')} tables. Skipped seeding.")
+    sys.exit(0)
+if "seeded" in body:
+    s = body["seeded"]
+    rows = s.get("rows_loaded", {})
+    print(f"  Seeded {s.get('tables_created', '?')} tables in {body.get('seconds', '?')}s")
+    for tbl, n in rows.items():
+        print(f"    {tbl}: {n} rows")
+    sys.exit(0)
+print(f"Unexpected seeder response shape: {body}")
+sys.exit(1)
+PY
 
-  if [ -n "$BASTION_INSTANCE" ] && [ "$BASTION_INSTANCE" != "None" ]; then
-    echo "Setting up port forwarding through bastion $BASTION_INSTANCE..."
-
-    # Start SSM port forward in background
-    aws ssm start-session \
-      --target "$BASTION_INSTANCE" \
-      --document-name AWS-StartPortForwardingSessionToRemoteHost \
-      --parameters "{\"host\":[\"$DB_HOST\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"5940\"]}" \
-      --region "$AWS_REGION" > /tmp/ssm-session.log 2>&1 &
-    SSM_PID=$!
-
-    # Wait for port to be available
-    echo "Waiting for port forward to establish..."
-    for i in {1..30}; do
-      if nc -z localhost 5940 2>/dev/null; then
-        echo "Port forward established"
-        break
-      fi
-      sleep 1
-    done
-
-    if ! nc -z localhost 5940 2>/dev/null; then
-      # Surface SSM session output so the real failure is diagnosable. Silent
-      # skips (e.g. AccessDenied on ssm:StartSession) previously manifested as
-      # a generic "Could not establish port forward" with no root cause.
-      if [ -s /tmp/ssm-session.log ]; then
-        echo "--- ssm start-session output ---"
-        cat /tmp/ssm-session.log
-        echo "--- end ssm output ---"
-      fi
-    fi
-
-    if nc -z localhost 5940 2>/dev/null; then
-      # Install Python dependencies
-      echo "Installing seeding script dependencies..."
-      python3 -m pip install -q psycopg[binary] PyYAML || {
-        echo "Warning: Failed to install Python dependencies"
-      }
-
-      # Check if database is already seeded
-      export DB_PASSWORD="$DB_PASSWORD"
-      TABLE_COUNT=$(python3 -c "
-import psycopg
-try:
-    conn = psycopg.connect('host=localhost port=5940 dbname=$DB_NAME user=$DB_USERNAME password=$DB_PASSWORD')
-    cur = conn.cursor()
-    cur.execute(\"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'\")
-    count = cur.fetchone()[0]
-    print(count)
-    conn.close()
-except Exception as e:
-    print('0')
-" 2>/dev/null)
-
-      if [ "$TABLE_COUNT" = "0" ] || [ -z "$TABLE_COUNT" ]; then
-        echo "Database is empty. Initializing schema and seeding data..."
-
-        # Initialize schema
-        python3 -m seeding_scripts.db_ops.db_init \
-          --database "$DB_NAME" \
-          --host localhost \
-          --port 5940 \
-          --user "$DB_USERNAME" \
-          --no-ssl || echo "Warning: Schema initialization failed"
-
-        # Generate synthetic data
-        python3 -m seeding_scripts.data_gen \
-          --seed 42 \
-          --output-dir ./seeding_scripts/synthetic_data || echo "Warning: Data generation failed"
-
-        # Load data
-        python3 -m seeding_scripts.database_seeding \
-          --input-dir ./seeding_scripts/synthetic_data \
-          --database "$DB_NAME" \
-          --host localhost \
-          --port 5940 \
-          --user "$DB_USERNAME" || echo "Warning: Data loading failed"
-
-        echo "Database seeding complete"
-      else
-        echo "Database already has $TABLE_COUNT tables. Skipping seeding."
-      fi
-
-      # Cleanup SSM session
-      kill $SSM_PID 2>/dev/null || true
-    else
-      echo "Warning: Could not establish port forward. Skipping database seeding."
-      kill $SSM_PID 2>/dev/null || true
-    fi
-  else
-    echo "Warning: Bastion instance not found. Skipping database seeding."
-  fi
-else
-  echo "Warning: Database credentials not available. Skipping database seeding."
-fi
+echo "  ✓ Database seeding complete"
 
 # Collect outputs
 echo "=== Collecting deployment outputs ==="

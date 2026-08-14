@@ -4,7 +4,7 @@
 
 **Plan, build, operate, and secure AI agents for financial services on AWS.**
 
-An open-source platform that unifies use cases, reference apps, apps generation from guided-prompt, managed Frontier Agents, custom agents, and reusable tools on Amazon Bedrock AgentCore.
+An open-source platform that unifies use cases, reference apps, apps generation from guided-prompt, managed Frontier Agents, and reusable tools on Amazon Bedrock AgentCore.
 
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -34,22 +34,29 @@ A guided tour of what AVA gives you, grouped by pillar. Click any item to jump t
 - [Operating Model](#plan) — pick the right TOM pattern (Centralized CoE / Hub-and-Spoke / Federated) by scoring 7 dimensions
 - [Use Case Prioritization](#plan) — rank ideas with the AWS Enterprise AI Scoring Model (25 weighted criteria)
 - [Business Cases](#plan) — CFO-grade DCF with NPV / IRR / payback and an 8-category risk scorecard
+- [Organization Design](#plan) — translate the chosen operating model into a concrete org chart — roles, squads, reporting lines, RACI, and headcount ramp — so Plan hands Build a team, not just a strategy
 
-**[Build](#build)** — three ways to ship agentic systems on AWS, ordered most opinionated → most composable
-- [FSI Foundry](#fsi-foundry) — 34 multi-agent POCs across 7 FSI domains, dual-framework (LangGraph + Strands), per-use-case React UI
-- [Reference Implementations](#reference-implementations) — 7 full-stack forkable apps (Market Surveillance, Shopping Concierge, Case Management, Agent Safety, Payments Fraud, Merchant Onboarding, AgentCore-in-a-Box)
-- [App Factory](#app-factory) — describe a use case in plain language → AI generates Strands agent + Terraform → deployed to AgentCore
-- [App Templates](#app-templates) — 22 deployable starter templates across 8 categories (foundation, agent scaffolds, multi-agent patterns, HITL, memory, security, API, tools)
+**[Build](#build)** — every way to ship agentic systems on AWS, ordered most opinionated → most composable
+- [Applications](#applications) — FSI Foundry (34 POCs), Reference Implementations (8 forkable apps), App Factory (plain-language → generated agent), App Templates (22 starters)
 - [Agent-as-a-Service](#agent-as-a-service) — Amazon's Frontier Agents (DevOps + Security available, Kiro coming) with one-click Terraform/CDK/CloudFormation deploy and federated AWS console launch
 - [Capabilities](#capabilities) — reusable Tools, Knowledge, and Prompts agents reach for at runtime (Knowledge Data Lake + Prompt Optimization available; Tools & Prompt Library coming soon)
+- [Harness](#harness) — managed agent loop (Bedrock AgentCore Harness) with system prompt, model, tools, and streaming test console
+- [Registry](#registry) — AVA namespace on AWS Agent Registry — five typed record kinds (Agents, MCP Servers, A2A Servers, Skills, Custom Resources) with curated catalogs, approval routing, and auto-publish on successful Foundry deploys
+- [Catalog](#catalog) — unified cross-cutting inventory of every Build resource with registry status (Active / Pending / Deprecated) so you can find and audit what's live in one screen
 
 **[Secure](#secure)** — safety controls every deployed agent passes through
-- [Guardrails](#secure) — Bedrock Guardrails (content filters, PII, denied topics, prompt attack) with FSI-tuned presets
-- [Policy](#secure) — AgentCore Cedar policy engine for fine-grained tool-access control on gateways; ENFORCE / LOG_ONLY modes, allow/deny rules enforced on every tool call
 - [LLM Gateway](#secure) — LiteLLM proxy on ECS Fargate; one chokepoint for every Bedrock call — virtual keys, budgets, rate limits, attached guardrails, audit
+- [Guardrails](#secure) — Bedrock Guardrails (content filters, PII, denied topics, prompt attack) with FSI-tuned presets
+- [Identity](#secure) — federate external IdPs (Microsoft Entra ID, Okta, Auth0, generic OIDC) with Auth Code + PKCE, discovery-URL testing, and per-provider claim mapping to AVA roles
+- [Policy](#secure) — AgentCore Cedar policy engine for fine-grained tool-access control on gateways; ENFORCE / LOG_ONLY modes, allow/deny rules enforced on every tool call
+- [Approval Policies](#secure) — HITL rules for sensitive actions (resource kind + action + required role + quorum + SLA); wired into MCP/A2A/Skills/Agents/Custom/Identity/Application flows
 
-**[Operate](#operate)** — full visibility into every agent in production
-- [Dual Observability](#operate) — Langfuse v3 (application traces, prompts, evals) + AgentCore Observability (CloudWatch GenAI + X-Ray) for service-level runtime telemetry, both embedded in the Control Plane
+**[Operate](#operate)** — full visibility and human sign-off for every agent in production
+- [Deployments](#operate) — every CodeBuild + CloudFormation run kicked off from AVA in one queue (reference apps, harness updates, FSI Foundry deploys) with streamed logs and artifact URLs
+- [AgentCore Observability](#operate) — AWS-native traces via CloudWatch GenAI Observability + X-Ray Transaction Search, opt-in at deploy for FSI Foundry use cases
+- [Langfuse Observability](#operate) — self-hosted Langfuse v3 (application traces, prompts, evals, cost analytics) fronted by CloudFront, embedded in the Control Plane
+- [Prompt Optimization](#operate) — Bedrock Advanced Prompt Optimization — submit a seed prompt + labeled examples, get scored variants, promote the winner to your Harness in one click
+- [Approval Queue](#operate) — live inbox of pending sign-offs from the Approval Policies engine — approve/deny per row or in bulk, with SLA countdown and requester/policy context
 
 **[Govern](#govern)** — AI GRC end-to-end, the view your executives, auditors, and engineers share
 - [Command Center](#govern) — AI Platform Activity grid, Trust Stack snapshot, Compliance / Guardrails / Cost summary, Recent Activity
@@ -60,29 +67,38 @@ A guided tour of what AVA gives you, grouped by pillar. Click any item to jump t
 - [Cost & FinOps · Audit & Incidents · Shadow AI](#govern) — FinOps health, audit trail, ungoverned AI detection
 
 **[Platform](#platform)** — the Control Plane that ties everything together (this is the entry point)
-- [Full Control Plane](#platform) — a unified React + FastAPI web UI to **plan, build, secure, operate, and govern** every agent in one place. Browse 34 FSI use cases, 7 reference apps, 22 starter templates, and the AaaS catalog; deploy any of them with one click; test deployed agents from a built-in console; embed Langfuse / AgentCore Observability live; manage guardrails and policies; jump to the federated AWS Console; and watch every event flow through the Govern Command Center — all from a single Cognito-protected app on ECS Fargate
+- [Full Control Plane](#platform) — a unified React + FastAPI web UI to **plan, build, secure, operate, and govern** every agent in one place. Browse 34 FSI use cases, 8 reference apps, 22 starter templates, and the AaaS catalog; deploy any of them with one click; test deployed agents from a built-in console; embed Langfuse / AgentCore Observability live; manage guardrails and policies; jump to the federated AWS Console; and watch every event flow through the Govern Command Center — all from a single Cognito-protected app on ECS Fargate
 - [Dual Deployment Paths](#deployment-paths) — Quick Deploy (S3 archive) for business users; Deploy from Git (CodeCommit) for developers who want to fork-and-customize before they deploy
 - [One-Click Deployment](#platform) — every deployment runs the same CodeBuild + Step Functions + Terraform/CDK pipeline; full audit trail in DynamoDB, lifecycle events on EventBridge, drift detection on every redeploy
 
 <table align="center">
   <tr>
     <td width="50%"><img src="platform/docs/imgs/home/plan-landing.png" alt="Plan" /></td>
-    <td width="50%"><img src="platform/docs/imgs/home/foundry-landing.png" alt="FSI Foundry" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/applications-landing.png" alt="Build — Applications" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="platform/docs/imgs/home/aaas-landing.png" alt="Agent-as-a-Service" /></td>
-    <td width="50%"><img src="platform/docs/imgs/home/capabilities-landing.png" alt="Capabilities" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/foundry-landing.png" alt="Build — FSI Foundry" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/refimpl-landing.png" alt="Build — Reference Implementations" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="platform/docs/imgs/home/secure-landing.png" alt="Secure — Guardrails, Policy, LLM Gateway" /></td>
-    <td width="50%"><img src="platform/docs/imgs/home/observability-landing.png" alt="Observability" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/app-templates-landing.png" alt="Build — App Templates" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/app-factory-landing.png" alt="Build — App Factory" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="platform/docs/imgs/home/govern-command-center.png" alt="Governance — one view" /></td>
-    <td width="50%"><img src="platform/docs/imgs/home/govern-modules.png" alt="Governance Modules" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/aaas-landing.png" alt="Build — Agent-as-a-Service (Frontier Agents)" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/capabilities-landing.png" alt="Build — Capabilities" /></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="platform/docs/imgs/home/govern-modules-2.png" alt="Governance Modules (continued)" width="50%" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/harness-landing.png" alt="Build — Harness" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/registry-landing.png" alt="Build — Registry" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="platform/docs/imgs/home/secure-landing.png" alt="Secure — LLM Gateway, Guardrails, Identity, Policy, Approval Policies" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/observability-landing.png" alt="Operate — Deployments, Observability, Prompt Optimization, Approval Queue" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="platform/docs/imgs/home/govern-modules.png" alt="Govern — module landing (top)" /></td>
+    <td width="50%"><img src="platform/docs/imgs/home/govern-modules-2.png" alt="Govern — module landing (bottom)" /></td>
   </tr>
 </table>
 
@@ -100,6 +116,7 @@ Four interactive frameworks, each persisted to DynamoDB and accessible from the 
 | **Operating Model** | Have a maturity score and need to choose how to organize delivery | Pick a Target Operating Model — Centralized CoE / Hub-and-Spoke / Federated — by scoring 7 dimensions (Strategy, Governance, Org, People, Tech, Process, Ecosystem) across 21 questions, with investment guidance per pattern |
 | **Use Case Prioritization** | Have multiple competing ideas and need to sequence them | Rank use cases against the AWS Enterprise AI Scoring Model (25 weighted sub-criteria across value, feasibility, risk, readiness, alignment, and cost) with Go/Conditional/No-Go gates |
 | **Business Cases** | Need executive buy-in or budget approval for a specific opportunity | CFO-grade DCF model — NPV, IRR, payback, ROI — with an 8-category risk scorecard, ramp-up curves, and Go/Review/Reject verdicts |
+| **Organization Design** | Have chosen your Operating Model and need to stand up the team | Concrete org chart derived from the TOM pick — roles, squads, reporting lines, RACI matrix across Build / Secure / Operate / Govern, and a headcount ramp with hiring priorities so Plan hands Build a team, not just a strategy |
 
 ### Written guidance
 
@@ -257,6 +274,7 @@ End-to-end full-stack solutions with dedicated frontends, backend APIs, and comp
 | [Agent Safety](applications/reference_implementations/agent-safety/README.md) | Safety & Governance   | Safety controls for Bedrock AgentCore — budget/eval/observability auto-provisioning, session interventions, kill switch, audit trail, and centralized dashboard             |
 | [Payments Fraud](applications/reference_implementations/payments-fraud/README.md) | Payments & Fraud      | Agent-native fraud scoring, NL investigation (smurfing, velocity, mule networks), and FinCEN-structured SAR drafting — a supervisor + 3 specialist agents on Bedrock AgentCore (Strands), with a Next.js UI and Cognito auth |
 | [Merchant Onboarding](applications/reference_implementations/merchant-onboarding/README.md) | Payments & Risk       | AI-powered merchant onboarding with document processing, OFAC sanctions screening, fraud detection, and human-in-the-loop approvals — multi-agent orchestration cutting onboarding from 5–7 days to 1–2 |
+| [Investment Research and Risk Accelerator](applications/reference_implementations/sales-recommend/README.md) | Capital Markets       | AI research and risk-analysis assistant for capital-markets teams — Bedrock AgentCore + self-provisioned Knowledge Base + RAG, Next.js UI on ECS Fargate behind CloudFront |
 | [AgentCore-in-a-Box](applications/reference_implementations/agentcore-in-a-box/README.md) | Field Demo            | Grab-and-go Bedrock AgentCore demo — one command deploys a governed multi-agent FS platform with every AgentCore primitive wired up, live and traceable in CloudWatch |
 
 [**View Reference Implementations &#8594;**](applications/reference_implementations/README.md)
@@ -355,7 +373,7 @@ Describe your use case in plain language through a five-step wizard (problem, us
 
 ### Agent-as-a-Service
 
-Managed autonomous agents you deploy into your own AWS account — either Amazon's Frontier Agents or your own Custom Agents built on Bedrock AgentCore.
+Managed autonomous agents you deploy into your own AWS account — Amazon's Frontier Agents on Bedrock AgentCore.
 
 #### Frontier Agents
 
@@ -368,10 +386,6 @@ Managed autonomous agents you deploy into your own AWS account — either Amazon
 One-click deployment from the Control Plane UI provisions the agent's Agent Space, operator role, and primary-account association in your account. After deploy, hit **Launch in Console** to federate (STS `AssumeRole` + sigv4 sign-in URL) directly into the agent's AWS Console with the right operator role — no manual role-switching, no copy-paste credentials.
 
 [**Browse Frontier Agents &#8594;**](platform/control_plane/aaas/frontier_agents.json)
-
-#### Custom Agents
-
-Build your own autonomous agent on Bedrock AgentCore — choose a model, attach tools, configure memory and guardrails, and deploy to a managed runtime. Create agents and manage them from the **Agent-as-a-Service → Custom Agents** catalog in the Control Plane.
 
 ---
 
@@ -389,26 +403,67 @@ Each primitive is registered once with access control, lineage, and audit trail,
 
 ---
 
+### Harness
+
+A managed agent-loop scaffold wrapping AWS Bedrock AgentCore Harness — pick a model, paste a system prompt, attach tools, and hit **Test** to stream the agent's response in the Control Plane. Live SSE streaming with a per-session console so prompt authors can iterate without re-deploying. Deployed harnesses can be published to Registry → Agents (`recordType=AGENT`, tag `Kind=agent`).
+
+### Memory
+
+Managed memory stores for agents — configurable extraction strategies (semantic, episodic, summary) backed by Bedrock AgentCore Memory. Attach a memory namespace to any agent at deploy time; the agent reads/writes across turns without you managing the underlying store.
+
+---
+
+### Registry
+
+The **AVA** namespace on AWS Agent Registry — the in-account discovery layer every AVA resource writes to. Five typed record kinds share one control-plane surface, one approval flow, and one audit trail. Curated catalogs on each subpage let users deploy well-known items in one click.
+
+| Record kind | AWS Agent Registry mapping | UI page | Curated catalog |
+|-------------|---------------------------|---------|-----------------|
+| **Agents** | `recordType=AGENT` + tag `Kind=agent` | `/registry/agents` | 4 curated (AWS DevOps Agent, AWS Security Agent, Kiro, Sample FSI KYC Agent) |
+| **MCP Servers** | `recordType=MCP` (descriptor `mcpServer` v2025-12-11) | `/mcp` | Well-known MCP server catalog |
+| **A2A Servers** | `recordType=AGENT` + tag `Kind=a2a` (descriptor `a2aAgentCard` v0.3) | `/a2a` | AWS, Google, Anthropic reference A2A peers |
+| **Skills** | `recordType=SKILL` (descriptor `agentSkillsDefinition` v0.1.0) | `/registry/skills` | 6 canonical skills (evaluation rubrics, KYC triage, extraction, guardrail templates) |
+| **Custom Resources** | `recordType=CUSTOM` (free-form descriptor) | `/registry/custom-resources` | — (register any resource with free-form JSON metadata) |
+
+**Auto-publish on successful deploy.** Every Foundry / reference app that deploys through the Control Plane becomes an **AGENT** record in the AVA registry automatically. The wire-up is a new additive Terraform module (`modules/deployment_success_hook`): an EventBridge rule on the deployment Step Function's `SUCCEEDED` events fires a Python Lambda that reads the deployment from DDB and publishes it as `recordType=AGENT` with tag `Source=foundry-deploy` and `DeploymentId=<uuid>`. The Step Function itself is untouched. Idempotent — a re-run skips if a record with the same `DeploymentId` tag exists.
+
+**Approval-aware create flow.** Every registration consults the Approval Policy Engine before writing. If a policy matches with `mode=auto_approve`, the record is created + submitted + approved in one transaction. If `mode=require_approval`, the record lands as `PENDING_APPROVAL` and an Approval Queue row is opened. If `mode=deny`, the API returns 403 with the denying policy's reason. All state transitions bridge AWS's async lifecycle: CREATING → DRAFT → PENDING_APPROVAL → APPROVED with per-step polling so no record ever gets stuck in DRAFT.
+
+---
+
+### Catalog
+
+A unified inventory of every resource across all Build subsections — Applications, Frontier Agents, Custom Agents, Harness, Memory, MCP Servers, A2A Agents, AgentCore Runtimes, and Templates — with a single **Registry** column that shows whether each is Active / Pending / Deprecated / Not in Registry. Filter by section, by registry state, or by name. The one place to answer "what's actually running, and is it approved?".
+
+---
+
 ## Secure
 
-Safety controls every deployed agent passes through — built on Amazon Bedrock Guardrails and extended with platform-level policy management and an executive-grade approval workflow.
+Safety controls every deployed agent passes through — built on Amazon Bedrock Guardrails and extended with platform-level policy management, federated identity, and an executive-grade approval workflow.
 
 | Component | Description | Status |
 |-----------|-------------|--------|
-| **Guardrails** | Content filters (hate, insults, sexual, violence, misconduct, prompt attack), PII detection and redaction, denied topics, word filters, and contextual grounding. Manage templates from the Control Plane; attach one or more to any agent at deploy time. FSI-tuned presets provided (FSI Standard, Market Surveillance, Customer Service). | **Available** |
 | **LLM Gateway** | OpenAI-compatible gateway built on [LiteLLM](https://github.com/BerriAI/litellm). Deploys on ECS Fargate with Aurora PostgreSQL + ElastiCache Valkey + ALB (same shape as the Foundation Stack). Provides virtual keys per agent/team, budgets and rate limits, Bedrock Guardrails attached as a `during_call` hook, Langfuse trace emission, and full CloudWatch audit. Every agent points at one `LITELLM_BASE_URL` — Govern (FinOps + Audit) reads live data from here. | **Available** |
+| **Guardrails** | Content filters (hate, insults, sexual, violence, misconduct, prompt attack), PII detection and redaction, denied topics, word filters, and contextual grounding. Manage templates from the Control Plane; attach one or more to any agent at deploy time. FSI-tuned presets provided (FSI Standard, Market Surveillance, Customer Service). | **Available** |
+| **Identity** | Federate external identity providers — Microsoft Entra ID, Okta, Auth0, or any generic OIDC provider — and map group claims to AVA roles. Auth Code + PKCE, discovery-URL testing, and per-provider claim mapping so enterprise SSO drops in without a Cognito rebuild. Registration routes through the Approval Queue by policy. | **Available** |
 | **Policy** | AgentCore policy engine (Cedar) for fine-grained tool-access control on gateways. Attach/detach a policy engine to any use-case gateway, switch ENFORCE vs LOG_ONLY, and author allow/deny rules that the gateway enforces on every tool call (default-deny). Managed from the Control Plane Policy page. | **Available** |
+| **Approval Policies** | Human-in-the-loop rules for sensitive actions — declare which `resource_kind + action` combinations require sign-off, from whom (`ADMIN` / `OPERATOR`), by when (SLA hours), and how many approvers (quorum). Eight `AVA Default` policies are seeded on backend boot covering MCP / A2A / Skills / Agents / Custom / Identity registration, Application delete, and Application deploy auto-approve. Live enforcement wired into `mcp.py`, `a2a.py`, `skills.py`, `agents.py`, `custom_resources.py`, `identity_providers.py`, and `deployments.py`; matches feed the Operate → Approval Queue. | **Available** |
 
 ---
 
 ## Operate
 
-Two complementary observability stacks — every deployed agent emits to both, and you can drill into either from the **Observability** page in the Control Plane.
+Five operational surfaces, one platform. Every deployed agent lands here for launch tracking, dual observability, prompt iteration, and human sign-off.
 
-- **Observability with AgentCore Observability** (service-level) — captures `InvokeAgentRuntime` spans, payload metadata, session/request IDs, cold-starts, init failures, and IAM denials. Surfaced via Amazon CloudWatch GenAI Observability and X-Ray Transaction Search. AWS-managed; APPLICATION_LOGS log delivery + X-Ray trace destinations are wired into every AgentCore runtime stack at deploy time. **Pick this for SRE / incident response and to confirm the runtime actually received the request.**
-- **Observability with Langfuse** (application-level) — captures traces, sessions, generations; prompt management; eval datasets and scores; cost-per-trace breakdown. Each FSI Foundry use case auto-provisions its own Langfuse project at deploy time so traces are isolated per-use-case. Self-hosted on ECS Fargate (Aurora PostgreSQL + ClickHouse + Redis), fronted by CloudFront, and embedded as an iframe in **Observability → Langfuse** with auto-login. **Pick this for prompt iteration, evals, and cost analysis.**
+| Surface | What it does | Status |
+|---------|--------------|--------|
+| **Deployments** | Every CodeBuild + CloudFormation run kicked off from AVA — reference apps, harness updates, FSI Foundry deploys — in one queue with streamed logs, artifact URLs, and success/failure status. No jumping between AWS consoles. | **Available** |
+| **AgentCore Observability** | AWS-native traces for AgentCore agents — CloudWatch GenAI Observability + X-Ray Transaction Search. Opt-in checkbox when deploying FSI Foundry use cases; once enabled, traces appear automatically in the AWS console. **Pick this for SRE / incident response — did the runtime actually receive the request?** | **Available** |
+| **Langfuse Observability** | Self-hosted Langfuse v3 for application-level traces, prompt versioning, evaluations, and cost analytics. Each FSI Foundry use case auto-provisions its own Langfuse project. Embedded as an iframe in the Control Plane with auto-login. **Pick this for prompt iteration, evals, and cost analysis.** | **Available** |
+| **Prompt Optimization** | Bedrock Advanced Prompt Optimization — submit a seed prompt + labeled JSONL examples; Bedrock generates candidate variants, scores each against your rubric, and returns the winner. One-click promotion to your Harness. | **Available** |
+| **Approval Queue** | Live inbox of pending HITL sign-offs produced by the Approval Policy Engine. Each row shows requester, target resource, action, matched policy, and time remaining. Approve or deny inline; bulk approve/deny up to 200 rows per call. Every decision flips the corresponding AWS Agent Registry record (DRAFT → PENDING_APPROVAL → APPROVED, with lifecycle-safe fallback if the record is stuck in DRAFT). | **Available** |
 
-Together, the two cover the full lifecycle: AgentCore Observability shows whether the runtime received and dispatched the request; Langfuse shows what the agent's reasoning and tool calls actually did.
+Together, the two observability stacks cover the full lifecycle: AgentCore Observability shows whether the runtime received and dispatched the request; Langfuse shows what the agent's reasoning and tool calls actually did.
 
 [**View Observability &#8594;**](platform/control_plane/templates/agent-observability/README.md)
 
@@ -444,6 +499,12 @@ Real-data sources are wired today for guardrails, deployments, use cases, agents
 | **Platform** | [**Platform Architecture**](platform/docs/architecture/platform-architecture.md) | Full system design with Mermaid diagrams — frontend, backend, CI/CD pipeline, infrastructure modules, per-use-case UI deployment flow |
 | **Platform** | [CI/CD Pipeline](platform/docs/architecture/cicd-pipeline.md) | Dual-source CodeBuild buildspec — Git clone / S3 unzip, Docker build, Terraform apply, UI build, S3 sync, CloudFront invalidation |
 | **Platform** | [Infrastructure Scripts](platform/control_plane/infrastructure/scripts/README.md) | Reference for every shell and Python script used to deploy, tear down, and seed the Control Plane (deploy-full, destroy, import-existing, seed-codecommit) |
+| **Registry** | Agent Registry Module (Terraform) | `platform/control_plane/infrastructure/modules/agent_registry/` — creates the AVA namespace inside AWS Agent Registry, wires `AGENT_REGISTRY_ID` into the backend ECS task environment, and exposes ARN outputs for downstream modules |
+| **Registry** | Agent Registry Client (Python) | `platform/control_plane/backend/src/services/agent_registry_client.py` — shared boto3 wrapper for `agent-registry-control` used by every registry route (`mcp.py`, `a2a.py`, `skills.py`, `agents.py`, `custom_resources.py`). Handles the async CREATING → DRAFT → PENDING_APPROVAL → APPROVED lifecycle with polling; tag reads go through `ListTagsForResource` because `GetRegistryRecord` doesn't return tags |
+| **Registry** | Deployment Success Hook (Terraform + Lambda) | `platform/control_plane/infrastructure/modules/deployment_success_hook/` — additive to the deployment Step Function. EventBridge rule on `aws.states` SUCCEEDED events triggers a Python Lambda that publishes the deployed application as an AGENT record in AWS Agent Registry. Idempotent (dedupes on `DeploymentId` tag). Step Function itself is untouched |
+| **Approvals** | Approval Policy Engine (Python) | `platform/control_plane/backend/src/services/approval_policy_engine.py` — evaluates `evaluate(kind, resource_id, action)` against active policies with priority resolution (mode strictness → pattern specificity → role strictness). Returns a `PolicyVerdict` with mode `auto_approve` / `require_approval` / `deny` and the matched policy for audit |
+| **Approvals** | Approval Policy Bootstrap (Python) | `platform/control_plane/backend/src/services/approval_policy_bootstrap.py` — seeds 8 `AVA Default` policies on backend boot (Agent / MCP / A2A / Skills / Custom / Identity registration require OPERATOR; Application delete requires ADMIN; Application deploy auto-approves) |
+| **Approvals** | Approval Requests Route | `platform/control_plane/backend/src/api/routes/approval_requests.py` — Approval Queue CRUD + per-row `POST /{id}/approve|deny|cancel` + `POST /batch-approve|batch-deny` (up to 200 rows). Decision hook flips the linked AWS Agent Registry record via `set_status()` (submits-for-approval first if stuck in DRAFT) or DDB Identity Providers record |
 | **FSI Foundry** | [Architecture & Deployment](applications/fsi_foundry/docs/foundations/README.md) | [Architecture Patterns](applications/fsi_foundry/docs/foundations/architecture/architecture_patterns.md) &#124; [AgentCore Design](applications/fsi_foundry/docs/foundations/architecture/architecture_agentcore.md) &#124; [Deployment Guide](applications/fsi_foundry/docs/foundations/deployment/deployment_patterns.md) |
 | **Reference** | [Market Surveillance](platform/docs/architecture/market-surveillance-architecture.md) | Multi-agent surveillance architecture — [Diagram](applications/reference_implementations/market-surveillance/docs/diagram/architecture.png) |
 | **Reference** | [Shopping Concierge](applications/reference_implementations/shopping-concierge-agent/docs/AGENT_CAPABILITIES_SHOPPING.md) | [Agent Capabilities](applications/reference_implementations/shopping-concierge-agent/docs/AGENT_CAPABILITIES_SHOPPING.md) &#124; [Deployment](applications/reference_implementations/shopping-concierge-agent/docs/DEPLOYMENT.md) &#124; [Data Flow](applications/reference_implementations/shopping-concierge-agent/docs/shopping_data_flow.png) |
@@ -483,10 +544,22 @@ ava/
 │       │       │   ├── ApplicationsLanding/     #   FSI Foundry, Ref Impls, App Factory, Templates
 │       │       │   ├── AaaSLanding/             #   Frontier Agents (DevOps + Security) + Custom
 │       │       │   ├── capabilities/            #   Tools, Knowledge, Prompts (coming soon)
+│       │       │   ├── harness/                 #   Harness — model+prompt+tools test console (SSE)
+│       │       │   ├── memory/                  #   AgentCore Memory stores (semantic/episodic/summary)
+│       │       │   ├── registry/                #   Registry overview + custom-resource placeholder
+│       │       │   ├── agents/                  #   Registry → Agents (recordType=AGENT, Kind=agent)
+│       │       │   ├── mcp/                     #   Registry → MCP Servers (recordType=MCP)
+│       │       │   ├── a2a/                     #   Registry → A2A Servers (recordType=AGENT, Kind=a2a)
+│       │       │   ├── skills/                  #   Registry → Skills (recordType=SKILL)
+│       │       │   ├── customresources/         #   Registry → Custom Resources (recordType=CUSTOM)
+│       │       │   ├── catalog/                 #   Unified inventory across every Build subsection
+│       │       │   ├── identity/                #   Federated IdPs (Entra, Okta, Auth0, OIDC)
+│       │       │   ├── approvals/               #   Approval Policies + Approval Queue (HITL)
 │       │       │   ├── service-onboarding/      #   5-gate approval workflow UI
 │       │       │   ├── guardrails/              #   Bedrock Guardrails template manager
 │       │       │   ├── govern/                  #   Command Center, Trust Stack, Fleet, Risk,
 │       │       │   │                            #   Models, Compliance, FinOps, Audit & Incidents
+│       │       │   ├── OperateLanding.tsx       #   Operate landing — 5 tiles with hero graphics
 │       │       │   ├── DeploymentList.tsx       #   /deployments — chip filters + status sort
 │       │       │   ├── DeploymentDetail.tsx
 │       │       │   └── Observability.tsx        #   Langfuse + AgentCore Observability iframe
@@ -498,13 +571,20 @@ ava/
 │       ├── backend/                             # Control Plane API (FastAPI on ECS Fargate)
 │       │   └── src/
 │       │       ├── api/routes/                  # REST endpoints —
-│       │       │                                #   deployments, templates, applications,
+│       │       │                                #   deployments, templates, applications, catalog,
 │       │       │                                #   codecommit, app_factory, frontier_agents
 │       │       │                                #   (federated console + IaC catalog),
-│       │       │                                #   service_approval, guardrails, langfuse,
-│       │       │                                #   maturity, operating_model, prioritization,
-│       │       │                                #   business_cases, projects, users, bootstrap
+│       │       │                                #   mcp, a2a, agents, skills, custom_resources,
+│       │       │                                #   harness, memory, identity_providers,
+│       │       │                                #   approval_policies, approval_requests,
+│       │       │                                #   llm_gateway, litellm, advpo, policies,
+│       │       │                                #   guardrails, service_approval, langfuse,
+│       │       │                                #   maturity, operating_model, organization_design,
+│       │       │                                #   prioritization, business_cases, knowledge,
+│       │       │                                #   projects, users, bootstrap, fsi_sso
 │       │       ├── services/                    # Business logic — pipeline, packaging,
+│       │       │                                #   agent_registry_client, approval_policy_engine,
+│       │       │                                #   approval_policy_bootstrap,
 │       │       │                                #   langfuse_provisioning (per-use-case projects)
 │       │       ├── models/                      # Pydantic models
 │       │       └── core/                        # Config, auth (Cognito JWT validation), middleware
@@ -517,15 +597,25 @@ ava/
 │       │   │   ├── step_functions/              # Deployment orchestrator (source-agnostic)
 │       │   │   ├── frontier_agents_pipeline/    # Dedicated Terraform-only pipeline for AaaS
 │       │   │   ├── service_approval/            # Service Onboarding (5-gate workflow + SF state machine)
-│       │   │   ├── agent_registry/              # AgentCore agent registry metadata
+│       │   │   ├── agent_registry/              # AVA namespace on AWS Agent Registry
+│       │   │   ├── deployment_success_hook/     # EventBridge rule + Lambda that auto-publishes deploys
+│       │   │   │                                #   as AGENT records in the AVA registry (additive to SF)
+│       │   │   ├── agentcore_policy/            # AgentCore Cedar policy engine + gateways
+│       │   │   ├── advanced_prompt_optimization/ # Bedrock AdvPO jobs + IAM
+│       │   │   ├── harness_execution_role/      # IAM role assumed by Harness test runs
+│       │   │   ├── litellm/                     # LLM Gateway (LiteLLM on ECS Fargate)
+│       │   │   ├── sample_datalake/             # Sample Data Lake (Glue + Athena + S3/Iceberg)
+│       │   │   ├── sample_knowledgebase/        # Sample Bedrock Knowledge Base (OpenSearch Serverless)
 │       │   │   ├── eventbridge/                 # Lifecycle events + Git push / PR-merge triggers
 │       │   │   ├── cloudfront/                  # CDN for frontend
 │       │   │   ├── cognito/                     # User pools + auth (+ optional demo user seeding)
-│       │   │   ├── dynamodb/                    # Deployment state + App Factory + Plan + service-approval
+│       │   │   ├── dynamodb/                    # Deployment state, App Factory, Plan, approval policies,
+│       │   │   │                                #   approval requests, identity providers, harness, memory
 │       │   │   ├── ecr/                         # Container registry
 │       │   │   ├── s3/                          # Frontend hosting + artifact storage
 │       │   │   ├── api_gateway/                 # HTTP API for backend
 │       │   │   ├── networking/                  # VPC, subnets, security groups
+│       │   │   ├── bastion/                     # Bastion host for private-subnet debugging
 │       │   │   ├── state_backend/               # Terraform remote state (S3 + DynamoDB lock)
 │       │   │   └── observability/               # CloudWatch + X-Ray Transaction Search prereqs
 │       │   ├── service_approval_runner/         # Container image for the service-approval phases
@@ -639,8 +729,6 @@ ava/
 │       ├── deploy.sh                            # CodeBuild entrypoint for generated bundles
 │       └── scripts/                             # Supporting generation + packaging scripts
 │                                                # Wizard → AI code + Terraform → deployed to AgentCore
-│
-└── internal/                                    # Internal docs, design notes, release planning
 ```
 
 ---
@@ -823,9 +911,14 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 
 ### Plan
 
-| Resource | Description |
-|----------|-------------|
+| Module | Description |
+|--------|-------------|
 | [Use Case Discovery Guide](plan/UseCaseGuidance.md) | 8-step framework for enterprise leaders to identify high-value agentic AI use cases — bounded autonomy, measurable outcomes, governance |
+| Maturity Assessment | `frontend/src/components/maturity/` + backend `api/routes/maturity.py` — score readiness across 5 dimensions, 25+ indicators, L1–L5 rating; persisted per user in DDB |
+| Operating Model | `frontend/src/components/operating_model/` + backend `api/routes/operating_model.py` — pick Centralized CoE / Hub-and-Spoke / Federated by scoring 7 dimensions across 21 questions, with investment guidance per pattern |
+| Use Case Prioritization | `frontend/src/components/prioritization/` + backend `api/routes/prioritization.py` — rank ideas against the AWS Enterprise AI Scoring Model (25 weighted sub-criteria) with Go/Conditional/No-Go gates |
+| Business Cases | `frontend/src/components/business_cases/` + backend `api/routes/business_cases.py` — CFO-grade DCF model (NPV / IRR / payback / ROI) with an 8-category risk scorecard and Go/Review/Reject verdicts |
+| Organization Design | `frontend/src/components/organization_design/` + backend `api/routes/organization_design.py` — translate the chosen TOM into an org chart: roles, squads, reporting lines, RACI, headcount ramp |
 
 ### Platform
 
@@ -856,13 +949,41 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 | [AWS Security Agent (AWS docs)](https://docs.aws.amazon.com/securityagent/latest/userguide/what-is.html) | Official service documentation — design review, code review, on-demand pentest |
 | [Kiro](https://kiro.dev) | Amazon's agentic IDE — spec-driven development, steering files, hooks |
 
-### Secure & Operate
+### Build — Harness, Memory, Registry & Catalog
 
-| Resource | Description |
-|----------|-------------|
-| [Bedrock Guardrails template](platform/control_plane/templates/agent-guardrails/README.md) | Content filters, PII protection, denied topics, profanity blocking; per-category filter strengths |
-| [Foundation Stack (Langfuse v3)](platform/docs/templates/foundation-stack.md) | Langfuse v3 + OpenTelemetry on ECS Fargate. Auto-provisions a Langfuse project per use case at deploy time |
+| Module | Description |
+|--------|-------------|
+| Harness | `frontend/src/components/harness/` + backend `api/routes/harness.py` — managed agent-loop scaffold wrapping Bedrock AgentCore Harness. Pick model + system prompt + tools; live SSE streaming test console; version history. Execution role in `infrastructure/modules/harness_execution_role/` |
+| Memory | `frontend/src/components/memory/` + backend `api/routes/memory.py` — AgentCore Memory namespaces with configurable extraction strategies (semantic, episodic, summary). Attach to any agent at deploy time |
+| Registry Overview | `frontend/src/components/registry/RegistryLanding.tsx` — landing page linking to Agents, MCP Servers, A2A Servers, Skills, and Custom Resources |
+| Registry → Agents | `frontend/src/components/agents/AgentsLanding.tsx` + backend `api/routes/agents.py` — recordType=AGENT + tag Kind=agent. Curated tab shows 4 AWS frontier agents |
+| Registry → MCP Servers | `frontend/src/components/mcp/McpLanding.tsx` + backend `api/routes/mcp.py` — recordType=MCP, descriptor `mcpServer` v2025-12-11. Curated tab shows well-known MCP servers |
+| Registry → A2A Servers | `frontend/src/components/a2a/A2aLanding.tsx` + backend `api/routes/a2a.py` — recordType=AGENT + tag Kind=a2a, descriptor `a2aAgentCard` v0.3. Curated tab shows AWS/Google/Anthropic reference peers |
+| Registry → Skills | `frontend/src/components/skills/SkillsLanding.tsx` + backend `api/routes/skills.py` — recordType=SKILL, descriptor `agentSkillsDefinition` v0.1.0. Curated tab shows 6 canonical skills |
+| Registry → Custom Resources | `frontend/src/components/customresources/CustomResourcesLanding.tsx` + backend `api/routes/custom_resources.py` — recordType=CUSTOM, free-form descriptor for anything not modeled by the four typed kinds |
+| Registry — Client library | `backend/src/services/agent_registry_client.py` — shared boto3 wrapper used by every registry route. Handles the CREATING → DRAFT → PENDING_APPROVAL → APPROVED lifecycle with polling; uses `ListTagsForResource` for tag lookups |
+| Catalog | `frontend/src/components/catalog/CatalogLanding.tsx` + backend `api/routes/catalog.py` — unified inventory of every Build resource with registry state joined in (Active / Pending / Deprecated / Not in Registry) |
+| Auto-publish hook | `infrastructure/modules/deployment_success_hook/` — Terraform module that adds an EventBridge rule on the deployment Step Function's SUCCEEDED events and a Lambda that publishes deployed apps as AGENT records. Idempotent (dedupes on DeploymentId tag). Step Function itself untouched |
+
+### Secure
+
+| Module | Description |
+|--------|-------------|
+| LLM Gateway | `frontend/src/components/llm-gateway/` + backend `api/routes/llm_gateway.py` + `litellm.py` — LiteLLM proxy on ECS Fargate. Virtual keys per agent/team, budgets, rate limits, attached Bedrock Guardrails, Langfuse trace emission. TF module: `infrastructure/modules/litellm/` |
+| [Guardrails](platform/control_plane/templates/agent-guardrails/README.md) | `frontend/src/components/guardrails/` + backend `api/routes/guardrails.py` — Bedrock Guardrails templates: content filters, PII protection, denied topics, prompt attack. FSI-tuned presets (FSI Standard, Market Surveillance, Customer Service) |
+| Identity | `frontend/src/components/identity/` + backend `api/routes/identity_providers.py` — register external OIDC providers (Microsoft Entra ID, Okta, Auth0, generic OIDC). Auth Code + PKCE, discovery-URL testing, per-provider claim mapping to AVA roles |
+| Policy | `frontend/src/components/policies/` + backend `api/routes/policies.py` — AgentCore Cedar policy engine. Attach/detach to gateways, ENFORCE vs LOG_ONLY, allow/deny rules enforced on every tool call. TF module: `infrastructure/modules/agentcore_policy/` |
+| Approval Policies | `frontend/src/components/approvals/ApprovalPoliciesLanding.tsx` + backend `api/routes/approval_policies.py` + services `approval_policy_engine.py` / `approval_policy_bootstrap.py` — author + evaluate HITL rules; 8 AVA Default policies seeded on boot (Agent / MCP / A2A / Skills / Custom / Identity registration require OPERATOR; Application delete requires ADMIN; Application deploy auto-approves) |
+
+### Operate
+
+| Module | Description |
+|--------|-------------|
+| Deployments | `frontend/src/components/DeploymentList.tsx` + `DeploymentDetail.tsx` + backend `api/routes/deployments.py` + service `deployment_service.py` — every CodeBuild + CloudFormation run kicked off from AVA in one queue, with streamed logs and artifact URLs. Backed by DDB deployments table and the deployment Step Function |
 | AgentCore Observability | Wired into every AgentCore runtime stack via `applications/fsi_foundry/foundations/iac/agentcore/runtime/main.tf` — CloudWatch APPLICATION_LOGS log delivery + X-Ray Transaction Search trace destinations. One-time per-account prereq enables X-Ray Transaction Search |
+| [Langfuse Observability](platform/docs/templates/foundation-stack.md) | Langfuse v3 on ECS Fargate — Aurora PostgreSQL + ClickHouse + Redis, fronted by CloudFront. Each FSI Foundry use case auto-provisions its own Langfuse project at deploy time. Embedded as an iframe in the Control Plane with auto-login |
+| Prompt Optimization | `frontend/src/components/PromptOptimization.tsx` + backend `api/routes/advpo.py` — Bedrock Advanced Prompt Optimization: submit seed + labeled JSONL, poll job, compare variants, promote winner to Harness. TF module: `infrastructure/modules/advanced_prompt_optimization/` |
+| Approval Queue | `frontend/src/components/approvals/ApprovalQueueLanding.tsx` + backend `api/routes/approval_requests.py` — live inbox with per-row + bulk approve/deny (up to 200 rows); flips linked AWS Agent Registry record status transparently (DRAFT → PENDING_APPROVAL → APPROVED with lifecycle-safe fallback) |
 
 ### Govern
 
@@ -898,14 +1019,18 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 &#8226; <a href="https://www.linkedin.com/in/dialloalseny/">Alseny Diallo</a><br/>
 &#8226; <a href="https://www.linkedin.com/in/mark-paguay-5a06a6193/">Mark Paguay</a>
 </td><td>Market Surveillance reference implementation</td></tr>
-<tr><td><a href="https://www.linkedin.com/in/hemal-gadhiya/">Hemal Gadhiya</a></td><td>App Templates, Role-based access control (RBAC)</td></tr>
-<tr><td><a href="https://www.linkedin.com/in/bikash-behera/">Bikash Behera</a></td><td>Plan section design and implementation, Service Onboarding integration, AgentCore-in-a-Box integration</td></tr>
+<tr><td><a href="https://www.linkedin.com/in/hemal-gadhiya/">Hemal Gadhiya</a></td><td>App Templates, Role-based access control (RBAC) — coming soon</td></tr>
+<tr><td><a href="https://www.linkedin.com/in/bikash-behera/">Bikash Behera</a></td><td>Maturity Assessment, Operating Model, Use Cases, Business Cases, Organization Design, Harness, Memory, Registry, Agents, MCP Servers, A2A Servers, Skills, Custom Resources, Catalog, Identity, Approval Policies, Approval Queue, integrated applications in reference applications section</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/pramanicks/">Sushil Pramanick</a></td><td>Plan section design, AI use case discovery methodology, framework guidance</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/aditipendharkar/">Aditi Pendharkar</a></td><td>Service Onboarding review workflow, Claude Code plugin design</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/gsorrels/">Gregg Sorrels</a></td><td>Govern section design, AI Trust Stack model, MRM framework alignment, Model Management &amp; Governance, Agentic Coding / Dev-Tools governance, Govern audit backend</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/aasheish/">Ashish Kumar</a></td><td>LLM Gateway (LiteLLM on ECS Fargate) integration</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/sidlermichael/">Michael Sidler</a></td><td>Payments Fraud reference implementation (Strands supervisor + scorer / investigation / SAR agents, Terraform)</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/sudhir-kalidindi-669a732/">Sudhir Kalidindi</a></td><td>Case Management &amp; Merchant Onboarding reference implementations</td></tr>
+<tr><td>
+&#8226; <a href="https://www.linkedin.com/in/ronn82/">Ronny Rodriguez</a><br/>
+&#8226; <a href="https://www.linkedin.com/in/borislitvin/">Boris Litvin</a>
+</td><td>Investment Research and Risk Accelerator reference implementation</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/rafamosca/">Rafael Mosca</a></td><td>Advanced Prompt Optimization (Bedrock AdvPO)</td></tr>
 <tr><td>
 &#8226; <a href="https://www.linkedin.com/in/cmeruwoma/">Charles Meruwoma</a><br/>

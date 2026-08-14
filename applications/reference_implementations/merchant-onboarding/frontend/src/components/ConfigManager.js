@@ -109,7 +109,7 @@ const ConfigManager = () => {
 
   const resetToDefault = () => {
     const defaultConfig = {
-      API_BASE_URL: 'https://dhswdkypjc.execute-api.us-east-1.amazonaws.com/Stage',
+      API_BASE_URL: 'https://<api-id>.execute-api.<region>.amazonaws.com/<stage>',
       ENABLE_API_CALLS: true,
       DEV_SETTINGS: {
         LOG_API_CALLS: true,

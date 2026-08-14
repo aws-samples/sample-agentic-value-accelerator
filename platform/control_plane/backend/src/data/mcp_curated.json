@@ -1,0 +1,173 @@
+{
+  "$comment": "Curated MCP servers surfaced under Build > MCP Servers > Browse Curated. AVA does not audit third-party MCP servers — users must review each server's terms and code before enabling. Add entries by appending here; the /mcp/curated route serves the file verbatim.",
+  "servers": [
+    {
+      "id": "aws-docs",
+      "name": "AWS Documentation",
+      "publisher": "awslabs",
+      "category": "aws",
+      "posture": "official",
+      "url": "https://mcp.aws/docs",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Query AWS documentation and service references from any agent. Read-only.",
+      "docs_url": "https://github.com/awslabs/mcp"
+    },
+    {
+      "id": "aws-cdk",
+      "name": "AWS CDK",
+      "publisher": "awslabs",
+      "category": "aws",
+      "posture": "official",
+      "url": "https://mcp.aws/cdk",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "CDK construct guidance and code-generation helpers.",
+      "docs_url": "https://github.com/awslabs/mcp"
+    },
+    {
+      "id": "aws-terraform",
+      "name": "AWS Terraform",
+      "publisher": "awslabs",
+      "category": "aws",
+      "posture": "official",
+      "url": "https://mcp.aws/terraform",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Terraform module/provider lookup and IAM policy assistance for AWS.",
+      "docs_url": "https://github.com/awslabs/mcp"
+    },
+    {
+      "id": "aws-cost-analysis",
+      "name": "AWS Cost Analysis",
+      "publisher": "awslabs",
+      "category": "aws",
+      "posture": "official",
+      "url": "https://mcp.aws/cost-analysis",
+      "auth_hint": "api_key",
+      "delegation_mode": "obo",
+      "description": "Query Cost Explorer and cost allocation tags. Requires AWS credentials scoped to Cost Explorer.",
+      "docs_url": "https://github.com/awslabs/mcp"
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "publisher": "anthropic",
+      "category": "development",
+      "posture": "official",
+      "url": "https://mcp.github.com",
+      "auth_hint": "oauth2",
+      "delegation_mode": "obo",
+      "description": "Read/write access to GitHub repositories — issues, PRs, files.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "gitlab",
+      "name": "GitLab",
+      "publisher": "modelcontextprotocol",
+      "category": "development",
+      "posture": "community",
+      "url": "https://mcp.gitlab.com",
+      "auth_hint": "api_key",
+      "delegation_mode": "obo",
+      "description": "GitLab project management, issues, and merge requests.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "filesystem",
+      "name": "Filesystem",
+      "publisher": "anthropic",
+      "category": "development",
+      "posture": "official",
+      "url": "https://localhost:3000/mcp/fs",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Sandboxed filesystem access. Configure sandbox roots per agent.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "exa",
+      "name": "Exa Search",
+      "publisher": "exa",
+      "category": "search",
+      "posture": "community",
+      "url": "https://mcp.exa.ai/mcp",
+      "auth_hint": "api_key",
+      "delegation_mode": "m2m",
+      "description": "Web search with content extraction, powered by Exa's neural search engine.",
+      "docs_url": "https://docs.exa.ai"
+    },
+    {
+      "id": "brave-search",
+      "name": "Brave Search",
+      "publisher": "modelcontextprotocol",
+      "category": "search",
+      "posture": "community",
+      "url": "https://mcp.search.brave.com",
+      "auth_hint": "api_key",
+      "delegation_mode": "m2m",
+      "description": "Privacy-preserving web search via the Brave Search API.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "fetch",
+      "name": "Fetch",
+      "publisher": "anthropic",
+      "category": "search",
+      "posture": "official",
+      "url": "https://mcp.anthropic.com/fetch",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Fetch and parse a URL as markdown for agent context.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "publisher": "modelcontextprotocol",
+      "category": "data",
+      "posture": "community",
+      "url": "https://localhost:5432/mcp",
+      "auth_hint": "api_key",
+      "delegation_mode": "m2m",
+      "description": "Read-only SQL queries against a PostgreSQL database. Configure connection string per registration.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "publisher": "modelcontextprotocol",
+      "category": "productivity",
+      "posture": "community",
+      "url": "https://mcp.slack.com",
+      "auth_hint": "oauth2",
+      "delegation_mode": "obo",
+      "description": "Send messages, read channels, manage Slack workspace resources.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "google-drive",
+      "name": "Google Drive",
+      "publisher": "modelcontextprotocol",
+      "category": "productivity",
+      "posture": "community",
+      "url": "https://mcp.googleapis.com/drive",
+      "auth_hint": "oauth2",
+      "delegation_mode": "obo",
+      "description": "Read and search Google Drive files.",
+      "docs_url": "https://github.com/modelcontextprotocol/servers"
+    },
+    {
+      "id": "sec-edgar",
+      "name": "SEC EDGAR",
+      "publisher": "community",
+      "category": "fsi",
+      "posture": "community",
+      "url": "https://mcp.edgar.sec.gov",
+      "auth_hint": "none",
+      "delegation_mode": "m2m",
+      "description": "Query SEC EDGAR filings — 10-K, 10-Q, 8-K, insider transactions.",
+      "docs_url": "https://www.sec.gov/edgar"
+    }
+  ]
+}

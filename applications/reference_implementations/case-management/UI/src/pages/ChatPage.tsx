@@ -19,6 +19,7 @@ import {
   Speed as SpeedIcon,
 } from '@mui/icons-material';
 import { getConfig } from '../config.js';
+import { avaAuthHeaders } from '../services/avaSso';
 
 const MODELS: Record<string, string> = {
   'Claude Sonnet 4': 'us.anthropic.claude-sonnet-4-20250514-v1:0',
@@ -82,7 +83,7 @@ const ChatPage: React.FC = () => {
     if (useAgentCore && isLocal) {
       const res = await fetch(`${sarApiBase}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...avaAuthHeaders() },
         body: JSON.stringify({ message: userMessage, sessionId, history }),
       });
       if (!res.ok) throw new Error(`Agent returned ${res.status}`);
@@ -120,7 +121,7 @@ const ChatPage: React.FC = () => {
     if (useAgentCore) {
       const res = await fetch(`${sarApiBase}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...avaAuthHeaders() },
         body: JSON.stringify({ message: userMessage, sessionId, history }),
       });
       if (!res.ok) throw new Error(`Agent returned ${res.status}`);
@@ -133,7 +134,7 @@ const ChatPage: React.FC = () => {
     const t0 = Date.now();
     const res = await fetch(`${sarApiBase}/api/bedrock-chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...avaAuthHeaders() },
       body: JSON.stringify({ message: userMessage, model: modelId, history }),
     });
     if (!res.ok) throw new Error(`Bedrock returned ${res.status}`);

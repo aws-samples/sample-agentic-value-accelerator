@@ -13,6 +13,37 @@ locals {
   # Validate that at least one origin is provided
   has_alb_origin = var.alb_dns_name != ""
   has_api_origin = var.api_gateway_domain != ""
+
+  # AVA FSI SSO edge gate — enabled when the AVA control-plane deploy passes
+  # in a non-empty signing secret. Empty (standalone laptop deploy) leaves
+  # the distribution alone; the Next.js custom Cognito login page keeps
+  # working. See the module comment on aws_cloudfront_function.ava_sso.
+  use_ava_sso = length(var.fsi_app_signing_secret) > 0
+}
+
+# ------------------------------------------------------------------------------
+# CloudFront Function — AVA FSI SSO (viewer-request)
+#
+# Consumes ?ava_token=<HMAC-signed handoff> from the AVA UI on first hop,
+# verifies against the shared AVA_FSI_APP_SIGNING_SECRET, and swaps it for
+# an ava_session cookie so subsequent requests ride the cookie. Anonymous
+# hits pass through — the market-surveillance Next.js app still shows its
+# own Cognito login page for standalone deploys and as fallback for
+# expired AVA sessions. The API-Gateway Cognito authorizer remains the
+# backend gate; the UI is responsible for exchanging the ava_session
+# cookie for a Cognito token (see trade-alerts-app/lib/auth/avaSso.ts).
+# ------------------------------------------------------------------------------
+resource "aws_cloudfront_function" "ava_sso" {
+  count   = local.use_ava_sso ? 1 : 0
+  name    = "${local.distribution_name}-ava-sso"
+  runtime = "cloudfront-js-2.0"
+  comment = "AVA FSI SSO for ${local.distribution_name}"
+  publish = true
+
+  code = templatefile("${path.module}/ava_sso_function.js.tftpl", {
+    SIGNING_SECRET = var.fsi_app_signing_secret
+    LOGIN_URL      = var.ava_ui_login_url
+  })
 }
 
 # CloudFront Distribution
@@ -90,6 +121,27 @@ resource "aws_cloudfront_distribution" "this" {
     default_ttl            = var.alb_dns_name != "" ? var.default_ttl : 0
     max_ttl                = var.alb_dns_name != "" ? var.max_ttl : 0
     compress               = false # Disable compression for streaming responses
+
+    # AVA FSI SSO edge gate. Attached only when the module is configured
+    # with a non-empty signing secret (control-plane deploys). Standalone
+    # deploys skip this block entirely and see no function on the
+    # distribution. The `count`-driven ternary means we produce zero or
+    # one function_association block — Terraform doesn't allow dynamic
+    # blocks inside default_cache_behavior for older provider versions,
+    # so we use a raw ternary via a dynamic `function_association`.
+    dynamic "function_association" {
+      # Terraform 1.9.8 rejects both `[1] : []` (list-of-number) and
+      # `toset(["1"]) : toset([])` (set-of-string) for a `dynamic` block
+      # nested inside `default_cache_behavior`. It accepts a
+      # list-of-object though — the AWS provider's own examples use
+      # `for_each = <condition> ? ["once"] : []` with the block iterator
+      # unused. Using an explicit list-of-string here.
+      for_each = range(local.use_ava_sso ? 1 : 0)
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.ava_sso[0].arn
+      }
+    }
   }
 
   # API cache behavior (only when both ALB and API Gateway are present)

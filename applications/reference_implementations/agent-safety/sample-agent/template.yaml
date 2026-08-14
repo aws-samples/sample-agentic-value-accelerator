@@ -63,13 +63,13 @@ Parameters:
 
   SessionTableName:
     Type: String
-    Description: DynamoDB table name for session tracking
-    Default: session-token-usage
+    Description: DynamoDB table name for session tracking (created by dashboard stack)
+    Default: safety-dashboard-sessions
 
   CreateSessionTable:
     Type: String
-    Description: Whether to create the DynamoDB session table (no if it already exists)
-    Default: 'yes'
+    Description: Whether to create the DynamoDB session table (no — owned by dashboard stack)
+    Default: 'no'
     AllowedValues:
       - 'yes'
       - 'no'
@@ -175,8 +175,6 @@ Resources:
   SessionTable:
     Type: AWS::DynamoDB::Table
     Condition: ShouldCreateSessionTable
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Ref SessionTableName
       BillingMode: PAY_PER_REQUEST

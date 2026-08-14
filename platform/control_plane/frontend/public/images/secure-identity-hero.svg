@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Identity Providers hero">
+  <defs>
+    <linearGradient id="idbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ecfdf5"/>
+      <stop offset="55%" stop-color="#d1fae5"/>
+      <stop offset="100%" stop-color="#ccfbf1"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+    <linearGradient id="idcard" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f0fdfa"/>
+    </linearGradient>
+    <radialGradient id="idglow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#5eead4" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#5eead4" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="idsoft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="320" fill="url(#idbg)"/>
+
+  <!-- Soft glow behind the shield -->
+  <circle cx="400" cy="160" r="170" fill="url(#idglow)"/>
+
+  <!-- Faint dot grid -->
+  <g fill="#2dd4bf" opacity="0.18">
+    <circle cx="60"  cy="60"  r="1.6"/>
+    <circle cx="60"  cy="160" r="1.6"/>
+    <circle cx="60"  cy="260" r="1.6"/>
+    <circle cx="140" cy="40"  r="1.6"/>
+    <circle cx="140" cy="120" r="1.6"/>
+    <circle cx="140" cy="220" r="1.6"/>
+    <circle cx="140" cy="300" r="1.6"/>
+    <circle cx="220" cy="80"  r="1.6"/>
+    <circle cx="220" cy="180" r="1.6"/>
+    <circle cx="220" cy="280" r="1.6"/>
+    <circle cx="660" cy="40"  r="1.6"/>
+    <circle cx="660" cy="120" r="1.6"/>
+    <circle cx="660" cy="220" r="1.6"/>
+    <circle cx="660" cy="300" r="1.6"/>
+    <circle cx="740" cy="80"  r="1.6"/>
+    <circle cx="740" cy="180" r="1.6"/>
+    <circle cx="740" cy="280" r="1.6"/>
+  </g>
+
+  <!-- IdP token flows converging on the shield -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 30 70  Q 200 100 360 150" stroke="#34d399" stroke-width="3" opacity="0.7"/>
+    <path d="M 30 160 Q 200 160 360 160" stroke="#10b981" stroke-width="3" opacity="0.85"/>
+    <path d="M 30 250 Q 200 220 360 170" stroke="#34d399" stroke-width="3" opacity="0.7"/>
+    <path d="M 30 110 Q 220 130 360 155" stroke="#5eead4" stroke-width="2.5" opacity="0.55"/>
+    <path d="M 30 220 Q 220 200 360 165" stroke="#5eead4" stroke-width="2.5" opacity="0.55"/>
+  </g>
+
+  <!-- Verified token exiting toward the AVA app -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 460 160 Q 600 160 770 160" stroke="#0f766e" stroke-width="3.5" opacity="0.9"/>
+    <path d="M 460 160 Q 600 160 770 160" stroke="#fff" stroke-width="1" stroke-dasharray="3 6" opacity="0.7"/>
+  </g>
+
+  <!-- IdP chips on the left (Entra, Okta, Auth0) -->
+  <g font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-weight="600">
+    <g>
+      <rect x="14" y="54" width="92" height="32" rx="16" fill="url(#idcard)" stroke="#a7f3d0"/>
+      <circle cx="34" cy="70" r="5" fill="#0d9488"/>
+      <text x="48" y="74" font-size="11" fill="#065f46">Entra ID</text>
+    </g>
+    <g>
+      <rect x="14" y="144" width="92" height="32" rx="16" fill="url(#idcard)" stroke="#a7f3d0"/>
+      <circle cx="34" cy="160" r="5" fill="#10b981"/>
+      <text x="48" y="164" font-size="11" fill="#065f46">Okta</text>
+    </g>
+    <g>
+      <rect x="14" y="234" width="92" height="32" rx="16" fill="url(#idcard)" stroke="#a7f3d0"/>
+      <circle cx="34" cy="250" r="5" fill="#34d399"/>
+      <text x="48" y="254" font-size="11" fill="#065f46">Auth0</text>
+    </g>
+  </g>
+
+  <!-- AVA target on the right -->
+  <g font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-weight="700">
+    <rect x="664" y="138" width="118" height="44" rx="10" fill="#0f172a"/>
+    <text x="723" y="166" font-size="13" fill="#5eead4" text-anchor="middle">AVA Roles</text>
+  </g>
+
+  <!-- Central Identity shield -->
+  <g transform="translate(360 100)">
+    <rect x="6" y="10" width="100" height="120" rx="22" fill="#065f46" opacity="0.18" filter="url(#idsoft)"/>
+    <rect x="0" y="4" width="100" height="120" rx="22" fill="url(#teal)"/>
+    <rect x="10" y="14" width="80" height="100" rx="16" fill="#fff" opacity="0.94"/>
+
+    <!-- Shield + checkmark glyph -->
+    <g transform="translate(50 46)" stroke="#065f46" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M 0 -20 L 18 -12 L 18 4 C 18 15, 8 22, 0 24 C -8 22, -18 15, -18 4 L -18 -12 Z"/>
+      <path d="M -8 2 L -2 8 L 8 -4"/>
+    </g>
+
+    <!-- Claim → role mapping dots -->
+    <g transform="translate(20 88)">
+      <rect x="0" y="0" width="60" height="6" rx="3" fill="#a7f3d0"/>
+      <rect x="0" y="0" width="48" height="6" rx="3" fill="url(#teal)"/>
+      <circle cx="48" cy="3" r="4" fill="#fff" stroke="#065f46" stroke-width="1.5"/>
+    </g>
+
+    <!-- Provider icons (Entra / Okta / Auth0 dots) -->
+    <g transform="translate(20 104)">
+      <circle cx="0" cy="0" r="3" fill="#0d9488"/>
+      <circle cx="10" cy="0" r="3" fill="#10b981"/>
+      <circle cx="20" cy="0" r="3" fill="#34d399"/>
+      <text x="30" y="3" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="9" font-weight="700" fill="#065f46">OIDC</text>
+    </g>
+
+    <text x="50" y="138" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="11" font-weight="700" fill="#065f46" text-anchor="middle">Identity</text>
+  </g>
+
+  <!-- Floating claim → role mappings -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" fill="#065f46" opacity="0.75">
+    <text x="500" y="64">groups: admins  →  t-admin</text>
+    <text x="500" y="80">groups: analysts →  g-users-*</text>
+    <text x="500" y="96">iss verified  ✓  aud match  ✓</text>
+    <text x="500" y="252">PKCE  •  RS256</text>
+    <text x="500" y="268">discovery OK  ✓</text>
+  </g>
+</svg>

@@ -17,7 +17,7 @@ interface Item {
 const LANGFUSE: Item = {
   id: 'langfuse',
   path: '/observability/langfuse',
-  name: 'Langfuse',
+  name: 'Langfuse Observability',
   tagline: 'Open-source LLM observability.',
   description:
     'Full execution traces, prompt versioning, evaluations, and cost analytics for every agent invocation. Self-hosted inside your VPC via the FSI Foundry foundation stack.',
@@ -55,7 +55,7 @@ const AGENTCORE: Item = {
   ],
 };
 
-const ITEMS = [LANGFUSE, AGENTCORE];
+const ITEMS = [AGENTCORE, LANGFUSE];
 
 export default function ObservabilityLanding() {
   const navigate = useNavigate();
