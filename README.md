@@ -19,7 +19,7 @@ An open-source platform that unifies use cases, reference apps, apps generation 
 
 <br/>
 
-[Getting Started](#getting-started) | [Plan](#plan) | [Build](#build) | [Secure](#secure) | [Operate](#operate) | [Govern](#govern) | [Platform](#platform) | [Architecture](#architecture) | [Documentation](#documentation) | [Contacts](#contacts)
+[Getting Started](#getting-started) | [Plan](#plan) | [Build](#build) | [Secure](#secure) | [Operate](#operate) | [Govern](#govern) | [Platform](#platform) | [Architecture](#architecture) | [Documentation](#documentation) 
 
 </div>
 
@@ -1020,10 +1020,10 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 &#8226; <a href="https://www.linkedin.com/in/mark-paguay-5a06a6193/">Mark Paguay</a>
 </td><td>Market Surveillance reference implementation</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/hemal-gadhiya/">Hemal Gadhiya</a></td><td>App Templates, Role-based access control (RBAC) — coming soon</td></tr>
-<tr><td><a href="https://www.linkedin.com/in/bikash-behera/">Bikash Behera</a></td><td>Maturity Assessment, Operating Model, Use Cases, Business Cases, Organization Design, Harness, Memory, Registry, Agents, MCP Servers, A2A Servers, Skills, Custom Resources, Catalog, Identity, Approval Policies, Approval Queue, integrated applications in reference applications section</td></tr>
-<tr><td><a href="https://www.linkedin.com/in/pramanicks/">Sushil Pramanick</a></td><td>Plan section design, AI use case discovery methodology, framework guidance</td></tr>
+<tr><td><a href="https://www.linkedin.com/in/bikash-behera/">Bikash Behera</a></td><td>Plan templates, integrated applications in reference applications section, [UI Placeholders - in-progress -  Harness, Memory, Registry, Agents, MCP Servers, A2A Servers Catalog, Identity]</td></tr>
+<tr><td><a href="https://www.linkedin.com/in/pramanicks/">Sushil Pramanick</a></td><td>Plan section design</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/aditipendharkar/">Aditi Pendharkar</a></td><td>Service Onboarding review workflow, Claude Code plugin design</td></tr>
-<tr><td><a href="https://www.linkedin.com/in/gsorrels/">Gregg Sorrels</a></td><td>Govern section design, AI Trust Stack model, MRM framework alignment, Model Management &amp; Governance, Agentic Coding / Dev-Tools governance, Govern audit backend</td></tr>
+<tr><td><a href="https://www.linkedin.com/in/gsorrels/">Gregg Sorrels</a></td><td>Govern section design, AI Trust Stack model, MRM framework alignment, Model Management &amp; Governance</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/aasheish/">Ashish Kumar</a></td><td>LLM Gateway (LiteLLM on ECS Fargate) integration</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/sidlermichael/">Michael Sidler</a></td><td>Payments Fraud reference implementation (Strands supervisor + scorer / investigation / SAR agents, Terraform)</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/sudhir-kalidindi-669a732/">Sudhir Kalidindi</a></td><td>Case Management &amp; Merchant Onboarding reference implementations</td></tr>
@@ -1039,14 +1039,6 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 </tbody>
 </table>
 
-## Contacts
-
-| Role                                   | Name                                                            |
-|----------------------------------------|-----------------------------------------------------------------|
-| Product & Strategy Lead                | [Bikash Behera](https://www.linkedin.com/in/bikash-behera/)     |
-| Platform Architect                     | [Jorge Castans](https://www.linkedin.com/in/jorgecastans/)      |
-| Project Lead                           | [Vivian Bui](https://www.linkedin.com/in/vivian-bui-413a561b6/) |
-
 ---
 
 ## Security
@@ -1059,6 +1051,4 @@ This project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE)
 
 ---
 
-<div align="center">
-<sub>Made with ❤️ by FSI PACE at AWS</sub>
-</div>
+*This is not a production solution system.  Before adapting any of this for a real workload, apply your own security review, model validation, data-retention controls, and regulatory sign-off — you are responsible for your use of the services and models it invokes.*
