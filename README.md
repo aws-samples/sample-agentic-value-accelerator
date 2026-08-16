@@ -1005,7 +1005,7 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 </colgroup>
 <thead><tr><th>Contributor</th><th>Contributions</th></tr></thead>
 <tbody>
-<tr><td><a href="https://www.linkedin.com/in/vivian-bui-413a561b6/">Vivian Bui</a></td><td>Control Plane platform, Frontier Agents, FSI Foundry foundations, 34 use case agentic design and service implementations, CI/CD pipeline, testing panel, deployment automation</td></tr>
+<tr><td><a href="https://www.linkedin.com/in/vivian-bui-413a561b6/">Vivian Bui</a></td><td>Control Plane platform, Frontier Agents, FSI Foundry foundations, 34 use case agentic design and service implementations, CI/CD pipeline, testing panel, deployment automation, reference apps integration</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/ethanalmeida/">Ethan Almeida</a></td><td>App Factory, Strands AgentCore integration, deployment scripts</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/adarshparakh/">Adarsh Parakh</a></td><td>FSI Foundry 34 frontend UIs, guidance design, workflow-driven orchestration pattern, Guardrails &amp; Policy (AgentCore Cedar policy engine + gateway tool-access control)</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/daniela-vargas-msda/">Daniela Vargas</a></td><td>Langfuse observability, AgentCore Observability, Shopping Concierge Agent reference implementation</td></tr>
@@ -1020,7 +1020,7 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 &#8226; <a href="https://www.linkedin.com/in/mark-paguay-5a06a6193/">Mark Paguay</a>
 </td><td>Market Surveillance reference implementation</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/hemal-gadhiya/">Hemal Gadhiya</a></td><td>App Templates, Role-based access control (RBAC) — coming soon</td></tr>
-<tr><td><a href="https://www.linkedin.com/in/bikash-behera/">Bikash Behera</a></td><td>Plan templates, integrated applications in reference applications section, [UI Placeholders - in-progress -  Harness, Memory, Registry, Agents, MCP Servers, A2A Servers Catalog, Identity]</td></tr>
+<tr><td><a href="https://www.linkedin.com/in/bikash-behera/">Bikash Behera</a></td><td>Plan templates, reference apps integration, harness, memory, registry, agents, MCP/A2A routers, catalog, identity</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/pramanicks/">Sushil Pramanick</a></td><td>Plan section design</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/aditipendharkar/">Aditi Pendharkar</a></td><td>Service Onboarding review workflow, Claude Code plugin design</td></tr>
 <tr><td><a href="https://www.linkedin.com/in/gsorrels/">Gregg Sorrels</a></td><td>Govern section design, AI Trust Stack model, MRM framework alignment, Model Management &amp; Governance</td></tr>
@@ -1051,4 +1051,4 @@ This project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE)
 
 ---
 
-*This is not a production solution system.  Before adapting any of this for a real workload, apply your own security review, model validation, data-retention controls, and regulatory sign-off — you are responsible for your use of the services and models it invokes.*
+*This is not a production solution system. Before adapting any of this for a real workload, apply your own security review, model validation, data-retention controls, and regulatory sign-off — you are responsible for your use of the services and models it invokes.*
