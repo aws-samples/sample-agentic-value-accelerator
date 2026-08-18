@@ -56,7 +56,15 @@ API_ACM_CERTIFICATE_ARN=$(terraform output -raw api_acm_certificate_arn)
 # from the caller identity into TF_VAR_lf_admin_role_arn; replicate that here
 # so the second apply doesn't fail on module.sample_datalake.
 CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text)
-export TF_VAR_lf_admin_role_arn=$(echo "$CALLER_ARN" | sed 's|arn:aws:sts::\([0-9]*\):assumed-role/\([^/]*\)/.*|arn:aws:iam::\1:role/\2|')
+LF_ADMIN_ROLE_ARN=$(echo "$CALLER_ARN" | sed 's|arn:aws:sts::\([0-9]*\):assumed-role/\([^/]*\)/.*|arn:aws:iam::\1:role/\2|')
+# Resolve the path-qualified ARN (IAM Identity Center roles sit under
+# /aws-reserved/sso.amazonaws.com/ and Lake Formation rejects path-less ARNs).
+LF_ROLE_NAME=$(echo "$LF_ADMIN_ROLE_ARN" | sed 's|.*:role/||')
+LF_RESOLVED_ARN=$(aws iam get-role --role-name "$LF_ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || echo "")
+if [ -n "$LF_RESOLVED_ARN" ] && [ "$LF_RESOLVED_ARN" != "None" ]; then
+    LF_ADMIN_ROLE_ARN="$LF_RESOLVED_ARN"
+fi
+export TF_VAR_lf_admin_role_arn="$LF_ADMIN_ROLE_ARN"
 
 echo "[B] CP terraform re-apply"
 cd "$INFRA_DIR"
