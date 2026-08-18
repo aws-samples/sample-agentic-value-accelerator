@@ -121,6 +121,15 @@ terraform init -input=false
 # Extract IAM role ARN from current credentials for Lake Formation admin
 CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text)
 LF_ADMIN_ROLE_ARN=$(echo "$CALLER_ARN" | sed 's|arn:aws:sts::\([0-9]*\):assumed-role/\([^/]*\)/.*|arn:aws:iam::\1:role/\2|')
+# The sed above drops the role's IAM path. IAM Identity Center (SSO) roles live
+# under /aws-reserved/sso.amazonaws.com/, and Lake Formation's PutDataLakeSettings
+# rejects a path-less ARN with "InvalidInputException: Invalid path for user".
+# Resolve the authoritative, path-qualified ARN via iam:GetRole when possible.
+LF_ROLE_NAME=$(echo "$LF_ADMIN_ROLE_ARN" | sed 's|.*:role/||')
+LF_RESOLVED_ARN=$(aws iam get-role --role-name "$LF_ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || echo "")
+if [ -n "$LF_RESOLVED_ARN" ] && [ "$LF_RESOLVED_ARN" != "None" ]; then
+    LF_ADMIN_ROLE_ARN="$LF_RESOLVED_ARN"
+fi
 export TF_VAR_lf_admin_role_arn="$LF_ADMIN_ROLE_ARN"
 echo -e "${GREEN}Lake Formation admin role: ${LF_ADMIN_ROLE_ARN}${NC}"
 # Pre-import X-Ray Transaction Search prereqs that are account+region-scoped
@@ -207,10 +216,28 @@ if [ -z "${HOSTED_ZONE_DOMAIN:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
 fi
 
 HZ_DIR="$INFRA_DIR/bootstrap/hosted_zone"
-HZ_DOMAIN="${HOSTED_ZONE_DOMAIN:?HOSTED_ZONE_DOMAIN not set. Add it to .env or export it before running deploy-full.sh.}"
+# HOSTED_ZONE_DOMAIN is only required when we are actually creating the zone.
+# Accounts without a delegable public domain (sandboxes, workshop accounts)
+# set DEPLOY_HOSTED_ZONE=false and stay on the default *.cloudfront.net URL,
+# so do NOT hard-fail on an unset variable here.
+HZ_DOMAIN="${HOSTED_ZONE_DOMAIN:-}"
 HZ_ID=""
 
-if [ "${DEPLOY_HOSTED_ZONE:-true}" = "true" ] && [ -d "$HZ_DIR" ]; then
+if [ "${DEPLOY_HOSTED_ZONE:-true}" != "true" ]; then
+    echo -e "${YELLOW}[1b/9] Skipped: DEPLOY_HOSTED_ZONE=false.${NC}"
+    echo    "  No Route 53 hosted zone created. The Control Plane will be served on its"
+    echo    "  default CloudFront and API Gateway domain names."
+    echo
+elif [ ! -d "$HZ_DIR" ]; then
+    echo -e "${YELLOW}[1b/9] Skipped: $HZ_DIR not present.${NC}"
+    echo
+elif [ -z "$HZ_DOMAIN" ]; then
+    echo -e "${RED}Error: HOSTED_ZONE_DOMAIN is not set.${NC}"
+    echo "  Either set HOSTED_ZONE_DOMAIN in $REPO_ROOT/.env (a subdomain of a public"
+    echo "  zone you control), or skip the custom-domain path entirely with:"
+    echo "      DEPLOY_HOSTED_ZONE=false ./deploy-full.sh"
+    exit 1
+else
     echo -e "${BLUE}[1b/9] Route 53 hosted zone bootstrap${NC}"
 
     pushd "$HZ_DIR" > /dev/null
@@ -227,11 +254,8 @@ if [ "${DEPLOY_HOSTED_ZONE:-true}" = "true" ] && [ -d "$HZ_DIR" ]; then
     popd > /dev/null
 
     echo -e "${GREEN}  Hosted zone ${HZ_DOMAIN} ready (id=${HZ_ID}).${NC}"
-    echo -e "${YELLOW}  Send these NS records to the parent-zone (example.com) owner:${NC}"
+    echo -e "${YELLOW}  Send these NS records to the parent-zone owner:${NC}"
     echo "$HZ_NAMESERVERS" | python3 -c "import sys,json;[print(f'    {n}') for n in json.load(sys.stdin)]" 2>/dev/null || echo "  (name_servers output unavailable)"
-    echo
-elif [ ! -d "$HZ_DIR" ]; then
-    echo -e "${YELLOW}[1b/9] Skipped: $HZ_DIR not present.${NC}"
     echo
 fi
 
@@ -300,8 +324,9 @@ echo
 echo -e "${BLUE}[3/7] Service-Approval runner image${NC}"
 
 if [ -z "$RUNNER_ECR_REPO" ]; then
-    echo -e "${YELLOW}  service_approval_runner_ecr_repository_url not in tf outputs — skipping.${NC}"
-    echo -e "${YELLOW}  (Service Onboarding pipeline will fail until the image is pushed.)${NC}"
+    echo -e "${GREEN}  Not required: the Fargate service-approval runner was decommissioned${NC}"
+    echo -e "${GREEN}  (Phase B). Service Onboarding now runs on an AgentCore runtime, so there${NC}"
+    echo -e "${GREEN}  is no runner image to build. Skipping.${NC}"
 elif [ ! -f "$RUNNER_DIR/Dockerfile" ]; then
     echo -e "${YELLOW}  Runner source not found at $RUNNER_DIR — skipping.${NC}"
 else
