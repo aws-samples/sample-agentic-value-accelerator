@@ -1,0 +1,101 @@
+{
+  "submission_id": "SUB001",
+  "appetite_rules": {
+    "ruleset_version": "2026.2",
+    "effective_date": "2026-04-01",
+    "rules": [
+      {
+        "rule_id": "APP-01",
+        "description": "Prohibited occupancy classes are not written under any circumstances",
+        "type": "prohibition",
+        "prohibited_occupancy_classes": [
+          "cannabis_cultivation",
+          "cannabis_retail",
+          "fireworks_manufacturing",
+          "waste_recycling_processing",
+          "scrap_metal_yard",
+          "nightclub_bar",
+          "asbestos_abatement",
+          "foundry_ferrous"
+        ]
+      },
+      {
+        "rule_id": "APP-02",
+        "description": "Frame construction is prohibited above 4 stories",
+        "type": "prohibition",
+        "construction_type": "frame",
+        "max_stories": 4
+      },
+      {
+        "rule_id": "APP-03",
+        "description": "Locations within 1.0 mile of coast require referral; within 0.5 mile are prohibited",
+        "type": "referral_and_prohibition",
+        "referral_threshold_miles": 1.0,
+        "prohibition_threshold_miles": 0.5
+      },
+      {
+        "rule_id": "APP-04",
+        "description": "Maximum total insured value at any single location",
+        "type": "limit",
+        "max_single_location_tiv": 25000000
+      },
+      {
+        "rule_id": "APP-05",
+        "description": "Maximum total insured value across the whole schedule",
+        "type": "limit",
+        "max_total_tiv": 75000000
+      },
+      {
+        "rule_id": "APP-06",
+        "description": "Buildings constructed before this year are not eligible",
+        "type": "limit",
+        "min_year_built": 1960
+      },
+      {
+        "rule_id": "APP-07",
+        "description": "Sprinkler protection required for manufacturing occupancies where building value exceeds threshold",
+        "type": "requirement",
+        "applies_to_occupancy": "manufacturing",
+        "building_value_threshold": 5000000,
+        "requirement": "sprinklered"
+      },
+      {
+        "rule_id": "APP-08",
+        "description": "No more than this share of total insured value may sit in a single named-storm exposed zone",
+        "type": "limit",
+        "max_catastrophe_zone_concentration_pct": 40
+      },
+      {
+        "rule_id": "APP-09",
+        "description": "Carrier must be admitted in every state where a location is situated",
+        "type": "requirement",
+        "requirement": "admitted_carrier_status"
+      },
+      {
+        "rule_id": "APP-10",
+        "description": "Any single open claim above this amount requires senior underwriter referral",
+        "type": "referral",
+        "open_claim_referral_threshold": 250000
+      }
+    ]
+  },
+  "licensing": {
+    "states_required": ["OH"],
+    "admitted_status": [
+      { "state": "OH", "admitted": true, "line_authority": ["property", "casualty"] }
+    ],
+    "all_states_admitted": true
+  },
+  "sanctions_screening": {
+    "status": "clear",
+    "last_check": "2026-07-15",
+    "databases_checked": ["OFAC", "UN", "EU", "UK HMT"],
+    "entities_screened": ["Meridian Precision Components LLC"],
+    "matches": []
+  },
+  "regulatory_checks": {
+    "environmental_permits_current": true,
+    "osha_open_citations": 0,
+    "outstanding_regulatory_actions": []
+  }
+}

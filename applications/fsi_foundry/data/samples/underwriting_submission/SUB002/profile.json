@@ -1,0 +1,128 @@
+{
+  "submission_id": "SUB002",
+  "received_date": "2026-07-22",
+  "requested_effective_date": "2026-10-01",
+  "broker": {
+    "name": "Cornerstone Midwest Brokers",
+    "contact": "t.okafor@cornerstonemw.example.com",
+    "submission_reference": "CMB-26-1188"
+  },
+  "applicant": {
+    "name": "Harvest Ridge Foods Inc.",
+    "entity_type": "corporation",
+    "years_in_business": 31,
+    "annual_revenue": 128000000,
+    "employee_count": 640,
+    "industry": "Food Processing",
+    "occupancy_class": "food_processing_frozen",
+    "sic_code": "2038",
+    "headquarters_state": "MO"
+  },
+  "coverage_requested": {
+    "lines_of_business": ["commercial_property", "general_liability"],
+    "property_limit": 36300000,
+    "property_deductible": 100000,
+    "general_liability_limit": 5000000,
+    "business_interruption": true,
+    "business_interruption_indemnity_months": 18,
+    "policy_term_months": 12
+  },
+  "property_schedule": [
+    {
+      "location_id": "LOC-1",
+      "description": "Primary processing plant, freezer tunnel and offices",
+      "address": "4501 Ozark Industrial Drive, Springfield, MO 65803",
+      "building_value": 6800000,
+      "contents_value": 4200000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 1998,
+      "stories": 2,
+      "roof_replaced_year": 2020,
+      "sprinklered": true,
+      "distance_to_coast_miles": 900,
+      "catastrophe_zone": "MIDWEST_CONVECTIVE",
+      "named_storm_exposed": false,
+      "occupancy": "food_processing_frozen"
+    },
+    {
+      "location_id": "LOC-2",
+      "description": "Secondary processing and packaging",
+      "address": "220 Range Line Road, Joplin, MO 64801",
+      "building_value": 4100000,
+      "contents_value": 2900000,
+      "construction_type": "joisted_masonry",
+      "year_built": 1985,
+      "stories": 1,
+      "sprinklered": true,
+      "distance_to_coast_miles": 880,
+      "catastrophe_zone": "MIDWEST_CONVECTIVE",
+      "named_storm_exposed": false,
+      "occupancy": "food_processing_frozen"
+    },
+    {
+      "location_id": "LOC-3",
+      "description": "Ingredient blending facility",
+      "address": "1975 South Hoover Road, Wichita, KS 67209",
+      "building_value": 3500000,
+      "contents_value": 2100000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 2010,
+      "stories": 1,
+      "roof_replaced_year": 2016,
+      "sprinklered": true,
+      "distance_to_coast_miles": 950,
+      "catastrophe_zone": "MIDWEST_CONVECTIVE",
+      "named_storm_exposed": false,
+      "occupancy": "food_processing_dry_goods"
+    },
+    {
+      "location_id": "LOC-4",
+      "description": "Regional packing and shipping",
+      "address": "860 Steele Creek Way, Fayetteville, AR 72704",
+      "building_value": 2900000,
+      "contents_value": 1600000,
+      "construction_type": "joisted_masonry",
+      "year_built": 1968,
+      "stories": 1,
+      "sprinklered": true,
+      "distance_to_coast_miles": 700,
+      "catastrophe_zone": "MIDWEST_CONVECTIVE",
+      "named_storm_exposed": false,
+      "occupancy": "warehouse_general_storage"
+    },
+    {
+      "location_id": "LOC-5",
+      "description": "Cold storage and distribution hub",
+      "address": "12400 Front Street, Kansas City, MO 64120",
+      "building_value": 5200000,
+      "contents_value": 3000000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 2004,
+      "stories": 1,
+      "sprinklered": true,
+      "distance_to_coast_miles": 1000,
+      "catastrophe_zone": "MIDWEST_CONVECTIVE",
+      "named_storm_exposed": false,
+      "occupancy": "warehouse_cold_storage"
+    }
+  ],
+  "total_insured_value": 36300000,
+  "risk_management": {
+    "written_safety_program": true,
+    "last_third_party_inspection": "2024-08-19",
+    "central_station_alarm": true,
+    "employee_safety_training_hours_annual": 12
+  },
+  "submission_completeness": {
+    "loss_runs_provided": true,
+    "loss_runs_years": 3,
+    "property_schedule_complete": false,
+    "financials_provided": true,
+    "outstanding_items": [
+      "Roof replacement year not stated for LOC-2, LOC-4 and LOC-5",
+      "Loss runs provided for 3 of 5 required policy years; 2021-2022 outstanding",
+      "Refrigeration maintenance contract not evidenced following the 2024 spoilage claim",
+      "Status report and reserve basis for open fire claim HRF-2026-00412"
+    ]
+  }
+}

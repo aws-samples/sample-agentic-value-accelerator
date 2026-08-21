@@ -1169,6 +1169,47 @@
       "id_field": "customer_id"
     },
     {
+      "id": "I04",
+      "use_case_name": "underwriting_submission",
+      "name": "Underwriting Submission Triage",
+      "description": "Commercial insurance submission triage covering risk appetite screening, exposure and loss history analysis, and technical pricing indication, synthesised into a quote, refer or decline decision",
+      "application_path": "applications/fsi_foundry/use_cases/underwriting_submission",
+      "data_path": "applications/fsi_foundry/data/samples/underwriting_submission",
+      "supported_frameworks": [
+        "strands"
+      ],
+      "supported_patterns": [
+        "agentcore"
+      ],
+      "agents": [
+        {
+          "id": "appetite_screener",
+          "name": "Appetite Screener"
+        },
+        {
+          "id": "exposure_analyst",
+          "name": "Exposure Analyst"
+        },
+        {
+          "id": "pricing_indicator",
+          "name": "Pricing Indicator"
+        }
+      ],
+      "test_entities": [
+        "SUB001",
+        "SUB002",
+        "SUB003"
+      ],
+      "type_field": "triage_type",
+      "type_values": [
+        "full",
+        "appetite_only",
+        "exposure_only",
+        "pricing_only"
+      ],
+      "id_field": "submission_id"
+    },
+    {
       "id": "O01",
       "use_case_name": "call_center_analytics",
       "name": "Call Center Analytics",

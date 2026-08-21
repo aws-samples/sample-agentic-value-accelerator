@@ -1,0 +1,70 @@
+{
+  "submission_id": "SUB001",
+  "record_type": "loss_runs",
+  "applicant_name": "Meridian Precision Components LLC",
+  "period_covered": {
+    "from": "2021-09-01",
+    "to": "2026-06-30",
+    "years": 5
+  },
+  "prior_carriers": [
+    {
+      "carrier": "Great Lakes Mutual Insurance",
+      "policy_period": "2021-09-01 to 2024-09-01",
+      "lines": ["commercial_property", "general_liability"]
+    },
+    {
+      "carrier": "Buckeye Indemnity Company",
+      "policy_period": "2024-09-01 to 2026-09-01",
+      "lines": ["commercial_property", "general_liability"]
+    }
+  ],
+  "claims": [
+    {
+      "claim_number": "GLM-2021-08841",
+      "date_of_loss": "2021-11-30",
+      "location_id": "LOC-1",
+      "peril": "water_damage_non_weather",
+      "description": "Burst supply line in break room, localised damage to interior finishes",
+      "status": "closed",
+      "paid": 18500,
+      "reserved": 0,
+      "total_incurred": 18500
+    },
+    {
+      "claim_number": "GLM-2023-01277",
+      "date_of_loss": "2023-04-18",
+      "location_id": "LOC-3",
+      "peril": "theft",
+      "description": "Forced entry, tooling and inventory removed from warehouse dock area",
+      "status": "closed",
+      "paid": 7200,
+      "reserved": 0,
+      "total_incurred": 7200
+    }
+  ],
+  "summary": {
+    "claim_count": 2,
+    "open_claim_count": 0,
+    "total_paid": 25700,
+    "total_reserved": 0,
+    "total_incurred": 25700,
+    "largest_single_claim": 18500,
+    "claim_frequency_per_year": 0.4
+  },
+  "expiring_program": {
+    "carrier": "Buckeye Indemnity Company",
+    "annual_premium": 92500,
+    "total_insured_value": 13400000,
+    "rate_per_thousand": 6.9,
+    "loss_ratio": 0.06,
+    "loss_ratio_years": 5
+  },
+  "financials": {
+    "fiscal_year": 2025,
+    "annual_revenue": 41500000,
+    "net_income": 3200000,
+    "current_ratio": 2.4,
+    "years_profitable_of_last_5": 5
+  }
+}

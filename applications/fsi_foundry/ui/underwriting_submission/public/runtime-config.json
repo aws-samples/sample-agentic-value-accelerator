@@ -1,0 +1,49 @@
+{
+  "use_case_id": "underwriting_submission",
+  "use_case_name": "Underwriting Submission Triage",
+  "description": "AI-powered commercial insurance submission triage covering risk appetite screening, exposure and loss history analysis, and technical pricing indication",
+  "domain": "FSI",
+  "agents": [
+    {
+      "id": "appetite_screener",
+      "name": "Appetite Screener",
+      "description": "Evaluates the submission against every rule in the insurer's written risk appetite ruleset, citing each finding by rule id, and identifies prohibited occupancy classes at both applicant and location level"
+    },
+    {
+      "id": "exposure_analyst",
+      "name": "Exposure Analyst",
+      "description": "Aggregates total insured value across the property schedule, quantifies catastrophe zone concentration, and assesses prior claims for frequency, severity, trend and open reserves"
+    },
+    {
+      "id": "pricing_indicator",
+      "name": "Pricing Indicator",
+      "description": "Anchors on the expiring programme rate and adjusts for loss experience, catastrophe exposure and data quality to produce a technical premium indication, plus the information required from the broker"
+    }
+  ],
+  "api_endpoint": "/api/invoke",
+  "input_schema": {
+    "id_field": "submission_id",
+    "id_label": "Submission ID",
+    "id_placeholder": "e.g. SUB001",
+    "type_field": "triage_type",
+    "type_options": [
+      {
+        "value": "full",
+        "label": "Full Triage"
+      },
+      {
+        "value": "appetite_only",
+        "label": "Appetite Only"
+      },
+      {
+        "value": "exposure_only",
+        "label": "Exposure Only"
+      },
+      {
+        "value": "pricing_only",
+        "label": "Pricing Only"
+      }
+    ],
+    "test_entities": ["SUB001", "SUB002", "SUB003"]
+  }
+}

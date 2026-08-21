@@ -1,0 +1,94 @@
+{
+  "submission_id": "SUB001",
+  "received_date": "2026-07-14",
+  "requested_effective_date": "2026-09-01",
+  "broker": {
+    "name": "Keystone Commercial Risk Partners",
+    "contact": "m.alvarez@keystonecrp.example.com",
+    "submission_reference": "KCRP-2026-4471"
+  },
+  "applicant": {
+    "name": "Meridian Precision Components LLC",
+    "entity_type": "limited_liability_company",
+    "years_in_business": 18,
+    "annual_revenue": 41500000,
+    "employee_count": 210,
+    "industry": "Light Manufacturing",
+    "occupancy_class": "machine_shop_metal_fabrication",
+    "sic_code": "3599",
+    "headquarters_state": "OH"
+  },
+  "coverage_requested": {
+    "lines_of_business": ["commercial_property", "general_liability"],
+    "property_limit": 14000000,
+    "property_deductible": 25000,
+    "general_liability_limit": 2000000,
+    "business_interruption": true,
+    "business_interruption_indemnity_months": 12,
+    "policy_term_months": 12
+  },
+  "property_schedule": [
+    {
+      "location_id": "LOC-1",
+      "description": "Primary machining facility and offices",
+      "address": "1840 Innovation Parkway, Columbus, OH 43230",
+      "building_value": 4200000,
+      "contents_value": 1800000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 2008,
+      "stories": 1,
+      "roof_replaced_year": 2019,
+      "sprinklered": true,
+      "distance_to_coast_miles": 520,
+      "catastrophe_zone": "OH_INLAND",
+      "named_storm_exposed": false,
+      "occupancy": "machine_shop_metal_fabrication"
+    },
+    {
+      "location_id": "LOC-2",
+      "description": "Secondary fabrication and assembly",
+      "address": "77 Kettering Industrial Court, Dayton, OH 45420",
+      "building_value": 3100000,
+      "contents_value": 1400000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 2012,
+      "stories": 1,
+      "roof_replaced_year": 2021,
+      "sprinklered": true,
+      "distance_to_coast_miles": 545,
+      "catastrophe_zone": "OH_INLAND",
+      "named_storm_exposed": false,
+      "occupancy": "machine_shop_metal_fabrication"
+    },
+    {
+      "location_id": "LOC-3",
+      "description": "Finished goods warehouse and distribution",
+      "address": "3200 Maumee Bay Road, Toledo, OH 43605",
+      "building_value": 2600000,
+      "contents_value": 900000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 2015,
+      "stories": 1,
+      "roof_replaced_year": 2015,
+      "sprinklered": true,
+      "distance_to_coast_miles": 490,
+      "catastrophe_zone": "OH_INLAND",
+      "named_storm_exposed": false,
+      "occupancy": "warehouse_general_storage"
+    }
+  ],
+  "total_insured_value": 14000000,
+  "risk_management": {
+    "written_safety_program": true,
+    "last_third_party_inspection": "2025-11-12",
+    "central_station_alarm": true,
+    "employee_safety_training_hours_annual": 24
+  },
+  "submission_completeness": {
+    "loss_runs_provided": true,
+    "loss_runs_years": 5,
+    "property_schedule_complete": true,
+    "financials_provided": true,
+    "outstanding_items": []
+  }
+}
