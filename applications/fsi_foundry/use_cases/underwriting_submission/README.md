@@ -26,26 +26,26 @@ This use case automates that first pass. It answers three questions in parallel 
 
 ```mermaid
 graph TB
-    Request["Client Request<br/><small>Submission Triage</small>"] --> Runtime["AgentCore Runtime"]
+    Request["Client Request<br/>Submission Triage"] --> Runtime["AgentCore Runtime"]
     Runtime --> Orchestrator["Underwriting Orchestrator"]
 
-    Orchestrator --> Appetite["Appetite Screener<br/><small>Risk appetite ruleset</small>"]
-    Orchestrator --> Exposure["Exposure Analyst<br/><small>TIV, concentration, loss history</small>"]
-    Orchestrator --> Pricing["Pricing Indicator<br/><small>Technical premium</small>"]
+    Orchestrator --> Appetite["Appetite Screener<br/>Risk appetite ruleset"]
+    Orchestrator --> Exposure["Exposure Analyst<br/>TIV, concentration,<br/>loss history"]
+    Orchestrator --> Pricing["Pricing Indicator<br/>Technical premium"]
 
-    Appetite --> Bedrock["Amazon Bedrock<br/>(Claude)"]
+    Appetite --> Bedrock["Amazon Bedrock<br/>(Claude Haiku 4.5)"]
     Exposure --> Bedrock
     Pricing --> Bedrock
 
-    Appetite --> S3["S3 Sample Data<br/><small>data/samples/underwriting_submission/</small>"]
+    Appetite --> S3["S3 Sample Data<br/>data/samples/<br/>underwriting_submission/"]
     Exposure --> S3
     Pricing --> S3
 
-    Appetite --> Synthesis["Triage Synthesis<br/><small>appetite outranks pricing</small>"]
+    Appetite --> Synthesis["Triage Synthesis<br/>appetite outranks pricing"]
     Exposure --> Synthesis
     Pricing --> Synthesis
 
-    Synthesis --> Response["Response<br/><small>quote / refer / decline</small>"]
+    Synthesis --> Response["Response<br/>quote / refer / decline"]
 
     style Request fill:#e1f5ff
     style Response fill:#d4edda
@@ -92,7 +92,7 @@ The `UnderwritingOrchestrator` extends `StrandsOrchestrator` and implements a **
 | **Role**     | Screens the submission against the insurer's written risk appetite ruleset                                                                                                                                                                                                                     |
 | **Data**     | Submission profile, appetite ruleset and regulatory record, and loss runs via `s3_retriever_tool`. The loss runs are needed because some appetite rules are claims-based — a referral threshold on the size of any single open claim cannot be evaluated without the individual claim records. |
 | **Produces** | Appetite status (IN_APPETITE / OUT_OF_APPETITE / REFERRAL_REQUIRED), rules passed and breached with rule ids, prohibited classes found                                                                                                                                                         |
-| **Model**    | Amazon Bedrock (Claude), temperature 0.1                                                                                                                                                                                                                                                       |
+| **Model**    | Amazon Bedrock (Claude Haiku 4.5), temperature 0.1                                                                                                                                                                                                                                             |
 
 ### Exposure Analyst
 
@@ -102,7 +102,7 @@ The `UnderwritingOrchestrator` extends `StrandsOrchestrator` and implements a **
 | **Role**     | Quantifies aggregate exposure and assesses prior claims                                                                    |
 | **Data**     | Submission profile with property schedule, loss runs via `s3_retriever_tool`                                               |
 | **Produces** | Total insured value, severity (LOW / MODERATE / HIGH / CRITICAL), catastrophe concentration flags, loss history assessment |
-| **Model**    | Amazon Bedrock (Claude), temperature 0.1                                                                                   |
+| **Model**    | Amazon Bedrock (Claude Haiku 4.5), temperature 0.1                                                                         |
 
 ### Pricing Indicator
 
@@ -112,7 +112,7 @@ The `UnderwritingOrchestrator` extends `StrandsOrchestrator` and implements a **
 | **Role**     | Produces a technical price indication and identifies missing information                                    |
 | **Data**     | Submission profile, loss runs and expiring programme via `s3_retriever_tool`                                |
 | **Produces** | Indicated premium, rate per thousand, expected loss ratio, confidence score, items required from the broker |
-| **Model**    | Amazon Bedrock (Claude), temperature 0.1                                                                    |
+| **Model**    | Amazon Bedrock (Claude Haiku 4.5), temperature 0.1                                                          |
 
 ## Data and Tools
 
