@@ -1,0 +1,88 @@
+{
+  "submission_id": "SUB002",
+  "record_type": "loss_runs",
+  "applicant_name": "Harvest Ridge Foods Inc.",
+  "period_covered": {
+    "from": "2023-10-01",
+    "to": "2026-06-30",
+    "years": 3
+  },
+  "data_completeness_note": "Loss runs for policy years 2021-2022 were not supplied with the submission. Five years are required for full credibility weighting.",
+  "prior_carriers": [
+    {
+      "carrier": "Prairie States Casualty",
+      "policy_period": "2023-10-01 to 2026-10-01",
+      "lines": ["commercial_property", "general_liability"]
+    }
+  ],
+  "claims": [
+    {
+      "claim_number": "PSC-2023-04410",
+      "date_of_loss": "2023-12-07",
+      "location_id": "LOC-2",
+      "peril": "equipment_breakdown",
+      "description": "Ammonia compressor failure in packaging hall, resulting damage to adjacent conveyor line",
+      "status": "closed",
+      "paid": 88000,
+      "reserved": 0,
+      "total_incurred": 88000
+    },
+    {
+      "claim_number": "PSC-2024-02935",
+      "date_of_loss": "2024-06-21",
+      "location_id": "LOC-1",
+      "peril": "spoilage_refrigeration_failure",
+      "description": "Freezer tunnel refrigeration outage over a weekend, finished goods inventory condemned",
+      "status": "closed",
+      "paid": 156000,
+      "reserved": 0,
+      "total_incurred": 156000
+    },
+    {
+      "claim_number": "PSC-2025-07781",
+      "date_of_loss": "2025-03-02",
+      "location_id": "LOC-4",
+      "peril": "water_damage_weather",
+      "description": "Roof leak during heavy rainfall, water damage to stored packaging materials",
+      "status": "closed",
+      "paid": 42000,
+      "reserved": 0,
+      "total_incurred": 42000
+    },
+    {
+      "claim_number": "HRF-2026-00412",
+      "date_of_loss": "2026-04-11",
+      "location_id": "LOC-2",
+      "peril": "fire",
+      "description": "Fire originating in packaging hall electrical panel. Cause under investigation; business interruption element not yet quantified.",
+      "status": "open",
+      "paid": 60000,
+      "reserved": 340000,
+      "total_incurred": 400000
+    }
+  ],
+  "summary": {
+    "claim_count": 4,
+    "open_claim_count": 1,
+    "total_paid": 346000,
+    "total_reserved": 340000,
+    "total_incurred": 686000,
+    "largest_single_claim": 400000,
+    "claim_frequency_per_year": 1.33
+  },
+  "expiring_program": {
+    "carrier": "Prairie States Casualty",
+    "annual_premium": 268000,
+    "total_insured_value": 35400000,
+    "rate_per_thousand": 7.6,
+    "loss_ratio": 0.85,
+    "loss_ratio_years": 3
+  },
+  "financials": {
+    "fiscal_year": 2025,
+    "annual_revenue": 128000000,
+    "net_income": 4100000,
+    "current_ratio": 1.6,
+    "years_profitable_of_last_5": 4
+  }
+}

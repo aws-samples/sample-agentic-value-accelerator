@@ -1,0 +1,113 @@
+{
+  "submission_id": "SUB003",
+  "received_date": "2026-08-03",
+  "requested_effective_date": "2026-09-15",
+  "broker": {
+    "name": "Atlantic Seaboard Risk Advisors",
+    "contact": "r.delacroix@asbrisk.example.com",
+    "submission_reference": "ASRA-2026-0907"
+  },
+  "applicant": {
+    "name": "Gulfline Terminal & Salvage LLC",
+    "entity_type": "limited_liability_company",
+    "years_in_business": 12,
+    "annual_revenue": 62000000,
+    "employee_count": 185,
+    "industry": "Marine Terminal Operations and Metal Salvage",
+    "occupancy_class": "scrap_metal_yard",
+    "sic_code": "5093",
+    "headquarters_state": "FL"
+  },
+  "coverage_requested": {
+    "lines_of_business": ["commercial_property", "general_liability"],
+    "property_limit": 29000000,
+    "property_deductible": 250000,
+    "general_liability_limit": 5000000,
+    "business_interruption": true,
+    "business_interruption_indemnity_months": 12,
+    "policy_term_months": 12
+  },
+  "property_schedule": [
+    {
+      "location_id": "LOC-1",
+      "description": "Waterfront transit warehouse and container yard",
+      "address": "1100 Hookers Point Road, Tampa, FL 33605",
+      "building_value": 5900000,
+      "contents_value": 3400000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 1996,
+      "stories": 1,
+      "roof_replaced_year": 2014,
+      "sprinklered": true,
+      "distance_to_coast_miles": 0.3,
+      "catastrophe_zone": "FL_GULF_COAST",
+      "named_storm_exposed": true,
+      "occupancy": "warehouse_general_storage"
+    },
+    {
+      "location_id": "LOC-2",
+      "description": "Metal salvage processing yard, shredder and baling operations",
+      "address": "300 Berth Nine Access Road, Palmetto, FL 34221",
+      "building_value": 4300000,
+      "contents_value": 6100000,
+      "construction_type": "joisted_masonry",
+      "year_built": 1988,
+      "stories": 1,
+      "roof_replaced_year": 2009,
+      "sprinklered": false,
+      "distance_to_coast_miles": 0.2,
+      "catastrophe_zone": "FL_GULF_COAST",
+      "named_storm_exposed": true,
+      "occupancy": "scrap_metal_yard"
+    },
+    {
+      "location_id": "LOC-3",
+      "description": "Bulk cargo transfer shed",
+      "address": "8200 Clinton Drive, Houston, TX 77029",
+      "building_value": 3600000,
+      "contents_value": 2200000,
+      "construction_type": "masonry_non_combustible",
+      "year_built": 2003,
+      "stories": 1,
+      "roof_replaced_year": 2018,
+      "sprinklered": true,
+      "distance_to_coast_miles": 0.9,
+      "catastrophe_zone": "TX_GULF_COAST",
+      "named_storm_exposed": true,
+      "occupancy": "warehouse_general_storage"
+    },
+    {
+      "location_id": "LOC-4",
+      "description": "Inland equipment depot and administrative offices",
+      "address": "4415 Drane Field Road, Lakeland, FL 33811",
+      "building_value": 2100000,
+      "contents_value": 1400000,
+      "construction_type": "frame",
+      "year_built": 1974,
+      "stories": 2,
+      "roof_replaced_year": 2012,
+      "sprinklered": false,
+      "distance_to_coast_miles": 45,
+      "catastrophe_zone": "FL_INLAND",
+      "named_storm_exposed": false,
+      "occupancy": "warehouse_general_storage"
+    }
+  ],
+  "total_insured_value": 29000000,
+  "risk_management": {
+    "written_safety_program": false,
+    "last_third_party_inspection": "2022-05-30",
+    "central_station_alarm": false,
+    "employee_safety_training_hours_annual": 4
+  },
+  "submission_completeness": {
+    "loss_runs_provided": true,
+    "loss_runs_years": 5,
+    "property_schedule_complete": true,
+    "financials_provided": true,
+    "outstanding_items": [
+      "Hot work permit procedure for shredder and torch cutting operations at LOC-2",
+      "Windstorm mitigation certification for LOC-1 and LOC-2"
+    ]
+  }
+}

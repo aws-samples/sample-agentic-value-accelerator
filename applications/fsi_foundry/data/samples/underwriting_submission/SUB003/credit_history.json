@@ -1,0 +1,114 @@
+{
+  "submission_id": "SUB003",
+  "record_type": "loss_runs",
+  "applicant_name": "Gulfline Terminal & Salvage LLC",
+  "period_covered": {
+    "from": "2021-09-15",
+    "to": "2026-07-31",
+    "years": 5
+  },
+  "prior_carriers": [
+    {
+      "carrier": "Southern Coastal Underwriters",
+      "policy_period": "2021-09-15 to 2024-09-15",
+      "lines": ["commercial_property", "general_liability"]
+    },
+    {
+      "carrier": "Tidewater Specialty Insurance Company",
+      "policy_period": "2024-09-15 to 2026-09-15",
+      "lines": ["commercial_property", "general_liability"]
+    }
+  ],
+  "claims": [
+    {
+      "claim_number": "SCU-2021-11902",
+      "date_of_loss": "2021-11-04",
+      "location_id": "LOC-1",
+      "peril": "windstorm",
+      "description": "Roof covering uplift and rainwater ingress to transit warehouse during tropical storm",
+      "status": "closed",
+      "paid": 480000,
+      "reserved": 0,
+      "total_incurred": 480000
+    },
+    {
+      "claim_number": "SCU-2022-05517",
+      "date_of_loss": "2022-08-16",
+      "location_id": "LOC-2",
+      "peril": "theft_vandalism",
+      "description": "Non-ferrous metal stock removed from unsecured yard perimeter",
+      "status": "closed",
+      "paid": 95000,
+      "reserved": 0,
+      "total_incurred": 95000
+    },
+    {
+      "claim_number": "SCU-2023-09244",
+      "date_of_loss": "2023-09-28",
+      "location_id": "LOC-2",
+      "peril": "named_storm_hurricane",
+      "description": "Hurricane damage across waterfront operations. Structural damage to processing sheds, contents loss and eight weeks of business interruption.",
+      "status": "closed",
+      "paid": 1850000,
+      "reserved": 0,
+      "total_incurred": 1850000
+    },
+    {
+      "claim_number": "TSI-2024-03388",
+      "date_of_loss": "2024-12-02",
+      "location_id": "LOC-2",
+      "peril": "fire",
+      "description": "Fire in mixed metal scrap pile, suspected lithium battery ignition during shredding",
+      "status": "closed",
+      "paid": 320000,
+      "reserved": 0,
+      "total_incurred": 320000
+    },
+    {
+      "claim_number": "TSI-2025-06120",
+      "date_of_loss": "2025-05-19",
+      "location_id": "LOC-2",
+      "peril": "pollution_environmental",
+      "description": "Hydraulic fluid and heavy metal runoff into adjacent tidal waters. Remediation ordered; third-party liability element unresolved.",
+      "status": "open",
+      "paid": 140000,
+      "reserved": 610000,
+      "total_incurred": 750000
+    },
+    {
+      "claim_number": "TSI-2026-01044",
+      "date_of_loss": "2026-06-08",
+      "location_id": "LOC-3",
+      "peril": "windstorm",
+      "description": "Cladding and roof damage to bulk cargo shed. Adjustment ongoing.",
+      "status": "open",
+      "paid": 40000,
+      "reserved": 210000,
+      "total_incurred": 250000
+    }
+  ],
+  "summary": {
+    "claim_count": 6,
+    "open_claim_count": 2,
+    "total_paid": 2925000,
+    "total_reserved": 820000,
+    "total_incurred": 3745000,
+    "largest_single_claim": 1850000,
+    "claim_frequency_per_year": 1.2
+  },
+  "expiring_program": {
+    "carrier": "Tidewater Specialty Insurance Company",
+    "annual_premium": 612000,
+    "total_insured_value": 28400000,
+    "rate_per_thousand": 21.5,
+    "loss_ratio": 1.22,
+    "loss_ratio_years": 5
+  },
+  "financials": {
+    "fiscal_year": 2025,
+    "annual_revenue": 62000000,
+    "net_income": -1400000,
+    "current_ratio": 0.9,
+    "years_profitable_of_last_5": 2
+  }
+}
