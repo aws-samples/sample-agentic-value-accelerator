@@ -1039,6 +1039,14 @@ After step 1, sign in to the Control Plane UI to deploy any FSI Foundry use case
 </tbody>
 </table>
 
+## Contacts
+
+| Role                                   | Name                                                            |
+|----------------------------------------|-----------------------------------------------------------------|
+| Product & Strategy Lead                | [Bikash Behera](https://www.linkedin.com/in/bikash-behera/)     |
+| Platform Architect                     | [Jorge Castans](https://www.linkedin.com/in/jorgecastans/)      |
+| Project Lead                           | [Vivian Bui](https://www.linkedin.com/in/vivian-bui-413a561b6/) |
+
 ---
 
 ## Security
