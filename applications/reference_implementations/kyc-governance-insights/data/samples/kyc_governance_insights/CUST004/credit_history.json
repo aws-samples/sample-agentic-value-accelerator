@@ -1,0 +1,42 @@
+{
+  "customer_id": "CUST004",
+  "credit_score": 780,
+  "credit_rating": "AA",
+  "existing_facilities": [
+    {
+      "type": "Lombard Loan",
+      "limit": 15000000,
+      "utilized": 5000000,
+      "status": "current",
+      "bank": "UBS"
+    }
+  ],
+  "payment_history": {
+    "payments_on_time": 40,
+    "payments_total": 40,
+    "on_time_payments": 40,
+    "late_payments": 0,
+    "defaults": 0,
+    "average_days_to_pay": 18
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 85000000,
+    "total_liabilities": 9800000,
+    "current_assets": 40000000,
+    "current_liabilities": 12000000,
+    "revenue": 30000000,
+    "net_income": 6500000,
+    "debt_to_equity": 0.13,
+    "current_ratio": 3.33,
+    "net_margin": 0.2167
+  },
+  "agent_claims": {
+    "de_ratio": 0.13,
+    "current_ratio": 3.33,
+    "net_margin": 0.2167,
+    "payment_pct": 100.0
+  },
+  "credit_inquiries_last_12_months": 1
+}

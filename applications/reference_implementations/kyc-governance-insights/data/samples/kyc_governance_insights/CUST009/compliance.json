@@ -1,0 +1,41 @@
+{
+  "customer_id": "CUST009",
+  "kyc_verification": {
+    "status": "completed",
+    "date": "2026-05-08",
+    "documents_verified": [
+      "Charity Commission Registration",
+      "Trustee Declarations",
+      "Governing Document"
+    ]
+  },
+  "sanctions_screening": {
+    "status": "clear",
+    "last_check": "2026-06-24",
+    "databases_checked": [
+      "OFAC",
+      "UN",
+      "EU",
+      "UK HMT"
+    ],
+    "matches": []
+  },
+  "pep_screening": {
+    "status": "clear",
+    "matches": []
+  },
+  "adverse_media": {
+    "status": "clear",
+    "last_check": "2026-06-20",
+    "findings": []
+  },
+  "aml_risk_rating": "high",
+  "enhanced_due_diligence_required": true,
+  "next_review_date": "2027-05-08",
+  "regulatory_notes": [
+    "Legitimate humanitarian organisation \u2014 escalation is procedural",
+    "Syria is FATF-listed jurisdiction \u2014 Board Risk Committee approval mandatory",
+    "No indication of sanctions evasion or terrorist financing",
+    "Charity Commission liaison recommended"
+  ]
+}

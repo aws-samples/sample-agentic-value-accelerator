@@ -23,11 +23,16 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Icon, type IconName } from '../icons';
 import { MockDataBadge } from '../DataSourceIndicator';
+import {
+  sampleExportBanner,
+  sampleExportFooter,
+  sampleFilename,
+  sampleJsonEnvelope,
+} from './exportProvenance';
 
 // ─────────────────────────── Types ───────────────────────────
 
 type CompletionStatus = 'complete' | 'partial' | 'missing';
-type RiskLevel = 'low' | 'medium' | 'high' | 'systemic';
 
 interface ModelIdentity {
   name: string;
@@ -112,10 +117,73 @@ interface SystemicRiskAssessment {
   incidentReportingProcess: string;
 }
 
+interface TrainingDataSource {
+  id: string;
+  name: string;
+  type: 'internal' | 'licensed' | 'public' | 'synthetic';
+  uri?: string;
+  version?: string;
+  license?: string;
+  sensitivityLevel: 'public' | 'internal' | 'confidential' | 'restricted';
+  piiHandling?: string;
+  recordCount?: string;
+}
+
+interface SupplierInfo {
+  name: string;
+  contactEmail?: string;
+  securityAssessment?: 'approved' | 'pending' | 'not-assessed';
+  lastAssessmentDate?: string;
+  contractExpiry?: string;
+}
+
+interface FineTuningInfo {
+  jobId?: string;
+  startDate: string;
+  completionDate?: string;
+  epochs?: number;
+  trainingLoss?: number;
+  validationLoss?: number;
+  hyperparameters?: Record<string, string>;
+}
+
+interface DifferentialPrivacy {
+  enabled: boolean;
+  mechanism: 'DP-SGD' | 'PATE' | 'federated-dp' | 'other';
+  epsilon: number;
+  delta?: number;
+  noiseMultiplier?: number;
+  maxGradNorm?: number;
+  assessmentDate?: string;
+}
+
+interface PrivacyRisk {
+  membershipInferenceRisk: 'low' | 'medium' | 'high' | 'critical' | 'not-assessed';
+  dataExtractionRisk: 'low' | 'medium' | 'high' | 'critical' | 'not-assessed';
+  lastAssessmentDate?: string;
+  assessmentMethod?: string;
+  mitigations?: string[];
+}
+
+interface ModelProvenance {
+  baseModelId?: string;
+  baseModelName?: string;
+  baseModelVersion?: string;
+  licenseSpdx?: string;
+  licenseUrl?: string;
+  modelHash?: string;
+  trainingDataSources: TrainingDataSource[];
+  supplierInfo?: SupplierInfo;
+  fineTuningInfo?: FineTuningInfo;
+  differentialPrivacy?: DifferentialPrivacy;
+  privacyRisk?: PrivacyRisk;
+}
+
 interface GpaiModelData {
   identity: ModelIdentity;
   intendedUse: IntendedUse;
   trainingData: TrainingDataSummary;
+  provenance?: ModelProvenance;
   capabilities: Capability[];
   limitations: Limitation[];
   evaluations: EvaluationResult[];
@@ -143,6 +211,7 @@ const CARD_SECTIONS: CardSection[] = [
   { id: 'identity', name: 'Model Identity', icon: 'cpu-chip', description: 'Basic model identification and versioning', euAiActRef: 'Art. 53(1)(a)', required: true },
   { id: 'intended-use', name: 'Intended Use', icon: 'clipboard-list', description: 'Purposes, domains, and use limitations', euAiActRef: 'Art. 53(1)(a)', required: true },
   { id: 'training-data', name: 'Training Data Summary', icon: 'circle-stack', description: 'Data sources, size, and processing methodology', euAiActRef: 'Art. 53(1)(d)', required: true },
+  { id: 'provenance', name: 'Provenance & Supply Chain', icon: 'link', description: 'Base model lineage, supplier info, and SBOM data', euAiActRef: 'Art. 53(1)(d)', required: true },
   { id: 'capabilities', name: 'Capabilities & Performance', icon: 'chart-bar', description: 'What the model can do and performance characteristics', euAiActRef: 'Art. 53(1)(b)', required: true },
   { id: 'limitations', name: 'Limitations', icon: 'exclamation-triangle', description: 'Known limitations and failure modes', euAiActRef: 'Art. 53(1)(b)', required: true },
   { id: 'evaluations', name: 'Evaluation Results', icon: 'beaker', description: 'Benchmark performance and safety evaluations', euAiActRef: 'Art. 53(1)(c)', required: true },
@@ -220,6 +289,39 @@ const SAMPLE_MODEL_DATA: GpaiModelData = {
     cutoffDate: '2025-09-01',
     languages: ['English (primary)', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', '+40 others'],
     personalDataHandling: 'Training data processed under legitimate interest; PII systematically detected and removed during preprocessing.',
+  },
+  provenance: {
+    baseModelId: 'anthropic.claude-sonnet-4-5-20251022-v2:0',
+    baseModelName: 'Claude Sonnet 4.5',
+    baseModelVersion: '20251022-v2:0',
+    licenseSpdx: 'Anthropic-Commercial',
+    licenseUrl: 'https://www.anthropic.com/legal/aup',
+    modelHash: 'sha256:c9d0e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2',
+    trainingDataSources: [
+      {
+        id: 'tds-anthropic-base',
+        name: 'Anthropic Foundation Training Corpus',
+        type: 'licensed',
+        sensitivityLevel: 'confidential',
+        piiHandling: 'Constitutional AI training with systematic PII removal',
+        recordCount: '~2.5 trillion tokens',
+      },
+      {
+        id: 'tds-code-repos',
+        name: 'Open Source Code Repositories',
+        type: 'public',
+        license: 'Various OSS (MIT, Apache-2.0, BSD)',
+        sensitivityLevel: 'public',
+        recordCount: '~180B tokens',
+      },
+    ],
+    supplierInfo: {
+      name: 'Anthropic PBC',
+      contactEmail: 'enterprise@anthropic.com',
+      securityAssessment: 'approved',
+      lastAssessmentDate: '2026-01-15',
+      contractExpiry: '2027-12-31',
+    },
   },
   capabilities: [
     { name: 'Natural Language Understanding', description: 'Comprehension of complex text across domains', level: 'advanced' },
@@ -305,6 +407,7 @@ function calculateCompleteness(data: GpaiModelData): { percentage: number; secti
   sectionStatus['identity'] = data.identity.name && data.identity.provider ? 'complete' : data.identity.name ? 'partial' : 'missing';
   sectionStatus['intended-use'] = data.intendedUse.purposes.length > 0 && data.intendedUse.limitations.length > 0 ? 'complete' : data.intendedUse.purposes.length > 0 ? 'partial' : 'missing';
   sectionStatus['training-data'] = data.trainingData.sources.length > 0 && data.trainingData.size ? 'complete' : data.trainingData.sources.length > 0 ? 'partial' : 'missing';
+  sectionStatus['provenance'] = data.provenance?.trainingDataSources?.length ? (data.provenance.supplierInfo ? 'complete' : 'partial') : 'missing';
   sectionStatus['capabilities'] = data.capabilities.length >= 3 ? 'complete' : data.capabilities.length > 0 ? 'partial' : 'missing';
   sectionStatus['limitations'] = data.limitations.length >= 2 ? 'complete' : data.limitations.length > 0 ? 'partial' : 'missing';
   sectionStatus['evaluations'] = data.evaluations.length >= 3 && data.safetyEvaluations.length > 0 ? 'complete' : data.evaluations.length > 0 ? 'partial' : 'missing';
@@ -331,11 +434,9 @@ interface GpaiModelCardProps {
   onViewFullCard?: (modelId: string) => void;
 }
 
-export default function GpaiModelCard({ embedded = false, initialModelId, onClose, onViewFullCard }: GpaiModelCardProps) {
+export default function GpaiModelCard({ embedded = false, initialModelId, onClose }: GpaiModelCardProps) {
   const [selectedModel, setSelectedModel] = useState<string | null>(initialModelId || null);
   const [activeSection, setActiveSection] = useState<string>('identity');
-  const [compareMode, setCompareMode] = useState(false);
-  const [compareModel, setCompareModel] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Get model data (mock)
@@ -363,8 +464,14 @@ export default function GpaiModelCard({ embedded = false, initialModelId, onClos
   const exportToPdf = useCallback(() => {
     if (!modelData) return;
 
-    let report = `GPAI MODEL TRANSPARENCY CARD\n`;
-    report += `EU AI Act Article 53 Compliance Document\n`;
+    // modelData is SAMPLE_MODEL_DATA for every model - the same record, with the name and
+    // version swapped for one id. So this file asserts a training-data summary, a compute
+    // figure, and an evaluation record for whichever model was selected, none of which were
+    // read from that model. It calls itself an Article 53 compliance document and lands on
+    // disk, past the reach of the on-screen badge, so it carries its own marking.
+    let report = sampleExportBanner('GPAI model transparency card');
+    report += `GPAI MODEL TRANSPARENCY CARD\n`;
+    report += `EU AI Act Article 53 Compliance Document (SAMPLE)\n`;
     report += `${'='.repeat(60)}\n\n`;
     report += `Model: ${modelData.identity.name} (v${modelData.identity.version})\n`;
     report += `Provider: ${modelData.identity.provider}\n`;
@@ -408,32 +515,47 @@ export default function GpaiModelCard({ embedded = false, initialModelId, onClos
     report += `\nGenerated: ${new Date().toISOString()}\n`;
     report += `Technical Documentation: ${modelData.technicalDocUrl}\n`;
 
+    report += sampleExportFooter();
+
     const blob = new Blob([report], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `GPAI_Model_Card_${modelData.identity.modelId}_${new Date().toISOString().split('T')[0]}.txt`;
+    a.download = sampleFilename(
+      `GPAI_Model_Card_${modelData.identity.modelId}_${new Date().toISOString().split('T')[0]}`,
+      'txt',
+    );
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showToast('Model card exported (PDF generation mock - exported as text)', 'info');
+    showToast('Sample model card exported — illustrative data, not for regulatory filing', 'info');
   }, [modelData, completeness, showToast]);
 
   // Export to JSON
   const exportToJson = useCallback(() => {
     if (!modelData) return;
-    const blob = new Blob([JSON.stringify(modelData, null, 2)], { type: 'application/json' });
+    // A raw serialization of modelData carried no marking whatsoever - worse than the text
+    // export, because a JSON file is the shape something downstream would ingest as input.
+    // The envelope puts the warning in the first field and adds an _isSampleData flag a
+    // consumer can branch on.
+    const blob = new Blob(
+      [sampleJsonEnvelope('GPAI model transparency card', modelData)],
+      { type: 'application/json' },
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `GPAI_Model_Card_${modelData.identity.modelId}_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = sampleFilename(
+      `GPAI_Model_Card_${modelData.identity.modelId}_${new Date().toISOString().split('T')[0]}`,
+      'json',
+    );
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Model card exported as JSON', 'success');
+    showToast('Sample model card exported as JSON — illustrative data, not for filing', 'success');
   }, [modelData, showToast]);
 
   // ─────────────────────────── Model Selection View ───────────────────────────
@@ -831,6 +953,327 @@ export default function GpaiModelCard({ embedded = false, initialModelId, onClos
                 <div className="text-xs font-semibold text-blue-800 mb-1">Personal Data Handling</div>
                 <p className="text-xs text-blue-700">{modelData.trainingData.personalDataHandling}</p>
               </div>
+            </div>
+          )}
+
+          {activeSection === 'provenance' && modelData.provenance && (
+            <div className="space-y-4">
+              {/* Base Model Info */}
+              {modelData.provenance.baseModelId && (
+                <div className="p-4 rounded-lg bg-violet-50 border border-violet-200">
+                  <div className="text-xs font-semibold text-violet-800 mb-3">Base Model Lineage</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <div className="text-[10px] text-violet-600 uppercase">Base Model</div>
+                      <div className="text-sm font-semibold text-violet-800">{modelData.provenance.baseModelName || modelData.provenance.baseModelId}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-violet-600 uppercase">Version</div>
+                      <div className="text-sm font-semibold text-violet-800">{modelData.provenance.baseModelVersion || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-violet-600 uppercase">Model ID</div>
+                      <div className="text-xs font-mono text-violet-700 break-all">{modelData.provenance.baseModelId}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* License & Integrity */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 rounded-lg bg-white border border-slate-200">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">License (SPDX)</div>
+                  <div className="text-sm font-semibold text-slate-800 mt-1">{modelData.provenance.licenseSpdx || 'Not specified'}</div>
+                  {modelData.provenance.licenseUrl && (
+                    <a href={modelData.provenance.licenseUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-700 mt-1 inline-flex items-center gap-1">
+                      <Icon name="arrow-top-right-on-square" className="w-3 h-3" />
+                      View License
+                    </a>
+                  )}
+                </div>
+                <div className="p-3 rounded-lg bg-white border border-slate-200">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">Model Hash</div>
+                  <div className="text-xs font-mono text-slate-600 mt-1 break-all">{modelData.provenance.modelHash || 'Not computed'}</div>
+                </div>
+              </div>
+
+              {/* Training Data Sources */}
+              <div>
+                <div className="text-xs font-semibold text-slate-700 mb-3">Training Data Sources (SBOM)</div>
+                <div className="space-y-2">
+                  {modelData.provenance.trainingDataSources.map((source, idx) => (
+                    <div key={idx} className="p-3 rounded-lg bg-white border border-slate-200">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <div className="text-sm font-medium text-slate-800">{source.name}</div>
+                          {source.uri && <div className="text-[10px] font-mono text-slate-400 mt-0.5">{source.uri}</div>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                            source.type === 'internal' ? 'bg-blue-100 text-blue-700' :
+                            source.type === 'licensed' ? 'bg-violet-100 text-violet-700' :
+                            source.type === 'public' ? 'bg-emerald-100 text-emerald-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {source.type}
+                          </span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                            source.sensitivityLevel === 'restricted' ? 'bg-rose-100 text-rose-700' :
+                            source.sensitivityLevel === 'confidential' ? 'bg-amber-100 text-amber-700' :
+                            source.sensitivityLevel === 'internal' ? 'bg-blue-100 text-blue-700' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>
+                            {source.sensitivityLevel}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">
+                        {source.version && (
+                          <div>
+                            <span className="text-slate-400">Version:</span>
+                            <span className="text-slate-600 ml-1">{source.version}</span>
+                          </div>
+                        )}
+                        {source.license && (
+                          <div>
+                            <span className="text-slate-400">License:</span>
+                            <span className="text-slate-600 ml-1">{source.license}</span>
+                          </div>
+                        )}
+                        {source.recordCount && (
+                          <div>
+                            <span className="text-slate-400">Size:</span>
+                            <span className="text-slate-600 ml-1">{source.recordCount}</span>
+                          </div>
+                        )}
+                        {source.piiHandling && (
+                          <div className="col-span-2">
+                            <span className="text-slate-400">PII:</span>
+                            <span className="text-slate-600 ml-1">{source.piiHandling}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Supplier Info */}
+              {modelData.provenance.supplierInfo && (
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-xs font-semibold text-slate-700 mb-3">Supplier Information</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase">Supplier</div>
+                      <div className="text-sm font-medium text-slate-800">{modelData.provenance.supplierInfo.name}</div>
+                    </div>
+                    {modelData.provenance.supplierInfo.contactEmail && (
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Contact</div>
+                        <div className="text-xs text-slate-600">{modelData.provenance.supplierInfo.contactEmail}</div>
+                      </div>
+                    )}
+                    {modelData.provenance.supplierInfo.securityAssessment && (
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Security Assessment</div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          modelData.provenance.supplierInfo.securityAssessment === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                          modelData.provenance.supplierInfo.securityAssessment === 'pending' ? 'bg-amber-100 text-amber-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {modelData.provenance.supplierInfo.securityAssessment}
+                        </span>
+                      </div>
+                    )}
+                    {modelData.provenance.supplierInfo.lastAssessmentDate && (
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Last Assessment</div>
+                        <div className="text-xs text-slate-600">{modelData.provenance.supplierInfo.lastAssessmentDate}</div>
+                      </div>
+                    )}
+                    {modelData.provenance.supplierInfo.contractExpiry && (
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Contract Expiry</div>
+                        <div className="text-xs text-slate-600">{modelData.provenance.supplierInfo.contractExpiry}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Fine-Tuning Info */}
+              {modelData.provenance.fineTuningInfo && (
+                <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                  <div className="text-xs font-semibold text-amber-800 mb-3">Fine-Tuning Details</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                    {modelData.provenance.fineTuningInfo.jobId && (
+                      <div>
+                        <div className="text-[10px] text-amber-600 uppercase">Job ID</div>
+                        <div className="text-xs font-mono text-amber-700">{modelData.provenance.fineTuningInfo.jobId}</div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-[10px] text-amber-600 uppercase">Start Date</div>
+                      <div className="text-xs text-amber-700">{modelData.provenance.fineTuningInfo.startDate}</div>
+                    </div>
+                    {modelData.provenance.fineTuningInfo.completionDate && (
+                      <div>
+                        <div className="text-[10px] text-amber-600 uppercase">Completion</div>
+                        <div className="text-xs text-amber-700">{modelData.provenance.fineTuningInfo.completionDate}</div>
+                      </div>
+                    )}
+                    {modelData.provenance.fineTuningInfo.epochs && (
+                      <div>
+                        <div className="text-[10px] text-amber-600 uppercase">Epochs</div>
+                        <div className="text-sm font-semibold text-amber-800">{modelData.provenance.fineTuningInfo.epochs}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {modelData.provenance.fineTuningInfo.trainingLoss !== undefined && (
+                      <div>
+                        <div className="text-[10px] text-amber-600 uppercase">Training Loss</div>
+                        <div className="text-sm font-mono text-amber-800">{modelData.provenance.fineTuningInfo.trainingLoss}</div>
+                      </div>
+                    )}
+                    {modelData.provenance.fineTuningInfo.validationLoss !== undefined && (
+                      <div>
+                        <div className="text-[10px] text-amber-600 uppercase">Validation Loss</div>
+                        <div className="text-sm font-mono text-amber-800">{modelData.provenance.fineTuningInfo.validationLoss}</div>
+                      </div>
+                    )}
+                  </div>
+                  {modelData.provenance.fineTuningInfo.hyperparameters && Object.keys(modelData.provenance.fineTuningInfo.hyperparameters).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-amber-200">
+                      <div className="text-[10px] text-amber-600 uppercase mb-2">Hyperparameters</div>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(modelData.provenance.fineTuningInfo.hyperparameters).map(([key, value]) => (
+                          <span key={key} className="text-[10px] px-2 py-1 rounded bg-white/50 text-amber-700 border border-amber-200">
+                            <span className="font-medium">{key}:</span> {value}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Differential Privacy */}
+              {modelData.provenance.differentialPrivacy && (
+                <div className="p-4 rounded-lg bg-violet-50 border border-violet-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-xs font-semibold text-violet-800">Differential Privacy</div>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${
+                      modelData.provenance.differentialPrivacy.enabled
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {modelData.provenance.differentialPrivacy.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                    <div>
+                      <div className="text-[10px] text-violet-600 uppercase">Mechanism</div>
+                      <div className="text-sm font-semibold text-violet-800">{modelData.provenance.differentialPrivacy.mechanism}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-violet-600 uppercase">Privacy Budget (ε)</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono font-semibold text-violet-800">{modelData.provenance.differentialPrivacy.epsilon}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                          modelData.provenance.differentialPrivacy.epsilon <= 1 ? 'bg-emerald-100 text-emerald-700' :
+                          modelData.provenance.differentialPrivacy.epsilon <= 3 ? 'bg-amber-100 text-amber-700' :
+                          'bg-rose-100 text-rose-700'
+                        }`}>
+                          {modelData.provenance.differentialPrivacy.epsilon <= 1 ? 'NIST Low Risk' :
+                           modelData.provenance.differentialPrivacy.epsilon <= 3 ? 'Moderate' : 'High ε'}
+                        </span>
+                      </div>
+                    </div>
+                    {modelData.provenance.differentialPrivacy.delta && (
+                      <div>
+                        <div className="text-[10px] text-violet-600 uppercase">Delta (δ)</div>
+                        <div className="text-sm font-mono text-violet-800">{modelData.provenance.differentialPrivacy.delta.toExponential(0)}</div>
+                      </div>
+                    )}
+                    {modelData.provenance.differentialPrivacy.noiseMultiplier && (
+                      <div>
+                        <div className="text-[10px] text-violet-600 uppercase">Noise Multiplier</div>
+                        <div className="text-sm font-mono text-violet-800">{modelData.provenance.differentialPrivacy.noiseMultiplier}</div>
+                      </div>
+                    )}
+                  </div>
+                  {modelData.provenance.differentialPrivacy.maxGradNorm && (
+                    <div className="text-xs text-violet-600">
+                      <span className="font-medium">Gradient Clipping:</span> max L2 norm = {modelData.provenance.differentialPrivacy.maxGradNorm}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Privacy Risk Assessment */}
+              {modelData.provenance.privacyRisk && (
+                <div className="p-4 rounded-lg bg-rose-50 border border-rose-200">
+                  <div className="text-xs font-semibold text-rose-800 mb-3">Privacy Risk Assessment</div>
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                      <div className="text-[10px] text-rose-600 uppercase">Membership Inference Risk</div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                        modelData.provenance.privacyRisk.membershipInferenceRisk === 'low' ? 'bg-emerald-100 text-emerald-700' :
+                        modelData.provenance.privacyRisk.membershipInferenceRisk === 'medium' ? 'bg-amber-100 text-amber-700' :
+                        modelData.provenance.privacyRisk.membershipInferenceRisk === 'high' ? 'bg-orange-100 text-orange-700' :
+                        modelData.provenance.privacyRisk.membershipInferenceRisk === 'critical' ? 'bg-rose-100 text-rose-700' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {modelData.provenance.privacyRisk.membershipInferenceRisk.toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-rose-600 uppercase">Data Extraction Risk</div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                        modelData.provenance.privacyRisk.dataExtractionRisk === 'low' ? 'bg-emerald-100 text-emerald-700' :
+                        modelData.provenance.privacyRisk.dataExtractionRisk === 'medium' ? 'bg-amber-100 text-amber-700' :
+                        modelData.provenance.privacyRisk.dataExtractionRisk === 'high' ? 'bg-orange-100 text-orange-700' :
+                        modelData.provenance.privacyRisk.dataExtractionRisk === 'critical' ? 'bg-rose-100 text-rose-700' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {modelData.provenance.privacyRisk.dataExtractionRisk.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  {modelData.provenance.privacyRisk.assessmentMethod && (
+                    <div className="text-xs text-rose-600 mb-2">
+                      <span className="font-medium">Assessment Method:</span> {modelData.provenance.privacyRisk.assessmentMethod}
+                    </div>
+                  )}
+                  {modelData.provenance.privacyRisk.mitigations && modelData.provenance.privacyRisk.mitigations.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-rose-200">
+                      <div className="text-[10px] text-rose-600 uppercase mb-2">Privacy Mitigations</div>
+                      <div className="flex flex-wrap gap-2">
+                        {modelData.provenance.privacyRisk.mitigations.map((mit, idx) => (
+                          <span key={idx} className="text-[10px] px-2 py-1 rounded bg-white/50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                            <Icon name="shield-check" className="w-3 h-3" />
+                            {mit}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {modelData.provenance.privacyRisk.lastAssessmentDate && (
+                    <div className="mt-2 text-[10px] text-rose-500">
+                      Last assessed: {new Date(modelData.provenance.privacyRisk.lastAssessmentDate).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSection === 'provenance' && !modelData.provenance && (
+            <div className="p-6 text-center rounded-lg bg-slate-50 border border-slate-200">
+              <Icon name="link" className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+              <div className="text-sm font-medium text-slate-600">Provenance data not available</div>
+              <div className="text-xs text-slate-400 mt-1">Add training data sources and supplier info to complete this section</div>
             </div>
           )}
 

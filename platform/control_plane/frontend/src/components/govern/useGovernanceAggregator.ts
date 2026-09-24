@@ -5,22 +5,39 @@
  * Teams deploy freely via Build/Operate; Govern has real-time visibility into everything.
  *
  * REAL DATA SOURCES (from AVA APIs):
- * - guardrailsApi: Guardrail templates created in Secure
+ * - governGuardrailsApi.list(): LIVE Bedrock guardrails, as GuardrailTemplate records
+ * - governGuardrailsApi.telemetry(): LIVE per-guardrail CloudWatch rollup (one call
+ *   for the whole fleet, not one per guardrail)
  * - deploymentsApi: Deployments from Build (FSI Foundry, Frontier Agents)
  * - prioritizationApi: Use cases from Plan
- * - maturityApi: Maturity assessments from Plan
+ * - maturityApi: Maturity assessments from Plan (feeds trust baseline)
  * - businessCasesApi: Business cases from Plan
  * - frontierAgentsApi: AWS Frontier Agents catalog
+ * - governCommandCenterApi.getData(): server-side LIVE aggregate — cost by model,
+ *   budgets, cost anomalies, model runtime metrics (feeds cost + model counts)
+ * - governCostApi.budgets(): LIVE AWS Budgets (DescribeBudgets) — primary source for
+ *   monthlySpend & budgetUtilization (falls back to getData budgets, then Cost Explorer
+ *   spend, then 0 — no BU-budget mock on the live path)
+ * - complianceApi.getPosture(): LIVE framework coverage + control counts. Its assessment
+ *   basis is re-exported as `complianceAssurance` — read ComplianceAssurance before
+ *   rendering any compliance score from `summary`; the assessed controls are existence
+ *   probes, not efficacy tests.
+ * - governModelsApi.catalog(): LIVE Bedrock foundation model catalog (totalModels)
  *
- * MOCK DATA (still needed for demo):
- * - Compliance frameworks (would come from custom DB)
- * - Cost data (would come from Cost Explorer API)
+ * GRACEFUL FALLBACK: every LIVE source above falls back to the corresponding
+ * mock value if the call fails or the payload reports not-live, so a single
+ * outage can never blank the ~25 surfaces this hook feeds.
+ *
+ * MOCK DATA (no clean live source yet):
+ * - Incident summary (INCIDENT_SUMMARY) — no operational-incident feed in scope;
+ *   getData.risk_posture is Security Hub findings, semantically different.
+ * - modelsPendingReview, savingsRealized/savingsTarget — no live source.
  * - Audit events (would come from CloudTrail)
  */
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  guardrailsApi,
+  governGuardrailsApi,
   guardrailValidationApi,
   deploymentsApi,
   prioritizationApi,
@@ -31,19 +48,44 @@ import {
   serviceApprovalApi,
   policiesApi,
   governAgentCoreApi,
+  governCommandCenterApi,
+  complianceApi,
+  governModelsApi,
+  governCostApi,
   type AwsDiscoveredAgentsResponse,
 } from '../../api/client';
 import { harnessApi, type HarnessSummary } from '../harness/api';
-import type { UseCase, BusinessCase, OperatingModel, FrontierAgentCatalogEntry, PolicyRecord } from '../../api/client';
+import type {
+  UseCase,
+  BusinessCase,
+  OperatingModel,
+  FrontierAgentCatalogEntry,
+  PolicyRecord,
+  CommandCenterData,
+  CompliancePosture,
+  AwsFoundationModelCatalog,
+  MaturityAssessment,
+  AwsBudgetsResponse,
+} from '../../api/client';
 import type { GuardrailTemplate, Deployment, ServiceApprovalRun, GuardrailMetrics, GuardrailValidationSummary } from '../../types';
 import {
   COMPLIANCE_FRAMEWORKS,
   COST_BY_MODEL,
-  BU_BUDGETS,
   ANOMALY_ALERTS,
   INCIDENT_SUMMARY,
 } from './mockData';
 import { costInputStore, computeExpectedCost, isPricedModelId, PRICED_MODEL_LABELS } from './finops/expectedCost';
+import { metricsByTemplateId } from './guardrailTelemetryMetrics';
+
+/**
+ * Window for the guardrail telemetry this hook reads: 1 day, i.e. 24 hours.
+ *
+ * Not the 30-day default. This hook feeds `guardrailEvents24h` and
+ * `recentGuardrailBlocks`, whose names and rendered labels both claim 24 hours, so a
+ * wider window would silently inflate them. useGuardrailMetrics uses 30 days for the
+ * fleet view and reports its own `windowDays`; the two are deliberately different.
+ */
+const AGGREGATOR_WINDOW_DAYS = 1;
 
 // Real risk categories from AVA's prioritization scoring framework
 export const USE_CASE_RISK_CATEGORIES = [
@@ -78,6 +120,8 @@ export interface GovernanceSummary {
   bedrockAgents: number;
   agentcoreRuntimes: number;
   agentsWithPolicies: number;
+  workloadIdentities: number;
+  gateways: number;
 
   // Guardrails (REAL DATA)
   guardrailsActive: number;
@@ -93,14 +137,14 @@ export interface GovernanceSummary {
   harnessCount: number;
   harnessesReady: number;
 
-  // Compliance (mock for now)
+  // Compliance (LIVE — complianceApi.getPosture(), mock fallback)
   frameworksCovered: number;
   frameworksTotal: number;
   controlsImplemented: number;
   controlsTotal: number;
   frameworksNeedingAttention: string[];
 
-  // Cost (mock for now)
+  // Cost (LIVE — governCommandCenterApi.getData(), mock fallback; savings* still mock)
   monthlySpend: number;
   budgetUtilization: number;
   costAnomalies: number;
@@ -188,6 +232,45 @@ export interface DeploymentSummary {
   updated_at: string;
 }
 
+/**
+ * Assurance basis for the compliance counts in `GovernanceSummary` — what was actually
+ * looked at, and HOW it was looked at. Additive: nothing in `summary` changes shape.
+ *
+ * Every assessed control in this edition is set by an AUTOMATED EXISTENCE PROBE, not an
+ * efficacy test. The probe asks whether the AWS resource a control depends on is present
+ * and then marks the control `pass`: two CloudTrail trails existing is enough to pass
+ * NIST AI RMF MANAGE 3.1, and nothing checks what those trails cover, whether they are
+ * validated, or whether anyone reads them. So `controlsImplemented` means "the
+ * prerequisite was found", never "this control was tested and works".
+ *
+ * Any surface that renders a compliance score, a control count, or a trust baseline
+ * derived from these numbers must disclose that, or it claims controls were tested when
+ * they were only found. This object exists so the basis of the claim travels with the
+ * claim instead of living only in the docs.
+ */
+export interface ComplianceAssurance {
+  /** Every control across every mapped framework (CompliancePosture.total_controls). */
+  totalControls: number;
+  /** Controls carrying a non not-started attestation — the only ones ever looked at. */
+  assessedControls: number;
+  /** Controls never looked at. NOT failures: not-assessed is not the same as failing. */
+  notAssessedControls: number;
+  /**
+   * How many of `assessedControls` were set by an automated existence probe rather than a
+   * human attestation. In the reference account this equals `assessedControls`.
+   */
+  autoDetectedControls: number;
+  /**
+   * `CompliancePosture.overall_coverage_pct` — the pooled pass rate over ASSESSED controls
+   * only. Reads 100 in the reference account off 24 of 281 controls, which is why it must
+   * never be rendered as coverage and why the trust baseline does not blend it. Only
+   * render it with `assessedControls` beside it as the denominator.
+   */
+  passRateOverAssessedPct: number;
+  /** True coverage: assessedControls / totalControls. The honest headline percentage. */
+  assessedPct: number;
+}
+
 export interface GovernanceAggregatorResult {
   loading: boolean;
   error: string | null;
@@ -241,10 +324,16 @@ export interface GovernanceAggregatorResult {
   // Guardrail Validation data
   guardrailValidation: GuardrailValidationSummary | null;
 
+  /**
+   * How the compliance counts in `summary` were arrived at. Null when no live posture
+   * answered — which is itself the signal that controlsImplemented/controlsTotal are the
+   * mock COMPLIANCE_FRAMEWORKS fallback and must not be qualified as if measured.
+   */
+  complianceAssurance: ComplianceAssurance | null;
+
   // Mock data (still needed for some views)
   complianceFrameworks: typeof COMPLIANCE_FRAMEWORKS;
   costByModel: typeof COST_BY_MODEL;
-  buBudgets: typeof BU_BUDGETS;
 
   // Expected-cost roll-up across use cases that have a cost model (real Plan→FinOps join).
   expectedCost: {
@@ -333,6 +422,15 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
   const [policyRecords, setPolicyRecords] = useState<PolicyRecord[]>([]);
   const [awsAgents, setAwsAgents] = useState<AwsDiscoveredAgentsResponse | null>(null);
   const [harnesses, setHarnesses] = useState<HarnessSummary[]>([]);
+  const [workloadIdentityCount, setWorkloadIdentityCount] = useState(0);
+  const [gatewayCount, setGatewayCount] = useState(0);
+  // LIVE aggregates that replace previously-hardcoded mock fields (with fallback).
+  const [commandCenter, setCommandCenter] = useState<CommandCenterData | null>(null);
+  const [compliancePosture, setCompliancePosture] = useState<CompliancePosture | null>(null);
+  const [modelCatalog, setModelCatalog] = useState<AwsFoundationModelCatalog | null>(null);
+  const [maturityAssessments, setMaturityAssessments] = useState<MaturityAssessment[]>([]);
+  // LIVE AWS Budgets (DescribeBudgets) — primary source for spend/budget utilization.
+  const [budgets, setBudgets] = useState<AwsBudgetsResponse | null>(null);
 
   // Load all data from AVA APIs
   useEffect(() => {
@@ -346,7 +444,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
           guardrailsRes,
           deploymentsRes,
           useCasesRes,
-          , // maturityRes - available for future use
+          maturityRes,
           frontierRes,
           businessCasesRes,
           operatingModelsRes,
@@ -355,8 +453,14 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
           policiesRes,
           awsAgentsRes,
           harnessesRes,
+          awsIdentitiesRes,
+          awsGatewaysRes,
+          commandCenterRes,
+          compliancePostureRes,
+          modelCatalogRes,
+          budgetsRes,
         ] = await Promise.allSettled([
-          guardrailsApi.list(),
+          governGuardrailsApi.list(),
           deploymentsApi.list(),
           prioritizationApi.list(),
           maturityApi.list(),
@@ -368,6 +472,12 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
           policiesApi.list(),
           governAgentCoreApi.agents(),
           harnessApi.list(),
+          governAgentCoreApi.workloadIdentities(),
+          governAgentCoreApi.gateways(),
+          governCommandCenterApi.getData(),
+          complianceApi.getPosture(),
+          governModelsApi.catalog(),
+          governCostApi.budgets(),
         ]);
 
         // Process results (handle failures gracefully)
@@ -406,19 +516,43 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
         if (harnessesRes.status === 'fulfilled') {
           setHarnesses(harnessesRes.value.harnesses || []);
         }
+        if (awsIdentitiesRes.status === 'fulfilled') {
+          setWorkloadIdentityCount(awsIdentitiesRes.value.total ?? awsIdentitiesRes.value.workload_identities?.length ?? 0);
+        }
+        if (awsGatewaysRes.status === 'fulfilled') {
+          setGatewayCount(awsGatewaysRes.value.total ?? awsGatewaysRes.value.gateways?.length ?? 0);
+        }
+        // Maturity — previously fetched then discarded; now captured for the trust baseline.
+        if (maturityRes.status === 'fulfilled') {
+          setMaturityAssessments(maturityRes.value);
+        }
+        // LIVE Command Center aggregate — cost by model, budgets, anomalies, runtime metrics.
+        if (commandCenterRes.status === 'fulfilled') {
+          setCommandCenter(commandCenterRes.value);
+        }
+        // LIVE compliance posture — framework coverage + control counts.
+        if (compliancePostureRes.status === 'fulfilled') {
+          setCompliancePosture(compliancePostureRes.value);
+        }
+        // LIVE Bedrock foundation model catalog — total model count.
+        if (modelCatalogRes.status === 'fulfilled') {
+          setModelCatalog(modelCatalogRes.value);
+        }
+        // LIVE AWS Budgets (DescribeBudgets) — spend + budget utilization.
+        if (budgetsRes.status === 'fulfilled') {
+          setBudgets(budgetsRes.value);
+        }
 
-        // Fetch metrics for active guardrails (in parallel, non-blocking)
-        const guardrailsWithIds = activeGuardrails.filter(g => g.guardrail_id && g.status === 'active');
-        if (guardrailsWithIds.length > 0) {
-          const metricsPromises = guardrailsWithIds.map(g =>
-            guardrailsApi.getMetrics(g.template_id, 24).catch(() => null)
-          );
-          const metricsResults = await Promise.all(metricsPromises);
-          const metricsMap = new Map<string, GuardrailMetrics>();
-          metricsResults.forEach((m, i) => {
-            if (m) metricsMap.set(guardrailsWithIds[i].template_id, m);
-          });
-          setGuardrailMetrics(metricsMap);
+        // Per-guardrail metrics in ONE request. This was a loop over
+        // guardrailsApi.getMetrics(template_id) — N requests per page load, each of
+        // which 404s whenever the template store is unreadable. The telemetry endpoint
+        // returns the same CloudWatch rollup for the whole fleet at once.
+        const activeWithBedrock = activeGuardrails.filter(g => g.status === 'active');
+        if (activeWithBedrock.length > 0) {
+          const telemetry = await governGuardrailsApi
+            .telemetry(AGGREGATOR_WINDOW_DAYS)
+            .catch(() => null);
+          setGuardrailMetrics(metricsByTemplateId(activeWithBedrock, telemetry));
         }
 
       } catch (err) {
@@ -539,16 +673,76 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
     // Use case stats (REAL)
     const productionUseCases = useCases.filter(uc => uc.status === 'Production').length;
 
-    // Compliance aggregation (MOCK)
-    const totalControls = COMPLIANCE_FRAMEWORKS.reduce((sum, f) => sum + f.total, 0);
-    const coveredControls = COMPLIANCE_FRAMEWORKS.reduce((sum, f) => sum + f.covered, 0);
-    const needsAttention = COMPLIANCE_FRAMEWORKS
+    // Compliance aggregation — LIVE via complianceApi.getPosture(), mock fallback.
+    // Mock fallbacks (COMPLIANCE_FRAMEWORKS): used when live posture is unavailable.
+    const mockTotalControls = COMPLIANCE_FRAMEWORKS.reduce((sum, f) => sum + f.total, 0);
+    const mockCoveredControls = COMPLIANCE_FRAMEWORKS.reduce((sum, f) => sum + f.covered, 0);
+    const mockNeedsAttention = COMPLIANCE_FRAMEWORKS
       .filter(f => f.status === 'attention')
       .map(f => f.name);
+    const mockFrameworksCovered = COMPLIANCE_FRAMEWORKS.filter(f => f.status === 'on-track').length;
+    const mockFrameworksTotal = COMPLIANCE_FRAMEWORKS.length;
 
-    // Cost aggregation (MOCK)
-    const totalBudget = BU_BUDGETS.reduce((sum, b) => sum + b.monthlyBudget, 0);
-    const totalSpend = BU_BUDGETS.reduce((sum, b) => sum + b.currentSpend, 0);
+    // A successful getPosture() with at least one framework is treated as live.
+    // The 80% threshold mirrors the mock's 'on-track' rule, and the Command Center's
+    // framework bars, for parity.
+    const posture = compliancePosture && compliancePosture.frameworks.length > 0 ? compliancePosture : null;
+    // "Covered" / "needs attention" are selected on ASSESSED COVERAGE, not on
+    // `coverage_pct`. `coverage_pct` is the pass rate over assessed controls only, so a
+    // framework with 2 of 16 controls assessed and both passing reports 100 there — it
+    // sailed past a `coverage_pct >= 80` gate and was counted as covered while 14 of its
+    // controls had never been looked at. That read as honest because the field is named
+    // "coverage"; it is not (client.ts FrameworkSummary.coverage_pct states the contract).
+    // Selecting on assessed_pct makes this predicate measure the same quantity the
+    // Command Center bars render, so "N need attention" and the bars can no longer
+    // disagree, and a barely-assessed framework is correctly flagged.
+    const assessedPctOf = (f: { total_controls: number; assessed_count?: number; assessed_pct?: number }): number =>
+      f.assessed_pct ?? (f.total_controls > 0 ? ((f.assessed_count ?? 0) / f.total_controls) * 100 : 0);
+    const frameworksTotal = posture ? posture.frameworks.length : mockFrameworksTotal;
+    const frameworksCovered = posture
+      ? posture.frameworks.filter(f => assessedPctOf(f) >= 80).length
+      : mockFrameworksCovered;
+    const controlsImplemented = posture ? posture.total_pass : mockCoveredControls;
+    const controlsTotal = posture ? posture.total_controls : mockTotalControls;
+    const frameworksNeedingAttention = posture
+      ? posture.frameworks.filter(f => assessedPctOf(f) < 80).map(f => f.framework_name)
+      : mockNeedsAttention;
+
+    // Cost aggregation — spend + budget utilization come from LIVE AWS Budgets
+    // (governCostApi.budgets(), DescribeBudgets). Graceful fallback order, all real:
+    // direct Budgets → Command Center aggregate budgets → Cost Explorer spend → 0.
+    // No BU_BUDGETS mock on this path — numbers are real or honestly zero.
+    // Only trust a payload that reports live=true with a real limit (never-blank guarantee).
+    const budgetsUsable =
+      budgets && budgets.live && budgets.total_limit > 0
+        ? budgets
+        : commandCenter?.budgets && commandCenter.budgets.live && commandCenter.budgets.total_limit > 0
+          ? commandCenter.budgets
+          : null;
+    const costModelUsable = commandCenter?.cost_by_model && commandCenter.cost_by_model.live
+      ? commandCenter.cost_by_model
+      : null;
+    const anomaliesUsable = commandCenter?.anomalies && commandCenter.anomalies.live
+      ? commandCenter.anomalies
+      : null;
+
+    const monthlySpend = budgetsUsable
+      ? budgetsUsable.total_actual
+      : costModelUsable
+        ? costModelUsable.total
+        : 0;
+    const budgetUtilization = budgetsUsable
+      ? Math.round((budgetsUsable.total_actual / budgetsUsable.total_limit) * 100)
+      : 0;
+    const costAnomalies = anomaliesUsable ? anomaliesUsable.count : ANOMALY_ALERTS.length;
+
+    // Model inventory — totalModels LIVE via governModelsApi.catalog(); modelsInProduction
+    // LIVE via getData runtime metrics (models with CloudWatch invocation activity). Both
+    // fall back to prior mock values. modelsPendingReview has no live source (stays mock).
+    const totalModels = modelCatalog && modelCatalog.live ? modelCatalog.total : 5;
+    const modelsInProduction = commandCenter?.runtime_metrics && commandCenter.runtime_metrics.live
+      ? commandCenter.runtime_metrics.by_model.length
+      : 4;
 
     // Compute trust score based on real data
     const guardrailScore = guardrailTemplates.length > 0
@@ -557,7 +751,45 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
     const deploymentScore = deployments.length > 0
       ? Math.round((deploymentsActive / deployments.length) * 100)
       : 50;
-    const trustScore = Math.round((guardrailScore + deploymentScore + 78) / 3); // 78 is baseline compliance
+    // Trust baseline — LIVE: blend the compliance signal (0-100) with org maturity
+    // composite (0-5 scale, scaled ×20 → 0-100). Falls back to the prior hardcoded 78
+    // when neither live signal is present, preserving current behavior on outage.
+    //
+    // The compliance term is PASSING CONTROLS OVER THE WHOLE ESTATE
+    // (total_pass / total_controls), never `overall_coverage_pct`. `overall_coverage_pct`
+    // is the pooled pass rate over ASSESSED controls only: it reads 100 in the reference
+    // account off 24 of 281 controls, so blending it here lifted trustScore by ~30 points
+    // on the strength of "everything we bothered to look for was found". The defect read
+    // as honest because the field is named "coverage" and the value was genuinely
+    // measured — it was the denominator that was wrong, and the denominator is invisible
+    // once the number is averaged into a score (client.ts CompliancePosture states the
+    // contract: use overall_assessed_pct for coverage).
+    //
+    // Why pass-over-estate rather than `overall_assessed_pct` itself: assessed_pct is
+    // blind to outcome, so "we assessed 8.5% of the estate and every one failed" would
+    // contribute the identical trust baseline as "8.5% assessed, all passing".
+    // total_pass / total_controls moves with BOTH breadth of assessment and result, and
+    // since total_pass <= total_assessed it can never exceed assessed_pct — it is the
+    // conservative form of the same coverage figure, and it equals the compliance
+    // percentage the Command Center already displays (controlsImplemented/controlsTotal),
+    // so the score and the rendered percentage cannot drift apart. Note the passing
+    // controls were FOUND, not TESTED — see ComplianceAssurance for that disclosure.
+    const trustBaselineParts: number[] = [];
+    if (posture) {
+      const passOverEstatePct = controlsTotal > 0 ? (controlsImplemented / controlsTotal) * 100 : 0;
+      trustBaselineParts.push(Math.max(0, Math.min(100, passOverEstatePct)));
+    }
+    const maturityComposites = maturityAssessments
+      .map(a => a.computed?.composite)
+      .filter((c): c is number => typeof c === 'number' && c > 0);
+    if (maturityComposites.length > 0) {
+      const avgComposite = maturityComposites.reduce((a, b) => a + b, 0) / maturityComposites.length;
+      trustBaselineParts.push(Math.max(0, Math.min(100, avgComposite * 20)));
+    }
+    const complianceBaseline = trustBaselineParts.length > 0
+      ? Math.round(trustBaselineParts.reduce((a, b) => a + b, 0) / trustBaselineParts.length)
+      : 78;
+    const trustScore = Math.round((guardrailScore + deploymentScore + complianceBaseline) / 3);
 
     return {
       // Risk posture
@@ -572,13 +804,15 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       totalUseCases: useCases.length,
       deployedUseCases: productionUseCases,
       catalogUseCases: useCases.filter(uc => uc.status === 'Concept').length,
-      totalModels: 5, // Mock - would come from Bedrock ListFoundationModels
-      modelsInProduction: 4,
-      modelsPendingReview: 1,
+      totalModels, // LIVE — governModelsApi.catalog().total (fallback 5)
+      modelsInProduction, // LIVE — getData runtime_metrics.by_model count (fallback 4)
+      modelsPendingReview: 1, // Mock — no live source
       totalAgents: (awsAgents?.total ?? 0) + frontierAgentsList.length + harnesses.length + deployments.filter(d => d.template_id?.toLowerCase().includes('agent')).length,
       bedrockAgents: awsAgents?.bedrock_agents ?? 0,
       agentcoreRuntimes: awsAgents?.agentcore_runtimes ?? 0,
       agentsWithPolicies: guardrailsActive,
+      workloadIdentities: workloadIdentityCount,
+      gateways: gatewayCount,
 
       // Guardrails (REAL)
       guardrailsActive,
@@ -594,19 +828,19 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       harnessCount: harnesses.length,
       harnessesReady: harnesses.filter((h) => h.status === 'READY').length,
 
-      // Compliance (MOCK)
-      frameworksCovered: COMPLIANCE_FRAMEWORKS.filter(f => f.status === 'on-track').length,
-      frameworksTotal: COMPLIANCE_FRAMEWORKS.length,
-      controlsImplemented: coveredControls,
-      controlsTotal: totalControls,
-      frameworksNeedingAttention: needsAttention,
+      // Compliance (LIVE — complianceApi.getPosture(), mock fallback)
+      frameworksCovered,
+      frameworksTotal,
+      controlsImplemented,
+      controlsTotal,
+      frameworksNeedingAttention,
 
-      // Cost (MOCK)
-      monthlySpend: totalSpend,
-      budgetUtilization: Math.round((totalSpend / totalBudget) * 100),
-      costAnomalies: ANOMALY_ALERTS.length,
-      savingsRealized: 4810,
-      savingsTarget: 7500,
+      // Cost (LIVE — governCommandCenterApi.getData(), mock fallback)
+      monthlySpend,
+      budgetUtilization,
+      costAnomalies,
+      savingsRealized: 4810, // Mock — no live source
+      savingsTarget: 7500, // Mock — no live source
 
       // Activity
       recentDeployments: deployments.filter(d => {
@@ -623,7 +857,7 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       validationCriticalFailures: guardrailValidation?.criticalFailures24h ?? 0,
       validationLastRun: guardrailValidation?.lastRunTimestamp,
     };
-  }, [guardrailTemplates, deployments, useCases, frontierAgentsList, businessCases, serviceApprovalRuns, guardrailMetricsTotal, guardrailValidation, awsAgents, harnesses]);
+  }, [guardrailTemplates, deployments, useCases, frontierAgentsList, businessCases, serviceApprovalRuns, guardrailMetricsTotal, guardrailValidation, awsAgents, harnesses, workloadIdentityCount, gatewayCount, commandCenter, compliancePosture, modelCatalog, maturityAssessments, budgets]);
 
   // Pipeline health from real use case data
   const pipeline = useMemo<PipelineHealth>(() => {
@@ -828,9 +1062,15 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
       return {
         day: i + 1,
         date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        // Clamped to the score's own domain [0, 100]. This used to floor at 50, a
+        // plausibility bound picked when the trust baseline sat in the high 70s and the
+        // floor never bound. Now that the compliance term is honest coverage rather than a
+        // pass rate over assessed controls, the baseline is ~53 and a 50 floor clips the
+        // early simulated days flat, which renders as a real "we were stuck, then
+        // improved" story on the sparkline instead of the wobble it is.
         trustScore: isToday
           ? baselineTrust
-          : Math.round(Math.max(50, Math.min(100, baselineTrust - 5 + dayVariance + trendImprovement))),
+          : Math.round(Math.max(0, Math.min(100, baselineTrust - 5 + dayVariance + trendImprovement))),
         guardrailHits: isToday
           ? dailyInvocations
           : Math.round(Math.max(0, dailyInvocations * (0.7 + trendNoise(i * 2 + 1) * 0.6))),
@@ -1011,6 +1251,29 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
     };
   }, [useCases]);
 
+  // Assurance basis for the compliance counts in `summary`. Same payload the counts come
+  // from, so a partial outage can never pair live counts with a stale qualifier (or the
+  // reverse). Null when the mock COMPLIANCE_FRAMEWORKS fallback is in play — the mock has
+  // no notion of "assessed", so there is nothing honest to say about it.
+  const complianceAssurance = useMemo<ComplianceAssurance | null>(() => {
+    if (!compliancePosture || compliancePosture.frameworks.length === 0) return null;
+    const totalControls = compliancePosture.total_controls;
+    const assessedControls = compliancePosture.total_assessed
+      ?? compliancePosture.total_pass + compliancePosture.total_gaps;
+    return {
+      totalControls,
+      assessedControls,
+      notAssessedControls: compliancePosture.total_not_assessed
+        ?? Math.max(0, totalControls - assessedControls),
+      autoDetectedControls: compliancePosture.auto_detected_count,
+      passRateOverAssessedPct: Math.round(compliancePosture.overall_coverage_pct),
+      assessedPct: Math.round(
+        compliancePosture.overall_assessed_pct
+          ?? (totalControls > 0 ? (assessedControls / totalControls) * 100 : 0),
+      ),
+    };
+  }, [compliancePosture]);
+
   const refresh = () => setRefreshKey(k => k + 1);
 
   return {
@@ -1048,10 +1311,12 @@ export function useGovernanceAggregator(): GovernanceAggregatorResult {
     // Guardrail Validation data
     guardrailValidation,
 
+    // Assurance basis for summary.controlsImplemented / controlsTotal
+    complianceAssurance,
+
     // Mock data (still needed for some views)
     complianceFrameworks: COMPLIANCE_FRAMEWORKS,
     costByModel: COST_BY_MODEL,
-    buBudgets: BU_BUDGETS,
 
     // Expected-cost roll-up across use cases (Plan → FinOps join)
     expectedCost,

@@ -10,8 +10,26 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { deploymentsApi, frontierAgentsApi, governAgentCoreApi } from '../../api/client';
-import type { FrontierAgentCatalogEntry, AwsDiscoveredAgent } from '../../api/client';
+import {
+  deploymentsApi,
+  frontierAgentsApi,
+  governAgentCoreApi,
+  buildAgentsApi,
+  buildMcpApi,
+  buildSkillsApi,
+  buildMemoryApi,
+  buildHarnessApi,
+} from '../../api/client';
+import type {
+  FrontierAgentCatalogEntry,
+  AwsDiscoveredAgent,
+  AwsRegionProvenance,
+  BuildRegistryAgent,
+  BuildMcpServer,
+  BuildSkill,
+  BuildMemory,
+  BuildHarness,
+} from '../../api/client';
 import type { Deployment } from '../../types';
 import {
   AGENT_REGISTRY,
@@ -28,16 +46,36 @@ export interface AgentRegistryResult {
   error: string | null;
   /** Combined agent list (live deployments + mock fallback) */
   agents: AgentRegistryEntry[];
+  /**
+   * Live-only subset of `agents` — AWS-discovered agents, AVA deployments, Build
+   * registries, and the AWS catalog. Never contains AGENT_REGISTRY demo agents.
+   * Views that badge themselves "Live" should aggregate over this list so demo
+   * agents can't inflate a live rollup.
+   */
+  liveAgents: AgentRegistryEntry[];
   /** Count of live agents from deployments */
   liveCount: number;
   /** Count of demo/mock agents */
   demoCount: number;
   /** Data source: 'live' if we have real deployments, 'demo' if only mock data */
   source: 'live' | 'demo' | 'mixed';
+  /**
+   * Region coverage of the AWS agent-discovery fan-out. A governed region that did
+   * not answer is dropped from the result rather than failing the request, so the
+   * discovered-agent count can be a floor; this is what lets a view say so. Null
+   * when the response carried no provenance block (single-region by construction).
+   */
+  discoveredRegions: AwsRegionProvenance | null;
   /** Raw deployments from API */
   deployments: Deployment[];
   /** Raw frontier agents from API */
   frontierAgents: FrontierAgentCatalogEntry[];
+  /** Build module registries */
+  buildAgents: BuildRegistryAgent[];
+  buildMcpServers: BuildMcpServer[];
+  buildSkills: BuildSkill[];
+  buildMemory: BuildMemory[];
+  buildHarnesses: BuildHarness[];
   /** Refresh data */
   refresh: () => void;
 }
@@ -208,10 +246,24 @@ function discoveredAgentToAgent(a: AwsDiscoveredAgent): AgentRegistryEntry {
   return {
     id: `live-${a.platform}-${a.id}`,
     name: a.name,
-    description: isCore ? 'AWS Bedrock AgentCore runtime (live)' : 'AWS Bedrock Agent (live)',
+    // The agent's real description when AWS has one (both list calls return it at no extra
+    // cost; 13 of 36 agents on the reference account carry one). The previous value was a
+    // sentence this mapper wrote - every Bedrock agent read "AWS Bedrock Agent (live)",
+    // which describes the platform, not the agent, and looked like recorded metadata.
+    // Absence is stated rather than papered over.
+    description: a.description
+      || (isCore
+        ? 'No description recorded on this AgentCore runtime.'
+        : 'No description recorded on this Bedrock agent.'),
     owner: 'AWS Account',
     productOwner: 'Platform',
-    businessPurpose: `Discovered from ${isCore ? 'Bedrock AgentCore' : 'Bedrock Agents'} in the connected account`,
+    // A business purpose is something a person records during onboarding; AWS holds no such
+    // field. This used to read "Discovered from Bedrock AgentCore in the connected account",
+    // which is provenance, not a purpose - and the drawer renders it under a "Business
+    // Purpose" heading, so it asserted an answer to a question nobody had answered. The
+    // provenance it used to carry is already on screen: the Live badge names the discovery
+    // source and the framework field names the platform.
+    businessPurpose: 'No business purpose recorded — this agent was discovered in the account rather than registered through AVA.',
     status: ready ? 'production' : 'development',
     scopeLevel: 3,
     securityClassification: 'confidential',
@@ -229,6 +281,166 @@ function discoveredAgentToAgent(a: AwsDiscoveredAgent): AgentRegistryEntry {
     metrics: { invocations30d: 0, errorRate: 0, p95LatencyMs: 0, avgCostPerDay: 0 },
     incidents: { count90d: 0, openCount: 0 },
     versionHistory: [{ version: a.version ? `v${a.version}` : 'v1', date, change: `Discovered live from ${a.platform}` }],
+  };
+}
+
+/**
+ * Maps a Build Registry Agent to an AgentRegistryEntry
+ */
+function buildAgentToEntry(agent: BuildRegistryAgent): AgentRegistryEntry {
+  const date = (agent.created_at || new Date().toISOString()).split('T')[0];
+  return {
+    id: `build-agent-${agent.agent_id}`,
+    name: agent.name,
+    description: agent.description || 'Agent from Build Registry',
+    owner: 'Build Module',
+    productOwner: 'Platform',
+    businessPurpose: `Registered agent using ${agent.runtime} runtime`,
+    status: agent.status === 'active' ? 'production' : agent.status === 'pending' ? 'pilot' : 'development',
+    scopeLevel: 3,
+    securityClassification: 'confidential',
+    framework: agent.runtime || 'Custom',
+    model: 'bedrock',
+    version: 'v1.0.0',
+    firstDeployed: date,
+    lastUpdated: (agent.updated_at || agent.created_at || new Date().toISOString()).split('T')[0],
+    rateLimit: { rpm: 100, tpm: 50000 },
+    approvalState: agent.status === 'active' ? 'approved' : 'pending',
+    tools: [],
+    invokesAgents: [],
+    dataAccess: agent.capabilities || [],
+    guardrailId: undefined,
+    metrics: { invocations30d: 0, errorRate: 0, p95LatencyMs: 0, avgCostPerDay: 0 },
+    incidents: { count90d: 0, openCount: 0 },
+    versionHistory: [{ version: 'v1.0.0', date, change: 'Registered via Build module' }],
+  };
+}
+
+/**
+ * Maps a Build MCP Server to an AgentRegistryEntry (for unified inventory)
+ */
+function buildMcpToEntry(server: BuildMcpServer): AgentRegistryEntry {
+  const date = (server.created_at || new Date().toISOString()).split('T')[0];
+  return {
+    id: `build-mcp-${server.server_id}`,
+    name: `MCP: ${server.name}`,
+    description: server.description || `MCP Server (${server.transport})`,
+    owner: 'Build Module',
+    productOwner: 'Platform',
+    businessPurpose: `MCP tool server providing ${(server.capabilities || []).length} capabilities`,
+    status: server.status === 'active' ? 'production' : 'development',
+    scopeLevel: 2,
+    securityClassification: 'internal',
+    framework: `MCP (${server.transport})`,
+    model: 'n/a',
+    version: 'v1.0.0',
+    firstDeployed: date,
+    lastUpdated: (server.updated_at || server.created_at || new Date().toISOString()).split('T')[0],
+    rateLimit: { rpm: 1000, tpm: 100000 },
+    approvalState: server.status === 'active' ? 'approved' : 'pending',
+    tools: server.capabilities || [],
+    invokesAgents: [],
+    dataAccess: [],
+    guardrailId: undefined,
+    metrics: { invocations30d: 0, errorRate: 0, p95LatencyMs: 0, avgCostPerDay: 0 },
+    incidents: { count90d: 0, openCount: 0 },
+    versionHistory: [{ version: 'v1.0.0', date, change: 'MCP server registered' }],
+  };
+}
+
+/**
+ * Maps a Build Skill to an AgentRegistryEntry
+ */
+function buildSkillToEntry(skill: BuildSkill): AgentRegistryEntry {
+  const date = (skill.created_at || new Date().toISOString()).split('T')[0];
+  return {
+    id: `build-skill-${skill.skill_id}`,
+    name: `Skill: ${skill.name}`,
+    description: skill.description || `${skill.type} skill`,
+    owner: 'Build Module',
+    productOwner: 'Platform',
+    businessPurpose: `Reusable skill of type ${skill.type}`,
+    status: skill.status === 'active' ? 'production' : 'development',
+    scopeLevel: 1,
+    securityClassification: 'internal',
+    framework: skill.type,
+    model: 'n/a',
+    version: 'v1.0.0',
+    firstDeployed: date,
+    lastUpdated: (skill.updated_at || skill.created_at || new Date().toISOString()).split('T')[0],
+    rateLimit: { rpm: 500, tpm: 50000 },
+    approvalState: skill.status === 'active' ? 'approved' : 'pending',
+    tools: skill.capabilities || [],
+    invokesAgents: [],
+    dataAccess: [],
+    guardrailId: undefined,
+    metrics: { invocations30d: 0, errorRate: 0, p95LatencyMs: 0, avgCostPerDay: 0 },
+    incidents: { count90d: 0, openCount: 0 },
+    versionHistory: [{ version: 'v1.0.0', date, change: 'Skill registered' }],
+  };
+}
+
+/**
+ * Maps a Build Memory store to an AgentRegistryEntry
+ */
+function buildMemoryToEntry(memory: BuildMemory): AgentRegistryEntry {
+  const date = (memory.created_at || new Date().toISOString()).split('T')[0];
+  return {
+    id: `build-memory-${memory.memory_id}`,
+    name: `Memory: ${memory.name}`,
+    description: memory.description || `${memory.strategy} memory store`,
+    owner: 'Build Module',
+    productOwner: 'Platform',
+    businessPurpose: `Memory persistence using ${memory.strategy} strategy`,
+    status: memory.status === 'active' ? 'production' : 'development',
+    scopeLevel: 1,
+    securityClassification: 'confidential',
+    framework: memory.strategy,
+    model: 'n/a',
+    version: 'v1.0.0',
+    firstDeployed: date,
+    lastUpdated: (memory.updated_at || memory.created_at || new Date().toISOString()).split('T')[0],
+    rateLimit: { rpm: 1000, tpm: 100000 },
+    approvalState: memory.status === 'active' ? 'approved' : 'pending',
+    tools: [],
+    invokesAgents: [],
+    dataAccess: ['Agent Context', 'Session History'],
+    guardrailId: undefined,
+    metrics: { invocations30d: 0, errorRate: 0, p95LatencyMs: 0, avgCostPerDay: 0 },
+    incidents: { count90d: 0, openCount: 0 },
+    versionHistory: [{ version: 'v1.0.0', date, change: 'Memory store registered' }],
+  };
+}
+
+/**
+ * Maps a Build Harness to an AgentRegistryEntry
+ */
+function buildHarnessToEntry(harness: BuildHarness): AgentRegistryEntry {
+  const date = (harness.created_at || new Date().toISOString()).split('T')[0];
+  return {
+    id: `build-harness-${harness.harness_id}`,
+    name: `Harness: ${harness.name}`,
+    description: harness.description || `${harness.harness_type} harness`,
+    owner: 'Build Module',
+    productOwner: 'Platform',
+    businessPurpose: `Agent harness using ${harness.foundation_model || 'default'} foundation model`,
+    status: harness.status === 'active' ? 'production' : 'development',
+    scopeLevel: 3,
+    securityClassification: 'confidential',
+    framework: harness.harness_type,
+    model: harness.foundation_model || 'bedrock',
+    version: 'v1.0.0',
+    firstDeployed: date,
+    lastUpdated: (harness.updated_at || harness.created_at || new Date().toISOString()).split('T')[0],
+    rateLimit: { rpm: 100, tpm: 50000 },
+    approvalState: harness.status === 'active' ? 'approved' : 'pending',
+    tools: [],
+    invokesAgents: [],
+    dataAccess: [],
+    guardrailId: undefined,
+    metrics: { invocations30d: 0, errorRate: 0, p95LatencyMs: 0, avgCostPerDay: 0 },
+    incidents: { count90d: 0, openCount: 0 },
+    versionHistory: [{ version: 'v1.0.0', date, change: 'Harness registered' }],
   };
 }
 
@@ -286,6 +498,12 @@ export function useAgentRegistry(): AgentRegistryResult {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [frontierAgents, setFrontierAgents] = useState<FrontierAgentCatalogEntry[]>([]);
   const [discovered, setDiscovered] = useState<AwsDiscoveredAgent[]>([]);
+  const [discoveredRegions, setDiscoveredRegions] = useState<AwsRegionProvenance | null>(null);
+  const [buildAgents, setBuildAgents] = useState<BuildRegistryAgent[]>([]);
+  const [buildMcpServers, setBuildMcpServers] = useState<BuildMcpServer[]>([]);
+  const [buildSkills, setBuildSkills] = useState<BuildSkill[]>([]);
+  const [buildMemory, setBuildMemory] = useState<BuildMemory[]>([]);
+  const [buildHarnesses, setBuildHarnesses] = useState<BuildHarness[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -293,10 +511,24 @@ export function useAgentRegistry(): AgentRegistryResult {
       setError(null);
 
       try {
-        const [deploymentsRes, frontierRes, discoveredRes] = await Promise.allSettled([
+        const [
+          deploymentsRes,
+          frontierRes,
+          discoveredRes,
+          buildAgentsRes,
+          buildMcpRes,
+          buildSkillsRes,
+          buildMemoryRes,
+          buildHarnessRes,
+        ] = await Promise.allSettled([
           deploymentsApi.list(),
           frontierAgentsApi.listCatalog(),
           governAgentCoreApi.agents(),
+          buildAgentsApi.list(),
+          buildMcpApi.list(),
+          buildSkillsApi.list(),
+          buildMemoryApi.list(),
+          buildHarnessApi.list(),
         ]);
 
         if (deploymentsRes.status === 'fulfilled') {
@@ -307,9 +539,25 @@ export function useAgentRegistry(): AgentRegistryResult {
         }
         if (discoveredRes.status === 'fulfilled' && discoveredRes.value.live) {
           setDiscovered(discoveredRes.value.agents);
+          setDiscoveredRegions(discoveredRes.value.regions ?? null);
+        }
+        if (buildAgentsRes.status === 'fulfilled') {
+          setBuildAgents(buildAgentsRes.value.agents || []);
+        }
+        if (buildMcpRes.status === 'fulfilled') {
+          setBuildMcpServers(buildMcpRes.value.servers || []);
+        }
+        if (buildSkillsRes.status === 'fulfilled') {
+          setBuildSkills(buildSkillsRes.value.skills || []);
+        }
+        if (buildMemoryRes.status === 'fulfilled') {
+          setBuildMemory(buildMemoryRes.value.memories || []);
+        }
+        if (buildHarnessRes.status === 'fulfilled') {
+          setBuildHarnesses(buildHarnessRes.value.harnesses || []);
         }
 
-        // Only set error if all failed
+        // Only set error if core sources all failed
         if (deploymentsRes.status === 'rejected' && frontierRes.status === 'rejected' && discoveredRes.status === 'rejected') {
           setError('Unable to load live deployment data - showing demo data');
         }
@@ -347,8 +595,23 @@ export function useAgentRegistry(): AgentRegistryResult {
     // Real agents discovered straight from AWS (Bedrock Agents + AgentCore runtimes).
     const discoveredAgents = discovered.map(discoveredAgentToAgent);
 
-    // Live agents = AVA deployments + AWS-discovered agents.
-    const liveAgents = [...discoveredAgents, ...deploymentAgents];
+    // Build module registries — unified inventory from Build
+    const buildAgentEntries = buildAgents.map(buildAgentToEntry);
+    const buildMcpEntries = buildMcpServers.map(buildMcpToEntry);
+    const buildSkillEntries = buildSkills.map(buildSkillToEntry);
+    const buildMemoryEntries = buildMemory.map(buildMemoryToEntry);
+    const buildHarnessEntries = buildHarnesses.map(buildHarnessToEntry);
+
+    // Live agents = AVA deployments + AWS-discovered + Build registries
+    const liveAgents = [
+      ...discoveredAgents,
+      ...deploymentAgents,
+      ...buildAgentEntries,
+      ...buildMcpEntries,
+      ...buildSkillEntries,
+      ...buildMemoryEntries,
+      ...buildHarnessEntries,
+    ];
 
     // Convert frontier agents to agent format (only those with deployments or marked available)
     const catalogAgents = frontierAgents
@@ -367,13 +630,18 @@ export function useAgentRegistry(): AgentRegistryResult {
       // Keep original ID but can be distinguished by not having 'live-' or 'frontier-' prefix
     }));
 
+    // Live-only inventory (no demo agents). Exposed separately so a view that
+    // badges itself "Live" can aggregate over real agents only, instead of
+    // rolling demo agents into a live number.
+    const liveOnlyAgents = [...liveAgents, ...catalogAgents];
+
     // If no live data, use only mock
     // If live data exists, combine live + mock (mock shows what's possible)
     const agents = hasLiveData
-      ? [...liveAgents, ...catalogAgents, ...mockAgents]
+      ? [...liveOnlyAgents, ...mockAgents]
       : mockAgents;
 
-    const liveCount = liveAgents.length + catalogAgents.length;
+    const liveCount = liveOnlyAgents.length;
     const demoCount = mockAgents.length;
 
     const source: 'live' | 'demo' | 'mixed' =
@@ -384,23 +652,43 @@ export function useAgentRegistry(): AgentRegistryResult {
       loading,
       error,
       agents,
+      liveAgents: liveOnlyAgents,
       liveCount,
       demoCount,
       source,
+      discoveredRegions,
       deployments,
       frontierAgents,
+      buildAgents,
+      buildMcpServers,
+      buildSkills,
+      buildMemory,
+      buildHarnesses,
       refresh: () => setRefreshKey(k => k + 1),
     };
-  }, [loading, error, deployments, frontierAgents, discovered]);
+  }, [loading, error, deployments, frontierAgents, discovered, discoveredRegions, buildAgents, buildMcpServers, buildSkills, buildMemory, buildHarnesses]);
 
   return result;
 }
 
 /**
- * Utility to check if an agent is from live data
+ * Get the source type for an agent ID
+ *
+ * NOTE: there is deliberately no `isLiveAgent(id)` helper here. A "Live" badge must
+ * mean an actual running AWS runtime, i.e. only the `live-` prefix — `frontier-`
+ * (model catalog) and `build-` (definition/registry) entries have no runtime and
+ * zero metrics. Callers should compare against `live-` (or `getAgentSource(id) === 'aws'`)
+ * at the point of use rather than reintroducing a loose multi-prefix helper.
  */
-export function isLiveAgent(agentId: string): boolean {
-  return agentId.startsWith('live-') || agentId.startsWith('frontier-');
+export function getAgentSource(agentId: string): 'aws' | 'frontier' | 'build-agent' | 'build-mcp' | 'build-skill' | 'build-memory' | 'build-harness' | 'demo' {
+  if (agentId.startsWith('live-')) return 'aws';
+  if (agentId.startsWith('frontier-')) return 'frontier';
+  if (agentId.startsWith('build-agent-')) return 'build-agent';
+  if (agentId.startsWith('build-mcp-')) return 'build-mcp';
+  if (agentId.startsWith('build-skill-')) return 'build-skill';
+  if (agentId.startsWith('build-memory-')) return 'build-memory';
+  if (agentId.startsWith('build-harness-')) return 'build-harness';
+  return 'demo';
 }
 
 export default useAgentRegistry;

@@ -49,6 +49,38 @@ const DATA_QUALITY_DEFS: DataQualityDef[] = [
   { id: 'data.pii',             label: 'PII Data Protection Score', category: 'Data Governance',  expected: 0.99,  actual: 0.82, tier: 'diagnostic', owner: 'DPO',                     source: 'Encryption & masking compliance' },
 ];
 
+/**
+ * Board-composite weights — one per dimension id above, summing to 1.00.
+ *
+ * A flat mean let a narrow dimension (lineage coverage traced over a handful of
+ * datasets) move the board number exactly as much as one measured across every
+ * record, and blended coverage ratios with quality scores as if they were the
+ * same kind of number. These weights encode two things and nothing else:
+ *   - population breadth — how much of the estate the dimension speaks for;
+ *   - board materiality — `management`-tier dimensions (what the board is
+ *     accountable for) outweigh `diagnostic`-tier detail rows.
+ * They live here, next to the definitions, so the rendered composite stays
+ * explainable: composite = Σ(weight × actual) / Σ(weight of measured rows).
+ */
+const COMPOSITE_WEIGHTS: Record<string, number> = {
+  'data.accuracy':     0.15,
+  'data.completeness': 0.15,
+  'data.freshness':    0.10,
+  'data.consistency':  0.05,
+  'data.pipeline':     0.10,
+  'data.schema-drift': 0.05,
+  'data.catalog':      0.10,
+  'data.governance':   0.10,
+  'data.lineage':      0.05,
+  'data.pii':          0.15,
+};
+
+/** Weight for any dimension not listed above — the diagnostic-tier default. */
+const DEFAULT_COMPOSITE_WEIGHT = 0.05;
+
+const compositeWeight = (id: string): number =>
+  COMPOSITE_WEIGHTS[id] ?? DEFAULT_COMPOSITE_WEIGHT;
+
 export interface DataQualityRow extends ComputedMetric {
   category: string;
 }
@@ -77,11 +109,18 @@ export function dataQualityRows(): DataQualityRow[] {
   });
 }
 
-/** Board-level composite: mean actual across the data-quality metrics. */
+/**
+ * Board-level composite: weighted mean of the MEASURED data-quality dimensions
+ * (weights + rationale in COMPOSITE_WEIGHTS). Unmeasured rows are dropped from
+ * both the numerator and the weight denominator rather than counted as zero, so
+ * a missing measurement never renders as a fabricated failure.
+ */
 export function dataQualityComposite(rows: DataQualityRow[]): ComputedMetric {
-  const actuals = rows.map(r => r.actual ?? 0);
-  const composite = actuals.length
-    ? Math.round((actuals.reduce((a, b) => a + b, 0) / actuals.length) * 1000) / 1000
+  const measured = rows.filter(r => r.actual != null);
+  const weightSum = measured.reduce((s, r) => s + compositeWeight(r.id), 0);
+  const weighted = measured.reduce((s, r) => s + compositeWeight(r.id) * (r.actual as number), 0);
+  const composite = weightSum > 0
+    ? Math.round((weighted / weightSum) * 1000) / 1000
     : 0;
   const target = 0.95;
   const { variance, variancePct } = computeVariance(target, composite);
@@ -97,7 +136,12 @@ export function dataQualityComposite(rows: DataQualityRow[]): ComputedMetric {
     actual: composite,
     target,
     owner: 'Data Governance Lead',
-    source: 'Govern · Data Governance (composite)',
+    // The dimension scores this composite averages are illustrative constants in
+    // DATA_QUALITY_DEFS, not live profiling output. ScorecardStrip already excludes this
+    // tile from its live count (the string deliberately carries no '[LIVE]' marker) and
+    // discloses "N/M live" at panel level, but the tile's own provenance string said only
+    // how it was computed, not what it was computed from. Say both.
+    source: `Govern · Data Governance (weighted composite, ${measured.length} dimensions — illustrative dimension scores, not live data profiling)`,
     variance,
     variancePct,
     rag: ragForVariance(variancePct, 'higher-is-better'),

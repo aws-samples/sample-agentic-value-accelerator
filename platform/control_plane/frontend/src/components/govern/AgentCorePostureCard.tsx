@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { governAgentCoreApi, type AwsAgentCorePostureResponse } from '../../api/client';
 import LiveHeader from './LiveHeader';
+import { useDataSources } from './DataSourceContext';
 
 export default function AgentCorePostureCard() {
   const [loading, setLoading] = useState(true);
@@ -16,19 +17,32 @@ export default function AgentCorePostureCard() {
   // fetchError = the request itself failed (transient/network) — distinct from a
   // valid live:false response, so we don't falsely imply AgentCore isn't permitted.
   const [fetchError, setFetchError] = useState(false);
+  const { updateSource } = useDataSources();
+
   useEffect(() => {
     let cancelled = false;
     const load = (attempt: number) =>
       governAgentCoreApi.posture()
-        .then(d => { if (!cancelled) { setData(d); setFetchError(false); setLoading(false); } })
+        .then(d => {
+          if (!cancelled) {
+            setData(d);
+            setFetchError(false);
+            setLoading(false);
+            if (d?.live) {
+              updateSource('aws-bedrock', { status: 'live', lastFetch: Date.now() });
+            }
+          }
+        })
         .catch(() => {
           if (cancelled) return;
           if (attempt < 1) { setTimeout(() => load(attempt + 1), 1500); return; } // one retry
-          setFetchError(true); setLoading(false);
+          setFetchError(true);
+          setLoading(false);
+          updateSource('aws-bedrock', { status: 'error', error: 'AgentCore API unavailable' });
         });
     load(0);
     return () => { cancelled = true; };
-  }, []);
+  }, [updateSource]);
 
   const live = !!data?.live;
   const cats = data?.categories ?? [];

@@ -8,8 +8,9 @@ updated as the AIMS matures). Follows the operating_model route pattern.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_conformance import (
@@ -21,6 +22,9 @@ from services.govern_conformance_service import GovernConformanceService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/conformance", tags=["govern-conformance"])
+
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_conformance", region_scope.CONTROL_PLANE, prefix="/govern/conformance")
 
 _svc: Optional[GovernConformanceService] = None
 
@@ -36,8 +40,19 @@ def get_service() -> GovernConformanceService:
 
 
 @router.post("/records", response_model=ConformanceRecord, status_code=201)
-async def create_record(req: ConformanceRecordCreate, _=Depends(require_role(Role.OPERATOR))):
-    return get_service().create(req, created_by="user")
+async def create_record(
+    req: ConformanceRecordCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    """Create an AIMS conformance record.
+
+    `created_by` comes from the `x-user-email` header, or `"unknown"` when absent -
+    `require_role` returns only a Role, never a principal. The previous literal
+    "user" read like a real principal to an ISO auditor, which is why the missing
+    attribution went unnoticed.
+    """
+    return get_service().create(req, created_by=x_user_email or "unknown")
 
 
 @router.get("/records", response_model=List[ConformanceRecord])

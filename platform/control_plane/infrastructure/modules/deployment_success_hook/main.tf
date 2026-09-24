@@ -53,6 +53,18 @@ data "archive_file" "hook" {
   depends_on = [null_resource.install_deps]
 }
 
+# Upload the zip to S3 first, then reference it from the Lambda. The zip is
+# ~17 MB (vendored boto3 for the preview agent-registry-control API); sending
+# it inline in CreateFunction can exceed SigV4's 5-min signature window on
+# slower links and fail with InvalidSignatureException. The S3 hop splits the
+# upload out of the CreateFunction request.
+resource "aws_s3_object" "hook_zip" {
+  bucket      = var.artifacts_bucket
+  key         = "lambda/deployment_success_hook/${data.archive_file.hook.output_base64sha256}.zip"
+  source      = data.archive_file.hook.output_path
+  source_hash = data.archive_file.hook.output_base64sha256
+}
+
 # ─── Lambda execution role ─────────────────────────────────────────────
 resource "aws_iam_role" "hook" {
   name = "${var.name_prefix}-deploy-success-hook-role"
@@ -143,7 +155,8 @@ resource "aws_lambda_function" "hook" {
   role             = aws_iam_role.hook.arn
   handler          = "index.handler"
   runtime          = "python3.12"
-  filename         = data.archive_file.hook.output_path
+  s3_bucket        = aws_s3_object.hook_zip.bucket
+  s3_key           = aws_s3_object.hook_zip.key
   source_code_hash = data.archive_file.hook.output_base64sha256
   timeout          = 60
   memory_size      = 256

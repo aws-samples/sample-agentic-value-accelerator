@@ -1,0 +1,13 @@
+{
+  "sanctions": [
+    { "name": "Viktor Petrov", "list_name": "OFAC SDN", "entry_id": "SDN-28934" },
+    { "name": "Volkov Enterprises LLC", "list_name": "OFAC SDN", "entry_id": "SDN-31847" },
+    { "name": "Omega Trading Ltd", "list_name": "OFSI Consolidated List", "entry_id": "OFSI/2024/1892" },
+    { "name": "Alexei Petrov", "list_name": "OFSI Consolidated List", "entry_id": "OFSI/2024/1801" },
+    { "name": "Northern Star Shipping Co", "list_name": "OFAC SDN", "entry_id": "SDN-27210" }
+  ],
+  "pep": [
+    { "name": "Kensington Holdings SA", "list_name": "PEP", "entry_id": "PEP-001", "level": 1, "jurisdiction": "GB", "source": "UK Cabinet family association" },
+    { "name": "James Richard Thornton", "list_name": "PEP", "entry_id": "PEP-014", "level": 2, "jurisdiction": "GB", "source": "Associate of designated person" }
+  ]
+}

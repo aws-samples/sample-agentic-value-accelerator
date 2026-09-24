@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -5,6 +6,18 @@ import {
 import Drawer from './Drawer';
 import { MODELS, MODEL_DETAILS, tooltipStyle, AI_GOVERNANCE_GATES } from './mockData';
 import { Icon } from './icons';
+import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
+import {
+  governSageMakerApi,
+  governModelsApi,
+  type AwsSageMakerModelsResponse,
+  type AwsSageMakerEndpointsResponse,
+  type AwsModelMetricsResponse,
+} from '../../api/client';
+
+// Normalize identifiers so a governed model name/id can be matched against
+// CloudWatch model ids (e.g. 'Claude Haiku 4.5' ↔ 'anthropic.claude-haiku-4-5-...').
+const normId = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const READINESS_DIMENSIONS = [
   { key: 'compliance', label: 'Compliance', fullMark: 100 },
@@ -53,6 +66,41 @@ const stepStatusBg: Record<string, string> = {
 export default function ModelDrawer({ modelId, onClose }: Props) {
   const model = modelId ? MODELS.find(m => m.id === modelId) : null;
   const detail = modelId ? MODEL_DETAILS[modelId] : null;
+
+  // Live deployed inventory — SageMaker models/endpoints + CloudWatch runtime.
+  // Each dataset degrades independently; on failure the drawer keeps its mock
+  // detail and badges the source honestly.
+  const [smModels, setSmModels] = useState<AwsSageMakerModelsResponse | null>(null);
+  const [smEndpoints, setSmEndpoints] = useState<AwsSageMakerEndpointsResponse | null>(null);
+  const [metrics, setMetrics] = useState<AwsModelMetricsResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([
+      governSageMakerApi.models(),
+      governSageMakerApi.endpoints(),
+      governModelsApi.runtimeMetrics(7),
+    ]).then(([m, e, r]) => {
+      if (cancelled) return;
+      if (m.status === 'fulfilled') setSmModels(m.value);
+      if (e.status === 'fulfilled') setSmEndpoints(e.value);
+      if (r.status === 'fulfilled') setMetrics(r.value);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const inventoryLive = !!smModels?.live || !!smEndpoints?.live;
+  const metricsLive = !!metrics?.live;
+
+  // This model's live runtime row, matched by fuzzy id/name against CloudWatch.
+  const liveRuntime = (() => {
+    if (!metricsLive || !metrics?.by_model?.length || !model) return null;
+    const keys = [normId(model.id), normId(model.name)].filter(k => k.length >= 4);
+    return metrics.by_model.find(bm => {
+      const nm = normId(bm.model_id);
+      return keys.some(k => nm.includes(k) || k.includes(nm));
+    }) ?? null;
+  })();
 
   return (
     <Drawer
@@ -201,6 +249,64 @@ export default function ModelDrawer({ modelId, onClose }: Props) {
           </div>
 
           <p className="text-sm text-slate-600 leading-relaxed">{detail.description}</p>
+
+          {/* Deployed Inventory — live SageMaker deployments + CloudWatch runtime */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-slate-900">Deployed Inventory</div>
+              {inventoryLive
+                ? <LiveDataBadge source="SageMaker ListModels / ListEndpoints" />
+                : <MockDataBadge integration="SageMaker ListModels / ListEndpoints" />}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-slate-50 rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">SageMaker Models</div>
+                <div className="text-xl font-bold text-slate-900">{smModels?.live ? smModels.total : '—'}</div>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-3">
+                <div className="text-[10px] text-emerald-600 uppercase">Endpoints InService</div>
+                <div className="text-xl font-bold text-emerald-700">{smEndpoints?.live ? smEndpoints.in_service : '—'}</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-3">
+                <div className="text-[10px] text-blue-600 uppercase">Creating</div>
+                <div className="text-xl font-bold text-blue-700">{smEndpoints?.live ? smEndpoints.creating : '—'}</div>
+              </div>
+              <div className="bg-rose-50 rounded-lg p-3">
+                <div className="text-[10px] text-rose-600 uppercase">Failed</div>
+                <div className="text-xl font-bold text-rose-700">{smEndpoints?.live ? smEndpoints.failed : '—'}</div>
+              </div>
+            </div>
+
+            {/* This model's runtime — live from CloudWatch when matched, else illustrative */}
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <div className="text-xs font-medium text-slate-600 flex items-center gap-2">
+                Runtime ({metrics?.window_days ?? 7}d)
+                {liveRuntime
+                  ? <LiveDataBadge source="CloudWatch AWS/Bedrock" />
+                  : <MockDataBadge integration="CloudWatch per-model runtime" />}
+              </div>
+              <div className="flex items-center gap-5">
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-500 uppercase">Invocations</div>
+                  <div className="text-sm font-bold text-slate-900">
+                    {liveRuntime ? liveRuntime.invocations.toLocaleString() : '—'}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-500 uppercase">Avg Latency</div>
+                  <div className="text-sm font-bold text-slate-900">
+                    {liveRuntime ? `${Math.round(liveRuntime.avg_latency_ms)}ms` : '—'}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-500 uppercase">Error Rate</div>
+                  <div className="text-sm font-bold text-slate-900">
+                    {liveRuntime ? `${liveRuntime.error_rate_pct.toFixed(2)}%` : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Compact Readiness Radar + Risk Controls Side by Side */}
           {detail.readiness && detail.riskProfile && (

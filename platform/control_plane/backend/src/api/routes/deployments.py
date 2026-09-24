@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from datetime import datetime
 from models.deployment import DeploymentCreate, DeploymentResponse, DeploymentStatus, StatusHistoryEntry
@@ -41,6 +42,61 @@ _test_results: dict[str, dict] = {}
 _test_results_lock = threading.Lock()
 _executor = ThreadPoolExecutor(max_workers=4)
 _TEST_RESULT_TTL_SECONDS = 600  # 10 minutes
+
+
+def _client_safe_error(summary: str, deployment_id: Optional[str] = None) -> str:
+    """Log the exception under a correlation id and return the only text a caller may read.
+
+    Must be called from inside an `except` block: `logger.exception` is what carries the
+    traceback to the log, and the log is the only place the exception text goes.
+
+    `str(e)` is not ours to hand out. Every call these routes wrap is a boto3 call, and
+    botocore renders a `ClientError` with the service's own message copied verbatim, which
+    for an AccessDenied is AWS's "User: <caller arn> is not authorized to perform:
+    <action> on resource: <target arn>" - the account id, the ECS task role, and the
+    bucket, state machine or log group. It used to reach the 500 body at ten sites in this
+    file, and four of those also persisted it (see _fail_deployment).
+
+    `summary` must stay a fixed literal, because it is interpolated before it reaches
+    logging and a CR/LF in it would forge a log record. `deployment_id` is passed
+    separately for that reason; it is safe to log because it is minted server-side
+    (models/deployment.py, `default_factory=lambda: str(uuid.uuid4())`) and every caller
+    below has already resolved it against DynamoDB, so it is a uuid rather than the
+    caller's string by the time it gets here.
+    """
+    error_ref = uuid.uuid4().hex[:12]
+    if deployment_id:
+        logger.exception("%s [error_ref=%s deployment=%s]", summary, error_ref, deployment_id)
+    else:
+        logger.exception("%s [error_ref=%s]", summary, error_ref)
+    return (
+        f"{summary} (error_ref={error_ref}). The full traceback is in the backend logs "
+        "under that error_ref."
+    )
+
+
+def _fail_deployment(svc: DeploymentService, deployment_id: str, summary: str) -> str:
+    """Mark a deployment FAILED with a correlation id, and return the caller-safe text.
+
+    `error_message` is not a private field. `GET /deployments/{id}/status` returns it
+    verbatim and is gated at Role.VIEWER, so persisting `str(e)` there was the same
+    disclosure as putting it in the 500 body, arriving one GET later and outliving the
+    request. Both halves take the identical string from `_client_safe_error` so the
+    stored record and the response cannot drift into disagreeing about what happened.
+
+    A bookkeeping failure must never hide the real cause: if `update_status` itself raises
+    - an invalid state transition, or a DynamoDB error - it is logged and swallowed and
+    the caller still gets the original failure. One of the four call sites already did
+    this with a nested try and the other three did not, so a failed transition there
+    replaced a 500 naming the real problem with a ValueError from `update_status`. Having
+    one owner for "record the failure" is what makes that consistent.
+    """
+    message = _client_safe_error(summary, deployment_id)
+    try:
+        svc.update_status(deployment_id, DeploymentStatus.FAILED, error_message=message)
+    except Exception:
+        logger.exception("Could not mark deployment %s FAILED", deployment_id)
+    return message
 
 
 def get_catalog():
@@ -220,10 +276,9 @@ async def create_deployment(
         )
         deployment = svc.update_status(deployment.deployment_id, DeploymentStatus.PACKAGED, "Template packaged")
         deployment = svc.update_status(deployment.deployment_id, DeploymentStatus.DELIVERED, "Delivered to S3", s3_key=s3_key)
-    except Exception as e:
-        logger.error(f"Delivery failed: {e}")
-        svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
-        raise HTTPException(status_code=500, detail=f"Delivery failed: {e}")
+    except Exception:
+        detail = _fail_deployment(svc, deployment.deployment_id, "Delivery failed")
+        raise HTTPException(status_code=500, detail=detail)
 
     # Start the deployment pipeline (Step Functions)
     try:
@@ -231,10 +286,11 @@ async def create_deployment(
         execution_arn = pipeline_svc.start_pipeline(deployment, template)
         deployment.execution_arn = execution_arn
         svc.table.put_item(Item=svc._to_item(deployment))
-    except Exception as e:
-        logger.error(f"Pipeline start failed: {e}")
-        svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
-        raise HTTPException(status_code=500, detail=f"Pipeline start failed: {e}")
+    except Exception:
+        # The "never let a bookkeeping failure hide the real cause" nested try that used to
+        # be here now lives in _fail_deployment, so all four failure sites get it.
+        detail = _fail_deployment(svc, deployment.deployment_id, "Pipeline start failed")
+        raise HTTPException(status_code=500, detail=detail)
 
     # Create an Approval Queue row for the deploy (audit trail).
     # * If policy said auto_approve → row starts APPROVED (no human
@@ -282,8 +338,18 @@ async def list_deployments(
     template_id: Optional[str] = Query(None),
 ):
     svc = get_deploy_svc()
-    deployments = svc.list_deployments(status=status, template_id=template_id)
-    return [DeploymentResponse(**d.dict()) for d in deployments]
+    try:
+        deployments = svc.list_deployments(status=status, template_id=template_id)
+        return [DeploymentResponse(**d.dict()) for d in deployments]
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "")
+        if code == "ResourceNotFoundException":
+            return []
+        raise
+    except Exception as e:
+        if "ResourceNotFoundException" in type(e).__name__ or "ResourceNotFoundException" in str(e):
+            return []
+        raise
 
 
 @router.get("/templates/{template_id}/dependencies")
@@ -359,9 +425,9 @@ async def get_deployment_logs(deployment_id: str, _=RBACDepends(require_role(Rol
         pipeline_svc = get_pipeline_svc()
         logs = pipeline_svc.get_build_logs(deployment.build_id)
         return {"deployment_id": deployment_id, "build_id": deployment.build_id, "logs": logs}
-    except Exception as e:
-        logger.error(f"Failed to retrieve logs: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve logs: {e}")
+    except Exception:
+        detail = _client_safe_error("Failed to retrieve logs", deployment_id)
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.get("/{deployment_id}/runtime-logs")
@@ -395,9 +461,9 @@ async def get_runtime_logs(deployment_id: str, _=RBACDepends(require_role(Role.V
             "observability_console_url": outputs.get("agentcore_observability_console_url", ""),
             "logs": logs,
         }
-    except Exception as e:
-        logger.error(f"Failed to retrieve runtime logs: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve runtime logs: {e}")
+    except Exception:
+        detail = _client_safe_error("Failed to retrieve runtime logs", deployment_id)
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.post("/{deployment_id}/destroy", status_code=200)
@@ -460,10 +526,12 @@ async def destroy_deployment(deployment_id: str, _=RBACDepends(require_role(Role
             deployment = svc.update_status(deployment.deployment_id, DeploymentStatus.DESTROYING, "Destroy pipeline started")
             deployment.execution_arn = response["executionArn"]
             svc.table.put_item(Item=svc._to_item(deployment))
-        except Exception as e:
-            logger.error(f"Foundry destroy pipeline start failed: {e}")
-            svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
-            raise HTTPException(status_code=500, detail=f"Destroy pipeline failed: {e}")
+        except Exception:
+            # Same summary as the standard-template path below on purpose: the traceback in
+            # the log distinguishes which one ran, and the caller does not need to be told
+            # which internal branch handled their destroy.
+            detail = _fail_deployment(svc, deployment.deployment_id, "Destroy pipeline failed")
+            raise HTTPException(status_code=500, detail=detail)
     else:
         # Standard template — look up via catalog, repackage, then run the
         # offboarding job via PipelineService.
@@ -494,10 +562,9 @@ async def destroy_deployment(deployment_id: str, _=RBACDepends(require_role(Role
             deployment = svc.update_status(deployment.deployment_id, DeploymentStatus.DESTROYING, "Destroy pipeline started")
             deployment.execution_arn = execution_arn
             svc.table.put_item(Item=svc._to_item(deployment))
-        except Exception as e:
-            logger.error(f"Destroy pipeline start failed: {e}")
-            svc.update_status(deployment.deployment_id, DeploymentStatus.FAILED, error_message=str(e))
-            raise HTTPException(status_code=500, detail=f"Destroy pipeline failed: {e}")
+        except Exception:
+            detail = _fail_deployment(svc, deployment.deployment_id, "Destroy pipeline failed")
+            raise HTTPException(status_code=500, detail=detail)
 
     # Best-effort: revoke the LLM Gateway virtual key + delete its Secrets
     # Manager secret. Only applies to Foundry deployments where Round 2 of
@@ -560,9 +627,9 @@ async def redeploy_deployment(deployment_id: str, _=RBACDepends(require_role(Rol
             s3_bucket=deployment.s3_bucket,
         )
         deployment.s3_key = s3_key
-    except Exception as e:
-        logger.error(f"Redeploy packaging failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Repackaging failed: {e}")
+    except Exception:
+        detail = _client_safe_error("Redeploy packaging failed", deployment_id)
+        raise HTTPException(status_code=500, detail=detail)
 
     # Reset status to PENDING then advance through pipeline
     deployment.status = DeploymentStatus.PENDING
@@ -583,9 +650,9 @@ async def redeploy_deployment(deployment_id: str, _=RBACDepends(require_role(Rol
         execution_arn = pipeline_svc.start_pipeline(deployment, template)
         deployment.execution_arn = execution_arn
         svc.table.put_item(Item=svc._to_item(deployment))
-    except Exception as e:
-        logger.error(f"Redeploy pipeline start failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Redeploy pipeline failed: {e}")
+    except Exception:
+        detail = _client_safe_error("Redeploy pipeline start failed", deployment_id)
+        raise HTTPException(status_code=500, detail=detail)
 
     return DeploymentResponse(**deployment.dict())
 
@@ -703,8 +770,22 @@ async def test_deployment(deployment_id: str, req: TestDeploymentRequest, _=RBAC
 
 
 @router.get("/{deployment_id}/test/{test_id}", status_code=200)
-async def get_test_result(deployment_id: str, test_id: str, _=RBACDepends(require_role(Role.VIEWER))):
-    """Poll for the result of an async test invocation."""
+async def get_test_result(deployment_id: str, test_id: str, _=RBACDepends(require_role(Role.OPERATOR))):
+    """Poll for the result of an async test invocation.
+
+    OPERATOR, not VIEWER, and raised deliberately: every writer of `_test_results` is
+    OPERATOR (`test_deployment`, `run_test_script`), so a VIEWER-gated read let the lowest
+    role we have collect the output of an action it cannot take. What it collects is not
+    innocuous - the AgentCore invoke path stores `str(e)` under "error" and the script path
+    appends `str(e)` to raw subprocess stdout, so an AccessDenied there is AWS's "User:
+    <caller arn> is not authorized to perform: ..." naming the account and the task role.
+
+    Matching the reader to the writers is the fix rather than scrubbing those two strings,
+    because an operator debugging why their own agent invocation failed is exactly who that
+    text is for - "not authorized to perform bedrock-agentcore:InvokeAgentRuntime" IS the
+    diagnosis. Redacting it would have cost the feature its point to close a hole that
+    only existed because the role was wrong.
+    """
     _cleanup_stale_results()
 
     with _test_results_lock:
@@ -737,9 +818,9 @@ async def upload_test_data(deployment_id: str, file: UploadFile = FastAPIFile(..
         s3_client.put_object(Bucket=bucket, Key=s3_key, Body=contents)
         logger.info(f"Uploaded test data to s3://{bucket}/{s3_key}")
         return {"s3_key": s3_key}
-    except Exception as e:
-        logger.error(f"Test data upload failed for {deployment_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+    except Exception:
+        detail = _client_safe_error("Test data upload failed", deployment_id)
+        raise HTTPException(status_code=500, detail=detail)
 
 
 class RunScriptRequest(BaseModel):
@@ -868,9 +949,12 @@ async def get_sample_data(deployment_id: str, _=RBACDepends(require_role(Role.VI
         with open(json_files[0], "r") as f:
             data = json.load(f)
         return data
-    except Exception as e:
-        logger.error(f"Failed to read sample data: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to read sample data: {e}")
+    except Exception:
+        # Not a boto3 call - this one reads a file off the image, so `str(e)` would hand
+        # back an absolute container path instead of an ARN. Same treatment: a path is
+        # free reconnaissance and tells the operator nothing the traceback does not.
+        detail = _client_safe_error("Failed to read sample data")
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.post("/{deployment_id}/provision-gateway", status_code=200)

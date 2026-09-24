@@ -175,7 +175,17 @@ generate_runtime_config() {
     local agents_with_desc
     agents_with_desc=$(echo "$agents_json" | jq -c '[.[] | {id: .id, name: .name, description: ("Specialized AI agent: " + .name)}]')
 
-    # Generate runtime config
+    # Optional console-service URLs + auth (used by the full governance console
+    # use case; empty for every other use case → those keys are omitted below).
+    local console_services
+    console_services=$(jq -c --arg name "$use_case_name" \
+        '.use_cases[] | select(.use_case_name == $name) | (.console_services // {})' "$REGISTRY_FILE")
+    [ -z "$console_services" ] && console_services='{}'
+
+    # Generate runtime config. The console_services object (if any) is merged in
+    # at the top level so runtimeConfig.cfgEnv() can resolve metrics_api_url,
+    # cedar_api_url, registry_api_url, hitl_api_url, grounding_api_url,
+    # api_key, tenant_id.
     cat > "$config_file" <<EOF
 {
   "use_case_id": "$use_case_name",
@@ -184,6 +194,7 @@ generate_runtime_config() {
   "domain": "FSI",
   "agents": $agents_with_desc,
   "api_endpoint": "$API_ENDPOINT",
+  "console_services": $console_services,
   "input_schema": {
     "id_field": "$id_field",
     "id_label": "$id_label",

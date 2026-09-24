@@ -1,0 +1,46 @@
+{
+  "customer_id": "CUST004",
+  "kyc_verification": {
+    "status": "completed",
+    "date": "2026-05-05",
+    "documents_verified": [
+      "Extrait du Registre du Commerce",
+      "UBO Declaration",
+      "Source of Wealth Declaration"
+    ]
+  },
+  "sanctions_screening": {
+    "status": "clear",
+    "last_check": "2026-06-24",
+    "databases_checked": [
+      "OFAC",
+      "UN",
+      "EU",
+      "UK HMT"
+    ],
+    "matches": []
+  },
+  "pep_screening": {
+    "status": "match",
+    "matches": [
+      {
+        "name": "Victoria Hartley-Morrison",
+        "level": 1,
+        "detail": "Daughter of serving UK Cabinet Minister"
+      }
+    ]
+  },
+  "adverse_media": {
+    "status": "clear",
+    "last_check": "2026-06-20",
+    "findings": []
+  },
+  "aml_risk_rating": "high",
+  "enhanced_due_diligence_required": true,
+  "next_review_date": "2027-05-05",
+  "regulatory_notes": [
+    "PEP Level 1 requires Board Risk Committee approval per FCA guidance",
+    "Source of wealth declaration obtained",
+    "Escalation is procedural, not risk-based"
+  ]
+}

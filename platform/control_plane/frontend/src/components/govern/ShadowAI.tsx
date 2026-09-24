@@ -6,7 +6,7 @@
  * the detection sources feeding the signal, and offer a path to governance.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { formatRelativeTime } from '@/lib/utils';
 import {
@@ -22,12 +22,14 @@ import UnifiedGuide, { SHADOW_AI_GUIDE } from './UnifiedGuide';
 import LiveAiCallers from './LiveAiCallers';
 import {
   governDeveloperAiApi,
+  governModelsApi,
   type ShadowAiDetection,
   type GuardDutyAISeverity,
+  type AwsInvocationAggregatesResponse,
 } from '../../api/client';
-import { Icon } from './icons';
+import { Icon, type IconName } from './icons';
 import { useGuardDutyAIFindings } from './useGuardDutyAIFindings';
-import { useSecurityHubAIInventory, type DiscoveredAIAsset, type AIAssetType } from './useSecurityHubAIInventory';
+import { useSecurityHubAIInventory, type SecurityHubAIAsset, type AIAssetType } from './useSecurityHubAIInventory';
 
 const severityBg: Record<ShadowSeverity, string> = {
   critical: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -45,7 +47,7 @@ const statusBg: Record<ShadowStatus, string> = {
 };
 
 // Asset type icons — maps to the Icon component's icon names
-const typeIconName: Record<ShadowAssetType | 'user', string> = {
+const typeIconName: Record<ShadowAssetType | 'user', IconName> = {
   agent: 'cpu-chip',           // Agents
   model: 'cube',              // Models
   tool: 'wrench',             // Tools
@@ -59,8 +61,13 @@ const STORAGE_KEY = 'ava_shadow_ai_dispositions';
 
 // formatRelativeTime imported from @/lib/utils
 
-/** Map API shadow detection data to component's ShadowAsset format */
-function mapApiToAssets(data: ShadowAiDetection): Array<{
+/**
+ * Row shape rendered by the detected-assets list. `risk` is a ReactNode rather
+ * than a string because an unmeasured token count / cost has to render as an
+ * em-dash with a tooltip (see <Unmeasured/>), which needs JSX. The illustrative
+ * `SHADOW_ASSETS` rows (whose `risk` is a plain string) remain assignable.
+ */
+type ShadowAssetRow = {
   id: string;
   name: string;
   type: ShadowAssetType | 'user';
@@ -70,22 +77,49 @@ function mapApiToAssets(data: ShadowAiDetection): Array<{
   detectedDate: string;
   suspectedOwner: string;
   businessUnit: string;
-  risk: string;
+  risk: ReactNode;
   recommendedAction: string;
-}> {
-  const assets: Array<{
-    id: string;
-    name: string;
-    type: ShadowAssetType | 'user';
-    severity: ShadowSeverity;
-    status: ShadowStatus;
-    detectedVia: string;
-    detectedDate: string;
-    suspectedOwner: string;
-    businessUnit: string;
-    risk: string;
-    recommendedAction: string;
-  }> = [];
+};
+
+/**
+ * Honest rendering for a value the backend reported as `null`.
+ *
+ * `null` means "could not be measured" — it is NOT zero. Rendering it as `0`,
+ * `$0.00`, or a blank cell would let a reader mistake "unknown" for "none", so
+ * show an em-dash plus a tooltip that explains why. This matches the unmeasured
+ * metric treatment already used in AgentRegistry.
+ *
+ * Callers MUST test with `x == null` / `x != null`, never truthiness — a
+ * measured `0` is a real measurement and must still print as `0`.
+ */
+function Unmeasured({ reason }: { reason: string }) {
+  return (
+    <span className="text-slate-400 cursor-help" title={`Not measured — ${reason}`}>
+      —
+    </span>
+  );
+}
+
+const TOKENS_UNMEASURED_REASON =
+  'no Bedrock invocation-log record matched this identity, so its token count is unknown, not zero';
+const COST_UNMEASURED_REASON =
+  'no invocation-log tokens matched this model, or it has no published per-1K rate, so its cost is unknown, not zero';
+
+/**
+ * Format a MEASURED USD cost. A measured 0 is a real 0 and prints as `$0.00`;
+ * a measured value under a cent prints as `<$0.01` so a genuinely non-zero
+ * measurement is never displayed as exactly zero (live data really does contain
+ * sub-cent per-model costs). `null` never reaches here — callers route it to
+ * <Unmeasured/> instead.
+ */
+function formatCostUsd(cost: number): string {
+  if (cost > 0 && cost < 0.005) return '<$0.01';
+  return `$${cost.toFixed(2)}`;
+}
+
+/** Map API shadow detection data to component's ShadowAsset format */
+function mapApiToAssets(data: ShadowAiDetection): ShadowAssetRow[] {
+  const assets: ShadowAssetRow[] = [];
 
   // Map unapproved users
   data.unapproved_users.forEach((user, i) => {
@@ -99,7 +133,15 @@ function mapApiToAssets(data: ShadowAiDetection): Array<{
       detectedDate: user.first_seen.split('T')[0],
       suspectedOwner: user.email.split('@')[0],
       businessUnit: 'Unknown',
-      risk: `${user.tokens.toLocaleString()} tokens consumed via ${user.source}`,
+      // tokens is `number | null`: null = no invocation-log token count matched
+      // this identity. Explicit != null so a measured 0 still prints as "0 tokens".
+      risk: user.tokens != null
+        ? `${user.tokens.toLocaleString()} tokens consumed via ${user.source}`
+        : (
+          <>
+            Tokens <Unmeasured reason={TOKENS_UNMEASURED_REASON} /> — activity observed via {user.source}
+          </>
+        ),
       recommendedAction: user.recommended_action,
     });
   });
@@ -133,7 +175,16 @@ function mapApiToAssets(data: ShadowAiDetection): Array<{
       detectedDate: new Date().toISOString().split('T')[0],
       suspectedOwner: `${model.users} user${model.users !== 1 ? 's' : ''}`,
       businessUnit: 'Unknown',
-      risk: `$${model.cost.toFixed(2)} cost, ${model.requests.toLocaleString()} requests`,
+      // cost is `number | null`: there is no longer a default pricing rate, so an
+      // unpriced/unmeasured model must read as unknown rather than as $0.00.
+      // Explicit != null so a measured 0 still prints as "$0.00 cost".
+      risk: model.cost != null
+        ? `${formatCostUsd(model.cost)} cost, ${model.requests.toLocaleString()} requests`
+        : (
+          <>
+            Cost <Unmeasured reason={COST_UNMEASURED_REASON} />, {model.requests.toLocaleString()} requests
+          </>
+        ),
       recommendedAction: model.recommended_action,
     });
   });
@@ -340,23 +391,25 @@ function GuardDutyAIProtectionCard() {
 
 // ─────────────────────────── Security Hub Discovery Card ───────────────────────────
 
-const ASSET_TYPE_ICONS: Record<AIAssetType, string> = {
+const ASSET_TYPE_ICONS: Record<AIAssetType, IconName> = {
   'bedrock-model': 'cube',
   'bedrock-agent': 'cpu-chip',
   'bedrock-guardrail': 'shield-check',
-  'bedrock-kb': 'book-open',
+  'bedrock-knowledge-base': 'book-open',
   'sagemaker-endpoint': 'server-stack',
+  'sagemaker-model': 'circle-stack',
 };
 
 const ASSET_TYPE_LABELS: Record<AIAssetType, string> = {
   'bedrock-model': 'Bedrock Models',
   'bedrock-agent': 'Agents',
   'bedrock-guardrail': 'Guardrails',
-  'bedrock-kb': 'Knowledge Bases',
+  'bedrock-knowledge-base': 'Knowledge Bases',
   'sagemaker-endpoint': 'SageMaker Endpoints',
+  'sagemaker-model': 'SageMaker Models',
 };
 
-const RISK_STYLES: Record<DiscoveredAIAsset['riskLevel'], { bg: string; text: string; border: string }> = {
+const RISK_STYLES: Record<'critical' | 'high' | 'medium' | 'low', { bg: string; text: string; border: string }> = {
   critical: { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200' },
   high: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
   medium: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
@@ -378,7 +431,15 @@ function SecurityHubDiscoveryCard() {
   // Derive values from hook results
   const assets = discoveredAssets ?? [];
   const unregisteredAssets = assets.filter(a => a.registrationStatus === 'unregistered');
-  const byType = summary?.byType ?? {};
+  const byType = (Object.entries(summary?.byType ?? {}) as [AIAssetType, number][])
+    .filter(([, total]) => total > 0)
+    .map(([type, total]) => ({
+      type,
+      total,
+      icon: ASSET_TYPE_ICONS[type],
+      label: ASSET_TYPE_LABELS[type],
+      unregistered: unregisteredAssets.filter(a => a.type === type).length,
+    }));
   const totalDiscovered = summary?.total ?? 0;
   const unregisteredCount = summary?.unregisteredCount ?? 0;
   const registeredCount = summary?.registeredCount ?? 0;
@@ -389,7 +450,7 @@ function SecurityHubDiscoveryCard() {
   const hasCriticalOrHigh = criticalRiskCount > 0 || highRiskCount > 0;
 
   // Handle register action (mock - would integrate with agent registry)
-  const handleRegister = (asset: DiscoveredAIAsset) => {
+  const handleRegister = (asset: SecurityHubAIAsset) => {
     setRegisteringIds(prev => new Set(prev).add(asset.id));
     // Simulate registration - in real implementation this would call the agent registry API
     setTimeout(() => {
@@ -468,7 +529,7 @@ function SecurityHubDiscoveryCard() {
           <div className="flex flex-wrap gap-1.5 mt-3">
             {byType.map((typeInfo) => (
               <span key={typeInfo.type} className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-100">
-                <Icon name={typeInfo.icon as any} className="w-3 h-3" />
+                <Icon name={typeInfo.icon} className="w-3 h-3" />
                 {typeInfo.label}: {typeInfo.total}
                 {typeInfo.unregistered > 0 && (
                   <span className="text-amber-600">({typeInfo.unregistered} shadow)</span>
@@ -493,26 +554,30 @@ function SecurityHubDiscoveryCard() {
           {expanded && (
             <div className="space-y-2 mt-2">
               {unregisteredAssets.slice(0, 5).map((asset) => {
-                const riskStyles = RISK_STYLES[asset.riskLevel];
+                // SecurityHubAIAsset exposes highestSeverity (CRITICAL/HIGH/MEDIUM/LOW/INFORMATIONAL),
+                // not a pre-bucketed riskLevel — normalize to the 4 risk buckets, defaulting to low.
+                const sev = (asset.highestSeverity ?? 'LOW').toLowerCase();
+                const risk = (['critical', 'high', 'medium', 'low'].includes(sev) ? sev : 'low') as 'critical' | 'high' | 'medium' | 'low';
+                const riskStyles = RISK_STYLES[risk];
                 const isRegistering = registeringIds.has(asset.id);
                 return (
                   <div key={asset.id} className={`border-l-2 ${riskStyles.border} bg-slate-50/50 rounded-r-lg p-3`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Icon name={ASSET_TYPE_ICONS[asset.type] as any} className="w-4 h-4 text-slate-500" />
+                          <Icon name={ASSET_TYPE_ICONS[asset.type]} className="w-4 h-4 text-slate-500" />
                           <span className="text-xs font-medium text-slate-800 truncate">{asset.name}</span>
                           <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${riskStyles.bg} ${riskStyles.text}`}>
-                            {asset.riskLevel.toUpperCase()}
+                            {risk.toUpperCase()}
                           </span>
                           <span className="text-[10px] text-slate-400">{formatRelativeTime(asset.lastSeen)}</span>
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-1 truncate">{asset.resourceArn}</div>
+                        <div className="text-[10px] text-slate-500 mt-1 truncate">{asset.arn}</div>
                         <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-400">
                           <span>{ASSET_TYPE_LABELS[asset.type]}</span>
                           <span>{asset.region}</span>
-                          {asset.securityFindingCount > 0 && (
-                            <span className="text-amber-600">{asset.securityFindingCount} finding{asset.securityFindingCount !== 1 ? 's' : ''}</span>
+                          {asset.findingsCount > 0 && (
+                            <span className="text-amber-600">{asset.findingsCount} finding{asset.findingsCount !== 1 ? 's' : ''}</span>
                           )}
                         </div>
                       </div>
@@ -535,8 +600,9 @@ function SecurityHubDiscoveryCard() {
                             'Register'
                           )}
                         </button>
+                        {/* SecurityHubAIAsset has no consoleUrl field — deep-link to the region's AWS console home. */}
                         <a
-                          href={asset.consoleUrl}
+                          href={`https://${asset.region}.console.aws.amazon.com/`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
@@ -592,12 +658,165 @@ function SecurityHubDiscoveryCard() {
   );
 }
 
+// ─────────────────────────── Live Model Invocation Volume Card ───────────────────────────
+
+/** Shorten a Bedrock model id / ARN to a readable label (tail segment after the last "/"). */
+function shortModelId(id: string): string {
+  return id.includes('/') ? (id.split('/').pop() || id) : id;
+}
+
+const fmtNum = (n: number) => n.toLocaleString();
+
+/**
+ * Real Bedrock per-model invocation & token telemetry from
+ * /govern/models/invocations (CloudWatch Logs Insights). Replaces the flat
+ * ~1K-tokens / $0.01-per-call estimate with actual per-model token totals and
+ * invocation counts, so shadow-AI volume is grounded in observed usage rather
+ * than a synthetic per-call assumption.
+ */
+function LiveModelInvocationVolumeCard() {
+  const [data, setData] = useState<AwsInvocationAggregatesResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    governModelsApi.invocations(24)
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  const live = !!data?.live;
+  const perModel = data?.per_model ?? [];
+  const hasRows = perModel.length > 0;
+  const windowHours = data?.window_hours ?? 24;
+
+  return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm mb-6">
+      {/* Header */}
+      <div className="p-5 border-b border-slate-100">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+              <Icon name="chart-bar-square" className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-900">Model Invocation Volume</span>
+                <LiveDataBadge
+                  live={live}
+                  source="CloudWatch Logs Insights"
+                  detail="Real Bedrock per-model invocation counts and token totals from /aws/bedrock/model-invocations"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Actual per-model invocation counts and input/output token totals over the last {windowHours}h — real usage, not a flat per-call estimate.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setReloadKey(k => k + 1)}
+            disabled={loading}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            title="Refresh invocation telemetry"
+          >
+            <Icon name={loading ? 'spinner' : 'arrow-path'} className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {/* Totals strip — real aggregates, only meaningful when live */}
+        {live && data && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+            <div className="rounded-lg p-2 border border-slate-200 bg-slate-50">
+              <div className="text-lg font-bold text-slate-800 tabular-nums">{fmtNum(data.total_invocations)}</div>
+              <div className="text-[10px] font-medium text-slate-500">INVOCATIONS</div>
+            </div>
+            <div className="rounded-lg p-2 border border-indigo-200 bg-indigo-50">
+              <div className="text-lg font-bold text-indigo-700 tabular-nums">{fmtNum(data.total_tokens)}</div>
+              <div className="text-[10px] font-medium text-indigo-600">TOKENS ({fmtNum(data.total_input_tokens)} in / {fmtNum(data.total_output_tokens)} out)</div>
+            </div>
+            <div className="rounded-lg p-2 border border-slate-200 bg-slate-50">
+              <div className="text-lg font-bold text-slate-800 tabular-nums">{perModel.length}</div>
+              <div className="text-[10px] font-medium text-slate-500">MODELS</div>
+            </div>
+            <div className={`rounded-lg p-2 border ${data.guardrail_intervention_count > 0 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`text-lg font-bold tabular-nums ${data.guardrail_intervention_count > 0 ? 'text-amber-700' : 'text-slate-800'}`}>{fmtNum(data.guardrail_intervention_count)}</div>
+              <div className={`text-[10px] font-medium ${data.guardrail_intervention_count > 0 ? 'text-amber-600' : 'text-slate-500'}`}>GUARDRAIL STOPS</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Per-model table / honest empty state */}
+      {loading ? (
+        <div className="h-24 flex items-center justify-center text-xs text-slate-400">Loading…</div>
+      ) : live && hasRows ? (
+        <div className="p-3 overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-slate-400 text-[10px] uppercase tracking-wide text-left">
+                <th scope="col" className="font-medium pb-2 pl-2">Model</th>
+                <th scope="col" className="font-medium pb-2">Operation</th>
+                <th scope="col" className="font-medium pb-2 text-right">Invocations</th>
+                <th scope="col" className="font-medium pb-2 text-right">Input tok</th>
+                <th scope="col" className="font-medium pb-2 text-right">Output tok</th>
+                <th scope="col" className="font-medium pb-2 text-right pr-2">Total tok</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perModel.map((m, i) => (
+                <tr key={`${m.model_id}-${m.operation ?? ''}-${i}`} className={i > 0 ? 'border-t border-slate-100' : ''}>
+                  <td className="py-2 pl-2 pr-2 font-medium text-slate-700 max-w-[280px] truncate" title={m.model_id}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="cube" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      {shortModelId(m.model_id)}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-2 text-slate-500">{m.operation ?? '—'}</td>
+                  <td className="py-2 text-right tabular-nums text-slate-700">{fmtNum(m.invocations)}</td>
+                  <td className="py-2 text-right tabular-nums text-slate-500">{fmtNum(m.input_tokens)}</td>
+                  <td className="py-2 text-right tabular-nums text-slate-500">{fmtNum(m.output_tokens)}</td>
+                  <td className="py-2 text-right tabular-nums text-slate-700 pr-2">{fmtNum(m.total_tokens)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data?.note && (
+            <div className="text-[10px] text-slate-400 mt-2 px-2">{data.note}</div>
+          )}
+        </div>
+      ) : (
+        <div className="p-5">
+          <div className="flex items-start gap-2 text-[12px] text-slate-500 bg-slate-50 rounded-lg px-4 py-3">
+            <Icon name={live ? 'shield-check' : 'signal'} className={`w-4 h-4 mt-0.5 flex-shrink-0 ${live ? 'text-emerald-500' : 'text-slate-400'}`} />
+            <div>
+              <div className="font-medium text-slate-600">
+                {live ? 'No model invocations in the window' : 'Live invocation telemetry unavailable'}
+              </div>
+              <div className="text-[11px] mt-0.5">
+                {data?.note ?? 'Real Bedrock per-model invocation counts and token totals will appear here once /aws/bedrock/model-invocations logging is enabled.'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ShadowAI() {
   const [severityFilter, setSeverityFilter] = useState<'all' | ShadowSeverity>('all');
   const [apiData, setApiData] = useState<ShadowAiDetection | null>(null);
+  // Honesty triple for shadow-AI detection specifically (NOT the envelope's):
+  // whether detection actually measured, what measured it, and what it could not.
   const [isLive, setIsLive] = useState(false);
   const [apiSource, setApiSource] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [apiNote, setApiNote] = useState<string | null>(null);
+  // Only the setter is used (fetch lifecycle); the value itself is not read in render.
+  const [, setLoading] = useState(true);
 
   // Track mounted state for safe async updates
   const mountedRef = useRef(true);
@@ -612,10 +831,15 @@ export default function ShadowAI() {
     setLoading(true);
     governDeveloperAiApi.usage()
       .then(response => {
-        if (!cancelled && response.shadow_ai) {
-          setApiData(response.shadow_ai);
-          setIsLive(response.live);
-          setApiSource(response.source);
+        const shadow = response.shadow_ai;
+        if (!cancelled && shadow) {
+          setApiData(shadow);
+          // Gate the Live badge on the shadow-AI block's OWN live flag — not on the
+          // envelope's, and not on "the fetch succeeded". A 200 whose detection
+          // degraded must not render a green Live pill over the asset list.
+          setIsLive(shadow.live);
+          setApiSource(shadow.source || response.source);
+          setApiNote(shadow.note ?? null);
         }
       })
       .catch(() => {
@@ -623,6 +847,7 @@ export default function ShadowAI() {
         if (!cancelled) {
           setApiData(null);
           setIsLive(false);
+          setApiNote(null);
         }
       })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -654,20 +879,33 @@ export default function ShadowAI() {
     }, 3200);
   };
 
-  // Determine if we have live API data with actual findings
-  const hasApiFindings = apiData && (
-    apiData.unapproved_users.length > 0 ||
-    apiData.unknown_tools.length > 0 ||
-    apiData.unapproved_models.length > 0
-  );
-
-  // Base assets — use API data if available with findings, otherwise use mock
-  const baseAssets = useMemo(() => {
-    if (hasApiFindings && apiData) {
+  // Base assets — trust the live API whenever it responded (live === true), even if
+  // it reports ZERO findings. A clean live result is a legitimate "no shadow AI"
+  // state, NOT a reason to fall back to mock. Only use the illustrative SHADOW_ASSETS
+  // when there is no live signal at all.
+  const baseAssets = useMemo<ShadowAssetRow[]>(() => {
+    if (isLive && apiData) {
       return mapApiToAssets(apiData);
     }
     return SHADOW_ASSETS;
-  }, [hasApiFindings, apiData]);
+  }, [isLive, apiData]);
+
+  // Shadow-cost honesty. `shadow_cost_estimate` is a sum over only the models
+  // whose per-model cost could actually be measured — rows with `cost === null`
+  // are silently absent from it, so the figure is a FLOOR, not a total. Count the
+  // exclusions here so the UI can disclose them instead of presenting a partial
+  // sum as though it were complete. Same for identities with unmeasured tokens.
+  const costExclusions = useMemo(() => {
+    const models = apiData?.unapproved_models ?? [];
+    const users = apiData?.unapproved_users ?? [];
+    const unmeasuredCostModels = models.filter(m => m.cost == null).length;
+    return {
+      unmeasuredCostModels,
+      unmeasuredTokenUsers: users.filter(u => u.tokens == null).length,
+      // Every detected model unmeasured => the total is not a floor, it is unknown.
+      allCostUnmeasured: models.length > 0 && unmeasuredCostModels === models.length,
+    };
+  }, [apiData]);
 
   // Effective assets = baseline detections with any user disposition applied.
   const assets = useMemo(
@@ -687,7 +925,7 @@ export default function ShadowAI() {
 
   // Coverage rollup — onboarded/blocked assets are no longer "shadow", so coverage rises.
   const resolvedByType = useMemo(() => {
-    const counts: Partial<Record<ShadowAssetType, number>> = {};
+    const counts: Partial<Record<ShadowAssetType | 'user', number>> = {};
     assets.forEach(a => {
       if (a.status === 'onboarding' || a.status === 'remediated' || a.status === 'blocked') {
         counts[a.type] = (counts[a.type] ?? 0) + 1;
@@ -724,8 +962,14 @@ export default function ShadowAI() {
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Shadow AI Detection</h1>
-                  {hasApiFindings && isLive ? (
-                    <LiveDataBadge source={apiSource} detail="Live shadow AI detection from Developer AI API" />
+                  {/* Gated on shadow_ai.live. The explicit ternary is kept (rather than
+                      LiveDataBadge live={isLive}) so the non-live branch can carry a
+                      specific integration message instead of just the source name. */}
+                  {isLive ? (
+                    <LiveDataBadge
+                      source={apiSource || 'Developer AI API'}
+                      detail={`Live shadow AI detection measured from ${apiSource || 'the Developer AI API'}`}
+                    />
                   ) : (
                     <MockDataBadge integration="Live CloudTrail AI-caller signal below; asset list & coverage illustrative" />
                   )}
@@ -733,6 +977,13 @@ export default function ShadowAI() {
                 <p className="text-slate-500 mt-1 max-w-2xl text-sm">
                   Discover ungoverned AI assets before they become incidents. Track governed-vs-shadow coverage and route discovered assets onto the governed path.
                 </p>
+                {/* What detection could NOT measure, straight from the backend's note. */}
+                {apiNote && (
+                  <div className="flex items-start gap-1.5 text-[11px] text-slate-400 mt-1.5 max-w-2xl">
+                    <Icon name="information-circle" className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                    <span>{apiNote}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
@@ -767,8 +1018,6 @@ export default function ShadowAI() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold">3 flagged</span>
-              <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">1 blocked</span>
               <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
@@ -779,14 +1028,19 @@ export default function ShadowAI() {
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {[
-            { label: 'Shadow Assets', value: totalShadow, sub: 'discovered ungoverned', tone: 'text-slate-900' },
-            { label: 'Critical', value: critical, sub: 'immediate action', tone: critical > 0 ? 'text-rose-600' : 'text-emerald-600' },
-            { label: 'Unresolved', value: unresolved, sub: 'detected / investigating', tone: unresolved > 0 ? 'text-amber-600' : 'text-emerald-600' },
-            { label: 'In Onboarding', value: inOnboarding, sub: 'joining governed path', tone: 'text-blue-600' },
-            { label: 'Governance Coverage', value: `${coveragePct}%`, sub: `${totalGoverned}/${totalDiscovered} assets`, tone: coveragePct >= 85 ? 'text-emerald-600' : 'text-amber-600' },
+            { label: 'Shadow Assets', value: totalShadow, sub: 'discovered ungoverned', tone: 'text-slate-900', mock: false },
+            { label: 'Critical', value: critical, sub: 'immediate action', tone: critical > 0 ? 'text-rose-600' : 'text-emerald-600', mock: false },
+            { label: 'Unresolved', value: unresolved, sub: 'detected / investigating', tone: unresolved > 0 ? 'text-amber-600' : 'text-emerald-600', mock: false },
+            { label: 'In Onboarding', value: inOnboarding, sub: 'joining governed path', tone: 'text-blue-600', mock: false },
+            // Coverage is derived from the illustrative SHADOW_COVERAGE rollup even when the
+            // asset list is live, so this tile carries its own Demo badge.
+            { label: 'Governance Coverage', value: `${coveragePct}%`, sub: `${totalGoverned}/${totalDiscovered} assets`, tone: coveragePct >= 85 ? 'text-emerald-600' : 'text-amber-600', mock: true },
           ].map(k => (
             <div key={k.label} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
-              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{k.label}</div>
+              <div className="flex items-center gap-1.5">
+                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{k.label}</div>
+                {k.mock && <MockDataBadge integration="Coverage rollup is illustrative; wire governed counts to live Agent Registry data" />}
+              </div>
               <div className={`text-2xl font-semibold mt-1 ${k.tone}`}>{k.value}</div>
               <div className="text-[11px] text-slate-400 mt-0.5">{k.sub}</div>
             </div>
@@ -799,8 +1053,10 @@ export default function ShadowAI() {
         {/* Security Hub AI Discovery — discover AI assets and identify shadow AI */}
         <SecurityHubDiscoveryCard />
 
-        {/* Shadow AI Cost Estimate - shown when live API data is available */}
-        {apiData && apiData.shadow_cost_estimate > 0 && (
+        {/* Shadow AI Cost Estimate — shown whenever the API returned shadow signal.
+            Also renders when the cost total is 0 but events exist, so an all-unmeasured
+            cost can say so instead of the whole card silently disappearing. */}
+        {apiData && (apiData.shadow_cost_estimate > 0 || apiData.total_shadow_events > 0) && (
           <div className="bg-gradient-to-r from-rose-50 to-orange-50 rounded-xl border border-rose-200 p-4 mb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -808,22 +1064,64 @@ export default function ShadowAI() {
                   <Icon name="currency-dollar" className="w-5 h-5 text-rose-600" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-rose-800">Estimated Shadow AI Cost</div>
-                  <div className="text-xs text-rose-600">
-                    Ungoverned usage consuming ${apiData.shadow_cost_estimate.toFixed(2)} — {apiData.total_shadow_events.toLocaleString()} events detected
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-semibold text-rose-800">Estimated Shadow AI Cost</div>
+                    <LiveDataBadge
+                      live={isLive}
+                      source={apiSource || 'Developer AI API'}
+                      detail="Measured shadow-AI cost from Bedrock invocation logs priced at published per-1K rates"
+                    />
                   </div>
+                  <div className="text-xs text-rose-600">
+                    {costExclusions.allCostUnmeasured ? (
+                      <>Cost could not be measured for any detected model — {apiData.total_shadow_events.toLocaleString()} events detected</>
+                    ) : costExclusions.unmeasuredCostModels > 0 ? (
+                      <>Ungoverned usage consuming at least {formatCostUsd(apiData.shadow_cost_estimate)} — {apiData.total_shadow_events.toLocaleString()} events detected</>
+                    ) : (
+                      <>Ungoverned usage consuming {formatCostUsd(apiData.shadow_cost_estimate)} — {apiData.total_shadow_events.toLocaleString()} events detected</>
+                    )}
+                  </div>
+                  {/* Disclose what the sum leaves out — an unmeasured row must not
+                      vanish into a total that reads as complete. */}
+                  {(costExclusions.unmeasuredCostModels > 0 || costExclusions.unmeasuredTokenUsers > 0) && (
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      Excluded from this total:{' '}
+                      {costExclusions.unmeasuredCostModels > 0 && (
+                        <>{costExclusions.unmeasuredCostModels} model{costExclusions.unmeasuredCostModels === 1 ? '' : 's'} with unmeasured cost</>
+                      )}
+                      {costExclusions.unmeasuredCostModels > 0 && costExclusions.unmeasuredTokenUsers > 0 && ', '}
+                      {costExclusions.unmeasuredTokenUsers > 0 && (
+                        <>{costExclusions.unmeasuredTokenUsers} {costExclusions.unmeasuredTokenUsers === 1 ? 'identity' : 'identities'} with unmeasured tokens</>
+                      )}
+                      . Unmeasured is not zero — the real figure is higher than shown.
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="text-2xl font-bold text-rose-700">${apiData.shadow_cost_estimate.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-rose-700">
+                {costExclusions.allCostUnmeasured ? (
+                  <Unmeasured reason={COST_UNMEASURED_REASON} />
+                ) : (
+                  <>
+                    {costExclusions.unmeasuredCostModels > 0 && (
+                      <span className="text-rose-400 mr-0.5" title="A floor, not a total: models with unmeasured cost are excluded from this sum.">≥</span>
+                    )}
+                    {formatCostUsd(apiData.shadow_cost_estimate)}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {/* Coverage by type */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm mb-6">
-          <div className="text-sm font-semibold text-slate-900 mb-1">Governed vs Shadow Coverage</div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="text-sm font-semibold text-slate-900">Governed vs Shadow Coverage</div>
+            <MockDataBadge integration="Coverage rollup is illustrative; wire governed counts to live Agent Registry data" />
+          </div>
           <div className="text-[11px] text-slate-500 mb-4">
-            Governed counts come live from the <Link to="/govern/agents" className="text-blue-600 hover:text-blue-700 font-medium">Agent Registry</Link> — onboarding a shadow asset moves it onto the governed side here.
+            Governed counts are an illustrative baseline — not yet sourced from the <Link to="/govern/agents" className="text-blue-600 hover:text-blue-700 font-medium">Agent Registry</Link>. Onboarding or blocking a discovered asset does move it onto the governed side here.
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {coverageRows.map(c => {
@@ -907,6 +1205,9 @@ export default function ShadowAI() {
         {/* Live AWS — real AI callers from CloudTrail, cross-referenced vs the registry */}
         <LiveAiCallers />
 
+        {/* Live AWS — real per-model invocation counts + token totals (grounds the shadow-cost story in observed usage, not a flat per-call estimate) */}
+        <LiveModelInvocationVolumeCard />
+
         {/* Detected assets */}
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold text-slate-900">Detected Shadow Assets</div>
@@ -933,7 +1234,7 @@ export default function ShadowAI() {
             <div key={a.id} className={`bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 border-l-4 ${borderTone} shadow-sm p-4 ${resolved ? 'opacity-75' : ''}`}>
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                  <Icon name={typeIconName[a.type as keyof typeof typeIconName] || 'exclamation-circle'} className="w-5 h-5 text-slate-600" />
+                  <Icon name={typeIconName[a.type] || 'exclamation-circle'} className="w-5 h-5 text-slate-600" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -988,6 +1289,21 @@ export default function ShadowAI() {
             </div>
             );
           })}
+          {filtered.length === 0 && (
+            isLive && assets.length === 0 ? (
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-emerald-200/60 shadow-sm p-8 text-center">
+                <Icon name="shield-check" className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                <div className="text-sm font-semibold text-slate-800">No shadow AI detected</div>
+                <p className="text-[11px] text-slate-500 mt-1 max-w-md mx-auto">
+                  Live detection is connected and every observed AI asset maps to a governed, registered entity. Nothing ungoverned was found.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-6 text-center text-sm text-slate-400">
+                No shadow assets match this filter.
+              </div>
+            )
+          )}
         </div>
 
         {/* Path to governance CTA */}

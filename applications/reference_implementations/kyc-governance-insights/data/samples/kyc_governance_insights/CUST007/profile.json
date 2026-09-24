@@ -1,0 +1,39 @@
+{
+  "customer_id": "CUST007",
+  "name": "GlobalFX Solutions Inc",
+  "account_type": "corporate",
+  "industry": "Money Services Business (FX)",
+  "incorporation": {
+    "country": "United States",
+    "state": "New York",
+    "date": "2013-07-22"
+  },
+  "contact": {
+    "address": "40 Wall Street, 28th Floor, New York, NY 10005",
+    "phone": "+1-212-555-0166",
+    "email": "compliance@globalfx.example.com"
+  },
+  "directors": [
+    {
+      "name": "Michael Chen",
+      "role": "CEO",
+      "pep_status": false
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "Michael Chen",
+      "ownership_percentage": 60
+    },
+    {
+      "name": "GFX Partners LP",
+      "ownership_percentage": 40
+    }
+  ],
+  "kyc_status": "verified",
+  "risk_flags": [
+    "high_transaction_volume"
+  ],
+  "annual_revenue": "$500M+",
+  "regulatory_status": "FinCEN MSB licensed"
+}

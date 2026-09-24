@@ -54,3 +54,13 @@ variable "demo_viewer_password" {
   default     = "DemoViewer123!@#"
   sensitive   = true
 }
+
+variable "login_events_table_name" {
+  description = "Name of the DynamoDB table the PostAuthentication Lambda writes login events into. Owned by modules/dynamodb."
+  type        = string
+}
+
+variable "login_events_table_arn" {
+  description = "ARN of the login-events DynamoDB table. Scopes the PostAuthentication Lambda's PutItem permission."
+  type        = string
+}

@@ -10,15 +10,20 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useDataGovernance } from './useDataGovernance';
-import { LiveDataBadge } from '../DataSourceIndicator';
+import { useDataReadiness } from './useDataReadiness';
+import { PII_COVERAGE_TARGET, computeMaturityAssessment } from './dataReadinessEngine';
+import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
 import { SetupGuidanceCard } from '../SetupGuidanceCard';
 import { governDataCatalogApi, type DataCatalogSummary } from '../../../api/client';
-import { MATURITY_QUESTIONS, MATURITY_LEVELS, DATA_DOMAINS, QUALITY_RULES, AI_DATASETS, tooltipStyle } from './dataGovernanceData';
+import { MATURITY_QUESTIONS, DATA_DOMAINS, QUALITY_RULES, AI_DATASETS, tooltipStyle } from './dataGovernanceData';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Icon, type IconName } from '../icons';
 import KnowledgeSources from './KnowledgeSources';
+import KnowledgeBaseGovernance from './KnowledgeBaseGovernance';
 import RagSecurityControls from './RagSecurityControls';
+import DataSensitivity from './DataSensitivity';
 import CoreBadge from '../CoreBadge';
+import { useDataSources } from '../DataSourceContext';
 
 // ─────────────────────────── Constants ───────────────────────────
 
@@ -40,13 +45,14 @@ const SENSITIVITY_COLORS: Record<string, string> = {
 };
 
 // Tab definitions matching FinOps style
-type Tab = 'dashboard' | 'lineage' | 'quality' | 'knowledge' | 'assessment';
+type Tab = 'dashboard' | 'lineage' | 'quality' | 'knowledge' | 'knowledgebases' | 'assessment';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'lineage', label: 'Lineage' },
   { id: 'quality', label: 'Quality' },
   { id: 'knowledge', label: 'Knowledge' },
+  { id: 'knowledgebases', label: 'Knowledge Bases' },
   { id: 'assessment', label: 'Assessment' },
 ];
 
@@ -56,6 +62,7 @@ const PRIMARY_MODULES: { id: string; path: string; label: string; description: s
   { id: 'lineage', path: '/govern/data/lineage', label: 'Data Lineage', description: 'Track data provenance and flow visualization', icon: 'link', color: 'blue' },
   { id: 'access', path: '/govern/data/access', label: 'Access Control', description: 'Service approvals and permission tracking', icon: 'finger-print', color: 'rose' },
   { id: 'quality', path: '/govern/data/quality', label: 'Data Quality', description: 'Quality rules and validation monitoring', icon: 'check-circle', color: 'emerald' },
+  { id: 'inventory', path: '/govern/data/inventory', label: 'AI Estate Inventory', description: 'Tagged AWS resources behind the AI estate', icon: 'server-stack', color: 'violet' },
 ];
 
 const KNOWLEDGE_MODULES: { id: string; path: string; label: string; description: string; icon: IconName; color: string }[] = [
@@ -66,7 +73,7 @@ const KNOWLEDGE_MODULES: { id: string; path: string; label: string; description:
 ];
 
 const ASSESSMENT_MODULES: { id: string; path: string; label: string; description: string; icon: IconName; color: string }[] = [
-  { id: 'readiness', path: '/govern/data/readiness', label: 'AI Readiness', description: '7-dimension assessment', icon: 'viewfinder-circle', color: 'cyan' },
+  { id: 'readiness', path: '/govern/data/readiness', label: 'AI Readiness', description: '7-dimension derived scorecard (0-100)', icon: 'viewfinder-circle', color: 'cyan' },
   { id: 'maturity', path: '/govern/data/maturity', label: 'Maturity Journey', description: 'Improvement roadmap', icon: 'chart-line', color: 'amber' },
   { id: 'metadata', path: '/govern/data/metadata', label: 'Metadata Management', description: 'RAG metadata schemas', icon: 'tag', color: 'violet' },
 ];
@@ -82,6 +89,22 @@ const colorClasses: Record<string, { bg: string; border: string; text: string; i
   rose: { bg: 'from-rose-50 to-pink-50', border: 'border-rose-200/60', text: 'text-rose-800', iconBg: 'bg-rose-500' },
 };
 
+/**
+ * Neutral badge for a DERIVED value: computed from live counts via a heuristic,
+ * so it must not be presented as a live measurement.
+ */
+function DerivedBadge({ detail }: { detail?: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300 cursor-help"
+      title={detail || 'Derived from live counts via a heuristic — not a direct measurement'}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+      Derived
+    </span>
+  );
+}
+
 // ─────────────────────────── Main Component ───────────────────────────
 
 export default function DataGovernanceLanding() {
@@ -95,18 +118,49 @@ export default function DataGovernanceLanding() {
   }, [activeTab]);
 
   const dg = useDataGovernance();
+  // The module's single CONTROL READINESS ladder (0-100, derived from AWS control-plane
+  // signals, with `scored`/`live`/`target` gating). The landing page reads the same hook
+  // the /govern/data/readiness page does, so both surfaces show one readiness number on
+  // one scale instead of two contradicting ladders.
+  const readiness = useDataReadiness();
   const [catalog, setCatalog] = useState<DataCatalogSummary | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const { updateSource } = useDataSources();
 
   useEffect(() => {
     let cancelled = false;
     setCatalogLoading(true);
     governDataCatalogApi.summary()
-      .then(data => { if (!cancelled) setCatalog(data); })
-      .catch(err => console.warn('Data catalog fetch failed:', err))
+      .then(data => {
+        if (!cancelled) {
+          setCatalog(data);
+          // Report aws-glue status if catalog data came from Glue
+          if (data?.catalog?.live) {
+            updateSource('aws-glue', {
+              name: 'Glue Data Catalog',
+              provider: 'aws',
+              status: 'live',
+              lastFetch: Date.now(),
+              description: 'Data catalog and quality rules',
+            });
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Data catalog fetch failed:', err);
+        if (!cancelled) {
+          updateSource('aws-glue', {
+            name: 'Glue Data Catalog',
+            provider: 'aws',
+            status: 'error',
+            error: 'API unavailable',
+            description: 'Data catalog and quality rules',
+          });
+        }
+      })
       .finally(() => { if (!cancelled) setCatalogLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [updateSource]);
 
   // Chart data computations
   const domainChartData = useMemo(() => {
@@ -156,10 +210,9 @@ export default function DataGovernanceLanding() {
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Data Governance</h1>
               <CoreBadge pillar="show" />
-              <LiveDataBadge />
             </div>
             <p className="text-slate-500 mt-1 max-w-2xl">
-              Ensure your data is AI-ready with quality controls, lineage tracking, and access governance.
+              Govern the data behind your AI — quality controls, PII sensitivity, lineage, access, and knowledge-base oversight.
             </p>
           </div>
         </div>
@@ -187,6 +240,7 @@ export default function DataGovernanceLanding() {
         {activeTab === 'dashboard' && (
           <DashboardTab
             dg={dg}
+            readiness={readiness}
             catalogLoading={catalogLoading}
             catalog={catalog}
             domainChartData={domainChartData}
@@ -198,6 +252,7 @@ export default function DataGovernanceLanding() {
         {activeTab === 'lineage' && <LineageTab />}
         {activeTab === 'quality' && <QualityTab />}
         {activeTab === 'knowledge' && <KnowledgeTab />}
+        {activeTab === 'knowledgebases' && <KnowledgeBaseGovernance />}
         {activeTab === 'assessment' && <AssessmentTab />}
       </div>
     </div>
@@ -208,6 +263,7 @@ export default function DataGovernanceLanding() {
 
 interface DashboardTabProps {
   dg: ReturnType<typeof useDataGovernance>;
+  readiness: ReturnType<typeof useDataReadiness>;
   catalogLoading: boolean;
   catalog: DataCatalogSummary | null;
   domainChartData: { name: string; datasets: number; isLive: boolean }[];
@@ -215,7 +271,12 @@ interface DashboardTabProps {
   qualityChartData: { data: { name: string; value: number; color: string }[]; total: number; passRate: number; isLive: boolean };
 }
 
-function DashboardTab({ dg, catalogLoading, catalog, domainChartData, sensitivityChartData, qualityChartData }: DashboardTabProps) {
+function DashboardTab({ dg, readiness, catalogLoading, catalog, domainChartData, sensitivityChartData, qualityChartData }: DashboardTabProps) {
+  // Respect the readiness ladder's own `scored` gate: dimensions that are not actually
+  // measured (e.g. Data Quality without Glue DQ) are excluded rather than scored 0.
+  const scoredDimensions = readiness.dimensions.filter(d => d.scored !== false);
+  const notMeasured = readiness.dimensions.filter(d => d.scored === false);
+
   return (
     <div className="space-y-6">
       {/* Hero KPIs */}
@@ -224,40 +285,96 @@ function DashboardTab({ dg, catalogLoading, catalog, domainChartData, sensitivit
           <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
         </div>
       ) : !dg.error && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Live Governance Metrics</span>
+            <LiveDataBadge source="Guardrails, Deployments, CloudWatch" />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
             { label: 'Guardrails Active', value: dg.summary.activeGuardrails, sub: `${dg.summary.totalGuardrails} total configured`, tone: dg.summary.activeGuardrails > 0 ? 'text-emerald-600' : 'text-amber-600' },
             { label: 'PII Types Protected', value: dg.summary.uniquePiiTypes.length, sub: dg.summary.uniquePiiTypes.slice(0, 3).join(', ') + (dg.summary.uniquePiiTypes.length > 3 ? '…' : '') || 'none configured', tone: dg.summary.uniquePiiTypes.length > 0 ? 'text-violet-600' : 'text-slate-400' },
             { label: 'Deployments', value: dg.summary.totalAgents, sub: dg.summary.agentsWithGuardrails > 0 ? `${dg.summary.agentsWithGuardrails} with guardrails` : 'no guardrail params', tone: dg.summary.totalAgents > 0 ? 'text-blue-600' : 'text-slate-400' },
             { label: 'Events (24h)', value: dg.summary.last24hEvents.total, sub: `${dg.summary.last24hEvents.blocked} blocked · ${dg.summary.last24hEvents.anonymized} anonymized`, tone: dg.summary.last24hEvents.blocked > 0 ? 'text-amber-600' : 'text-slate-600' },
-            { label: 'Data Readiness', value: `${dg.readinessMetrics.overallScore}%`, sub: '7-dimension assessment', tone: dg.readinessMetrics.overallScore >= 70 ? 'text-emerald-600' : dg.readinessMetrics.overallScore >= 40 ? 'text-amber-600' : 'text-rose-600' },
+            {
+              label: 'Data Readiness',
+              // Same hook, same 0-100 scale, same scored/target gating as the AI Data
+              // Readiness page. No rescaling into another ladder's units.
+              value: readiness.loading ? '—' : `${readiness.overallScore}/100`,
+              sub: readiness.loading
+                ? 'loading AWS signals…'
+                : `${scoredDimensions.length} of ${readiness.dimensions.length} dimensions scored · target ${readiness.overallTarget}`,
+              tone: readiness.status === 'ai-ready' ? 'text-emerald-600' : readiness.status === 'partially-ready' ? 'text-amber-600' : 'text-rose-600',
+            },
           ].map(k => (
             <div key={k.label} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
-              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{k.label}</div>
+              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                {k.label}
+                {k.label === 'Data Readiness' && (
+                  <DerivedBadge detail={`Derived scorecard: heuristic 0-100 dimension scores computed from AWS control-plane signals (${readiness.liveSourcesCount}/${readiness.totalSourcesCount} signals live) — not a direct measurement`} />
+                )}
+              </div>
               <div className={`text-2xl font-semibold mt-1 ${k.tone}`}>{k.value}</div>
               <div className="text-[11px] text-slate-400 mt-0.5">{k.sub}</div>
             </div>
           ))}
+          </div>
         </div>
       )}
 
-      {/* Readiness Radar + Quality by Domain */}
-      {!dg.loading && !dg.error && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Readiness Radar + Quality by Domain — neither depends on useDataGovernance, so
+          a failure of that hook must not hide the readiness scorecard. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">AI-Readiness by Dimension</h3>
-            <ResponsiveContainer width="100%" height={240}>
-              <RadarChart data={dg.readinessMetrics.dimensions.map(d => ({ dimension: d.name, score: Math.round((d.score / d.maxScore) * 100) }))} outerRadius="70%">
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="dimension" tick={{ fill: '#64748b', fontSize: 10 }} />
-                <PolarRadiusAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 9 }} />
-                <Radar dataKey="score" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.35} />
-                <Tooltip contentStyle={tooltipStyle} />
-              </RadarChart>
-            </ResponsiveContainer>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-slate-900">Control Readiness by Dimension</h3>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium" title="Underlying AWS signals fetched live. The 0-100 scores computed from them are derived.">
+                  {readiness.liveSourcesCount}/{readiness.totalSourcesCount} signals live
+                </span>
+              </div>
+              <DerivedBadge detail="Heuristic 0-100 dimension scores derived from live AWS control-plane signals — not direct measurements" />
+            </div>
+            {readiness.loading ? (
+              <div className="flex items-center justify-center h-[240px]">
+                <div className="w-5 h-5 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+              </div>
+            ) : readiness.error ? (
+              <div className="flex items-center justify-center h-[240px] text-xs text-rose-600">
+                Readiness signals unavailable: {readiness.error}
+              </div>
+            ) : (
+              <>
+                {/* Scores are plotted on their native 0-100 scale — no rescaling. */}
+                <ResponsiveContainer width="100%" height={240}>
+                  <RadarChart data={scoredDimensions.map(d => ({ dimension: d.name, score: d.score, target: d.target }))} outerRadius="70%">
+                    <PolarGrid stroke="#e2e8f0" />
+                    <PolarAngleAxis dataKey="dimension" tick={{ fill: '#64748b', fontSize: 9 }} />
+                    <PolarRadiusAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 9 }} />
+                    <Radar name="Score" dataKey="score" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.35} />
+                    <Radar name="Target" dataKey="target" stroke="#d97706" fill="none" strokeDasharray="5 5" />
+                    <Tooltip contentStyle={tooltipStyle} />
+                  </RadarChart>
+                </ResponsiveContainer>
+                <div className="flex items-start justify-between gap-3 mt-1">
+                  <div className="text-[10px] text-slate-500">
+                    Dashed ring = per-dimension target.{' '}
+                    <Link to="/govern/data/readiness" className="text-blue-600 hover:text-blue-700 font-medium">Full scorecard →</Link>
+                  </div>
+                  {notMeasured.length > 0 && (
+                    <div className="text-[10px] text-slate-400 text-right" title="Excluded from the radar and the overall score because the underlying signal is not measured">
+                      Not measured: {notMeasured.map(d => d.name).join(', ')}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Data Quality by Domain</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900">Data Quality by Domain</h3>
+              <MockDataBadge integration="Glue Data Quality per-domain scores" />
+            </div>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={DATA_DOMAINS.map(d => ({ name: d.name, quality: d.qualityScore }))} layout="vertical" margin={{ left: 20, right: 12 }}>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -272,8 +389,7 @@ function DashboardTab({ dg, catalogLoading, catalog, domainChartData, sensitivit
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
-      )}
+      </div>
 
       {/* Data Catalog, Sensitivity, Quality Rules */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -376,24 +492,35 @@ function DashboardTab({ dg, catalogLoading, catalog, domainChartData, sensitivit
         </div>
       </div>
 
+      {/* Sensitive Data Discovery (live Amazon Macie: PII/PCI/PHI by finding type + severity + affected buckets) */}
+      <DataSensitivity />
+
       {/* Data Protection Coverage */}
       {!dg.loading && !dg.error && (
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-900">Data Protection Coverage</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">LIVE</span>
+              {/* Leads with the same guardrail-binding wording the sibling views use
+                  (AgentDataProfiles.tsx, DataOntology.tsx) so one gap does not read as
+                  three different gaps. The second clause is a genuinely SEPARATE gap that
+                  only this card has: the PII tile's denominator is PII_COVERAGE_TARGET, a
+                  hardcoded constant, not a measured set of expected PII types. */}
+              <MockDataBadge integration="Bedrock agent guardrail associations + PII coverage baseline" />
             </div>
           </div>
           <div className="text-[11px] text-slate-500 mb-4">
             Agents with active guardrails protecting PII, PHI, PCI, and harmful content.
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Protection-coverage counters only. The former 4th tile showed the pooled
+              7-dimension readiness score divided by 20 and labelled it a "Use Case
+              Readiness" level — a silent rescale of one ladder into the other's units.
+              Adoption maturity now has its own card below, in its own 0-5 units. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               { label: 'Guardrail Coverage', protected: dg.summary.agentsWithGuardrails, total: dg.summary.totalAgents || dg.summary.agentsWithGuardrails, icon: 'shield-check' as IconName, unit: 'agents' },
-              { label: 'PII Detection', protected: Math.min(dg.summary.uniquePiiTypes.length, 10), total: 10, icon: 'finger-print' as IconName, unit: 'types', actualCount: dg.summary.uniquePiiTypes.length },
+              { label: 'PII Detection', protected: Math.min(dg.summary.uniquePiiTypes.length, PII_COVERAGE_TARGET), total: PII_COVERAGE_TARGET, icon: 'finger-print' as IconName, unit: 'types', actualCount: dg.summary.uniquePiiTypes.length },
               { label: 'Active Guardrails', protected: dg.summary.activeGuardrails, total: dg.summary.totalGuardrails || dg.summary.activeGuardrails, icon: 'shield' as IconName, unit: 'guardrails' },
-              { label: 'Use Case Readiness', protected: Math.round(dg.readinessMetrics.overallScore / 20), total: 5, icon: 'chart-bar' as IconName, unit: 'level' },
             ].map(c => {
               const pct = c.total > 0 ? Math.min(100, Math.round((c.protected / c.total) * 100)) : 0;
               return (
@@ -415,6 +542,9 @@ function DashboardTab({ dg, catalogLoading, catalog, domainChartData, sensitivit
           </div>
         </div>
       )}
+
+      {/* Adoption Maturity — the surviving 0-5 ladder, kept separate from readiness */}
+      {!dg.loading && !dg.error && <AdoptionMaturityCard maturity={dg.adoptionMaturity} />}
 
       {/* Recent Events */}
       {!dg.loading && dg.recentDataEvents.length > 0 && (
@@ -447,19 +577,97 @@ function DashboardTab({ dg, catalogLoading, catalog, domainChartData, sensitivit
   );
 }
 
+// ─────────────────────────── Adoption Maturity ───────────────────────────
+
+/**
+ * Adoption Maturity — the three genuinely-different signals that used to be mixed into
+ * a second "7-dimension AI Readiness" ladder on a 0-5 scale. They measure adoption and
+ * self-assessed maturity, NOT control effectiveness, so they are shown separately, in
+ * their own 0-5 level units, and are never converted into the readiness percentage.
+ * Dimensions with no underlying signal are labelled "not assessed" and excluded from
+ * the pooled figure rather than counted as level 0.
+ */
+function AdoptionMaturityCard({ maturity }: { maturity: ReturnType<typeof useDataGovernance>['adoptionMaturity'] }) {
+  const assessed = maturity.levelsPossible > 0;
+  return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-900">Adoption Maturity</span>
+          <span
+            className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300 cursor-help"
+            title="Self-reported maturity survey, human use-case scoring, and platform deployment inventory — not an AWS control measurement"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            Self-reported + inventory
+          </span>
+        </div>
+        {assessed && (
+          <span className="text-xs font-semibold text-slate-700">
+            {maturity.levelsAchieved} / {maturity.levelsPossible} levels
+            <span className="text-slate-400 font-normal"> ({maturity.pooledPct}%)</span>
+          </span>
+        )}
+      </div>
+      <div className="text-[11px] text-slate-500 mb-4">
+        How far along adoption is, scored 0-5 per dimension. Separate from the control-readiness
+        score above and deliberately not comparable to it.
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {maturity.dimensions.map(d => {
+          const pct = d.measured && d.maxScore > 0 ? Math.min(100, Math.round((d.score / d.maxScore) * 100)) : 0;
+          return (
+            <div key={d.id} className="border border-slate-100 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+                  <Icon name="chart-bar" className="w-3.5 h-3.5" />{d.name}
+                </span>
+                {d.measured ? (
+                  <span className={`text-xs font-bold ${d.score >= 4 ? 'text-emerald-600' : d.score >= 2 ? 'text-amber-600' : 'text-rose-600'}`}>
+                    Level {d.score}/{d.maxScore}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium text-slate-400">Not assessed</span>
+                )}
+              </div>
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all ${d.measured ? 'bg-indigo-500' : 'bg-transparent'}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="flex justify-between gap-2 text-[10px] mt-1.5">
+                <span className="text-slate-500">{d.source}</span>
+              </div>
+              <div className="text-[10px] text-slate-400">{d.sourceDetail}</div>
+            </div>
+          );
+        })}
+      </div>
+      {!assessed && (
+        <div className="text-[11px] text-slate-400 mt-3">
+          No maturity signals available yet — submit the self-assessment below or score use-case data readiness in Prioritization.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─────────────────────────── Lineage Tab ───────────────────────────
 
 function LineageTab() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ModuleCard mod={PRIMARY_MODULES.find(m => m.id === 'lineage')!} />
         <ModuleCard mod={PRIMARY_MODULES.find(m => m.id === 'agents')!} />
+        <ModuleCard mod={PRIMARY_MODULES.find(m => m.id === 'inventory')!} />
       </div>
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
         <p className="text-xs text-blue-800">
           <strong>Data Lineage</strong> tracks how data flows through your AI systems — from source through processing to output.
-          View caller origins, guardrail checkpoints, model inference, and response paths.
+          View caller origins, guardrail checkpoints, model inference, and response paths. The
+          <strong> AI Estate Inventory</strong> lists the tagged AWS resources those flows run on.
         </p>
       </div>
     </div>
@@ -561,88 +769,14 @@ function ModuleCard({ mod }: { mod: { id: string; path: string; label: string; d
   );
 }
 
-// ─────────────────────────── Setup Tab ───────────────────────────
-
-function SetupTab() {
-  return (
-    <div className="space-y-6">
-      {/* Maturity Assessment */}
-      <MaturityAssessment />
-
-      {/* How Data Protection Works */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-semibold text-slate-900">How Data Protection Works</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">BEDROCK GUARDRAILS</span>
-        </div>
-        <div className="text-[11px] text-slate-500 mb-4">
-          Every agent request flows through configured guardrails. PII is detected and masked before reaching the model. Harmful content is blocked. All events are logged for audit.
-        </div>
-        <div className="flex items-center gap-2 flex-wrap text-[11px]">
-          {[
-            { label: 'Agent Request', tone: 'bg-blue-50 text-blue-700 border-blue-200' },
-            { label: 'PII Detection', tone: 'bg-violet-50 text-violet-700 border-violet-200' },
-            { label: 'Content Filters', tone: 'bg-amber-50 text-amber-700 border-amber-200' },
-            { label: 'Bedrock Model', tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-            { label: 'Audit Log', tone: 'bg-slate-100 text-slate-600 border-slate-200' },
-          ].map((step, i, arr) => (
-            <div key={step.label} className="flex items-center gap-2">
-              <span className={`px-2.5 py-1 rounded-lg border font-medium ${step.tone}`}>{step.label}</span>
-              {i < arr.length - 1 && <span className="text-slate-300">→</span>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Getting Started Links */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900 mb-4">Getting Started</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center mb-2">1</div>
-            <div className="text-sm font-medium text-slate-800 mb-1">Configure Guardrails</div>
-            <p className="text-xs text-slate-500 mb-2">Set up Bedrock Guardrails to protect AI inputs/outputs with PII detection and content filters.</p>
-            <Link to="/secure/guardrails" className="text-xs text-blue-600 hover:text-blue-700 font-medium">Open Guardrails →</Link>
-          </div>
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center mb-2">2</div>
-            <div className="text-sm font-medium text-slate-800 mb-1">Assess Readiness</div>
-            <p className="text-xs text-slate-500 mb-2">Run the 7-dimension AI readiness assessment to identify gaps in your data governance posture.</p>
-            <Link to="/govern/data/readiness" className="text-xs text-blue-600 hover:text-blue-700 font-medium">Start Assessment →</Link>
-          </div>
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center mb-2">3</div>
-            <div className="text-sm font-medium text-slate-800 mb-1">Review Data Flows</div>
-            <p className="text-xs text-slate-500 mb-2">Visualize how data moves through your AI systems with lineage tracking and protection status.</p>
-            <Link to="/govern/data/lineage" className="text-xs text-blue-600 hover:text-blue-700 font-medium">View Lineage →</Link>
-          </div>
-        </div>
-      </div>
-
-      {/* AWS Services */}
-      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-        <p className="text-xs text-blue-800">
-          <strong>AWS Services Used:</strong> Bedrock Guardrails (PII/content protection), CloudTrail (AI caller tracking),
-          CloudWatch (invocation logs), AWS Config (compliance), Security Hub (findings). Optional: Glue Data Catalog,
-          Glue Data Quality, Amazon Macie, Neptune Analytics.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────── Maturity Assessment ───────────────────────────
 
 function MaturityAssessment() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [expanded, setExpanded] = useState(false);
 
-  const answered = Object.keys(answers).length;
-  const total = MATURITY_QUESTIONS.length;
-  const avgScore = answered > 0 ? Object.values(answers).reduce((s, v) => s + v, 0) / answered : 0;
-  const maturityLevel = useMemo(() =>
-    MATURITY_LEVELS.find(l => avgScore >= l.range[0] && avgScore <= l.range[1]) || MATURITY_LEVELS[0],
-  [avgScore]);
+  // Shared readiness/maturity engine: ONE consistent avgScore + level computation.
+  const { answered, total, avgScore, level: maturityLevel } = computeMaturityAssessment(answers);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">

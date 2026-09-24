@@ -55,15 +55,6 @@ const nodeIcons: Record<NodeType, IconName> = {
   deployment: 'rocket-launch',
 };
 
-// Text glyphs for use inside SVG <text> elements (no JSX components allowed there)
-const nodeGlyphs: Record<NodeType, string> = {
-  model: '⊙',
-  'use-case': '☰',
-  guardrail: '⛨',
-  'data-source': '⊗',
-  deployment: '▶',
-};
-
 export default function ModelDependencyGraph({ isOpen, onClose }: Props) {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'all' | 'model' | 'use-case'>('all');
@@ -389,9 +380,9 @@ export default function ModelDependencyGraph({ isOpen, onClose }: Props) {
                     <text x="30" y="32" fontSize="9" fill="#64748b">
                       {node.sublabel?.substring(0, 16) || ''}
                     </text>
-                    <text x="10" y="26" fontSize="14">
-                      {nodeGlyphs[node.type]}
-                    </text>
+                    <foreignObject x="8" y="12" width="16" height="16">
+                      <Icon name={nodeIcons[node.type]} className="w-4 h-4 text-slate-600" />
+                    </foreignObject>
                     {node.tier && (
                       <rect x="95" y="5" width="20" height="12" rx="3" fill={
                         node.tier === 'Tier 1' ? '#fecaca' : node.tier === 'Tier 2' ? '#fef3c7' : '#d1fae5'

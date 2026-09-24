@@ -1,0 +1,25 @@
+{
+  "customer_id": "CUST004",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 25000000,
+    "total_outflow": 18000000,
+    "average_monthly_volume": 1791667,
+    "transaction_count": 300
+  },
+  "top_counterparties": [
+    {
+      "name": "Private Equity Fund SPC",
+      "country": "Cayman Islands",
+      "volume": 10000000,
+      "type": "inflow"
+    }
+  ],
+  "geographic_distribution": {
+    "domestic": 60,
+    "international": 40
+  },
+  "high_risk_jurisdictions": [],
+  "suspicious_patterns": [],
+  "large_transactions_over_100k": 6
+}

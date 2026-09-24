@@ -12,23 +12,30 @@
 import { useState, useEffect } from 'react';
 import { useGovernanceAggregator } from './useGovernanceAggregator';
 import {
+  governCommandCenterApi, governAuditApi, multicloudApi,
   governCostApi, governPostureApi, governModelsApi, governRiskPostureApi, governTrailApi, governEvalsApi, governSecurityApi,
-  governInvocationSafetyApi, governAuditApi,
+  governInvocationSafetyApi, governDeveloperAiApi, governAgentCoreApi, complianceApi,
+  type CompliancePosture,
   type AwsCostModelBreakdown, type AwsConfigCompliance, type AwsModelMetricsResponse,
   type AwsRiskPostureResponse, type AwsAiCallersResponse, type AwsEvaluationJobsResponse,
   type AwsSecurityPostureResponse, type AwsInvocationSafetyResponse,
   type AwsBudgetsResponse, type AwsCostAnomalies, type GovernAuditEvent,
+  type PolicyEvaluationResult, type AwsAgentRuntimeMetricsResponse,
+  type MultiCloudAllAgents, type MultiCloudAgentInventory,
 } from '../../api/client';
 import type { ActivityFeedItem } from './useGovernanceAggregator';
 import { useGuardrailMetrics } from './useGuardrailMetrics';
 import { useLiveKPIs } from './useLiveKPIs';
+import { computeLayerReadiness } from './TrustStack3Layer';
 import LiveHeader from './LiveHeader';
 import { usePollingKey } from './usePollingKey';
 import { Icon, type IconName } from './icons';
 import { MiniStatCard } from './StatCard';
 import ScorecardStrip from './metrics/ScorecardStrip';
 import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
+import { RegionCoverageBadge, FloorCountBadge } from './RegionCoverageBadge';
 import AIQualityMonitor from './AIQualityMonitor';
+import { useDataSources } from './DataSourceContext';
 
 // ─────────────────────────── Platform Integration Data ───────────────────────────
 interface PlatformModule {
@@ -180,34 +187,143 @@ export default function GovernanceCommandCenter() {
   const [liveBudgets, setLiveBudgets] = useState<AwsBudgetsResponse | null>(null);
   const [liveAnomalies, setLiveAnomalies] = useState<AwsCostAnomalies | null>(null);
   const [liveAuditEvents, setLiveAuditEvents] = useState<GovernAuditEvent[] | null>(null);
+  const [liveMcAgents, setLiveMcAgents] = useState<MultiCloudAllAgents | null>(null);
+  const [livePolicyEval, setLivePolicyEval] = useState<PolicyEvaluationResult | null>(null);
+  const [liveObservability, setLiveObservability] = useState<AwsAgentRuntimeMetricsResponse | null>(null);
+  const [livePosture, setLivePosture] = useState<CompliancePosture | null>(null);
   const pollKey = usePollingKey(60_000);
+  const { updateSource } = useDataSources();
 
+  // Single aggregator call replaces 15 separate API calls
   useEffect(() => {
     let cancelled = false;
-    governCostApi.byModel(3).then(d => { if (!cancelled) setLiveCost(d); }).catch(() => {});
-    governInvocationSafetyApi.telemetry(7).then(d => { if (!cancelled) setLiveInvSafety(d); }).catch(() => {});
-    governPostureApi.configCompliance().then(d => { if (!cancelled) setLiveConfig(d); }).catch(() => {});
-    governModelsApi.runtimeMetrics(7).then(d => { if (!cancelled) setLiveRuntime(d); }).catch(() => {});
-    governRiskPostureApi.securityHub(200).then(d => { if (!cancelled) setLiveRisk(d); }).catch(() => {});
-    governTrailApi.aiCallers(168).then(d => { if (!cancelled) setLiveCallers(d); }).catch(() => {});
-    governEvalsApi.jobs(100).then(d => { if (!cancelled) setLiveEvals(d); }).catch(() => {});
-    governSecurityApi.posture().then(d => { if (!cancelled) setLiveSecurity(d); }).catch(() => {});
-    governCostApi.budgets().then(d => { if (!cancelled) setLiveBudgets(d); }).catch(() => {});
-    governCostApi.anomalies(60).then(d => { if (!cancelled) setLiveAnomalies(d); }).catch(() => {});
-    governAuditApi.list(undefined, 20).then(d => { if (!cancelled) setLiveAuditEvents(d); }).catch(() => {});
+    const now = Date.now();
+
+    governCommandCenterApi.getData()
+      .then(data => {
+        if (cancelled) return;
+
+        // Distribute aggregated data to state
+        if (data.security_posture) {
+          setLiveSecurity(data.security_posture as AwsSecurityPostureResponse);
+          if (data.security_posture.live) updateSource('aws-security-hub', { status: 'live', lastFetch: now });
+        }
+        if (data.runtime_metrics) {
+          setLiveRuntime(data.runtime_metrics as AwsModelMetricsResponse);
+          if (data.runtime_metrics.live) updateSource('aws-cloudwatch', { status: 'live', lastFetch: now });
+        }
+        if (data.config_compliance) {
+          setLiveConfig(data.config_compliance as AwsConfigCompliance);
+          if (data.config_compliance.live) updateSource('aws-config', { status: 'live', lastFetch: now });
+        }
+        if (data.risk_posture) {
+          setLiveRisk(data.risk_posture as AwsRiskPostureResponse);
+        }
+        if (data.ai_callers) {
+          setLiveCallers(data.ai_callers as AwsAiCallersResponse);
+          if (data.ai_callers.live) updateSource('aws-cloudtrail', { status: 'live', lastFetch: now });
+        }
+        if (data.eval_jobs) {
+          setLiveEvals(data.eval_jobs as AwsEvaluationJobsResponse);
+          if (data.eval_jobs.live) updateSource('aws-bedrock', { status: 'live', lastFetch: now });
+        }
+        if (data.invocation_safety) {
+          setLiveInvSafety(data.invocation_safety as AwsInvocationSafetyResponse);
+        }
+        if (data.cost_by_model) {
+          setLiveCost(data.cost_by_model as AwsCostModelBreakdown);
+          if (data.cost_by_model.live) updateSource('aws-cost-explorer', { status: 'live', lastFetch: now });
+        }
+        if (data.budgets) {
+          setLiveBudgets(data.budgets as AwsBudgetsResponse);
+        }
+        if (data.anomalies) {
+          setLiveAnomalies(data.anomalies as AwsCostAnomalies);
+        }
+        if (data.agent_metrics) {
+          setLiveObservability(data.agent_metrics as AwsAgentRuntimeMetricsResponse);
+        }
+        if (data.policy_eval) {
+          setLivePolicyEval(data.policy_eval as PolicyEvaluationResult);
+        }
+      })
+      .catch(() => {
+        // Fallback: if aggregator fails, use individual calls with staggered loading
+        console.warn('Command center aggregator unavailable, falling back to individual calls');
+
+        governSecurityApi.posture().then(d => {
+          if (!cancelled) { setLiveSecurity(d); if (d?.live) updateSource('aws-security-hub', { status: 'live', lastFetch: now }); }
+        }).catch(() => {});
+        governDeveloperAiApi.evaluatePolicy('default', 7).then(d => { if (!cancelled) setLivePolicyEval(d); }).catch(() => {});
+        governModelsApi.runtimeMetrics(7).then(d => {
+          if (!cancelled) { setLiveRuntime(d); if (d?.live) updateSource('aws-cloudwatch', { status: 'live', lastFetch: now }); }
+        }).catch(() => {});
+        governInvocationSafetyApi.telemetry(7).then(d => { if (!cancelled) setLiveInvSafety(d); }).catch(() => {});
+
+        setTimeout(() => {
+          if (cancelled) return;
+          governRiskPostureApi.securityHub(200).then(d => { if (!cancelled) setLiveRisk(d); }).catch(() => {});
+          governTrailApi.aiCallers(168).then(d => { if (!cancelled) setLiveCallers(d); }).catch(() => {});
+          governEvalsApi.jobs(100).then(d => { if (!cancelled) setLiveEvals(d); }).catch(() => {});
+          governPostureApi.configCompliance().then(d => { if (!cancelled) setLiveConfig(d); }).catch(() => {});
+        }, 250);
+
+        setTimeout(() => {
+          if (cancelled) return;
+          governCostApi.byModel(3).then(d => { if (!cancelled) setLiveCost(d); }).catch(() => {});
+          governCostApi.budgets().then(d => { if (!cancelled) setLiveBudgets(d); }).catch(() => {});
+          governCostApi.anomalies(60).then(d => { if (!cancelled) setLiveAnomalies(d); }).catch(() => {});
+          governAgentCoreApi.agentMetrics(7).then(d => { if (!cancelled) setLiveObservability(d); }).catch(() => {});
+        }, 500);
+      });
+
+    return () => { cancelled = true; };
+  }, [pollKey, updateSource]);
+
+  // Recent Activity feed + External Agents inventory — live from their own APIs.
+  // Each degrades independently: a failure leaves the mock fallback in place.
+  useEffect(() => {
+    let cancelled = false;
+    governAuditApi.list()
+      .then(events => { if (!cancelled) setLiveAuditEvents(events); })
+      .catch(() => { /* keep mock activityFeed */ });
+    multicloudApi.allAgents()
+      .then(data => { if (!cancelled) setLiveMcAgents(data); })
+      .catch(() => { /* keep mock external-agent literals */ });
+    // LIVE compliance posture — per-framework coverage for the Compliance card bars.
+    complianceApi.getPosture()
+      .then(p => { if (!cancelled) setLivePosture(p); })
+      .catch(() => { /* keep mock COMPLIANCE_FRAMEWORKS bars */ });
     return () => { cancelled = true; };
   }, [pollKey]);
 
+  const aggResult = useGovernanceAggregator();
   const {
-    loading: aggLoading,
     error: aggError,
-    summary,
+    summary: rawSummary,
     activityFeed,
     complianceFrameworks,
+    complianceAssurance,
     costByModel,
-    buBudgets,
     refresh: refreshAggregator,
-  } = useGovernanceAggregator();
+  } = aggResult;
+
+  // Default summary for progressive loading (avoids null checks everywhere)
+  const summary = rawSummary ?? {
+    controlsImplemented: 0,
+    controlsTotal: 1,
+    frameworksNeedingAttention: [],
+    totalUseCases: 0,
+    totalAgents: 0,
+    deploymentsActive: 0,
+    deploymentsPending: 0,
+    deploymentsFailed: 0,
+    deployedUseCases: 0,
+    agentsWithPolicies: 0,
+    monthlySpend: 0,
+    costAnomalies: 0,
+    criticalIncidents: 0,
+  };
 
   const {
     error: guardrailError,
@@ -217,23 +333,12 @@ export default function GovernanceCommandCenter() {
     refresh: refreshGuardrails,
   } = useGuardrailMetrics();
 
-  const loading = aggLoading;
-
   const refresh = () => {
     refreshAggregator();
     refreshGuardrails();
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-          <div className="text-slate-500">Loading governance data...</div>
-        </div>
-      </div>
-    );
-  }
+  // No blocking spinner - show skeleton tiles immediately, data fills in progressively
 
   if (aggError) {
     return (
@@ -248,21 +353,164 @@ export default function GovernanceCommandCenter() {
   const effectiveGuardrailsFailed = guardrailError ? 0 : guardrailsFailed;
   const compliancePct = Math.round((summary.controlsImplemented / summary.controlsTotal) * 100);
 
+  // Compliance card bars — LIVE from complianceApi.getPosture(), mock
+  // COMPLIANCE_FRAMEWORKS fallback. A successful posture with at least one framework is
+  // treated as live (mirrors the aggregator's rule); the 80% threshold matches the mock's
+  // 'on-track' cut.
+  //
+  // The bar renders ASSESSED COVERAGE (assessed_pct), not coverage_pct. coverage_pct is a
+  // pass rate over assessed controls ONLY, so SR 26-2 reports 100 there off 2 of its 16
+  // controls — a full green bar labelled "SR 26-2" on the executive dashboard for a
+  // framework that has barely been looked at. client.ts states the contract on the field:
+  // "Never render this without assessed_count beside it; for true coverage use
+  // assessed_pct." The pass rate moves into the row tooltip where it keeps its denominator.
+  const complianceLive = !!livePosture && livePosture.frameworks.length > 0;
+  const frameworkBars: { name: string; pct: number; status: 'on-track' | 'attention'; title?: string }[] = complianceLive
+    ? livePosture!.frameworks.map(f => {
+        const assessed = f.assessed_count ?? 0;
+        const pct = Math.round(f.assessed_pct ?? (f.total_controls > 0 ? (assessed / f.total_controls) * 100 : 0));
+        return {
+          name: f.framework_name,
+          pct,
+          status: (pct >= 80 ? 'on-track' : 'attention') as 'on-track' | 'attention',
+          title: assessed > 0
+            ? `${assessed} of ${f.total_controls} controls assessed (${pct}%). ${Math.round(f.coverage_pct)}% of those assessed pass. The other ${f.total_controls - assessed} were never looked at, which is not the same as failing.`
+            : `0 of ${f.total_controls} controls assessed. Nothing has been attested for this framework — not assessed is not the same as failing.`,
+        };
+      })
+    : complianceFrameworks.map(f => ({
+        name: f.name,
+        pct: Math.round((f.covered / f.total) * 100),
+        status: f.status,
+      }));
+
   const secLive = liveSecurity?.live ? liveSecurity : null;
   const riskCrit = secLive ? secLive.critical : (liveRisk?.live ? liveRisk.critical : null);
+  // Same nullable shape as riskCrit, and it exists so the Security Findings grid below can
+  // render Critical and High the way Medium and Low already did. Those four tiles sit in one
+  // grid-cols-4 and disagreed about what an unmeasured severity looks like: Medium/Low went
+  // through riskBySeverity() -> null -> a grey "—", while Critical/High re-derived the count
+  // inline as `secLive?.critical ?? liveRisk?.critical ?? 0` and printed a bold coloured 0.
+  // So an account with no Security Hub access read "0 Critical · 0 High · — Medium · — Low",
+  // where the two dashes actively imply the two zeros WERE measured. Worse than a plain
+  // fabricated number, and on the executive view. riskCrit was already correct and already
+  // rendered as "—" by the KPI tile at the top of this same component - the grid simply did
+  // not use it.
+  const riskHigh = secLive ? secLive.high : (liveRisk?.live ? liveRisk.high : null);
   const riskSub = secLive
     ? `critical · ${secLive.high} high · ${secLive.total_findings} findings (${secLive.sources_live} AWS security services)`
     : (liveRisk?.live ? `critical · ${liveRisk.high} high (Security Hub)` : 'Security Hub unavailable');
   const riskLive = !!secLive || !!liveRisk?.live;
+  // Security Hub risk posture reports a full severity breakdown (CRITICAL..LOW);
+  // read MEDIUM/LOW from it when live, else leave the "—" placeholder.
+  const riskBySeverity = (sev: string): number | null =>
+    liveRisk?.live ? (liveRisk.by_severity.find(s => s.severity === sev)?.count ?? 0) : null;
+  const mediumFindings = riskBySeverity('MEDIUM');
+  const lowFindings = riskBySeverity('LOW');
+  // External Agents: the card badge is Live when ANY multi-cloud/SaaS connector
+  // reports live. Under a Live card each provider tile must show its own real
+  // total, or "—" when that connector is not live — never a fabricated literal.
+  // Only when the whole card is Mock-badged (no connector live) do the
+  // illustrative literals show, disclosed by the MockDataBadge.
+  const mcInventories = liveMcAgents
+    ? [liveMcAgents.azure, liveMcAgents.gcp, liveMcAgents.salesforce, liveMcAgents.copilot_studio, liveMcAgents.servicenow]
+    : [];
+  const multicloudAgentsLive = mcInventories.some(p => p.live);
+  // Real external-agent total: sum of the connectors that actually reported live.
+  // `useLiveKPIs.externalAgents` has no multi-cloud source of its own, so it must not be
+  // rendered here — it would print an unsourced constant under a Live badge.
+  const mcLiveConnectors = mcInventories.filter(p => p.live);
+  const externalAgentsTotal = mcLiveConnectors.reduce((sum, p) => sum + p.total, 0);
+  const mcAgentCell = (inv: MultiCloudAgentInventory | undefined, illustrative: number): number | '—' =>
+    multicloudAgentsLive ? (inv?.live ? inv.total : '—') : illustrative;
+  const awsAgentCell: number | '—' = multicloudAgentsLive ? (liveFlags.agents ? liveKpis.bedrockAgents : '—') : 12;
+  const azureAgentsCell = mcAgentCell(liveMcAgents?.azure, 8);
+  const gcpAgentsCell = mcAgentCell(liveMcAgents?.gcp, 5);
+  const salesforceAgentsCell = mcAgentCell(liveMcAgents?.salesforce, 8);
+  const copilotAgentsCell = mcAgentCell(liveMcAgents?.copilot_studio, 12);
+  // ServiceNow is the fifth connector in MultiCloudAllAgents and the only one not broken
+  // out into its own tile. That tile used to render a literal "+3 / more", implying three
+  // further providers that do not exist in the payload at all — a fabricated count on the
+  // Live path AND the Mock path. There is no illustrative literal for ServiceNow anywhere
+  // in the codebase and one is deliberately NOT invented here: this cell shows the real
+  // total when the connector is live and "—" otherwise, in every state. Do not "complete
+  // the set" by giving it a number.
+  const servicenowAgentsCell: number | '—' = liveMcAgents?.servicenow.live ? liveMcAgents.servicenow.total : '—';
   const runtimeInv = liveRuntime?.live ? liveRuntime.total_invocations : null;
   const runtimeErr = liveRuntime?.live ? liveRuntime.fleet_error_rate_pct : 0;
   const unrecognizedCallers = liveCallers?.live ? liveCallers.unrecognized : null;
   const evalsDone = liveEvals?.live ? liveEvals.completed : null;
   const interventions = liveInvSafety?.live ? liveInvSafety.guardrail_intervened : null;
   const compact = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : `${n}`;
+  const usdCompact = (n: number) => `$${compact(Math.round(n))}`;
+
+  // Budgets card — LIVE AWS Budgets (DescribeBudgets) only. Renders real budget rows
+  // when connected, otherwise an honest degraded state. No mock BU-budget fallback.
+  const budgetsLive = !!liveBudgets?.live && liveBudgets.budgets.length > 0;
+
+  // Policy violation counts — gated on livePolicyEval.live, NOT on the payload merely
+  // existing. The policy-evaluate endpoint answers with live=false and zeroed counts when
+  // it cannot read the events it evaluates, so `livePolicyEval?.blocked_count ?? 0` and
+  // `livePolicyEval ? total : '—'` rendered "0 violations · 0 blocked · 0 review" — a
+  // clean bill of health — for an estate that was never examined, and rendered it beside
+  // the Live banner. Verified against the running backend: setting policy_eval.live=false
+  // still produced a green 0 with no live dot. A degraded engine now renders "—" like
+  // every other tile in this row, and cannot raise the alert banner above.
+  const policyLive = !!livePolicyEval?.live;
+  const policyBlocked = policyLive ? livePolicyEval!.blocked_count : 0;
+  const policyReview = policyLive ? livePolicyEval!.review_count : 0;
+  const policyViolationTotal = policyLive ? (livePolicyEval!.violations?.length ?? 0) : null;
+  const hasPolicyAlerts = policyBlocked > 0 || policyReview > 0;
+
+  // Health banner asserts "Live" only when at least one of its five tiles actually has
+  // live data; otherwise it degrades to an honest, non-Live state.
+  //
+  // The caption is derived from the SAME five flags rather than naming a fixed source
+  // list. It used to read "Security Hub · CloudWatch · CloudTrail · Bedrock evals &
+  // guardrails" unconditionally, which named four sources beside a "Live" label while
+  // three of them could be dark — the caption asserted connectivity the tiles below were
+  // simultaneously denying with "—". Only sources whose own tile is live are listed, so
+  // the caption can never name a source that is not answering.
+  const healthSources: string[] = [];
+  if (policyLive) healthSources.push('Policy engine');
+  if (riskLive) healthSources.push('Security Hub');
+  if (liveRuntime?.live) healthSources.push('CloudWatch');
+  if (liveCallers?.live) healthSources.push('CloudTrail');
+  if (liveInvSafety?.live) healthSources.push('Bedrock invocation logs & guardrails');
+  const healthLive = healthSources.length > 0;
+  const healthCaption = healthLive
+    ? `${healthSources.join(' · ')} · ${healthSources.length} of 5 sources answering`
+    : 'No source answered — connect Security Hub, CloudWatch, CloudTrail, or Bedrock invocation logging';
 
   return (
     <div className="space-y-6">
+      {/* Policy Violation Alert Banner */}
+      {hasPolicyAlerts && (
+        <a
+          href="/govern/dev-tools?tab=policies"
+          className={`flex items-center justify-between px-4 py-2 rounded-lg border transition-colors ${
+            policyBlocked > 0
+              ? 'bg-rose-50 border-rose-200 hover:bg-rose-100'
+              : 'bg-amber-50 border-amber-200 hover:bg-amber-100'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Icon
+              name="exclamation-triangle"
+              className={`w-4 h-4 ${policyBlocked > 0 ? 'text-rose-600' : 'text-amber-600'}`}
+            />
+            <span className={`text-sm font-medium ${policyBlocked > 0 ? 'text-rose-800' : 'text-amber-800'}`}>
+              {policyBlocked > 0 && <span>{policyBlocked} blocked event{policyBlocked !== 1 ? 's' : ''}</span>}
+              {policyBlocked > 0 && policyReview > 0 && <span>, </span>}
+              {policyReview > 0 && <span>{policyReview} requiring review</span>}
+            </span>
+          </div>
+          <span className={`text-xs font-medium ${policyBlocked > 0 ? 'text-rose-600' : 'text-amber-600'}`}>
+            View details
+          </span>
+        </a>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════════════════════
           ZONE 1: HEALTH — "Is everything okay?"
           Live AWS metrics + AI Quality Monitor
@@ -277,21 +525,36 @@ export default function GovernanceCommandCenter() {
           />
           <button
             onClick={refresh}
-            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[10px] font-medium text-slate-700 border border-slate-200 transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[10px] font-medium text-slate-700 border border-slate-200 transition-colors"
           >
-            ↻ Refresh All
+            <Icon name="arrow-path" className="w-3 h-3" strokeWidth={2} />
+            Refresh All
           </button>
         </div>
 
         {/* Live AWS Tiles */}
         <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/50 via-white to-white p-4 shadow-sm">
           <LiveHeader
-            live
-            label="Live · from your AWS account"
-            caption="Security Hub · CloudWatch · CloudTrail · Bedrock evals & guardrails"
+            live={healthLive}
+            label={healthLive ? 'Live · from your AWS account' : 'AWS account not connected'}
+            caption={healthCaption}
             autoRefresh
           />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <a href="/govern/dev-tools?tab=policies" className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 hover:shadow-md hover:border-slate-300 transition-all">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Policy Violations</span>
+                {policyLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Live" />}
+              </div>
+              <div className={`text-2xl font-bold tabular-nums ${policyViolationTotal === null ? 'text-slate-400' : policyViolationTotal > 0 ? (policyBlocked > 0 ? 'text-rose-600' : 'text-amber-600') : 'text-emerald-600'}`}>
+                {policyViolationTotal === null ? '—' : String(policyViolationTotal)}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                {policyLive
+                  ? `${policyBlocked} blocked · ${policyReview} review`
+                  : 'Policy engine unavailable'}
+              </div>
+            </a>
             <a href="/govern/risk?tab=monitoring" className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 hover:shadow-md hover:border-slate-300 transition-all">
               <div className="flex items-center gap-1.5 mb-1">
                 <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Security Posture</span>
@@ -343,8 +606,21 @@ export default function GovernanceCommandCenter() {
           </div>
         </div>
 
-        {/* AI Quality Monitor */}
-        <AIQualityMonitor compact />
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════════════════
+          ZONE 1b: AI QUALITY — model quality, drift, latency & evaluation signals
+          ═══════════════════════════════════════════════════════════════════════════════ */}
+      <section className="space-y-4">
+        <ZoneHeader
+          icon="sparkles"
+          title="AI Quality"
+          description="Model quality, drift, latency, and evaluation signals"
+          color="bg-violet-500"
+        />
+        <div className="bg-white/80 rounded-xl border border-slate-200/60 p-4 shadow-sm">
+          <AIQualityMonitor compact />
+        </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════════════
@@ -366,31 +642,75 @@ export default function GovernanceCommandCenter() {
                 <Icon name="document-check" className="w-4 h-4 text-indigo-600" />
                 <span className="text-sm font-semibold text-slate-800">Compliance</span>
                 {summary.frameworksNeedingAttention.length > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">
+                  /* This badge and the bars below it now measure the same quantity —
+                     assessed coverage under 80% — so the count always matches the number of
+                     amber bars. The aggregator previously selected on coverage_pct (pass
+                     rate over ASSESSED controls), which meant a framework could sit at 13%
+                     on its bar and still not be counted here because the two controls it
+                     had assessed both passed. */
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium"
+                    title={complianceAssurance
+                      ? 'Frameworks where fewer than 80% of the controls have been assessed at all — the same measure the bars below show. A framework whose few assessed controls all pass still needs attention: the rest were never looked at.'
+                      : undefined}
+                  >
                     {summary.frameworksNeedingAttention.length} need attention
                   </span>
                 )}
+                {complianceLive
+                  ? <LiveDataBadge source="Compliance posture" detail="Live per-framework coverage from complianceApi.getPosture()" />
+                  : <MockDataBadge integration="Compliance framework control mapping (GRC / Audit Manager)" />}
               </div>
               <a href="/govern/compliance" className="text-[10px] text-blue-600 hover:text-blue-800 font-medium">View →</a>
             </div>
             <div className="space-y-2">
-              {complianceFrameworks.slice(0, 4).map((fw, i) => {
-                const pct = Math.round((fw.covered / fw.total) * 100);
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="w-20 text-[10px] text-slate-700 truncate font-medium">{fw.name}</div>
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: fw.status === 'on-track' ? '#10b981' : '#f59e0b' }} />
-                    </div>
-                    <div className="w-8 text-right text-[10px] font-semibold text-slate-600">{pct}%</div>
+              {frameworkBars.slice(0, 4).map((fw, i) => (
+                <div key={i} className="flex items-center gap-2" title={fw.title}>
+                  <div className="w-20 text-[10px] text-slate-700 truncate font-medium">{fw.name}</div>
+                  <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${fw.pct}%`, background: fw.status === 'on-track' ? '#10b981' : '#f59e0b' }} />
                   </div>
-                );
-              })}
+                  <div className="w-8 text-right text-[10px] font-semibold text-slate-600">{fw.pct}%</div>
+                </div>
+              ))}
             </div>
             <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
               <span className="text-[10px] text-slate-500">{summary.controlsImplemented}/{summary.controlsTotal} controls</span>
-              <span className="text-xs font-bold text-slate-800">{compliancePct}%</span>
+              <span
+                className="text-xs font-bold text-slate-800"
+                title={`Controls with a passing attestation as a share of all ${summary.controlsTotal} controls across every mapped framework.`}
+              >
+                {compliancePct}%
+              </span>
             </div>
+            {/* The one disclosure this card owes an executive: those passing controls were
+                FOUND, not TESTED. Every assessed control is an automated existence probe —
+                the probe asks whether the AWS resource a control depends on is present and
+                then marks the control pass. Without this line, "24/281 controls · 9%" under
+                a Live badge reads as 24 controls verified working, and the four framework
+                bars above read as measured programme coverage. Numbers come from the same
+                getPosture() payload as the counts they qualify (aggregator
+                complianceAssurance), so they can never drift apart; the block is absent
+                entirely on the mock path, because the mock has no notion of "assessed". */}
+            {complianceAssurance && (
+              <div
+                className="mt-2 flex items-start gap-1.5"
+                title={
+                  `An existence probe asks whether the AWS resource a control depends on is present, then marks the control pass. ` +
+                  `Two CloudTrail trails existing is enough to pass NIST AI RMF MANAGE 3.1 — nothing checks what those trails cover, ` +
+                  `whether they are retained, or whether anyone reads them. Read a passing control as "the prerequisite exists", never as ` +
+                  `"this control was tested and works". ${complianceAssurance.autoDetectedControls} of the ${complianceAssurance.assessedControls} assessed controls were set this way rather than by human attestation. ` +
+                  `The other ${complianceAssurance.notAssessedControls} of ${complianceAssurance.totalControls} controls are not assessed, which is not the same as failing.`
+                }
+              >
+                <Icon name="information-circle" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-px" />
+                <span className="text-[10px] text-slate-500 leading-snug">
+                  {complianceAssurance.assessedControls} of {complianceAssurance.totalControls} controls assessed
+                  {' '}({complianceAssurance.assessedPct}%) · {complianceAssurance.autoDetectedControls} set by automated
+                  {' '}existence probes, not efficacy tests
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Security Findings */}
@@ -399,25 +719,30 @@ export default function GovernanceCommandCenter() {
               <div className="flex items-center gap-2">
                 <Icon name="exclamation-triangle" className="w-4 h-4 text-rose-600" />
                 <span className="text-sm font-semibold text-slate-800">Security Findings</span>
-                {riskLive && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">LIVE</span>}
+                {riskLive && <LiveDataBadge source="AWS Security Hub" detail="Live risk posture from AWS security services" />}
+                {/* When the Security Hub scan hit its limit, every severity tile below is
+                    a floor. That matters most here: "0 Critical" out of a truncated scan
+                    is not "no critical findings", and this is the executive view. */}
+                <FloorCountBadge truncated={liveRisk?.truncated} scanned={liveRisk?.scanned} noun="findings" />
+                <RegionCoverageBadge regions={liveRisk?.regions} noun="Finding counts" />
               </div>
               <a href="/govern/risk" className="text-[10px] text-blue-600 hover:text-blue-800 font-medium">View →</a>
             </div>
             <div className="grid grid-cols-4 gap-2 mb-3">
-              <div className="text-center p-2 rounded-lg bg-rose-50 border border-rose-200/60">
-                <div className="text-lg font-bold text-rose-700">{secLive?.critical ?? liveRisk?.critical ?? 0}</div>
+              <div className="text-center p-2 rounded-lg bg-rose-50 border border-rose-200/60" title={riskCrit != null ? 'Critical-severity findings (AWS security services)' : 'Security Hub risk posture unavailable'}>
+                <div className={`text-lg font-bold ${riskCrit != null ? 'text-rose-700' : 'text-slate-300'}`}>{riskCrit != null ? riskCrit : '—'}</div>
                 <div className="text-[9px] text-slate-600 font-medium">Critical</div>
               </div>
-              <div className="text-center p-2 rounded-lg bg-amber-50 border border-amber-200/60">
-                <div className="text-lg font-bold text-amber-700">{secLive?.high ?? liveRisk?.high ?? 0}</div>
+              <div className="text-center p-2 rounded-lg bg-amber-50 border border-amber-200/60" title={riskHigh != null ? 'High-severity findings (AWS security services)' : 'Security Hub risk posture unavailable'}>
+                <div className={`text-lg font-bold ${riskHigh != null ? 'text-amber-700' : 'text-slate-300'}`}>{riskHigh != null ? riskHigh : '—'}</div>
                 <div className="text-[9px] text-slate-600 font-medium">High</div>
               </div>
-              <div className="text-center p-2 rounded-lg bg-blue-50 border border-blue-200/60">
-                <div className="text-lg font-bold text-blue-700">{secLive?.medium ?? liveRisk?.medium ?? 0}</div>
+              <div className="text-center p-2 rounded-lg bg-blue-50 border border-blue-200/60" title={mediumFindings != null ? 'Medium-severity findings (AWS Security Hub)' : 'Security Hub risk posture unavailable'}>
+                <div className={`text-lg font-bold ${mediumFindings != null ? 'text-blue-700' : 'text-slate-300'}`}>{mediumFindings != null ? mediumFindings : '—'}</div>
                 <div className="text-[9px] text-slate-600 font-medium">Medium</div>
               </div>
-              <div className="text-center p-2 rounded-lg bg-slate-100 border border-slate-200/60">
-                <div className="text-lg font-bold text-slate-700">{secLive?.low ?? liveRisk?.low ?? 0}</div>
+              <div className="text-center p-2 rounded-lg bg-slate-100 border border-slate-200/60" title={lowFindings != null ? 'Low-severity findings (AWS Security Hub)' : 'Security Hub risk posture unavailable'}>
+                <div className={`text-lg font-bold ${lowFindings != null ? 'text-slate-700' : 'text-slate-300'}`}>{lowFindings != null ? lowFindings : '—'}</div>
                 <div className="text-[9px] text-slate-600 font-medium">Low</div>
               </div>
             </div>
@@ -436,6 +761,7 @@ export default function GovernanceCommandCenter() {
                 <Icon name="building-office" className="w-4 h-4 text-violet-600" />
                 <span className="text-sm font-semibold text-slate-800">Vendors</span>
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">TPRM</span>
+                <MockDataBadge integration="Third-party risk management (TPRM) feed" />
               </div>
               <a href="/govern/risk?tab=third-party" className="text-[10px] text-blue-600 hover:text-blue-800 font-medium">View →</a>
             </div>
@@ -495,7 +821,10 @@ export default function GovernanceCommandCenter() {
             <div className="w-px h-5 bg-slate-200" />
             <a href="/govern/agents" className="flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-white hover:shadow-sm transition-all border border-transparent hover:border-slate-200">
               <Icon name="globe-alt" className="w-4 h-4 text-cyan-500" />
-              <span className="text-slate-800 font-semibold text-sm">{liveKpis.externalAgents}</span>
+              {/* Honesty gate: only the summed live connector inventories are shown; otherwise a Mock badge. */}
+              {multicloudAgentsLive
+                ? <span className="text-slate-800 font-semibold text-sm">{externalAgentsTotal}</span>
+                : <MockDataBadge integration="Multi-cloud/SaaS agent inventory" />}
               <span className="text-slate-500 text-[10px]">External</span>
             </a>
             <div className="w-px h-5 bg-slate-200" />
@@ -554,40 +883,46 @@ export default function GovernanceCommandCenter() {
               <div className="flex items-center gap-2">
                 <Icon name="globe-alt" className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-semibold text-slate-800">External Agents</span>
+                {multicloudAgentsLive
+                  ? <LiveDataBadge source="Multi-cloud connectors" detail="Live agent inventory from configured cloud/SaaS connectors" />
+                  : <MockDataBadge integration="Multi-cloud/SaaS agent inventory" />}
               </div>
               <a href="/govern/agents" className="text-[10px] text-blue-600 hover:text-blue-800 font-medium">View →</a>
             </div>
             <div className="grid grid-cols-3 gap-2 mb-2">
               <div className="p-2 rounded-lg bg-orange-50 border border-orange-200/60 text-center">
-                <div className="text-lg font-bold text-slate-900">{liveFlags.agents ? liveKpis.bedrockAgents : 12}</div>
+                <div className={`text-lg font-bold ${awsAgentCell === '—' ? 'text-slate-300' : 'text-slate-900'}`}>{awsAgentCell}</div>
                 <div className="text-[9px] text-orange-700 font-semibold">AWS</div>
               </div>
               <div className="p-2 rounded-lg bg-blue-50 border border-blue-200/60 text-center">
-                <div className="text-lg font-bold text-slate-900">8</div>
+                <div className={`text-lg font-bold ${azureAgentsCell === '—' ? 'text-slate-300' : 'text-slate-900'}`}>{azureAgentsCell}</div>
                 <div className="text-[9px] text-blue-700 font-semibold">Azure</div>
               </div>
               <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-200/60 text-center">
-                <div className="text-lg font-bold text-slate-900">5</div>
+                <div className={`text-lg font-bold ${gcpAgentsCell === '—' ? 'text-slate-300' : 'text-slate-900'}`}>{gcpAgentsCell}</div>
                 <div className="text-[9px] text-indigo-700 font-semibold">GCP</div>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="p-2 rounded-lg bg-cyan-50 border border-cyan-200/60 text-center">
-                <div className="text-lg font-bold text-slate-900">8</div>
+                <div className={`text-lg font-bold ${salesforceAgentsCell === '—' ? 'text-slate-300' : 'text-slate-900'}`}>{salesforceAgentsCell}</div>
                 <div className="text-[9px] text-cyan-700 font-semibold">Salesforce</div>
               </div>
               <div className="p-2 rounded-lg bg-purple-50 border border-purple-200/60 text-center">
-                <div className="text-lg font-bold text-slate-900">12</div>
+                <div className={`text-lg font-bold ${copilotAgentsCell === '—' ? 'text-slate-300' : 'text-slate-900'}`}>{copilotAgentsCell}</div>
                 <div className="text-[9px] text-purple-700 font-semibold">Copilot</div>
               </div>
-              <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/60 text-center">
-                <div className="text-lg font-bold text-slate-400">+3</div>
-                <div className="text-[9px] text-slate-500 font-semibold">more</div>
+              <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/60 text-center" title={servicenowAgentsCell === '—' ? (liveMcAgents?.servicenow.note ?? 'ServiceNow connector not connected') : 'Live ServiceNow AI Agent Studio inventory'}>
+                <div className={`text-lg font-bold ${servicenowAgentsCell === '—' ? 'text-slate-300' : 'text-slate-900'}`}>{servicenowAgentsCell}</div>
+                <div className="text-[9px] text-slate-500 font-semibold">ServiceNow</div>
               </div>
             </div>
             <div className="flex items-center justify-between text-[10px] pt-2 mt-2 border-t border-slate-200/60">
-              <span className="text-slate-600">Total: <span className="font-bold">{liveKpis.externalAgents}</span></span>
-              <span className="text-emerald-600 font-bold">{liveKpis.governedPct}% governed</span>
+              {/* Total = sum of live connector inventories. The old "% governed" here rendered
+                  `liveKpis.governedPct`, which measures AWS resource-tag coverage and says nothing
+                  about external agents — replaced with the connector count, which is real. */}
+              <span className="text-slate-600">Total: <span className="font-bold">{multicloudAgentsLive ? externalAgentsTotal : '—'}</span></span>
+              <span className="text-slate-600">{multicloudAgentsLive ? `${mcLiveConnectors.length} of ${mcInventories.length} connectors live` : 'No connector live'}</span>
             </div>
           </div>
 
@@ -606,14 +941,13 @@ export default function GovernanceCommandCenter() {
               <a href="/govern/trust-stack" className="text-[10px] text-blue-600 hover:text-blue-800 font-medium">View →</a>
             </div>
             {(() => {
-              // L1 Foundation: % of guardrails active + governed agents (proxy for KB/Tools coverage)
-              const totalGuardrails = effectiveGuardrailsActive + effectiveGuardrailsDraft + effectiveGuardrailsFailed;
-              const guardrailHealth = totalGuardrails > 0 ? Math.round((effectiveGuardrailsActive / totalGuardrails) * 100) : 0;
-              const foundationPct = Math.round((guardrailHealth + liveKpis.governedPct) / 2); // avg of guardrail health + governed %
-              // L2 Production: deployed use cases
-              const productionPct = summary.totalUseCases > 0 ? Math.round((summary.deployedUseCases / summary.totalUseCases) * 100) : 0;
-              // L3 Scale: agents with policies
-              const scalePct = summary.totalAgents > 0 ? Math.round((summary.agentsWithPolicies / summary.totalAgents) * 100) : 0;
+              // Single source of truth: grade the 3 Trust Stack layers with the SAME
+              // computeLayerReadiness() the dedicated /govern/trust-stack page uses, so
+              // Foundation/Production/Scale % no longer diverge between the two surfaces.
+              const readiness = computeLayerReadiness(aggResult);
+              const foundationPct = readiness[1].score;
+              const productionPct = readiness[2].score;
+              const scalePct = readiness[3].score;
               return (
                 <div className="grid grid-cols-3 gap-2">
                   <div className="text-center p-2 bg-white/60 rounded-lg">
@@ -636,6 +970,47 @@ export default function GovernanceCommandCenter() {
             })()}
           </div>
         </div>
+
+        {/* Runtime Observability - Compact widget for Command Center */}
+        {liveObservability && liveObservability.by_agent.length > 0 && (
+          <div className="bg-white/80 rounded-xl border border-slate-200/60 p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Icon name="chart-bar" className="w-4 h-4 text-indigo-600" />
+                <span className="text-sm font-semibold text-slate-800">Runtime Observability</span>
+                {liveObservability.live && <LiveDataBadge source="CloudWatch" detail="Live AgentCore runtime metrics from CloudWatch" />}
+              </div>
+              <a href="/govern/fleet/observability" className="text-[10px] text-blue-600 hover:text-blue-800">Full Dashboard →</a>
+            </div>
+            <div className="grid grid-cols-5 gap-3">
+              <MiniStatCard
+                label="Invocations"
+                value={liveObservability.by_agent.reduce((sum, a) => sum + a.invocations, 0).toLocaleString()}
+                variant="info"
+              />
+              <MiniStatCard
+                label="Active Agents"
+                value={liveObservability.by_agent.filter(a => a.invocations > 0).length}
+                variant="success"
+              />
+              <MiniStatCard
+                label="Avg Latency"
+                value={`${Math.round(liveObservability.by_agent.reduce((sum, a) => sum + a.avg_latency_ms, 0) / Math.max(liveObservability.by_agent.length, 1))}ms`}
+                variant="warning"
+              />
+              <MiniStatCard
+                label="Errors (7d)"
+                value={liveObservability.by_agent.reduce((sum, a) => sum + a.errors, 0)}
+                variant={liveObservability.by_agent.reduce((sum, a) => sum + a.errors, 0) > 0 ? 'danger' : 'muted'}
+              />
+              <MiniStatCard
+                label="Sessions"
+                value={liveObservability.by_agent.reduce((sum, a) => sum + a.sessions, 0)}
+                variant="muted"
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════════════
@@ -656,7 +1031,9 @@ export default function GovernanceCommandCenter() {
               <div className="flex items-center gap-2">
                 <Icon name="currency-dollar" className="w-4 h-4 text-emerald-600" />
                 <span className="text-sm font-semibold text-slate-800">Cost by Model</span>
-                {liveCost?.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">LIVE</span>}
+                {liveCost?.live && liveCost.by_model.length > 0
+                  ? <LiveDataBadge source="Cost Explorer" detail="Live cost by model from AWS Cost Explorer (GetCostAndUsage)" />
+                  : <MockDataBadge integration="Cost Explorer (GetCostAndUsage grouped by model)" />}
               </div>
               <a href="/govern/finops" className="text-[10px] text-blue-600 hover:text-blue-800">FinOps →</a>
             </div>
@@ -688,33 +1065,53 @@ export default function GovernanceCommandCenter() {
             </div>
           </div>
 
-          {/* BU Budgets — prefer live AWS Budgets, fallback to mock */}
+          {/* Budgets — LIVE AWS Budgets (DescribeBudgets); honest degraded state when not connected */}
           <div className="bg-white/80 rounded-xl border border-slate-200/60 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Icon name="building-office" className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-semibold text-slate-800">Budgets</span>
-                {liveBudgets?.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">LIVE</span>}
+                {budgetsLive
+                  ? <LiveDataBadge source="AWS Budgets" detail="Live budget utilization from AWS Budgets (DescribeBudgets)" />
+                  : <MockDataBadge integration="AWS Budgets (DescribeBudgets)" />}
               </div>
               <a href="/govern/finops" className="text-[10px] text-blue-600 hover:text-blue-800">FinOps →</a>
             </div>
-            <div className="space-y-2">
-              {(liveBudgets?.live && liveBudgets.budgets.length > 0
-                ? liveBudgets.budgets.slice(0, 4).map(b => ({ name: b.name, pct: b.pct_used }))
-                : buBudgets.slice(0, 4).map(bu => ({ name: bu.bu, pct: Math.round((bu.currentSpend / bu.monthlyBudget) * 100) }))
-              ).map((b, i) => {
-                const color = b.pct > 90 ? '#ef4444' : b.pct > 75 ? '#f59e0b' : '#10b981';
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-700 w-20 truncate font-medium">{b.name}</span>
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${Math.min(b.pct, 100)}%`, background: color }} />
-                    </div>
-                    <span className="text-[10px] font-semibold w-10 text-right" style={{ color }}>{b.pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
+            {budgetsLive ? (
+              <>
+                <div className="space-y-2">
+                  {liveBudgets!.budgets.slice(0, 4).map((b) => {
+                    const pct = Math.round(b.pct_used);
+                    const color = pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : '#10b981';
+                    return (
+                      <div
+                        key={b.name}
+                        className="flex items-center gap-2"
+                        title={`${b.name}: ${usdCompact(b.actual)} of ${usdCompact(b.limit)} · forecast ${usdCompact(b.forecast)} · ${b.time_unit.toLowerCase()}`}
+                      >
+                        <span className="text-[10px] text-slate-700 w-20 truncate font-medium">{b.name}</span>
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
+                        </div>
+                        <span className="text-[10px] font-semibold w-12 text-right tabular-nums" style={{ color }}>{pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500">Total actual / limit</span>
+                  <span className="text-xs font-bold text-slate-800 tabular-nums">{usdCompact(liveBudgets!.total_actual)} / {usdCompact(liveBudgets!.total_limit)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-start gap-2 text-[11px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2.5">
+                <Icon name="exclamation-triangle" className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-medium text-slate-600">Budgets unavailable</div>
+                  <div className="text-[10px] mt-0.5">{liveBudgets?.note ?? 'Create AWS Budgets in the Billing console to track budget-vs-actual here.'}</div>
+                </div>
+              </div>
+            )}
             {(liveAnomalies?.live ? liveAnomalies.anomalies.length : summary.costAnomalies) > 0 && (
               <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center gap-2">
                 <PulseDot color="#f59e0b" size="sm" />
@@ -769,7 +1166,7 @@ export default function GovernanceCommandCenter() {
                     <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Recent Activity</span>
                     <PulseDot color="#10b981" size="sm" />
                     {liveAuditEvents && liveAuditEvents.length > 0 && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">LIVE</span>
+                      <LiveDataBadge source="Audit Log" detail="Live audit events" />
                     )}
                   </div>
                   <a href="/govern/audit" className="text-[10px] text-blue-600 hover:text-blue-700 font-medium">
@@ -876,6 +1273,7 @@ export default function GovernanceCommandCenter() {
           </>
         )}
       </section>
+
     </div>
   );
 }

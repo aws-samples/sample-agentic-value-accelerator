@@ -1,5 +1,9 @@
 /**
- * ModelMonitoring — Real-time model quality monitoring
+ * ModelMonitoring — Model quality monitoring
+ *
+ * Live CloudWatch runtime signals (invocations/latency/errors) are real; the
+ * quality KPIs (drift, hallucination, safety) are illustrative until a
+ * CloudWatch/SageMaker Model Monitor source is wired.
  *
  * Features:
  * - Quality KPIs with thresholds (error rate, safety, hallucination, drift)
@@ -8,16 +12,17 @@
  * - Intervention actions (tighten guardrails, pause model, route to human)
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { MODELS, tooltipStyle } from './mockData';
 import { useGovernModels } from './useGovernModels';
-import { LiveDataBadge } from './DataSourceIndicator';
+import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
 import LiveHeader from './LiveHeader';
 import { Icon, type IconName } from './icons';
 import { rowButtonProps } from './a11y';
+import { governSageMakerApi, type AwsModelMonitorResponse } from '../../api/client';
 
 // Quality thresholds - green/amber boundaries
 const QUALITY_THRESHOLDS = {
@@ -25,7 +30,7 @@ const QUALITY_THRESHOLDS = {
   guardrailIntervention: { green: 5, amber: 15, label: 'Guardrail Interventions', unit: '%', icon: 'shield-check' as IconName, invert: false },
   safetyScore: { green: 98, amber: 95, label: 'Safety Score', unit: '%', icon: 'check-circle' as IconName, invert: true },
   hallucinationRate: { green: 2, amber: 5, label: 'Hallucination Rate', unit: '%', icon: 'chat-bubble' as IconName, invert: false },
-  latencyP99: { green: 3, amber: 5, label: 'Latency P99', unit: 's', icon: 'arrow-path' as IconName, invert: false },
+  latencyP99: { green: 3, amber: 5, label: 'Avg Latency', unit: 's', icon: 'arrow-path' as IconName, invert: false },
   driftScore: { green: 2, amber: 5, label: 'Model Drift', unit: '%', icon: 'chart-line' as IconName, invert: false },
 };
 
@@ -37,6 +42,12 @@ interface ModelMetrics {
   modelName: string;
   metrics: Record<MetricKey, number>;
   trend: { day: number; errorRate: number; safety: number; hallucination: number }[];
+  /** True when error/latency are backed by a live CloudWatch by_model row. */
+  isLive?: boolean;
+  /** Which MetricKeys came from live CloudWatch (error rate, latency). */
+  liveKeys?: MetricKey[];
+  /** Live trailing-window invocation count (CloudWatch), when live. */
+  invocations?: number;
 }
 
 // Deterministic [0,1) pseudo-noise from an integer seed — keeps mock metrics
@@ -72,6 +83,31 @@ const MODEL_METRICS: ModelMetrics[] = MODELS.map((m, mi) => ({
     };
   }),
 }));
+
+// MetricKeys that CloudWatch AWS/Bedrock can source live (per-model). The rest
+// (guardrail, safety, hallucination, drift) have no live source and stay
+// illustrative until SageMaker Model Monitor / eval feeds are wired.
+const LIVE_METRIC_KEYS: MetricKey[] = ['errorRate', 'latencyP99'];
+
+// Model-family tokens used to borrow illustrative quality (safety/hallucination/
+// drift) for a live model_id from the closest mock model.
+const FAMILY_RE = /haiku|sonnet|opus|nova|pro|lite|titan|llama|mistral|command|jamba/g;
+
+function matchMockModel(liveModelId: string): ModelMetrics | undefined {
+  const lid = liveModelId.toLowerCase();
+  return MODEL_METRICS.find(mm => {
+    const toks = mm.modelName.toLowerCase().match(FAMILY_RE) ?? [];
+    return toks.length > 0 && toks.every(t => lid.includes(t));
+  });
+}
+
+// Strip region + provider prefixes and the trailing version for a readable label.
+function prettyModelName(modelId: string): string {
+  return modelId
+    .replace(/^(us|eu|apac|us-gov)\./, '')
+    .replace(/^[a-z0-9-]+\./, '')
+    .replace(/[-:]v?\d+(:\d+)?$/i, '');
+}
 
 const INTERVENTIONS = [
   {
@@ -123,6 +159,204 @@ const STATUS_BG: Record<Status, string> = {
   red: 'bg-rose-50 border-rose-200',
 };
 
+// Run-status pill styling for the SageMaker analyzer processing job.
+const RUN_STATUS_STYLE: Record<string, string> = {
+  Completed: 'bg-emerald-100 text-emerald-700',
+  InProgress: 'bg-blue-100 text-blue-700',
+  Failed: 'bg-rose-100 text-rose-700',
+  Stopping: 'bg-amber-100 text-amber-700',
+  Stopped: 'bg-slate-200 text-slate-600',
+};
+
+// Colour a per-feature drift % by magnitude (data-quality convention).
+function driftColor(pct?: number | null): string {
+  if (pct == null) return '#94a3b8';
+  const a = Math.abs(pct);
+  if (a < 2) return '#10b981';
+  if (a < 5) return '#f59e0b';
+  return '#ef4444';
+}
+
+const fmtMean = (n?: number | null) =>
+  n == null ? '—' : (Math.abs(n) >= 1000 || Number.isInteger(n) ? n.toLocaleString() : n.toFixed(3));
+
+/**
+ * DataQualityDriftPanel — live SageMaker Model Monitor data-quality drift.
+ *
+ * Reads the analyzer run's baseline vs captured constraints/statistics from S3
+ * via governSageMakerApi.modelMonitor(). LiveDataBadge is gated on `.live`;
+ * pending / unreachable states surface the backend's honest `.note` and never
+ * show fabricated numbers. Model Monitor *scheduling* is in AWS maintenance mode
+ * for this account, so drift is produced by an on-demand analyzer processing job.
+ */
+function DataQualityDriftPanel() {
+  const [data, setData] = useState<AwsModelMonitorResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Single graceful fetch — a failure leaves data null so the panel badges the
+  // source honestly rather than crashing the monitoring surface.
+  useEffect(() => {
+    let cancelled = false;
+    governSageMakerApi.modelMonitor()
+      .then(res => { if (!cancelled) setData(res); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const live = !!data?.live;
+  const violations = data?.violations ?? [];
+  const stats = data?.feature_stats ?? [];
+  const configuredPending = !live && !!data?.monitor_configured;
+
+  return (
+    <div className="rounded-2xl border border-orange-200/70 bg-gradient-to-br from-orange-50/40 via-white to-white p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Icon name="beaker" className="w-4 h-4 text-orange-500" />
+          <h3 className="text-sm font-semibold text-slate-900">Data Quality Drift (SageMaker Model Monitor)</h3>
+          {live
+            ? <LiveDataBadge source="SageMaker" detail="Model Monitor baseline vs analyzed capture (constraint_violations.json + statistics.json, S3)" />
+            : <MockDataBadge integration="SageMaker Model Monitor: baseline vs monitor-results (S3)" />}
+        </div>
+        {data?.monitored_endpoint && (
+          <span className="text-[10px] text-slate-500 font-mono truncate max-w-[220px]" title={data.monitored_endpoint}>
+            {data.monitored_endpoint}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="text-[11px] text-slate-400">Loading Model Monitor drift…</div>
+      ) : (
+        <>
+          {/* Summary chips: endpoint, baseline features, violations, last run */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-3">
+              <div className="text-2xl font-bold text-slate-900 tabular-nums">{data ? data.baseline_features : '—'}</div>
+              <div className="text-[11px] text-slate-500">Baseline features</div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-3">
+              <div className={`text-2xl font-bold tabular-nums ${(data?.violations_count ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {data ? data.violations_count : '—'}
+              </div>
+              <div className="text-[11px] text-slate-500">Drift violations</div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-3">
+              <div className="flex items-center gap-1.5">
+                {data?.last_run_status
+                  ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${RUN_STATUS_STYLE[data.last_run_status] ?? 'bg-slate-200 text-slate-600'}`}>{data.last_run_status}</span>
+                  : <span className="text-slate-300 text-sm">—</span>}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">Analyzer run</div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-3">
+              <div className="text-sm font-semibold text-slate-700 tabular-nums flex items-center gap-1">
+                <Icon name="clock" className="w-3.5 h-3.5 text-slate-400" />
+                {data?.last_run ? new Date(data.last_run).toLocaleString() : '—'}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">Last run</div>
+            </div>
+          </div>
+
+          {/* Not-live: surface the backend's honest note (pending or unreachable). */}
+          {!live && data?.note && (
+            <div className={`flex items-start gap-2 text-[11px] rounded-lg p-3 border mb-4 ${
+              configuredPending ? 'text-purple-700 bg-purple-50/60 border-purple-200' : 'text-slate-600 bg-slate-50 border-slate-200'
+            }`}>
+              <Icon name={configuredPending ? 'clock' : 'information-circle'} className="w-4 h-4 mt-px shrink-0" />
+              <span>{data.note}</span>
+            </div>
+          )}
+
+          {/* Live + no findings: honest positive (baseline met, no drift). */}
+          {live && violations.length === 0 && stats.length === 0 && (
+            <div className="flex items-start gap-2 text-[11px] text-emerald-700 bg-emerald-50/60 rounded-lg p-3 border border-emerald-200 mb-4">
+              <Icon name="check-circle" className="w-4 h-4 mt-px shrink-0" />
+              <span>Monitor configured, drift results pending — no constraint violations or feature statistics returned for this run yet.</span>
+            </div>
+          )}
+
+          {/* Violations table */}
+          {violations.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Icon name="exclamation-triangle" className="w-3.5 h-3.5 text-rose-500" />
+                <span className="text-xs font-semibold text-slate-700">Constraint violations</span>
+                <span className="text-[10px] text-slate-400">baseline constraints vs analyzed capture</span>
+              </div>
+              <div className="max-h-64 overflow-auto rounded-lg border border-slate-100">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] text-slate-400 uppercase tracking-wide bg-slate-50/70">
+                      <th scope="col" className="text-left py-2 px-3 font-medium">Feature</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium">Check type</th>
+                      <th scope="col" className="text-left py-2 px-3 font-medium">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {violations.map((v, i) => (
+                      <tr key={`${v.feature}-${v.check_type}-${i}`} className="border-t border-slate-100 align-top">
+                        <td className="py-2 px-3 font-medium text-slate-800">{v.feature || '—'}</td>
+                        <td className="py-2 px-3">
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-100">
+                            {v.check_type || '—'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-slate-600">{v.description || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Feature-drift table (baseline mean vs current mean vs drift %) */}
+          {stats.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Icon name="chart-line" className="w-3.5 h-3.5 text-orange-500" />
+                <span className="text-xs font-semibold text-slate-700">Feature drift</span>
+                <span className="text-[10px] text-slate-400">baseline mean vs current mean (numerical_statistics)</span>
+              </div>
+              <div className="max-h-64 overflow-auto rounded-lg border border-slate-100">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] text-slate-400 uppercase tracking-wide bg-slate-50/70">
+                      <th scope="col" className="text-left py-2 px-3 font-medium">Feature</th>
+                      <th scope="col" className="text-right py-2 px-3 font-medium">Baseline mean</th>
+                      <th scope="col" className="text-right py-2 px-3 font-medium">Current mean</th>
+                      <th scope="col" className="text-right py-2 px-3 font-medium">Drift %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.map((s, i) => (
+                      <tr key={`${s.feature}-${i}`} className="border-t border-slate-100">
+                        <td className="py-2 px-3 font-medium text-slate-800">{s.feature}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">{fmtMean(s.baseline)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-slate-600">{fmtMean(s.current)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums font-semibold" style={{ color: driftColor(s.drift_pct) }}>
+                          {s.drift_pct == null ? '—' : `${s.drift_pct > 0 ? '+' : ''}${s.drift_pct.toFixed(2)}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-slate-400 mt-3 italic">
+            Model Monitor scheduling is in AWS maintenance mode for this account; drift is computed by an on-demand
+            analyzer processing job and read from S3. Baseline feature count, violations, and per-feature means are live.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ModelMonitoring() {
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<MetricKey | null>(null);
@@ -133,8 +367,43 @@ export default function ModelMonitoring() {
   // Live CloudWatch AWS/Bedrock runtime signals (real invocations/latency/errors).
   const { metrics: liveMetrics, metricsLive } = useGovernModels(7, 3);
 
-  // Aggregate fleet metrics
-  const fleetMetrics = useMemo(() => {
+  // Per-model quality rows. When CloudWatch AWS/Bedrock returns live per-model
+  // signals, error rate + latency (and invocation counts) come straight from
+  // metrics.by_model; the remaining quality dimensions borrow illustrative
+  // values from the closest mock model. Falls back to the full mock set when no
+  // live rows are present, so the surface never crashes or shows fake "Live".
+  const perModel = useMemo<ModelMetrics[]>(() => {
+    const liveRows = liveMetrics?.live ? liveMetrics.by_model : [];
+    if (liveRows.length === 0) {
+      return MODEL_METRICS.map(m => ({ ...m, isLive: false }));
+    }
+    return liveRows.map((row, ri) => {
+      const mock = matchMockModel(row.model_id) ?? MODEL_METRICS[ri % MODEL_METRICS.length];
+      return {
+        modelId: row.model_id,
+        modelName: prettyModelName(row.model_id) || mock.modelName,
+        metrics: {
+          errorRate: +row.error_rate_pct.toFixed(2),
+          latencyP99: +(row.avg_latency_ms / 1000).toFixed(2),
+          guardrailIntervention: mock.metrics.guardrailIntervention,
+          safetyScore: mock.metrics.safetyScore,
+          hallucinationRate: mock.metrics.hallucinationRate,
+          driftScore: mock.metrics.driftScore,
+        },
+        trend: mock.trend,
+        isLive: true,
+        liveKeys: LIVE_METRIC_KEYS,
+        invocations: row.invocations,
+      };
+    });
+  }, [liveMetrics]);
+
+  // Live only when at least one row is CloudWatch-backed.
+  const anyLive = perModel.some(m => m.isLive);
+  const liveKeySet = anyLive ? new Set<MetricKey>(LIVE_METRIC_KEYS) : new Set<MetricKey>();
+
+  // Aggregate fleet metrics across the (possibly live) per-model rows.
+  const { fleetMetrics, latencyCoverage } = useMemo(() => {
     const totals: Record<MetricKey, number[]> = {
       errorRate: [],
       guardrailIntervention: [],
@@ -144,32 +413,96 @@ export default function ModelMonitoring() {
       driftScore: [],
     };
 
-    MODEL_METRICS.forEach(m => {
+    perModel.forEach(m => {
       (Object.keys(totals) as MetricKey[]).forEach(key => {
         totals[key].push(m.metrics[key]);
       });
     });
 
-    const avg = (arr: number[]) => +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2);
-    return Object.fromEntries(
+    const avg = (arr: number[]) => (arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : 0);
+    const result = Object.fromEntries(
       (Object.keys(totals) as MetricKey[]).map(key => [key, avg(totals[key])])
     ) as Record<MetricKey, number>;
-  }, []);
 
-  // Count statuses across fleet
+    // Error Rate is a pooled rate, so recompute it invocation-weighted as
+    // Σ(rate_i × invocations_i) / Σ(invocations_i) = Σerrors / Σinvocations — never an
+    // unweighted mean of per-model rates, which ignores each model's differing traffic.
+    // Invocation counts are present on live CloudWatch rows; when absent (pure mock, no
+    // denominator to pool by) fall back to the arithmetic mean above.
+    // Every row with invocations > 0 carries a genuinely measured error_rate_pct (the
+    // backend only emits 0.0 there when invocations are 0), so this numerator and
+    // denominator already range over the same set of models.
+    const totalInvocations = perModel.reduce((a, m) => a + (m.invocations ?? 0), 0);
+    if (totalInvocations > 0) {
+      const weightedErrors = perModel.reduce((a, m) => a + m.metrics.errorRate * (m.invocations ?? 0), 0);
+      result.errorRate = +(weightedErrors / totalInvocations).toFixed(2);
+    }
+
+    // Latency is invocation-weighted too, but it must NOT share the error-rate
+    // denominator. The backend emits avg_latency_ms = 0.0 for a model that has traffic
+    // yet published no latency datapoint (govern_models.py `_merge_runtime_metrics`:
+    // `lat = round(lat_weighted / lat_inv, 1) if lat_inv > 0 else 0.0`). Weighting those
+    // rows over `totalInvocations` contributed 0 to the numerator while still counting
+    // their invocations in the denominator, so a high-traffic model with no latency
+    // telemetry dragged the fleet mean toward zero. It failed silently: the result was
+    // still a plausible number of seconds, no per-model row looked wrong, and the only
+    // visible symptom was disagreeing with the "Avg latency (fleet)" tile above — which
+    // renders the backend's own correctly-weighted figure. Restricting both sums to the
+    // latency-reporting rows reproduces the backend's fleet_lat_weighted / fleet_lat_inv.
+    const latencyRows = perModel.filter(m => (m.invocations ?? 0) > 0 && m.metrics.latencyP99 > 0);
+    const latencyInvocations = latencyRows.reduce((a, m) => a + (m.invocations ?? 0), 0);
+    if (latencyInvocations > 0) {
+      const weightedLatency = latencyRows.reduce((a, m) => a + m.metrics.latencyP99 * (m.invocations ?? 0), 0);
+      result.latencyP99 = +(weightedLatency / latencyInvocations).toFixed(2);
+    }
+
+    // Coverage travels with the pooled latency so the KPI can disclose "N of M
+    // reported" rather than imply the whole fleet was measured. null on the mock path,
+    // where there is no invocation denominator and nothing was measured at all.
+    const coverage = totalInvocations > 0
+      ? {
+          reported: latencyRows.length,
+          total: perModel.filter(m => (m.invocations ?? 0) > 0).length,
+        }
+      : null;
+
+    return { fleetMetrics: result, latencyCoverage: coverage };
+  }, [perModel]);
+
+  // Count statuses across the per-model rows.
   const statusCounts = useMemo(() => {
     const counts: Record<Status, number> = { green: 0, amber: 0, red: 0 };
-    MODEL_METRICS.forEach(m => {
+    perModel.forEach(m => {
       (Object.keys(QUALITY_THRESHOLDS) as MetricKey[]).forEach(key => {
         const status = getStatus(m.metrics[key], QUALITY_THRESHOLDS[key]);
         counts[status]++;
       });
     });
     return counts;
-  }, []);
+  }, [perModel]);
+
+  // Best / Worst model for the expanded metric. The direction comes from that metric's
+  // own `invert` flag rather than being hardcoded: safetyScore is invert:true (HIGHER is
+  // better — green at >= 98%), every other metric in QUALITY_THRESHOLDS is invert:false
+  // (lower is better). The panel used to take Math.min for "Best" and Math.max for
+  // "Worst" unconditionally, so on safetyScore it published the fleet's LOWEST safety
+  // score as the best model and the highest as the worst. It failed silently because
+  // both figures were real per-model values in the right units — only the labels were
+  // backwards, and the same getStatus() colour logic elsewhere on the page (which does
+  // consult `invert`) disagreed with it. Reading the flag keeps every metric the panel
+  // can display correct, including any inverted one added later.
+  const expandedExtremes = useMemo(() => {
+    if (!expandedMetric || perModel.length === 0) return null;
+    const ranked = [...perModel].sort((a, b) => a.metrics[expandedMetric] - b.metrics[expandedMetric]);
+    const lowest = ranked[0];
+    const highest = ranked[ranked.length - 1];
+    return QUALITY_THRESHOLDS[expandedMetric].invert
+      ? { best: highest, worst: lowest }
+      : { best: lowest, worst: highest };
+  }, [expandedMetric, perModel]);
 
   const selectedModelData = selectedModel
-    ? MODEL_METRICS.find(m => m.modelId === selectedModel)
+    ? perModel.find(m => m.modelId === selectedModel)
     : null;
 
   // Slice the 90-day history to the selected window and label days as "-Nd".
@@ -224,12 +557,25 @@ export default function ModelMonitoring() {
         )}
       </div>
 
+      {/* Live SageMaker Model Monitor data-quality drift — baseline vs analyzed
+          capture (real S3 output). Sits alongside the live CloudWatch strip; the
+          quality KPIs below stay illustrative. */}
+      <DataQualityDriftPanel />
+
       {/* Fleet Health Summary */}
       <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">Fleet Quality Monitor</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Real-time metrics across {MODELS.length} models</p>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-900">Fleet Quality Monitor</h3>
+              {anyLive && <LiveDataBadge source="CloudWatch" detail="Error rate & latency from AWS/Bedrock metrics" />}
+              <MockDataBadge integration="Safety, hallucination & drift: SageMaker Model Monitor / eval feeds" />
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {anyLive
+                ? `Error rate & latency live from CloudWatch across ${perModel.length} models · safety/hallucination/drift illustrative`
+                : `Illustrative quality metrics across ${perModel.length} models`}
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-xs">
@@ -291,6 +637,20 @@ export default function ModelMonitoring() {
                 <div className="text-[9px] text-slate-400 mt-0.5">
                   Target: {threshold.invert ? '>' : '<'}{threshold.green}{threshold.unit}
                 </div>
+                <div className={`text-[8px] mt-0.5 font-medium uppercase tracking-wide ${liveKeySet.has(key) ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {liveKeySet.has(key) ? 'CloudWatch' : 'Illustrative'}
+                </div>
+                {/* Partial-coverage disclosure, in the module's "N of M reported" idiom:
+                    a latency pooled over a subset of the fleet must say so instead of
+                    reading as a fleet-wide measurement. */}
+                {key === 'latencyP99' && latencyCoverage && latencyCoverage.reported < latencyCoverage.total && (
+                  <div
+                    className="text-[8px] mt-0.5 text-slate-500 tabular-nums"
+                    title="Invocation-weighted across the models that published a CloudWatch latency datapoint. Models with traffic but no latency telemetry are excluded from both the numerator and the denominator."
+                  >
+                    {latencyCoverage.reported} of {latencyCoverage.total} reported
+                  </div>
+                )}
               </button>
             );
           })}
@@ -321,24 +681,35 @@ export default function ModelMonitoring() {
                   {fleetMetrics[expandedMetric]}{QUALITY_THRESHOLDS[expandedMetric].unit}
                 </div>
               </div>
+              {/* "Best" is the metric's favourable extreme, which is the MAXIMUM for an
+                  inverted metric (safety) and the minimum otherwise. The labels stay
+                  fixed; only which model each one reads is direction-aware. */}
               <div className="p-3 bg-white rounded-lg border border-slate-200">
                 <div className="text-[10px] text-slate-500 uppercase">Best Model</div>
-                <div className="text-xl font-bold text-emerald-600">
-                  {Math.min(...MODEL_METRICS.map(m => m.metrics[expandedMetric]))}{QUALITY_THRESHOLDS[expandedMetric].unit}
+                <div className="text-xl font-bold text-emerald-600" title={expandedExtremes?.best.modelName}>
+                  {expandedExtremes
+                    ? `${expandedExtremes.best.metrics[expandedMetric]}${QUALITY_THRESHOLDS[expandedMetric].unit}`
+                    : '—'}
                 </div>
               </div>
               <div className="p-3 bg-white rounded-lg border border-slate-200">
                 <div className="text-[10px] text-slate-500 uppercase">Worst Model</div>
-                <div className="text-xl font-bold text-rose-600">
-                  {Math.max(...MODEL_METRICS.map(m => m.metrics[expandedMetric]))}{QUALITY_THRESHOLDS[expandedMetric].unit}
+                <div className="text-xl font-bold text-rose-600" title={expandedExtremes?.worst.modelName}>
+                  {expandedExtremes
+                    ? `${expandedExtremes.worst.metrics[expandedMetric]}${QUALITY_THRESHOLDS[expandedMetric].unit}`
+                    : '—'}
                 </div>
               </div>
             </div>
 
             <div className="text-[10px] text-slate-500">
-              Source: CloudWatch AWS/Bedrock · Window: 7 days ·
+              Source: {liveKeySet.has(expandedMetric) ? 'Live CloudWatch AWS/Bedrock' : 'Illustrative — wire CloudWatch/SageMaker Model Monitor for live drift/quality'} ·
               Threshold: {QUALITY_THRESHOLDS[expandedMetric].invert ? '>' : '<'}{QUALITY_THRESHOLDS[expandedMetric].green}{QUALITY_THRESHOLDS[expandedMetric].unit} (green),
               {QUALITY_THRESHOLDS[expandedMetric].invert ? '>' : '<'}{QUALITY_THRESHOLDS[expandedMetric].amber}{QUALITY_THRESHOLDS[expandedMetric].unit} (amber)
+              {expandedMetric === 'latencyP99' && latencyCoverage && (
+                <> · Invocation-weighted, {latencyCoverage.reported} of {latencyCoverage.total} models reported latency telemetry</>
+              )}
+              {expandedMetric === 'errorRate' && <> · Invocation-weighted pooled rate</>}
             </div>
           </div>
         )}
@@ -372,7 +743,7 @@ export default function ModelMonitoring() {
                   </span>
                   <button
                     onClick={() => {
-                      setToast(`Executing intervention: ${intervention.action}`);
+                      setToast(`Executing intervention: ${intervention.label}`);
                       setTimeout(() => setToast(null), 2800);
                     }}
                     className="px-3 py-1.5 text-xs font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
@@ -389,24 +760,29 @@ export default function ModelMonitoring() {
       {/* Per-Model Metrics */}
       <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900">Per-Model Quality</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-900">Per-Model Quality</h3>
+            {anyLive && <LiveDataBadge source="CloudWatch" detail="Invocations, error rate & latency from AWS/Bedrock metrics" />}
+            <MockDataBadge integration="Guardrail, safety, hallucination & drift: SageMaker Model Monitor / eval feeds" />
+          </div>
           <span className="text-xs text-slate-400">Click row for trend details</span>
         </div>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[11px] text-slate-400 uppercase tracking-wide bg-slate-50/50">
               <th scope="col" className="text-left py-2.5 px-5 font-medium">Model</th>
+              <th scope="col" className="text-center py-2.5 px-3 font-medium">Invocations</th>
               <th scope="col" className="text-center py-2.5 px-3 font-medium">Error %</th>
               <th scope="col" className="text-center py-2.5 px-3 font-medium">Guardrail %</th>
               <th scope="col" className="text-center py-2.5 px-3 font-medium">Safety</th>
               <th scope="col" className="text-center py-2.5 px-3 font-medium">Hallucination %</th>
-              <th scope="col" className="text-center py-2.5 px-3 font-medium">Latency P99</th>
+              <th scope="col" className="text-center py-2.5 px-3 font-medium">Avg Latency</th>
               <th scope="col" className="text-center py-2.5 px-3 font-medium">Drift %</th>
               <th scope="col" className="text-center py-2.5 px-5 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
-            {MODEL_METRICS.map(m => {
+            {perModel.map(m => {
               const worstStatus = (Object.keys(QUALITY_THRESHOLDS) as MetricKey[]).reduce<Status>(
                 (worst, key) => {
                   const s = getStatus(m.metrics[key], QUALITY_THRESHOLDS[key]);
@@ -429,14 +805,24 @@ export default function ModelMonitoring() {
                     selectedModel === m.modelId ? 'bg-blue-50/50' : ''
                   }`}
                 >
-                  <td className="py-2.5 px-5 font-medium text-slate-900">{m.modelName}</td>
+                  <td className="py-2.5 px-5 font-medium text-slate-900">
+                    <span className="flex items-center gap-1.5">
+                      {m.isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Live CloudWatch signals" />}
+                      {m.modelName}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 text-center tabular-nums text-slate-700">
+                    {m.invocations != null ? m.invocations.toLocaleString() : <span className="text-slate-300">—</span>}
+                  </td>
                   {(Object.keys(QUALITY_THRESHOLDS) as MetricKey[]).map(key => {
                     const status = getStatus(m.metrics[key], QUALITY_THRESHOLDS[key]);
+                    const cellLive = m.liveKeys?.includes(key) ?? false;
                     return (
                       <td key={key} className="py-2.5 px-3 text-center">
                         <span
                           className="font-semibold tabular-nums"
                           style={{ color: STATUS_COLORS[status] }}
+                          title={cellLive ? 'Live CloudWatch AWS/Bedrock' : 'Illustrative'}
                         >
                           {m.metrics[key]}{QUALITY_THRESHOLDS[key].unit}
                         </span>
@@ -463,9 +849,12 @@ export default function ModelMonitoring() {
       {selectedModelData && (
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-slate-900">
-              {selectedModelData.modelName} — {trendWindow}-Day Trend
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-900">
+                {selectedModelData.modelName} — {trendWindow}-Day Trend
+              </h3>
+              <MockDataBadge integration="Model monitoring: CloudWatch/SageMaker Model Monitor" />
+            </div>
             <div className="flex items-center gap-2">
               <div className="flex gap-1 p-0.5 bg-slate-100 rounded-lg" role="group" aria-label="Trend window">
                 {([7, 30, 90] as const).map(w => (

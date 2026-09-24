@@ -1,0 +1,41 @@
+{
+  "customer_id": "CUST005",
+  "kyc_verification": {
+    "status": "completed",
+    "date": "2026-05-10",
+    "documents_verified": [
+      "Certificate of Incorporation",
+      "Articles of Association",
+      "Board Resolution",
+      "Beneficial Ownership Declaration"
+    ]
+  },
+  "sanctions_screening": {
+    "status": "clear",
+    "last_check": "2026-06-24",
+    "databases_checked": [
+      "OFAC",
+      "UN",
+      "EU",
+      "UK HMT"
+    ],
+    "matches": []
+  },
+  "pep_screening": {
+    "status": "clear",
+    "matches": []
+  },
+  "adverse_media": {
+    "status": "clear",
+    "last_check": "2026-06-20",
+    "findings": []
+  },
+  "aml_risk_rating": "low",
+  "enhanced_due_diligence_required": false,
+  "next_review_date": "2027-05-10",
+  "regulatory_notes": [
+    "All compliance checks PASSED",
+    "Decline is on CREDIT grounds only",
+    "No regulatory concern"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "customer_id": "CUST001",
+  "credit_score": 750,
+  "credit_rating": "A",
+  "existing_facilities": [
+    {
+      "type": "Revolving Credit",
+      "limit": 5000000,
+      "utilized": 2500000,
+      "status": "current",
+      "bank": "First National Bank"
+    }
+  ],
+  "payment_history": {
+    "payments_on_time": 48,
+    "payments_total": 50,
+    "on_time_payments": 48,
+    "late_payments": 2,
+    "defaults": 0,
+    "average_days_to_pay": 28
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 66500000,
+    "total_liabilities": 16500000,
+    "current_assets": 21000000,
+    "current_liabilities": 10000000,
+    "revenue": 60000000,
+    "net_income": 8500000,
+    "debt_to_equity": 0.33,
+    "current_ratio": 2.1,
+    "net_margin": 0.1417
+  },
+  "agent_claims": {
+    "de_ratio": 0.33,
+    "current_ratio": 2.1,
+    "net_margin": 0.1417,
+    "payment_pct": 96.0
+  },
+  "credit_inquiries_last_12_months": 3
+}

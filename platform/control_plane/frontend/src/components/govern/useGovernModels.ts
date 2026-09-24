@@ -14,6 +14,7 @@ import {
   type AwsCostModelBreakdown,
 } from '../../api/client';
 import { usePollingKey } from './usePollingKey';
+import { useDataSources } from './DataSourceContext';
 
 export interface UseGovernModelsResult {
   loading: boolean;
@@ -37,6 +38,7 @@ export function useGovernModels(days = 7, costMonths = 3): UseGovernModelsResult
   const [metrics, setMetrics] = useState<AwsModelMetricsResponse | null>(null);
   const [cost, setCost] = useState<AwsCostModelBreakdown | null>(null);
   const pollKey = usePollingKey(60_000);
+  const { updateSource } = useDataSources();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,12 +51,27 @@ export function useGovernModels(days = 7, costMonths = 3): UseGovernModelsResult
       governCostApi.byModel(costMonths),
     ]).then(([c, m, k]) => {
       if (cancelled) return;
-      setCatalog(c.status === 'fulfilled' ? c.value : null);
-      setMetrics(m.status === 'fulfilled' ? m.value : null);
-      setCost(k.status === 'fulfilled' ? k.value : null);
+      const catalogData = c.status === 'fulfilled' ? c.value : null;
+      const metricsData = m.status === 'fulfilled' ? m.value : null;
+      const costData = k.status === 'fulfilled' ? k.value : null;
+
+      setCatalog(catalogData);
+      setMetrics(metricsData);
+      setCost(costData);
+
+      // Update data source statuses
+      if (catalogData?.live) {
+        updateSource('aws-bedrock', { status: 'live', lastFetch: Date.now() });
+      }
+      if (metricsData?.live) {
+        updateSource('aws-cloudwatch', { status: 'live', lastFetch: Date.now() });
+      }
+      if (costData?.live) {
+        updateSource('aws-cost-explorer', { status: 'live', lastFetch: Date.now() });
+      }
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [days, costMonths, pollKey]);
+  }, [days, costMonths, pollKey, updateSource]);
 
   return {
     loading, catalog, metrics, cost,

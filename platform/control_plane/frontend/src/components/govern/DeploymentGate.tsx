@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { allModelGates, computeModelGate, APPROVAL_STATUS, type GateVerdict, type GateStatus } from './deploymentGateData';
 import { MODELS } from './mockData';
 import { rowButtonProps } from './a11y';
+import { Icon, type IconName } from './icons';
 
 const verdictMeta: Record<GateVerdict, { label: string; badge: string; dot: string; ring: string }> = {
   cleared: { label: 'Cleared', badge: 'bg-emerald-100 text-emerald-700', dot: '#10b981', ring: 'border-emerald-300' },
@@ -17,10 +18,10 @@ const verdictMeta: Record<GateVerdict, { label: string; badge: string; dot: stri
   blocked: { label: 'Blocked', badge: 'bg-rose-100 text-rose-700', dot: '#dc2626', ring: 'border-rose-300' },
 };
 
-const statusMeta: Record<GateStatus, { badge: string; icon: string }> = {
-  pass: { badge: 'bg-emerald-100 text-emerald-700', icon: '✓' },
-  warning: { badge: 'bg-amber-100 text-amber-700', icon: '!' },
-  fail: { badge: 'bg-rose-100 text-rose-700', icon: '✕' },
+const statusMeta: Record<GateStatus, { badge: string; icon: IconName | null }> = {
+  pass: { badge: 'bg-emerald-100 text-emerald-700', icon: 'check' },
+  warning: { badge: 'bg-amber-100 text-amber-700', icon: null },
+  fail: { badge: 'bg-rose-100 text-rose-700', icon: 'x-mark' },
 };
 
 const card = 'bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm';
@@ -116,7 +117,11 @@ export default function DeploymentGate({ modelId, onSelectModel, onNavigateTab }
           </div>
           <div className="text-right">
             <span className={`text-xs font-bold px-3 py-1 rounded-lg ${verdictMeta[gate.verdict].badge}`}>
-              {gate.verdict === 'cleared' ? '✓ Cleared for Production' : gate.verdict === 'conditional' ? '! Conditional' : '✕ Blocked'}
+              {gate.verdict === 'cleared'
+                ? <><Icon name="check" className="w-3.5 h-3.5 inline-block align-middle mr-1" />Cleared for Production</>
+                : gate.verdict === 'conditional'
+                  ? '! Conditional'
+                  : <><Icon name="x-mark" className="w-3.5 h-3.5 inline-block align-middle mr-1" />Blocked</>}
             </span>
             <div className="text-[9px] text-slate-400 mt-1 font-mono">ModelApprovalStatus: {APPROVAL_STATUS[gate.verdict]}</div>
           </div>
@@ -127,7 +132,7 @@ export default function DeploymentGate({ modelId, onSelectModel, onNavigateTab }
             const sm = statusMeta[c.status];
             return (
               <div key={c.id} className="flex items-start gap-3 bg-slate-50 rounded-lg p-3 border border-slate-100">
-                <span className={`text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${sm.badge}`}>{sm.icon}</span>
+                <span className={`text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${sm.badge}`}>{sm.icon ? <Icon name={sm.icon} className="w-3 h-3" /> : '!'}</span>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-slate-800">

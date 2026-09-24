@@ -1,5 +1,88 @@
 # Release Notes
 
+## v5.0 — Govern goes AWS-native and multi-cloud; Marketplace, Evaluation, and enterprise-grade hardening
+
+Release date: September 2026
+
+Feature release building on v4.0. Rebuilds **Govern** on top of ~40 AWS-native governance modules (Audit Manager, CloudTrail Lake, Trusted Advisor, Service Quotas, Compute Optimizer, Security Lake, Macie, GuardDuty AI, Verified Permissions, IAM Access Analyzer, X-Ray, and more), adds a first-class **Marketplace** under Build with matching admin surface under Govern, adds an **Evaluation** surface to Operate, extends Govern into **Multi-Cloud** (Azure, GCP, ServiceNow, Salesforce, Copilot Studio), ships a new FSI Foundry use case (**Govern Compliance Agent**, R07 — 35th POC) and a new reference implementation (**KYC Governance Insights**), and hardens the Control Plane for production (SSRF defense, response sanitization, WAF Bot Control at the edge, self-service signup with corporate-email policy, login-history audit, ~35 new backend tests).
+
+### 🏛️ Govern — AWS-native and multi-cloud
+
+- **~40 AWS-native governance modules** — new backend routes/services/models that read a customer's own AWS estate live: Audit Manager, Compliance Evidence, Policy Drift, Posture Score, Command Center, CloudTrail Lake, X-Ray, Trusted Advisor, Service Quotas, Compute Optimizer, Security Lake, Macie, GuardDuty AI, Verified Permissions, IAM Access Analyzer, Resource Tags, Bedrock Assets, Knowledge Bases, Regions, Capacity, Marketplace, Operations, Health, LLM Quality, Harness Audit, Harness Policy, Path Jail, Invocations, AIDLC, Governance, Validation. Every payload passes through `core/security_utils.py` before serialization so account ids, ARNs, IPv4s, CVEs, and STS session suffixes are masked. — _Bikash Behera_
+- **Compliance Center — 11 → 14 frameworks, 281 controls** — adds CRI FS AI RMF and FINOS AIR alongside the existing SR 26-2, NIST AI RMF, EU AI Act, ISO 42001, NYDFS Part 500, and SOC 2. Compliance-evidence route surfaces per-control evidence from Audit Manager. — _Bikash Behera_
+- **Model Management adds differential-privacy signals** — DP-SGD, PATE, and federated-DP tracked in the Model SBOM. — _Bikash Behera_
+- **Marketplace Admin, Operations, Reports & Assessments** — three new Govern surfaces. Marketplace Admin publishes/manages listings that consumers browse in Build → Marketplace. Operations landing gives runbooks, on-call, SLA, and alerts. Reports & Assessments runs a governance self-assessment and exports evidence bundles. — _Bikash Behera_
+- **Multi-Cloud Governance** — governance connectors across **Azure** (Cost Management + AI Foundry), **GCP** (BigQuery Billing + Vertex AI), **ServiceNow** (Now Assist), **Salesforce** (Einstein / Agentforce), and **Copilot Studio**. Credentials in Secrets Manager; Test Connection UX measures round-trip latency; per-connector paging honors the target's native page tokens. — _Bikash Behera_
+- **AI Estate Inventory, Fleet Identity, Agent Topology Map, Agent Lifecycle Policies, Agent Onboarding Workflow, Harness Audit Viewer, Policy Drift Dashboard, Path Jail Editor, AgentCore Observability, Investigation Queue, Candidate Incidents, Live CloudTrail Lake Activity** — new frontend components sitting on the AWS-native backend. — _Bikash Behera_
+
+### 🛒 Marketplace — internal AI-resource marketplace
+
+- **Build → Marketplace** — governed catalog of agents, MCP servers, knowledge bases, skills, and models. Subscription requests, multi-step approval chains, budgets, attestations, entitlement checks, and full audit log. Wired into the Approval Policy Engine, so requests land in the same Operate → Approval Queue as v4.0 registrations. — _Bikash Behera_
+
+### 📊 Operate — Evaluation surface
+
+- **Evaluation** — LLM-as-judge suites with promotion gates, pairwise A/B compare, calibration, and background auto-enrollment that scaffolds a draft suite for every new deployment. Suite detail, run detail, run compare, and a Playground are exposed as first-class routes under `/evaluation/*`. Backed by `evaluation_runner`, `evaluation_pairwise`, `evaluation_calibration`, `evaluation_enrollment`, `evaluation_report` services and a new `evaluations` route + model. — _Bikash Behera_
+
+### 🔐 Secure & Platform hardening
+
+- **SSRF defense (`safe_fetch`)** — every URL the platform fetches on a caller's behalf (OIDC discovery, A2A agent cards, SaaS connector endpoints) resolves the host, refuses non-public addresses, pins the connection to the validated address to defeat DNS rebinding, and drops credentials across cross-host redirects. Genuinely private issuers opt in via `SAFE_FETCH_ALLOWED_PRIVATE_CIDRS`; no value can expose the instance metadata endpoint. — _Bikash Behera_
+- **Sanitized error responses** — deployment and agent APIs return a fixed summary plus an `error_ref` instead of raw boto3/botocore exception text (which copies the service's own message verbatim, leaking account ids, task role ARNs, and resource ARNs). Full traceback stays in backend logs, indexed by `error_ref`. — _Bikash Behera_
+- **Response sanitization invariant** — `core/security_utils.py` is the single point that strips account identifiers before serialization; 27 backend modules import from it. 12-digit account ids become `************`, full ARNs collapse to their resource tail, and CVE ids, IPv4s, S3 bucket URIs, caller identities, and STS session suffixes are redacted from free text. — _Bikash Behera_
+- **Path jail** — file-path allowlist matcher for tools that touch the file system; enforced by `core/path_jail.py` and editable from the Govern → Path Jail Editor. — _Bikash Behera_
+- **Output caps, cache pre-warm, AWS paging, CloudTrail paging, multi-region scope** — new `core/` helpers underpinning the AWS-native governance surfaces so responses are bounded, warm, paged correctly, and region-aware. A `region_config.log_resolution()` runs first at backend startup and prints the resolved region tiers under `AUTH-GATE` — the one governance misconfiguration that never raises (AWS answers the wrong region with that region's inventory, so the symptom is a zero-agent estate instead of an error). — _Bikash Behera_
+- **Auth-gate log line** — startup prints the resolved authentication mode under `AUTH-GATE`; the development bypass is now gated so it can only ever activate when `ENVIRONMENT` is `development`, `dev`, `local`, or `test`. Confirm the line says *refusing* before exposing an endpoint. — _Bikash Behera_
+
+### 🔒 Sign-in, signup, and edge protection
+
+- **Self-service signup with corporate-email policy** — sign-in page adds a "Create account" flow. A Cognito **PreSignUp Lambda** rejects public-mail providers (~40 domains — Gmail, Yahoo, Hotmail, Outlook, iCloud, ProtonMail, GMX, Yandex, QQ/163/Sina, Naver, Zoho, FastMail, DuckDuckGo, Comcast/Verizon, Hey, Tutanota, …); a **PostConfirmation Lambda** places new users in the `viewer` group so admins promote deliberately. Cognito Advanced Security = **ENFORCED**. — _Bikash Behera_
+- **WAF Bot Control at the edge** — AWS WAFv2 (CLOUDFRONT scope, us-east-1) with `AWSManagedRulesBotControlRuleSet` (COMMON tier) plus `AWSManagedRulesCommonRuleSet` attached to the frontend CloudFront distribution — challenges suspicious traffic before it reaches the SPA. New `modules/waf/` Terraform module. — _Bikash Behera_
+- **Login-history audit** — every successful sign-in is written to a dedicated `ava-cp-<id>-login-events` DynamoDB table by a Cognito **PostAuthentication Lambda**. PITR + SSE on, GSI `by_date` for per-day reports. Query with `aws dynamodb query` or the DynamoDB console — no UI yet. — _Bikash Behera_
+
+### 📦 New applications
+
+- **FSI Foundry R07 — Govern Compliance Agent** (35th POC) — multi-agent compliance-evidence workflow that continuously assesses posture against SR 26-2, NIST AI RMF, EU AI Act, ISO 42001, CRI FS AI RMF, and FINOS AIR, and drafts remediation with Human Oversight gates.
+- **KYC Governance Insights** — 9th reference implementation. Governed KYC workflow that surfaces access, cost, and compliance insights against the KYC agent estate.
+
+### 🧪 Testing
+
+- **~35 new backend tests** under `platform/control_plane/backend/tests/`: paging (AWS + CloudTrail), path jail, safe fetch, deployment error disclosure, RBAC/JWKS, region resolution, multicloud URL validation + GCP location, evaluation engine, guardrail reconcile paging, incident-response denominator, LLM quality dashboard absence, model pricing, Cognito group names, auth gate, gateway no-redirect, govern controls CloudTrail, path-jail matcher, and more. — _Bikash Behera_
+
+### 🧭 Frontend
+
+- **Global `ErrorBoundary`** keyed on route pathname so a component crash is contained rather than blanking the app. — _Bikash Behera_
+- **UseCasesHub** replaces the standalone `Prioritization` page at `/use-cases`. Prioritization is one tab; Business Cases, Maturity, Operating Model, and Organization Design join it under a single hub with a shared `ExportReportButton` that renders PDFs from the new `src/lib/pdf/` toolkit. — _Bikash Behera_
+- **Transformation Value Model** — new Plan surface + backend route/service/model + `data/transformation_value_model/` seed catalog imported on first boot (gated by a persisted `seed_applied` latch so `catalog_meta` state is preserved after users prune the seed rows). — _Bikash Behera_
+
+### 🧰 Reference implementations
+
+- **Sales-Recommend** — adds a leads-capture flow (`EmailCaptureModal`, `UserProvider`, `VisitorsView`, `leadsStore`, `/api/lead[s]` routes, IAM + ECS + Knowledge Base infra updates), retained under Build → Reference Implementations. — _Bikash Behera_
+
+### 📖 Documentation
+
+- **`SECURITY.md`** — expands the "When deploying this solution" checklist with sections on Cognito JWT auth-gate, SSRF via `safe_fetch`, sanitized error responses with `error_ref`, and the response-sanitization invariant. Adds a **"Hardening required before production"** table covering interactive API docs, missing security response headers, JWT-in-`localStorage`, wildcard CORS in the bundled API Gateway module, and DynamoDB point-in-time recovery / deletion protection defaults.
+- **README** refreshed for v5.0: 34 → 35 FSI POCs, 8 → 9 reference apps, adds Marketplace, Evaluation, Multi-Cloud Governance, Self-Service Signup, Bot Protection at the Edge, Login-History Audit, and DP-SGD in the Model SBOM. Compliance framework count 11 → 14 (281 controls).
+- **`platform/docs/architecture/ai-safety-module-design.md`** and **`platform/docs/architecture/govern-metrics-integration.md`** — new architecture docs describing the AWS-native governance data flow and the safety module.
+- **`platform/control_plane/README.md`** and **`platform/control_plane/docs/`** — new Control Plane developer docs (previously spread across module READMEs).
+
+### Upgrade notes
+
+- **New Cognito Lambdas.** The first `terraform apply` on v5.0 creates the PreSignUp, PostConfirmation, and PostAuthentication Lambdas + the `ava-cp-<id>-login-events` DynamoDB table + the WAF Web ACL. If you fork the domain denylist to your own tenancy rules, edit `modules/cognito/lambda_src/pre_signup_domain_check/` — the list is server-side by design so it cannot be bypassed by hitting Cognito with curl.
+- **WAF Bot Control is on by default on the frontend CloudFront distribution.** Turn it off via the `enable_waf_bot_control` variable in the frontend module if you know you don't need it — costs are non-zero and the COMMON rule set may challenge some automation.
+- **Transformation reference catalog seeds on first boot only.** A persisted `seed_applied` latch (in `catalog_meta`) keeps re-seeding from silently reversing user edits after a restart. Re-seed explicitly via the lifecycle API.
+- **SSRF check applies to OIDC discovery and A2A agent cards.** If you were federating with an OIDC issuer inside a private range, add its CIDR to `SAFE_FETCH_ALLOWED_PRIVATE_CIDRS` before the first upgraded boot; otherwise discovery will fail with a `safe_fetch` refusal.
+- **`AUTH-GATE` startup log line.** Watch for `AUTH-GATE refusing dev bypass` on first boot in production environments. If it says `AUTH-GATE serving dev admin` outside a development environment, set `ENVIRONMENT` to your real environment name and restart before exposing any endpoint.
+- **Response sanitization is a route invariant, not a cleanup pass.** New Govern routes must import from `core/security_utils.py` and mask at the point of serialization. See any of the 27 existing importers for the pattern.
+- **Interactive API docs (`/docs`, `/redoc`, `/openapi.json`) are unconditional.** Either set the corresponding FastAPI URLs to `None` outside development or keep the API off the public internet. See `SECURITY.md` → Hardening required before production.
+
+### Contributors to v5.0
+
+- **Bikash Behera** — Path Jail, safe_fetch, response sanitization invariant, self-service signup + PreSignUp/PostConfirmation/PostAuthentication Lambdas, WAF Bot Control, Login-History audit, test suite, README + SECURITY refresh
+- **Gregg Sorrels** Govern AWS-native modules, Multi-Cloud Governance connectors, Marketplace, Govern Compliance Agent foundry POC
+- **Donatas Kuchalskis** Evaluation
+- **Raphael Fuchs & Roshan Rao** KYC Governance Insights reference app
+- **Chris Taylor** UseCasesHub, Transformation Value Model
+---
+
 ## v4.0 — Build pillar completes: Harness, Memory, Registry, Catalog, Approvals; Secure adds Identity + Policy; Operate becomes a full surface
 
 Release date: August 2026

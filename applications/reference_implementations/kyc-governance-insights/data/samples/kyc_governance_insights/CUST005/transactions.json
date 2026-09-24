@@ -1,0 +1,18 @@
+{
+  "customer_id": "CUST005",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 13000000,
+    "total_outflow": 14200000,
+    "average_monthly_volume": 1133333,
+    "transaction_count": 700
+  },
+  "top_counterparties": [],
+  "geographic_distribution": {
+    "domestic": 90,
+    "international": 10
+  },
+  "high_risk_jurisdictions": [],
+  "suspicious_patterns": [],
+  "large_transactions_over_100k": 14
+}

@@ -175,17 +175,22 @@ export function gradeProgram(agg: GovernanceAggregatorResult): GradedStep[] {
         };
       }
       case 'assess': {
-        // Two halves: risk-scored use cases, and compliance frameworks mapped.
+        // Two halves: risk-scored use cases, and frameworks whose controls have actually
+        // been assessed. `frameworksCovered` counts frameworks at >=80% ASSESSED coverage;
+        // it used to count frameworks at >=80% pass rate over their assessed controls,
+        // which let a framework with 2 of 16 controls looked at count as covered. The
+        // wording below says "assessed" because "frameworks mapped" would now be wrong in
+        // the other direction: every framework is mapped, most have nothing assessed.
         const riskScore = s.totalUseCases > 0 ? Math.min(1, riskScored / s.totalUseCases) : (riskScored > 0 ? 1 : 0);
         const compScore = s.frameworksTotal > 0 ? s.frameworksCovered / s.frameworksTotal : 0;
         const score = (riskScore + compScore) / 2;
         const weakest = compScore < riskScore ? 'compliance' : 'risk';
         return {
           ...def, score, status: statusFor(score),
-          metric: `${s.frameworksCovered}/${s.frameworksTotal} frameworks · ${riskScored} risk-scored`,
+          metric: `${s.frameworksCovered}/${s.frameworksTotal} frameworks assessed · ${riskScored} risk-scored`,
           action: score < 1
             ? (weakest === 'compliance'
-                ? `Map more frameworks — ${s.frameworksNeedingAttention[0] ?? 'SR 26-2'} needs attention`
+                ? `Assess controls — ${s.frameworksNeedingAttention[0] ?? 'SR 26-2'} needs attention`
                 : 'Score remaining use cases for risk')
             : undefined,
           actionNav: weakest === 'compliance' ? 'compliance' : 'risk',

@@ -40,6 +40,36 @@ def get_or_load(
     storing it (e.g. a live=False fallback), so a transient AWS failure doesn't
     poison the cache for the whole TTL. The value is still returned to the caller.
     On a skipped store, cached_at is the load time (freshly fetched).
+
+    ── IMMUTABILITY CONTRACT — READ THIS BEFORE TOUCHING THE RETURNED VALUE ──────
+
+    On a cache HIT this returns THE OBJECT THE CACHE STILL HOLDS, not a copy. Mutating
+    it therefore edits the cached entry in place, and every later hit for the whole TTL
+    sees the mutation.
+
+    The failure this causes is not a crash, which is what makes it worth stating here:
+    the usual thing a caller wants to do is append a freshness stamp to `note`, e.g.
+
+        result.note = f"{result.note} · Cached {age}s ago"   # WRONG
+
+    That appends a stamp PER HIT, so a note grows without bound across a TTL window and
+    the UI shows "Cached 3s ago · Cached 61s ago · Cached 119s ago …" — a slow leak that
+    only appears under repeat traffic and never in a single-request test.
+
+    Copy instead. For a pydantic model, `model_copy(update=...)` swaps only the
+    top-level scalars you name and leaves the cache entry untouched:
+
+        if result.live and (time.time() - cached_at) >= 2:
+            result = result.model_copy(
+                update={"note": f"{result.note} · Cached {int(time.time() - cached_at)}s ago"}
+            )
+
+    Note that `model_copy` is shallow: nested models and lists are shared with the cached
+    object, so mutating `copied.regions.append(...)` still corrupts the entry. Rebuild the
+    nested value rather than mutating it.
+
+    Every service that stamps freshness in this repo already follows this — 35 of them —
+    which is why the contract belongs here rather than being rediscovered per service.
     """
     now = time.monotonic()
     with _lock:
@@ -57,12 +87,33 @@ def get_or_load(
 
 
 def invalidate(key: Optional[str] = None) -> None:
-    """Drop one key, or the whole cache when key is None."""
+    """Drop one key, or the whole cache when key is None.
+
+    Matches the key EXACTLY. Callers holding a family of parameterized keys
+    (``…:{status}:{severity}:{days}``) want invalidate_prefix instead - passing the bare
+    stem here matches nothing and fails silently.
+    """
     with _lock:
         if key is None:
             _store.clear()
         else:
             _store.pop(key, None)
+
+
+def invalidate_prefix(prefix: str) -> int:
+    """Drop every key starting with `prefix`, returning the number dropped.
+
+    Read-paths cache under keys that embed their query parameters, so one logical resource
+    occupies many keys (`ops:incidents:<table>:open:high:30:50:1`, and one more per filter
+    combination). A write to that resource has no way to enumerate them, and invalidate()
+    pops by exact key, so `invalidate("ops:incidents:<table>")` silently matched none of
+    them and left every cached filter combination stale until its TTL expired.
+    """
+    with _lock:
+        stale = [k for k in _store if k.startswith(prefix)]
+        for k in stale:
+            del _store[k]
+        return len(stale)
 
 
 def clear_all() -> int:

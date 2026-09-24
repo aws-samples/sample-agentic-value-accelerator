@@ -22,6 +22,18 @@ PyJWT[crypto]==2.8.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 
+# Outbound HTTP
+# Declared explicitly because it is a PRODUCTION dependency that was only arriving
+# transitively, via moto and responses in the Testing block below. core/security.py
+# imports it on the token-verification path, as do the multicloud connector and spend
+# aggregator services. A single requirements.txt installs test libraries into the
+# image, so this worked - but it meant removing a test dependency would have broken
+# JWT authentication, and nothing in the file said so.
+# >=2.32.0 for the redirect handling this code relies on: SessionRedirectMixin
+# .rebuild_auth drops Authorization on a cross-host redirect, which is the behaviour
+# core/safe_fetch.py had to reimplement for the urllib call sites that lack it.
+requests==2.32.5
+
 # Validation
 pydantic==2.9.2
 pydantic-settings==2.5.2
@@ -44,3 +56,4 @@ mypy==1.8.0
 # Utilities
 python-dateutil==2.8.2
 click==8.1.7
+Markdown==3.10.3

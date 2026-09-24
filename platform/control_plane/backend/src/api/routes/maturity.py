@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from core.rbac import require_role, Role
 
@@ -52,10 +52,17 @@ async def get_framework(_=Depends(require_role(Role.VIEWER))):
 # --- CRUD ---
 
 @router.post("", response_model=Assessment, status_code=201)
-async def create_assessment(req: AssessmentCreate, _=Depends(require_role(Role.OPERATOR))):
+async def create_assessment(
+    req: AssessmentCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    # created_by from the x-user-email header, or "unknown" - require_role returns only
+    # a Role, never a principal. The literal "user" read like a real principal, so a
+    # record with no captured author looked fully attributed.
     svc = get_service()
     try:
-        return svc.create(req, created_by="user")
+        return svc.create(req, created_by=x_user_email or "unknown")
     except NameTakenError as e:
         raise HTTPException(status_code=409, detail=str(e))
 

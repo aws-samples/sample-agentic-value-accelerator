@@ -1,0 +1,60 @@
+sequenceDiagram
+    actor User as End User
+    participant UI as UI (React console)
+    participant CF as CloudFront (/svc/*)
+    participant GW as API Gateway
+    participant L as Lambda layer
+    participant SUP as Supervisor Agent
+    participant CA as Credit Analyst Agent
+    participant CO as Compliance Agent
+    participant S3 as S3 (customer data)
+    participant GOV as Gov backends (AVP · Bedrock Guardrails · DynamoDB)
+
+    rect rgb(232,242,254)
+    Note over User,GOV: PHASE 1 — Core assessment · produces the REAL decision
+    User->>UI: Enter customer_id, run assessment (type=full)
+    UI->>GW: POST /api/invoke {customer_id, assessment_type}
+    GW->>L: Forward
+    L->>SUP: Invoke orchestrator (router branches on assessment_type)
+    par Credit path
+        SUP->>CA: analyze_credit_risk(customer_id)
+        loop Tool-use loop - shown once - framework-provided max 10
+            Note over CA: LLM reasons, decides next tool call
+            CA->>S3: s3_retriever_tool(profile / credit_history / transactions)
+            S3-->>CA: customer data (JSON)
+        end
+        CA-->>SUP: Credit verdict
+    and Compliance path
+        SUP->>CO: check_compliance(customer_id)
+        Note over CO,S3: Same s3_retriever_tool loop (profile / compliance / transactions)
+        CO-->>SUP: Compliance status
+    end
+    Note over SUP: Synthesize — 1 structured LLM call, no tools
+    SUP->>L: Governance review (synthesized assessment)
+    Note over L: Non-bypassable: recompute ratios · sanctions/PEP · Cedar cascade · LLM-judge
+    L->>S3: Independent re-read (don't trust agent output)
+    S3-->>L: Raw data
+    L-->>SUP: Decision (APPROVE / ESCALATE / BLOCK + incident_id)
+    SUP-->>L: AssessmentResponse
+    L-->>GW: AssessmentResponse
+    GW-->>UI: 200 {decision, risk, sanctions, checks}
+    UI-->>User: Render decision card
+    end
+
+    rect rgb(232,250,236)
+    Note over User,GOV: PHASE 2 — Console live-badge overlay · ADDITIVE, fire-and-forget · does NOT feed Phase 1 decision
+    User->>UI: Advance Basic-mode walkthrough step (scripted narrative)
+    Note over UI: Fires live checks using hardcoded scenario FIXTURES, not real output. Failure → badge hidden.
+    loop For each governed control on that step (Cedar, grounding, validator, AR, registry, HITL)
+        UI->>CF: POST /svc/{control}/... (relative path, NO key)
+        Note over CF: injects x-api-key + x-origin-verify at the edge
+        CF->>GW: route /svc/* to console-gateway
+        GW->>L: proxy to that control's backend Lambda
+        L->>GOV: is-authorized / ApplyGuardrail / read table (validator recomputes in-Lambda)
+        GOV-->>L: result
+        L-->>GW: result
+        GW-->>CF: result
+        CF-->>UI: verdict
+        UI-->>User: light up "verified live" badge (scripted numbers unchanged)
+    end
+    end

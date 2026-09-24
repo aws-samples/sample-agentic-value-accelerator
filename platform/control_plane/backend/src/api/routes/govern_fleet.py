@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_fleet import (
@@ -21,18 +22,21 @@ from services.govern_fleet_service import GovernFleetService
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/fleet", tags=["govern-fleet"])
 
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_fleet", region_scope.MULTI_REGION, prefix="/govern/fleet")
+
 _svc: Optional[GovernFleetService] = None
 
 
 def get_service() -> GovernFleetService:
     global _svc
     if _svc is None:
-        _svc = GovernFleetService(region=settings.AWS_REGION)
+        _svc = GovernFleetService(region=settings.GOVERN_AWS_REGION)
     return _svc
 
 
 @router.get("/summary", response_model=FleetSummaryResponse)
-async def get_fleet_summary(_=Depends(require_role(Role.VIEWER))):
+def get_fleet_summary(_=Depends(require_role(Role.VIEWER))):
     """Pre-aggregated fleet summary (governance, risk, scope distributions).
 
     Returns counts and percentages only — never raw agent lists. Use this for
@@ -42,7 +46,7 @@ async def get_fleet_summary(_=Depends(require_role(Role.VIEWER))):
 
 
 @router.get("/segments", response_model=FleetSegmentsResponse)
-async def get_fleet_segments(
+def get_fleet_segments(
     group_by: str = Query(
         default="businessUnit",
         regex="^(businessUnit|provider|environment)$",
@@ -58,7 +62,7 @@ async def get_fleet_segments(
 
 
 @router.get("/exceptions", response_model=FleetExceptionsResponse)
-async def get_fleet_exceptions(
+def get_fleet_exceptions(
     limit: int = Query(default=100, ge=1, le=500, description="Max agents to return"),
     filter_key: Optional[str] = Query(default=None, description="Filter by business unit"),
     _=Depends(require_role(Role.VIEWER)),
@@ -72,7 +76,7 @@ async def get_fleet_exceptions(
 
 
 @router.get("/inventory", response_model=FleetInventoryResponse)
-async def get_fleet_inventory(_=Depends(require_role(Role.VIEWER))):
+def get_fleet_inventory(_=Depends(require_role(Role.VIEWER))):
     """Inventory breakdown by model and provider.
 
     Used for the registry-lens view (what's deployed, by count and percentage).

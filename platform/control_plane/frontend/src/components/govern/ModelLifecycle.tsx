@@ -9,7 +9,17 @@
  * - Regulatory hold flags
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  governModelsApi,
+  governSageMakerApi,
+  type AwsFoundationModelCatalog,
+  type AwsModelMetricsResponse,
+  type AwsModelRegistryResponse,
+} from '../../api/client';
+import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
+import { RegionCoverageBadge } from './RegionCoverageBadge';
+import { Icon } from './icons';
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -277,9 +287,49 @@ const daysUntil = (dateStr: string | null): number | null => {
 
 // ─────────────────────────── Component ───────────────────────────
 
+// Normalize model identifiers so the governance catalog ids/names can be matched
+// against CloudWatch model ids (e.g. 'haiku-4-5' ↔ 'anthropic.claude-haiku-4-5-...').
+const normId = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 export default function ModelLifecycle() {
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState<LifecycleState | 'all'>('all');
+
+  // Live AWS signals — each degrades independently; on failure the surface keeps
+  // its illustrative governance workflow and badges the source honestly.
+  const [catalog, setCatalog] = useState<AwsFoundationModelCatalog | null>(null);
+  const [metrics, setMetrics] = useState<AwsModelMetricsResponse | null>(null);
+  const [registry, setRegistry] = useState<AwsModelRegistryResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([
+      governModelsApi.catalog(),
+      governModelsApi.runtimeMetrics(7),
+      governSageMakerApi.modelRegistry(),
+    ]).then(([c, m, r]) => {
+      if (cancelled) return;
+      if (c.status === 'fulfilled') setCatalog(c.value);
+      if (m.status === 'fulfilled') setMetrics(m.value);
+      if (r.status === 'fulfilled') setRegistry(r.value);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const catalogLive = !!catalog?.live;
+  const metricsLive = !!metrics?.live;
+  const registryLive = !!registry?.live;
+
+  // Real CloudWatch invocations for a governed model, matched by fuzzy id/name.
+  const liveInvocationsFor = (modelId: string, modelName: string): number | null => {
+    if (!metricsLive || !metrics?.by_model?.length) return null;
+    const keys = [normId(modelId), normId(modelName)].filter(k => k.length >= 4);
+    const hit = metrics.by_model.find(bm => {
+      const nm = normId(bm.model_id);
+      return keys.some(k => nm.includes(k) || k.includes(nm));
+    });
+    return hit ? hit.invocations : null;
+  };
 
   const stats = useMemo(() => ({
     candidate: LIFECYCLE_DATA.filter(m => m.currentState === 'candidate').length,
@@ -295,6 +345,70 @@ export default function ModelLifecycle() {
 
   return (
     <div className="space-y-6">
+      {/* Live AWS model signals — real Bedrock catalog / SageMaker registry / CloudWatch runtime */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Bedrock foundation-model lifecycle (ACTIVE vs LEGACY) */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-medium text-slate-500 uppercase">Bedrock Foundation Models</div>
+            <div className="flex items-center gap-1.5">
+              {catalogLive
+                ? <LiveDataBadge source="Bedrock ListFoundationModels" />
+                : <MockDataBadge integration="Bedrock ListFoundationModels" />}
+              {/* active / legacy / total are all catalog counts, so a missing region moves
+                  all three at once. */}
+              {catalogLive && <RegionCoverageBadge regions={catalog?.regions} noun="Model counts" />}
+            </div>
+          </div>
+          {catalogLive && catalog ? (
+            <div className="flex items-end gap-5">
+              <div><div className="text-2xl font-bold text-emerald-600">{catalog.active}</div><div className="text-[11px] text-slate-400">active</div></div>
+              <div><div className="text-2xl font-bold text-slate-500">{Math.max(catalog.total - catalog.active, 0)}</div><div className="text-[11px] text-slate-400">legacy</div></div>
+              <div><div className="text-2xl font-bold text-slate-900">{catalog.total}</div><div className="text-[11px] text-slate-400">total</div></div>
+            </div>
+          ) : (
+            <div className="text-sm text-slate-400">Catalog unavailable — showing illustrative lifecycle below</div>
+          )}
+        </div>
+
+        {/* SageMaker model registry approval status */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-medium text-slate-500 uppercase">SageMaker Registry Approvals</div>
+            {registryLive
+              ? <LiveDataBadge source="SageMaker ListModelPackages" />
+              : <MockDataBadge integration="SageMaker ListModelPackages" />}
+          </div>
+          {registryLive && registry ? (
+            <div className="flex items-end gap-5">
+              <div><div className="text-2xl font-bold text-emerald-600">{registry.approved}</div><div className="text-[11px] text-slate-400">approved</div></div>
+              <div><div className="text-2xl font-bold text-amber-600">{registry.pending_approval}</div><div className="text-[11px] text-slate-400">pending</div></div>
+              <div><div className="text-2xl font-bold text-rose-600">{registry.rejected}</div><div className="text-[11px] text-slate-400">rejected</div></div>
+            </div>
+          ) : (
+            <div className="text-sm text-slate-400">No registered model packages</div>
+          )}
+        </div>
+
+        {/* CloudWatch runtime invocations across the fleet */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-medium text-slate-500 uppercase">Runtime Invocations ({metrics?.window_days ?? 7}d)</div>
+            {metricsLive
+              ? <LiveDataBadge source="CloudWatch AWS/Bedrock" />
+              : <MockDataBadge integration="CloudWatch AWS/Bedrock" />}
+          </div>
+          {metricsLive && metrics ? (
+            <div className="flex items-end gap-5">
+              <div><div className="text-2xl font-bold text-slate-900">{metrics.total_invocations.toLocaleString()}</div><div className="text-[11px] text-slate-400">invocations</div></div>
+              <div><div className="text-2xl font-bold text-slate-600">{metrics.by_model.length}</div><div className="text-[11px] text-slate-400">models tracked</div></div>
+            </div>
+          ) : (
+            <div className="text-sm text-slate-400">No runtime metrics available</div>
+          )}
+        </div>
+      </div>
+
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {LIFECYCLE_STATES.map(state => (
@@ -322,7 +436,10 @@ export default function ModelLifecycle() {
 
       {/* Lifecycle Pipeline Visualization */}
       <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-900 mb-4">Lifecycle Pipeline</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-sm font-semibold text-slate-900">Lifecycle Pipeline</h3>
+          <MockDataBadge integration="Governance workflow states (candidate → retired)" />
+        </div>
         <div className="flex items-center justify-between mb-6">
           {LIFECYCLE_STATES.map((state, i) => (
             <div key={state.id} className="flex items-center flex-1">
@@ -396,9 +513,7 @@ export default function ModelLifecycle() {
               </div>
             </div>
             <button onClick={() => setSelectedModel(null)} className="text-slate-400 hover:text-slate-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="x-mark" className="w-5 h-5" />
             </button>
           </div>
 
@@ -454,10 +569,21 @@ export default function ModelLifecycle() {
               <div className="text-[10px] text-slate-500 uppercase">Migrated</div>
               <div className="text-xl font-bold text-slate-600">{selectedModelData.useCases.filter(u => u.migrationStatus === 'migrated').length}</div>
             </div>
-            <div className="bg-slate-50 rounded-lg p-3">
-              <div className="text-[10px] text-slate-500 uppercase">Invocations/mo</div>
-              <div className="text-xl font-bold text-slate-900">{selectedModelData.useCases.reduce((s, u) => s + u.invocations, 0).toLocaleString()}</div>
-            </div>
+            {(() => {
+              const liveInv = liveInvocationsFor(selectedModelData.id, selectedModelData.name);
+              const mockInv = selectedModelData.useCases.reduce((s, u) => s + u.invocations, 0);
+              return (
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <div className="text-[10px] text-slate-500 uppercase flex items-center gap-1">
+                    Invocations {liveInv != null ? `(${metrics?.window_days ?? 7}d)` : '/mo'}
+                    {liveInv != null
+                      ? <LiveDataBadge source="CloudWatch AWS/Bedrock" />
+                      : <MockDataBadge />}
+                  </div>
+                  <div className="text-xl font-bold text-slate-900">{(liveInv ?? mockInv).toLocaleString()}</div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Use Cases Table */}
@@ -556,9 +682,7 @@ export default function ModelLifecycle() {
               <div key={i} className="flex items-center gap-4 p-3 border border-slate-200 rounded-lg">
                 <div className="flex items-center gap-2 flex-1">
                   <span className="text-sm font-medium text-slate-600">{migration.fromModel}</span>
-                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
+                  <Icon name="arrow-right" className="w-4 h-4 text-slate-400" />
                   <span className="text-sm font-semibold text-slate-900">{migration.toModel}</span>
                 </div>
                 <div className="text-right">

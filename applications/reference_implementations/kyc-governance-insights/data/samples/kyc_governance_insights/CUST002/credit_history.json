@@ -1,0 +1,42 @@
+{
+  "customer_id": "CUST002",
+  "credit_score": 700,
+  "credit_rating": "BBB",
+  "existing_facilities": [
+    {
+      "type": "Trade Finance",
+      "limit": 10000000,
+      "utilized": 6000000,
+      "status": "current",
+      "bank": "Emirates NBD"
+    }
+  ],
+  "payment_history": {
+    "payments_on_time": 58,
+    "payments_total": 60,
+    "on_time_payments": 58,
+    "late_payments": 2,
+    "defaults": 0,
+    "average_days_to_pay": 31
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 90000000,
+    "total_liabilities": 40000000,
+    "current_assets": 30000000,
+    "current_liabilities": 18000000,
+    "revenue": 100000000,
+    "net_income": 9000000,
+    "debt_to_equity": 0.8,
+    "current_ratio": 1.67,
+    "net_margin": 0.09
+  },
+  "agent_claims": {
+    "de_ratio": 0.8,
+    "current_ratio": 1.67,
+    "net_margin": 0.09,
+    "payment_pct": 96.67
+  },
+  "credit_inquiries_last_12_months": 4
+}

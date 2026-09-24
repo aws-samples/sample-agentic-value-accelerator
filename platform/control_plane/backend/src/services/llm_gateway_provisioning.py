@@ -24,6 +24,9 @@ from typing import Dict, List, Optional
 
 import boto3
 
+from core import safe_fetch
+from core.safe_fetch import SafeFetchError
+
 logger = logging.getLogger(__name__)
 
 
@@ -158,8 +161,6 @@ class LLMGatewayProvisioningService:
 
         # Mint the virtual key via LiteLLM admin API
         try:
-            import urllib.request
-
             payload = {
                 "key_alias": f"foundry-{safe_uc}-{safe_fw}-{safe_id}",
                 "metadata": {
@@ -174,25 +175,58 @@ class LLMGatewayProvisioningService:
             if enabled_models:
                 payload["models"] = enabled_models
 
-            req = urllib.request.Request(
+            # fetch_internal, not fetch: `gateway["endpoint"]` is platform
+            # configuration read out of our own deployment record, and depending on
+            # the topology it is either a private ALB address or a public CloudFront
+            # domain, so the address class is not a useful gate on it either way.
+            # What fetch_internal buys us is that a redirect is an error instead of a
+            # hop - urllib's redirect handler forwarded this Authorization header
+            # verbatim, replaying the gateway master key to whatever host a 302
+            # named. Nothing here validates the endpoint's shape, so this rests on
+            # `outputs.gateway_endpoint` staying platform-written; a caller-supplied
+            # URL would have to go through safe_fetch.fetch instead.
+            resp = safe_fetch.fetch_internal(
                 f"{gateway['endpoint'].rstrip('/')}/key/generate",
-                data=json.dumps(payload).encode("utf-8"),
+                method="POST",
+                body=json.dumps(payload),
                 headers={
                     "Authorization": f"Bearer {master_key}",
                     "Content-Type": "application/json",
                 },
-                method="POST",
+                timeout=15,
             )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                key_response = json.loads(resp.read().decode("utf-8"))
+            # urlopen raised on 4xx/5xx; fetch_internal returns the response, so an
+            # error body would otherwise be parsed as if it were a minted key.
+            if not (200 <= resp.status < 300):
+                logger.warning(
+                    "llm_gateway_provisioning: /key/generate returned status %s", resp.status
+                )
+                return None
+            if resp.truncated:
+                # A minted-key document does not approach safe_fetch's cap, so this
+                # is not the gateway's answer at all. Say that, instead of letting it
+                # surface as the invalid_json_response a cut body would otherwise
+                # cause and reading "no key" out of a document we truncated.
+                logger.warning(
+                    "llm_gateway_provisioning: /key/generate body exceeded the read cap"
+                )
+                return None
+            key_response = resp.json()
 
             virtual_key = key_response.get("key") or key_response.get("token", "")
             if not virtual_key:
+                # %r, not %s: this is the gateway's own text, and a CR/LF in it would
+                # forge a log record.
                 logger.warning(
-                    "llm_gateway_provisioning: /key/generate returned no key: %s",
+                    "llm_gateway_provisioning: /key/generate returned no key: %r",
                     str(key_response)[:200],
                 )
                 return None
+        except SafeFetchError as exc:
+            logger.warning(
+                "llm_gateway_provisioning: /key/generate failed: %s (%s)", exc.reason, exc.detail
+            )
+            return None
         except Exception as exc:
             logger.warning("llm_gateway_provisioning: /key/generate failed: %s", exc)
             return None
@@ -263,23 +297,43 @@ class LLMGatewayProvisioningService:
         gateway = self.find_active_gateway()
         if gateway and virtual_key:
             try:
-                import urllib.request
-
                 master_resp = self._sm.get_secret_value(SecretId=gateway["master_key_secret_arn"])
                 master_key = json.loads(master_resp["SecretString"]).get("master_key", "")
                 if master_key:
                     payload = {"keys": [virtual_key]}
-                    req = urllib.request.Request(
+                    # Same reasoning as /key/generate above: a platform-configured
+                    # endpoint whose address class proves nothing, and a redirect that
+                    # must not become a hop carrying this Authorization header. The
+                    # response body is still discarded, but fetch_internal closes the
+                    # connection on its way out, which the bare urlopen(...).read() did
+                    # not.
+                    resp = safe_fetch.fetch_internal(
                         f"{gateway['endpoint'].rstrip('/')}/key/delete",
-                        data=json.dumps(payload).encode("utf-8"),
+                        method="POST",
+                        body=json.dumps(payload),
                         headers={
                             "Authorization": f"Bearer {master_key}",
                             "Content-Type": "application/json",
                         },
-                        method="POST",
+                        timeout=10,
                     )
-                    urllib.request.urlopen(req, timeout=10).read()
-                    logger.info("llm_gateway_provisioning: revoked virtual key %s", secret_name)
+                    # urlopen raised on 4xx/5xx, so the success log below only ever
+                    # printed after an accepted delete. Keep it that way: a key that is
+                    # still spendable must not be logged as revoked.
+                    if 200 <= resp.status < 300:
+                        logger.info(
+                            "llm_gateway_provisioning: revoked virtual key %s", secret_name
+                        )
+                    else:
+                        logger.warning(
+                            "llm_gateway_provisioning: /key/delete returned status %s for %s",
+                            resp.status,
+                            secret_name,
+                        )
+            except SafeFetchError as exc:
+                logger.warning(
+                    "llm_gateway_provisioning: /key/delete failed: %s (%s)", exc.reason, exc.detail
+                )
             except Exception as exc:
                 logger.warning("llm_gateway_provisioning: /key/delete failed: %s", exc)
 

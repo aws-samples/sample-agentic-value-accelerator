@@ -18,7 +18,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from core.ttl_cache import get_or_load
-from core.security_utils import mask_arn
+from core.security_utils import mask_arn, sanitize_finding_title
 from models.govern_guardduty_ai import (
     GuardDutyAIFinding,
     GuardDutyAIFindingsResponse,
@@ -175,7 +175,12 @@ class GovernGuardDutyAIService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_findings(self, limit: int = 50) -> GuardDutyAIFindingsResponse:
@@ -289,8 +294,8 @@ class GovernGuardDutyAIService:
                 parsed.append(GuardDutyAIFinding(
                     id=_hash_id(finding_id),
                     type=finding_type,
-                    title=title,
-                    description=description[:500] if description else "",
+                    title=sanitize_finding_title(title) or "",
+                    description=sanitize_finding_title(description[:500], max_len=500) if description else "",
                     severity=severity,
                     resource_type=resource_type,
                     resource_id=resource_id or "unknown",

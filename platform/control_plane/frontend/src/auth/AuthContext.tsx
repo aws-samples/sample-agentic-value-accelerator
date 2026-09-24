@@ -4,6 +4,7 @@ import {
   CognitoUserPool,
   CognitoUser,
   AuthenticationDetails,
+  CognitoUserAttribute,
   CognitoUserSession,
 } from 'amazon-cognito-identity-js';
 
@@ -26,6 +27,12 @@ interface AuthState {
   confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   signOut: () => void;
+  // Self-service sign-up. Domain policy (public-mail-provider denylist) is
+  // enforced by a Cognito PreSignUp Lambda, not the browser — the message
+  // returned by the SDK on rejection is user-facing copy from that Lambda.
+  signUp: (email: string, password: string, name?: string) => Promise<void>;
+  confirmSignUp: (email: string, code: string) => Promise<void>;
+  resendConfirmationCode: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -150,8 +157,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const signUp = (email: string, password: string, name?: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (!userPool) return reject(new Error('Cognito not configured'));
+      const attributes: CognitoUserAttribute[] = [
+        new CognitoUserAttribute({ Name: 'email', Value: email }),
+      ];
+      if (name) attributes.push(new CognitoUserAttribute({ Name: 'name', Value: name }));
+      userPool.signUp(email, password, attributes, [], (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  };
+
+  const confirmSignUp = (email: string, code: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (!userPool) return reject(new Error('Cognito not configured'));
+      const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+      cognitoUser.confirmRegistration(code, true, (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  };
+
+  const resendConfirmationCode = (email: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (!userPool) return reject(new Error('Cognito not configured'));
+      const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+      cognitoUser.resendConfirmationCode((err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, token, signIn, completeNewPassword, forgotPassword, confirmForgotPassword, changePassword, signOut }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, token, signIn, completeNewPassword, forgotPassword, confirmForgotPassword, changePassword, signOut, signUp, confirmSignUp, resendConfirmationCode }}>
       {children}
     </AuthContext.Provider>
   );

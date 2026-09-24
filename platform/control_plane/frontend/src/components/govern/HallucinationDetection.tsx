@@ -18,10 +18,11 @@ import {
 import { Icon, type IconName } from './icons';
 import { tooltipStyle } from './mockData';
 import LiveHeader from './LiveHeader';
-import { LiveDataBadge } from './DataSourceIndicator';
-import { governGuardrailsApi, type AwsGuardrailSummary, type AwsGuardrailPolicyBreakdown } from '../../api/client';
+import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
+import { governGuardrailsApi, governInvocationSafetyApi, type AwsGuardrailSummary, type AwsGuardrailPolicyBreakdown, type AwsInvocationSafetyResponse } from '../../api/client';
 import { usePollingKey } from './usePollingKey';
 import { rowButtonProps } from './a11y';
+import { useDataSources } from './DataSourceContext';
 
 // Detection method definitions
 interface DetectionMethod {
@@ -303,6 +304,9 @@ export default function HallucinationDetection() {
     by_policy: AwsGuardrailPolicyBreakdown[];
     window_days: number;
   } | null>(null);
+  // Live invocation-safety telemetry — real detection/intervention trend from Bedrock invocation logs
+  const [invSafety, setInvSafety] = useState<AwsInvocationSafetyResponse | null>(null);
+  const { updateSource } = useDataSources();
 
   useEffect(() => {
     setLoading(true);
@@ -340,15 +344,41 @@ export default function HallucinationDetection() {
           by_policy: byPolicy,
           window_days: d.window_days ?? 30,
         });
+
+        if (d.live) {
+          updateSource('aws-bedrock', { status: 'live', lastFetch: Date.now() });
+        }
       })
       .catch(e => {
         setError(e?.message || 'Failed to load guardrail telemetry');
         setGuardrailsData(null);
+        updateSource('aws-bedrock', { status: 'error', error: 'Guardrail telemetry unavailable' });
       })
       .finally(() => setLoading(false));
+  }, [pollKey, updateSource]);
+
+  // Live invocation-safety telemetry (daily interventions + call volume from Bedrock model-invocation logs).
+  // Degrades independently: on failure the trend falls back to the illustrative series below.
+  useEffect(() => {
+    let cancelled = false;
+    governInvocationSafetyApi.telemetry(7)
+      .then(d => { if (!cancelled) setInvSafety(d); })
+      .catch(() => { if (!cancelled) setInvSafety(null); });
+    return () => { cancelled = true; };
   }, [pollKey]);
 
-  const trendData = useMemo(() => generateTrendData(), []);
+  // True only when the API came back live AND actually returned daily trend points.
+  const trendLive = !!invSafety?.live && (invSafety?.trend?.length ?? 0) > 0;
+  const trendWindowDays = invSafety?.window_days ?? 7;
+  const trendData = useMemo(() => {
+    const points = invSafety?.trend ?? [];
+    if (invSafety?.live && points.length > 0) {
+      // Real daily series: guardrail interventions ("detected") and invocation volume ("calls").
+      return points.map(p => ({ hour: p.date, detected: p.guardrail_intervened, calls: p.calls, blocked: 0, flagged: 0 }));
+    }
+    // Fallback: illustrative hourly series (no live invocation logs available).
+    return generateTrendData().map(d => ({ ...d, calls: 0 }));
+  }, [invSafety]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -588,7 +618,54 @@ export default function HallucinationDetection() {
             )}
           </div>
 
-          {/* Illustrative Incidents Section */}
+          {/* Headline intervention counts — live Bedrock guardrail telemetry when available,
+              illustrative demo incidents otherwise. Per-incident detail rows below stay illustrative. */}
+          {guardrailsData?.live ? (
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon name="shield-check" className="w-5 h-5 text-emerald-600" />
+              <span className="text-sm font-semibold text-slate-900">Guardrail Interventions</span>
+              <LiveDataBadge source="Bedrock guardrail telemetry" detail="Aggregated Bedrock guardrail interventions over the window (no prompt/response content)" />
+              <span className="text-xs text-slate-400">last {guardrailsData.window_days}d</span>
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="chart-bar" className="w-5 h-5 text-slate-500" />
+                  <span className="text-xs text-slate-500 uppercase tracking-wide">Invocations</span>
+                </div>
+                <div className="text-2xl font-bold text-slate-900">{guardrailsData.total.toLocaleString()}</div>
+                <div className="text-xs text-slate-400 mt-1">guarded calls</div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="x-circle" className="w-5 h-5 text-rose-500" />
+                  <span className="text-xs text-slate-500 uppercase tracking-wide">Blocked</span>
+                </div>
+                <div className="text-2xl font-bold text-rose-600">{guardrailsData.total_interventions.toLocaleString()}</div>
+                <div className="text-xs text-slate-400 mt-1">guardrail interventions</div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="flag" className="w-5 h-5 text-amber-500" />
+                  <span className="text-xs text-slate-500 uppercase tracking-wide">Grounding</span>
+                </div>
+                <div className="text-2xl font-bold text-amber-600">{guardrailsData.grounding_failures.toLocaleString()}</div>
+                <div className="text-xs text-slate-400 mt-1">grounding interventions</div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="chart-bar-square" className="w-5 h-5 text-slate-500" />
+                  <span className="text-xs text-slate-500 uppercase tracking-wide">Intervention Rate</span>
+                </div>
+                <div className="text-2xl font-bold text-slate-900">
+                  {guardrailsData.total > 0 ? ((guardrailsData.total_interventions / guardrailsData.total) * 100).toFixed(1) : '0.0'}%
+                </div>
+                <div className="text-xs text-slate-400 mt-1">of guarded calls</div>
+              </div>
+            </div>
+          </div>
+          ) : (
           <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <Icon name="information-circle" className="w-5 h-5 text-amber-600" />
@@ -632,6 +709,7 @@ export default function HallucinationDetection() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Recent Blocked/Flagged Responses - Critical Detail (Illustrative) */}
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-rose-200/60 p-5 shadow-sm">
@@ -708,16 +786,33 @@ export default function HallucinationDetection() {
           <div className="grid grid-cols-3 gap-4">
             {/* Trend Chart */}
             <div className="col-span-2 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 mb-4">24-Hour Detection Trend</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  {trendLive ? `${trendWindowDays}-Day Guardrail Intervention Trend` : '24-Hour Detection Trend'}
+                </h3>
+                {trendLive
+                  ? <LiveDataBadge source="Bedrock invocation logs" detail="Daily guardrail interventions and invocation volume from CloudWatch model-invocation logs" />
+                  : <MockDataBadge integration="Bedrock invocation logging (CloudWatch Logs)" />}
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={trendData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="hour" tick={{ fill: '#94a3b8', fontSize: 10 }} interval={3} />
-                  <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                  <XAxis dataKey="hour" tick={{ fill: '#94a3b8', fontSize: 10 }} interval={trendLive ? 0 : 3} />
+                  <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                  {trendLive && <YAxis yAxisId="right" orientation="right" tick={{ fill: '#94a3b8', fontSize: 10 }} />}
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="detected" name="Detected" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="blocked" name="Blocked" stroke="#ef4444" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="flagged" name="Flagged" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                  {trendLive ? (
+                    <>
+                      <Line yAxisId="left" type="monotone" dataKey="detected" name="Guardrail Interventions" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                      <Line yAxisId="right" type="monotone" dataKey="calls" name="Invocations" stroke="#6366f1" strokeWidth={2} dot={false} />
+                    </>
+                  ) : (
+                    <>
+                      <Line yAxisId="left" type="monotone" dataKey="detected" name="Detected" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                      <Line yAxisId="left" type="monotone" dataKey="blocked" name="Blocked" stroke="#ef4444" strokeWidth={2} dot={false} />
+                      <Line yAxisId="left" type="monotone" dataKey="flagged" name="Flagged" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                    </>
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -734,7 +829,7 @@ export default function HallucinationDetection() {
                     innerRadius={40}
                     outerRadius={60}
                     dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                     labelLine={false}
                   >
                     {pieData.map((_, i) => (

@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AgentCore Evaluations - DynamoDB tables for the KYC agent evaluation framework:
+  evaluator definitions, evaluation results, and golden test cases. These tables
+  are seeded (seed_evaluations.py / seed_phase3.py) and READ by the registry-proxy
+  (/svc/registry/evaluators, /results, /evaluations). The former inline
+  "EvaluationRunner" Lambda returned a hardcoded placeholder score (1.0) and had
+  no gateway route or event trigger — it was never invoked, so it was removed
+  (architecture honesty review). If a real evaluation runner is added later, wire
+  it explicitly with a route/trigger and genuine scoring.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+      - development
+    Description: Deployment environment
+
+Resources:
+  # ============================================================
+  # DynamoDB Tables (seeded + read by registry-proxy)
+  # ============================================================
+
+  EvaluatorsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: kyc-agent-evaluators
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: evaluator_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: evaluator_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: kyc-evaluations
+        - Key: Environment
+          Value: !Ref Environment
+
+  EvaluationResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: kyc-evaluation-results
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: evaluator_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: evaluator_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: kyc-evaluations
+        - Key: Environment
+          Value: !Ref Environment
+
+  GoldenTestCasesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: kyc-golden-test-cases
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: case_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: case_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: kyc-evaluations
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  EvaluatorsTableArn:
+    Description: ARN of the Evaluators DynamoDB table
+    Value: !GetAtt EvaluatorsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EvaluatorsTableArn'
+
+  ResultsTableArn:
+    Description: ARN of the Evaluation Results DynamoDB table
+    Value: !GetAtt EvaluationResultsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ResultsTableArn'
+
+  GoldenTestCasesTableArn:
+    Description: ARN of the Golden Test Cases DynamoDB table
+    Value: !GetAtt GoldenTestCasesTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-GoldenTestCasesTableArn'

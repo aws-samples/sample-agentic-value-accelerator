@@ -82,7 +82,6 @@ export function useComplianceAttestations(): UseComplianceAttestationsReturn {
       // Fetch overall posture
       const postureData = await complianceApi.getPosture();
       setPosture(postureData);
-      setLive(true);
 
       // Fetch attestations for all frameworks
       const allAttestations = new Map<string, ControlAttestation>();
@@ -99,6 +98,29 @@ export function useComplianceAttestations(): UseComplianceAttestationsReturn {
         })
       );
       setAttestations(allAttestations);
+      // Honesty gate: posture alone (all controls not_started with empty
+      // attestations) is not live compliance data. Only mark live when real
+      // attestation/evidence data exists, so the LIVE badge and posture strip
+      // don't misrepresent mock control statuses as live.
+      //
+      // Re-checked after the backend control-id re-key (2026-09-14), which made the merge
+      // below land 24 attestations where 14 used to land. The predicate is unchanged in
+      // correctness, because it never claimed anything per-row: it says "the compliance API
+      // is reachable and has stored attestations", and that is true of the response whenever
+      // it is true. The re-key raised how many of those attestations actually reach a
+      // control, so the flag is now backed by more of what it implies, not less.
+      //
+      // It is deliberately NOT a per-control provenance claim and callers must not spend it
+      // as one: 24 of 806 controls are measured, so a LiveDataBadge placed over the whole
+      // framework list still sits on 782 seeded literals. Badge scope is the caller's
+      // problem; this flag answers only "did any measurement arrive".
+      //
+      // Why `size === 0` yields false rather than counting as a measured zero: a reachable
+      // store that holds no attestations has measured nothing *about these controls*, so
+      // there is no zero to report - the page would be 806 seeded rows under a Live badge.
+      // That is different from a store being queried for a quantity and honestly answering
+      // 0, which would be live data.
+      setLive(allAttestations.size > 0);
     } catch (err) {
       console.warn('Compliance API unavailable, using mock data:', err);
       setError('API unavailable — showing mock data');
@@ -119,6 +141,37 @@ export function useComplianceAttestations(): UseComplianceAttestationsReturn {
       categories: fw.categories.map((cat) => ({
         ...cat,
         controls: cat.controls.map((ctrl) => {
+          // JOIN KEY: `${fw.id}#${ctrl.id}` - the framework id from this checklist plus the
+          // control's own `id`, never its `section`. The backend's auto-detector is written
+          // against exactly this contract (see the "CONTROL ID CONTRACT" block in
+          // backend/src/services/govern_compliance_service.py), and the two sides now agree:
+          // every stored attestation resolves to a control here.
+          //
+          // Until 2026-09-14 they did not. 10 of the 24 stored attestations used an id this
+          // checklist has nowhere - the 3 nist-ai-rmf rows sent `section` values ("GOVERN
+          // 1.6" where the id is "NIST-GV-1.6"), and 7 finos-air rows used AIR-P-### /
+          // AIR-D-###, prefixes absent from the FINOS taxonomy entirely. That was closed on
+          // the backend by re-keying to the ids below; this side was already correct to key
+          // on `ctrl.id`, so nothing changed here.
+          //
+          // What would break the agreement again: any backend `control_id` that is not a
+          // `ctrl.id` in COMPLIANCE_CENTER_FRAMEWORKS. There is no runtime signal when that
+          // happens, which is why it survived so long. `attestations.get()` simply misses,
+          // the control keeps its seeded status, and a miss is indistinguishable from "not
+          // assessed" - while `setLive()` above has already flipped the page to LIVE because
+          // the *other* attestations did arrive. So a seeded PASS renders under a Live badge
+          // and nothing logs. The provenance claim ends up true of the response and false of
+          // the row.
+          //
+          // One id is expected to miss, by design: `finos-air` / `AIR-D-002`, written by the
+          // backend's aws-config scanner. No FINOS control means "configuration compliance
+          // monitoring", and inventing one to host the measurement was rejected, so it stays
+          // measured-but-undisplayable rather than pointed at an approximate control.
+          //
+          // Still true regardless of the key: only 24 of the 806 controls in this checklist
+          // are measured at all, and each of the 24 is an existence probe, not an efficacy
+          // test. Agreeing on ids makes those 24 land on the right rows; it does not make
+          // the remaining 782 anything other than seeded literals.
           const att = attestations.get(attestationKey(fw.id, ctrl.id));
           if (att) {
             return {
@@ -155,7 +208,13 @@ export function useComplianceAttestations(): UseComplianceAttestationsReturn {
             evidence: [],
             auto_detected: false,
             updated_at: new Date().toISOString(),
-            updated_by: 'user',
+            // 'unknown' rather than 'user' because that is what the server will actually
+            // store: the route resolves attribution from the x-user-email header and
+            // falls back to 'unknown', and we deliberately no longer send an updated_by
+            // param. An optimistic row that guesses a different value than the write it
+            // is predicting would flicker to the real one a moment later, and 'user'
+            // named nobody in the first place.
+            updated_by: 'unknown',
           };
 
       setAttestations((prev) => new Map(prev).set(key, optimistic));

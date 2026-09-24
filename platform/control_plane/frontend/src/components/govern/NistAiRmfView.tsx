@@ -11,15 +11,28 @@
  * - Visual lifecycle pipeline (Govern/Map/Measure/Manage horizontal flow)
  * - Per-function compliance scores with expandable control details
  * - AWS service mapping showing which services satisfy each control
- * - Live detection status (auto-detected vs manual attestation)
+ * - Detection status (auto-detected vs manual attestation)
  * - Overall RMF compliance score and trend
  * - Evidence links for audit trail
  * - Supports `embedded` prop for ComplianceCenter integration
  */
 import { useState, useMemo } from 'react';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
+import { Icon } from './icons';
+import { COMPLIANCE_CENTER_FRAMEWORKS } from './mockData';
+import { useControlEvaluation } from './useControlEvaluation';
+import type { ControlEvaluation } from '../../api/client';
+
+// Maps a live control-evaluation status onto the lifecycle control status union.
+// 'not-evaluated' surfaces as 'not-started' so it flows through the existing
+// applicable = total - notStarted denominator convention.
+function liveControlStatus(
+  status: ControlEvaluation['status'],
+): 'pass' | 'fail' | 'in-progress' | 'not-started' {
+  return status === 'not-evaluated' ? 'not-started' : status;
+}
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -381,8 +394,11 @@ function computeFunctionStats(func: NistFunction) {
   const passed = func.controls.filter(c => c.status === 'pass').length;
   const inProgress = func.controls.filter(c => c.status === 'in-progress').length;
   const failed = func.controls.filter(c => c.status === 'fail').length;
+  const notStarted = func.controls.filter(c => c.status === 'not-started').length;
   const autoDetected = func.controls.filter(c => c.detectionType === 'auto' || c.detectionType === 'hybrid').length;
-  const compliancePct = total > 0 ? Math.round((passed / total) * 100) : 0;
+  // Match the ComplianceCenter hub denominator: % of applicable (non-'not-started') controls
+  const applicable = total - notStarted;
+  const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
   return { total, passed, inProgress, failed, autoDetected, compliancePct };
 }
 
@@ -392,8 +408,11 @@ function computeOverallStats(functions: NistFunction[]) {
   const passed = allControls.filter(c => c.status === 'pass').length;
   const inProgress = allControls.filter(c => c.status === 'in-progress').length;
   const failed = allControls.filter(c => c.status === 'fail').length;
+  const notStarted = allControls.filter(c => c.status === 'not-started').length;
   const autoDetected = allControls.filter(c => c.detectionType === 'auto' || c.detectionType === 'hybrid').length;
-  const compliancePct = total > 0 ? Math.round((passed / total) * 100) : 0;
+  // Match the ComplianceCenter hub denominator: % of applicable (non-'not-started') controls
+  const applicable = total - notStarted;
+  const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
   const automationPct = total > 0 ? Math.round((autoDetected / total) * 100) : 0;
   return { total, passed, inProgress, failed, autoDetected, compliancePct, automationPct };
 }
@@ -410,7 +429,38 @@ export default function NistAiRmfView({ embedded = false, onNavigateToProgram }:
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  const overallStats = useMemo(() => computeOverallStats(NIST_FUNCTIONS), []);
+  // Live control evaluation — pull the nist-ai-rmf framework's controls (those with an
+  // AWS autoDetectSource) and evaluate them against live AWS sources. Same live-overlay
+  // pattern as the sibling framework views (EuAiActView, CriAiRmfView, OsfiE23View, …).
+  const nistFramework = useMemo(
+    () => COMPLIANCE_CENTER_FRAMEWORKS.find(fw => fw.id === 'nist-ai-rmf'),
+    [],
+  );
+  const frameworkControls = useMemo(
+    () => nistFramework?.categories.flatMap(c => c.controls) ?? [],
+    [nistFramework],
+  );
+  const { evaluations: liveEvaluations, live: controlsLive } = useControlEvaluation({
+    controls: frameworkControls,
+    skip: !nistFramework,
+  });
+
+  // Overlay live status onto the lifecycle functions. Framework control IDs carry a
+  // `NIST-` prefix (e.g. NIST-GV-1.6) that maps to the lifecycle IDs here (GV-1.6).
+  // Controls without a live evaluation keep their static status.
+  const liveFunctions = useMemo<NistFunction[]>(() => {
+    if (!controlsLive) return NIST_FUNCTIONS;
+    return NIST_FUNCTIONS.map(fn => ({
+      ...fn,
+      controls: fn.controls.map(ctrl => {
+        const ev = liveEvaluations.get(`NIST-${ctrl.id}`);
+        if (!ev) return ctrl;
+        return { ...ctrl, status: liveControlStatus(ev.status), evidence: ev.evidence || ctrl.evidence };
+      }),
+    }));
+  }, [controlsLive, liveEvaluations]);
+
+  const overallStats = useMemo(() => computeOverallStats(liveFunctions), [liveFunctions]);
 
   const toggleFunction = (key: string) => {
     const next = new Set(expandedFunctions);
@@ -427,12 +477,12 @@ export default function NistAiRmfView({ embedded = false, onNavigateToProgram }:
   };
 
   const filteredFunctions = useMemo(() => {
-    if (filterStatus === 'all') return NIST_FUNCTIONS;
-    return NIST_FUNCTIONS.map(f => ({
+    if (filterStatus === 'all') return liveFunctions;
+    return liveFunctions.map(f => ({
       ...f,
       controls: f.controls.filter(c => c.status === filterStatus),
     })).filter(f => f.controls.length > 0);
-  }, [filterStatus]);
+  }, [filterStatus, liveFunctions]);
 
   const body = (
     <div className="space-y-6">
@@ -441,7 +491,7 @@ export default function NistAiRmfView({ embedded = false, onNavigateToProgram }:
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">NIST AI RMF Lifecycle</h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">Four-function risk management process with live compliance status</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Four-function risk management process with compliance status</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -457,7 +507,7 @@ export default function NistAiRmfView({ embedded = false, onNavigateToProgram }:
           <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-violet-200 via-blue-200 via-emerald-200 to-orange-200 -translate-y-1/2 rounded-full hidden md:block" />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative">
-            {NIST_FUNCTIONS.map((func, idx) => {
+            {liveFunctions.map((func, idx) => {
               const stats = computeFunctionStats(func);
               const isExpanded = expandedFunctions.has(func.key);
               return (
@@ -543,7 +593,7 @@ export default function NistAiRmfView({ embedded = false, onNavigateToProgram }:
       {onNavigateToProgram && (
         <div className="flex items-center justify-between bg-violet-50 rounded-xl border border-violet-200 px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-violet-600 text-sm">📋</span>
+            <Icon name="clipboard-document-list" className="w-4 h-4 text-violet-600" />
             <span className="text-sm text-violet-800">Track NIST AI RMF controls in your governance program</span>
           </div>
           <button
@@ -803,13 +853,25 @@ export default function NistAiRmfView({ embedded = false, onNavigateToProgram }:
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a framework whose controls are seeded would inherit a Live header.
+  const badge = controlsLive
+    ? <LiveDataBadge source="AWS control evaluation" detail="NIST AI RMF controls with an AWS auto-detect source evaluated live against CloudTrail, CloudWatch, Bedrock, Config, SageMaker, IAM, and Glue" />
+    : <MockDataBadge integration="NIST AI RMF controls — control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
 
   return (
     <GovernPageLayout
       title="NIST AI RMF"
       description="NIST AI Risk Management Framework 1.0 — Govern, Map, Measure, Manage lifecycle with AWS service mappings and automated detection status."
-      badge={<MockDataBadge integration="NIST AI RMF controls — control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

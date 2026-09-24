@@ -5,7 +5,8 @@
 import { Link } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useDataGovernance } from './useDataGovernance';
-import { LiveDataBadge } from '../DataSourceIndicator';
+import { MockDataBadge } from '../DataSourceIndicator';
+import { Icon } from '../icons';
 import EmptyState from '../EmptyState';
 import StatCard from '../StatCard';
 import { tooltipStyle } from './dataGovernanceData';
@@ -71,7 +72,7 @@ export default function AgentDataProfiles() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Agent Data Profiles</h1>
-              <LiveDataBadge />
+              <MockDataBadge integration="Bedrock agent guardrail associations" />
             </div>
             <p className="text-slate-500 mt-1 max-w-2xl">
               Data sources, protection status, and guardrail configuration for each deployed agent.
@@ -79,10 +80,21 @@ export default function AgentDataProfiles() {
           </div>
         </div>
 
+        {/* Illustrative binding note */}
+        <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
+          <Icon name="information-circle" className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800">
+            <strong>Illustrative protection coverage.</strong> Deployment inventory (accounts, regions, status, owners)
+            is live. The guardrail-to-agent binding below is an approximation — every active guardrail is currently
+            associated with every deployment, so per-agent coverage is identical and not yet measured from real
+            Bedrock agent guardrail associations.
+          </p>
+        </div>
+
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <StatCard label="Agents Deployed" value={profiles.length} variant="info" sub="across all accounts" />
-          <StatCard label="Protected Agents" value={protectedAgents} variant={protectedAgents ? 'success' : 'muted'} sub={`${protectedPct}% with guardrails`} />
+          <StatCard label="Protected Agents" value={protectedAgents} variant={protectedAgents ? 'success' : 'muted'} sub={`${protectedPct}% with guardrails · illustrative`} />
           <StatCard label="PII Types Protected" value={dg.summary.uniquePiiTypes.length} variant="default" sub="unique classes" />
           <StatCard label="Events (24h)" value={dg.summary.last24hEvents.total} variant={dg.summary.last24hEvents.blocked ? 'warning' : 'muted'} sub={`${dg.summary.last24hEvents.blocked} blocked`} />
         </div>
@@ -90,7 +102,10 @@ export default function AgentDataProfiles() {
         {profiles.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4 mb-6">
             <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Guardrail Coverage</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Guardrail Coverage</h3>
+                <MockDataBadge integration="Bedrock agent guardrail associations" />
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie data={protectionData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
@@ -108,7 +123,10 @@ export default function AgentDataProfiles() {
               </div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Data-Class Control Coverage per Agent</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900">Data-Class Control Coverage per Agent</h3>
+                <MockDataBadge integration="Bedrock agent guardrail associations" />
+              </div>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={coverageData} margin={{ left: 4, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -132,7 +150,7 @@ export default function AgentDataProfiles() {
         {profiles.length === 0 ? (
           <div className="bg-slate-50 rounded-xl border border-slate-200 py-6">
             <EmptyState
-              icon="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              icon="computer-desktop"
               title="No agents deployed"
               description="Deploy agents from the Applications catalog to see their data governance profiles, guardrails, and PII detection settings."
               actionLabel="Browse Applications"

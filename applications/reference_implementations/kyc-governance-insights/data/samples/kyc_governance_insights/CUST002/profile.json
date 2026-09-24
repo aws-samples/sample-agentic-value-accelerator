@@ -1,0 +1,34 @@
+{
+  "customer_id": "CUST002",
+  "name": "Al-Rashid Trading FZE",
+  "account_type": "corporate",
+  "industry": "General Trading",
+  "incorporation": {
+    "country": "United Arab Emirates",
+    "state": "Dubai (DIFC)",
+    "date": "2016-08-01"
+  },
+  "contact": {
+    "address": "Level 12, Gate District, DIFC, Dubai, UAE",
+    "phone": "+971-4-555-0142",
+    "email": "treasury@alrashid.example.ae"
+  },
+  "directors": [
+    {
+      "name": "Omar Al-Rashid",
+      "role": "Managing Director",
+      "pep_status": false
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "Omar Al-Rashid",
+      "ownership_percentage": 100
+    }
+  ],
+  "kyc_status": "verified",
+  "risk_flags": [
+    "elevated_geographic_risk"
+  ],
+  "annual_revenue": "$80M-$120M"
+}

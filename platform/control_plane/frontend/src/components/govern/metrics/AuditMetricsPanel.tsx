@@ -51,7 +51,16 @@ export default function AuditMetricsPanel({ showTrail = true }: { showTrail?: bo
 
       {/* Incident KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <StatCard label="Incident Resolution (MTTR)" value={`${mttr.actual} min`} variant={ragToStatCardVariant(mttr.rag)} sub={`target ≤ ${mttr.expected} min`} />
+        {/* `${mttr.actual} min` printed the string "null min" once MTTR became honestly
+            unmeasured. Audit events carry no resolution timestamp, so on the live path there
+            is nothing to compute this from - the rag is already 'na', which StatCard renders
+            neutrally. */}
+        <StatCard
+          label="Incident Resolution (MTTR)"
+          value={mttr.actual == null ? '—' : `${mttr.actual} min`}
+          variant={ragToStatCardVariant(mttr.rag)}
+          sub={mttr.actual == null ? 'not measured — audit events carry no resolution time' : `target ≤ ${mttr.expected} min`}
+        />
         {rows.filter(r => r.id !== 'audit.mttr').map(r => (
           <StatCard
             key={r.id}

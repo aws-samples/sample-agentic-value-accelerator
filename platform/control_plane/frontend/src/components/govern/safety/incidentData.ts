@@ -54,6 +54,17 @@ export interface Incident {
   detectedAt: string;
   /** Does EU AI Act Article 73 serious-incident reporting apply? */
   reportable: boolean;
+  /**
+   * Whether anyone has actually made the Art. 73 determination for this incident.
+   *
+   * Defaults to true for the authored fixture records, whose reportable/clock values are
+   * deliberate. Audit-derived rows set it FALSE: their severity is inferred by substring-
+   * matching the event summary, and deriving a statutory reporting obligation and a 2- or
+   * 15-day deadline from that guess states a regulatory conclusion nobody reached. With
+   * this false the UI shows "classification pending" rather than a clock badge or the
+   * equally strong claim "not reportable".
+   */
+  reportableAssessed?: boolean;
   /** Statutory clock in days (2/10/15) or null when not reportable. */
   reportClockDays: ReportClockDays;
   /** Fixed ISO deadline string, or 'n/a' when not reportable. */
@@ -204,9 +215,29 @@ function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((to - from) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Real 'today' as an ISO date (YYYY-MM-DD). Statutory clocks (Art. 73) are a live
+ * obligation, so overdue/approaching math must run against wall-clock time — not a
+ * frozen fixture date. INCIDENT_FIXTURE_TODAY only documents when the fixtures were
+ * authored; it is no longer used to drive the countdowns.
+ */
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Is a reportable incident past its statutory deadline, relative to real today?
+ * True only when a concrete deadline exists, it has passed, and the incident has
+ * not yet been reported (a reported incident met its clock and is not overdue).
+ */
+export function isReportOverdue(inc: Incident, today: string = todayIso()): boolean {
+  if (!inc.reportable || inc.reportDeadline === 'n/a' || inc.status === 'reported') return false;
+  return daysBetween(today, inc.reportDeadline) < 0;
+}
+
 export function computeIncidentCounts(
   incidents: Incident[] = INCIDENTS,
-  today: string = INCIDENT_FIXTURE_TODAY,
+  today: string = todayIso(),
   approachingWindowDays = 7,
 ): IncidentCounts {
   const bySeverity = Object.fromEntries(SEVERITIES.map(s => [s, 0])) as Record<IncidentSeverity, number>;

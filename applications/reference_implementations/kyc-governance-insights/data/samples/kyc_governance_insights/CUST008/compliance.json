@@ -1,0 +1,54 @@
+{
+  "customer_id": "CUST008",
+  "kyc_verification": {
+    "status": "completed",
+    "date": "2020-02-10",
+    "documents_verified": [
+      "Certificate of Incorporation",
+      "UBO Declaration"
+    ]
+  },
+  "sanctions_screening": {
+    "status": "match",
+    "last_check": "2026-06-15",
+    "databases_checked": [
+      "OFAC",
+      "UN",
+      "EU",
+      "UK HMT"
+    ],
+    "matches": [
+      {
+        "name": "Volkov Enterprises LLC",
+        "list": "OFAC SDN",
+        "entry_id": "SDN-31847",
+        "match_score": 0.97,
+        "designated": "2026-06-15"
+      }
+    ]
+  },
+  "pep_screening": {
+    "status": "clear",
+    "matches": []
+  },
+  "adverse_media": {
+    "status": "findings",
+    "last_check": "2026-06-16",
+    "findings": [
+      {
+        "date": "2026-06",
+        "summary": "OFAC SDN designation coverage (5 articles)",
+        "severity": "critical"
+      }
+    ]
+  },
+  "aml_risk_rating": "critical",
+  "enhanced_due_diligence_required": true,
+  "next_review_date": "immediate",
+  "regulatory_notes": [
+    "MANDATORY BLOCK \u2014 OFAC SDN match 97% (SDN-31847, designated 2026-06-15)",
+    "Customer previously CLEAN (onboarded 2020) \u2014 caught by automated weekly re-screening",
+    "SAR filed: REF-SAR-2026-0493",
+    "All facilities frozen pending termination"
+  ]
+}

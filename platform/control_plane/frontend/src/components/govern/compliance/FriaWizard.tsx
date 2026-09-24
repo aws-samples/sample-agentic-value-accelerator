@@ -277,7 +277,7 @@ export default function FriaWizard({ embedded = false, initialSystemId, onClose 
 
   // Calculate overall FRIA score
   const friaScore = useMemo(() => {
-    if (!friaData) return { score: 0, level: 'N/A', color: 'text-slate-500' };
+    if (!friaData) return { score: 0, level: 'N/A', color: 'text-slate-500', assessed: false, assessedCount: 0, totalRights: FUNDAMENTAL_RIGHTS.length };
 
     const impactWeights: Record<ImpactLevel, number> = { none: 0, low: 1, medium: 2, high: 3, critical: 4 };
     const residualWeights: Record<ResidualRisk, number> = { acceptable: 0, tolerable: 1, unacceptable: 3 };
@@ -298,6 +298,12 @@ export default function FriaWizard({ embedded = false, initialSystemId, onClose 
     const rawScore = totalImpact + totalResidual;
     const normalizedScore = Math.round((1 - rawScore / maxScore) * 100);
 
+    // Until at least one right has been assessed, weights are all 0 → a perfect 100/Low Risk
+    // would be fabricated. Report "Not assessed" instead of a misleading clean bill of health.
+    if (assessedCount === 0) {
+      return { score: normalizedScore, level: 'Not assessed', color: 'text-slate-500', assessed: false, assessedCount, totalRights: FUNDAMENTAL_RIGHTS.length };
+    }
+
     let level: string;
     let color: string;
     if (normalizedScore >= 80) { level = 'Low Risk'; color = 'text-emerald-600'; }
@@ -305,7 +311,7 @@ export default function FriaWizard({ embedded = false, initialSystemId, onClose 
     else if (normalizedScore >= 40) { level = 'High Risk'; color = 'text-orange-600'; }
     else { level = 'Critical Risk'; color = 'text-rose-600'; }
 
-    return { score: normalizedScore, level, color, assessedCount, totalRights: FUNDAMENTAL_RIGHTS.length };
+    return { score: normalizedScore, level, color, assessed: true, assessedCount, totalRights: FUNDAMENTAL_RIGHTS.length };
   }, [friaData]);
 
   // Update assessment for a specific right
@@ -376,7 +382,9 @@ export default function FriaWizard({ embedded = false, initialSystemId, onClose 
     report += `Assessor: ${friaData.assessorName || 'Not specified'}\n`;
     report += `Date: ${friaData.assessmentDate}\n`;
     report += `Status: ${friaData.status.toUpperCase()}\n`;
-    report += `Overall Score: ${friaScore.score}/100 (${friaScore.level})\n\n`;
+    report += friaScore.assessed
+      ? `Overall Score: ${friaScore.score}/100 (${friaScore.level})\n\n`
+      : `Overall Score: Not assessed (no rights assessed yet)\n\n`;
     report += `${'─'.repeat(60)}\n\n`;
 
     FUNDAMENTAL_RIGHTS.forEach(right => {
@@ -618,10 +626,19 @@ export default function FriaWizard({ embedded = false, initialSystemId, onClose 
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-xs text-violet-600 uppercase tracking-wide font-semibold">Overall FRIA Score</div>
-                      <div className={`text-4xl font-bold mt-1 ${friaScore.color}`}>
-                        {friaScore.score}/100
-                      </div>
-                      <div className={`text-sm font-medium mt-1 ${friaScore.color}`}>{friaScore.level}</div>
+                      {friaScore.assessed ? (
+                        <>
+                          <div className={`text-4xl font-bold mt-1 ${friaScore.color}`}>
+                            {friaScore.score}/100
+                          </div>
+                          <div className={`text-sm font-medium mt-1 ${friaScore.color}`}>{friaScore.level}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-4xl font-bold mt-1 text-slate-400">—</div>
+                          <div className="text-sm font-medium mt-1 text-slate-500">Not assessed</div>
+                        </>
+                      )}
                       <div className="text-xs text-slate-500 mt-2">
                         {friaScore.assessedCount} of {friaScore.totalRights} rights assessed with content
                       </div>

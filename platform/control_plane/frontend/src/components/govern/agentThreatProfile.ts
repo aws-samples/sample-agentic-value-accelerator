@@ -7,7 +7,7 @@
  */
 
 import type { AgentRegistryEntry } from './mockData';
-import { AGENTIC_RISK_CATEGORIES, type AgenticRiskCategory } from './risk/riskData';
+import { type AgenticRiskCategory } from './risk/riskData';
 import { CONTROLS, type ControlId } from './threatModelData';
 
 export interface AgentThreat {

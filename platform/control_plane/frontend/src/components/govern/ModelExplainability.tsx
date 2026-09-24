@@ -11,8 +11,9 @@
  * Bias & fairness has its own first-class tab (see BiasFairness.tsx).
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Icon } from './icons';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -21,6 +22,8 @@ import {
   MODEL_EXPLAINABILITY, EXPLAIN_MODELS,
   type ShapValue, type LimeFeature,
 } from './explainData';
+import { governSageMakerApi, type AwsClarifyJobsResponse } from '../../api/client';
+import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
 
 type Section = 'attribution' | 'adverse' | 'counterfactual' | 'drift' | 'audit';
 
@@ -93,11 +96,104 @@ export default function ModelExplainability({ modelId: propModelId, onNavigateTa
   );
 }
 
+/* Live SageMaker Clarify explainability jobs — the job list + status is real
+   (ListProcessingJobs); the SHAP / LIME / Anchor attributions below stay
+   illustrative until Clarify SHAP output is parsed from S3. */
+const CLARIFY_STATUS_STYLE: Record<string, string> = {
+  Completed: 'bg-emerald-100 text-emerald-700',
+  InProgress: 'bg-blue-100 text-blue-700',
+  Failed: 'bg-rose-100 text-rose-700',
+  Stopping: 'bg-amber-100 text-amber-700',
+  Stopped: 'bg-slate-200 text-slate-600',
+};
+
+function ClarifyJobsPanel() {
+  const [data, setData] = useState<AwsClarifyJobsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Single graceful fetch — a failure leaves data null so the panel badges the
+  // source honestly and the illustrative attributions below still render.
+  useEffect(() => {
+    let cancelled = false;
+    governSageMakerApi.clarifyJobs()
+      .then(res => { if (!cancelled) setData(res); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const live = !!data?.live;
+  const jobs = data?.jobs ?? [];
+
+  return (
+    <div className={card}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Icon name="beaker" className="w-4 h-4 text-orange-500" />
+          <h3 className={heading}>SageMaker Clarify explainability jobs</h3>
+          {live
+            ? <LiveDataBadge source="SageMaker" detail="ListProcessingJobs — Clarify job list & status" />
+            : <MockDataBadge integration="SageMaker Clarify: ListProcessingJobs" />}
+        </div>
+        {live && data && (
+          <div className="flex items-center gap-2 text-[10px]">
+            <span className="text-slate-500">{data.total} jobs</span>
+            <span className="text-emerald-600">{data.completed} done</span>
+            <span className="text-blue-600">{data.in_progress} running</span>
+            {data.failed > 0 && <span className="text-rose-600">{data.failed} failed</span>}
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="text-[11px] text-slate-400">Loading Clarify jobs…</div>
+      ) : jobs.length === 0 ? (
+        <div className="text-[11px] text-slate-500 bg-slate-50 rounded-lg p-3 border border-slate-100">
+          {live
+            ? 'No SageMaker Clarify explainability jobs found in this account. The SHAP / LIME / Anchor attributions below are illustrative.'
+            : 'SageMaker Clarify not reachable — showing illustrative attributions below. Run a Clarify explainability job to populate live job status.'}
+        </div>
+      ) : (
+        <div className="max-h-56 overflow-auto rounded-lg border border-slate-100">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[10px] text-slate-400 uppercase tracking-wide bg-slate-50/70">
+                <th scope="col" className="text-left py-2 px-3 font-medium">Clarify job</th>
+                <th scope="col" className="text-center py-2 px-3 font-medium">Status</th>
+                <th scope="col" className="text-right py-2 px-3 font-medium">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map(j => (
+                <tr key={j.job_arn} className="border-t border-slate-100">
+                  <td className="py-2 px-3 font-medium text-slate-700 truncate max-w-[220px]" title={j.job_name}>{j.job_name}</td>
+                  <td className="py-2 px-3 text-center">
+                    <span className={`text-[9px] font-semibold px-2 py-0.5 rounded ${CLARIFY_STATUS_STYLE[j.job_status] ?? 'bg-slate-200 text-slate-600'}`}>
+                      {j.job_status}
+                    </span>
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums text-slate-500">
+                    {j.creation_time ? new Date(j.creation_time).toLocaleDateString() : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-[10px] text-slate-400 mt-2 italic">
+        Job list &amp; status are live from SageMaker Clarify. SHAP / LIME / Anchor feature attributions below are illustrative.
+      </p>
+    </div>
+  );
+}
+
 /* ───────── 1. Feature Attribution ───────── */
 function AttributionSection({ data }: { data: typeof MODEL_EXPLAINABILITY[string]['attribution'] }) {
   const [tab, setTab] = useState<'shap' | 'lime' | 'anchor'>('shap');
   return (
     <div className="space-y-4">
+      <ClarifyJobsPanel />
       <div className={card}>
         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Explained prediction</div>
         <div className="text-xs text-slate-700 mb-2"><span className="font-semibold text-blue-600">Prompt:</span> {data.prompt}</div>
@@ -116,8 +212,14 @@ function AttributionSection({ data }: { data: typeof MODEL_EXPLAINABILITY[string
       {tab === 'shap' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className={card}>
-            <h3 className={heading}>SHAP — feature contributions</h3>
-            <p className="text-[10px] text-slate-400 mb-3">Base {data.shap.base_value.toFixed(2)} → final {data.shap.final_value.toFixed(2)}</p>
+            <div className="flex items-center gap-2">
+              <h3 className={heading}>SHAP — feature contributions</h3>
+              <MockDataBadge integration="SHAP via SageMaker Clarify — Clarify is in maintenance mode; illustrative values shown" />
+            </div>
+            <p className="text-[10px] text-slate-400">Base {data.shap.base_value.toFixed(2)} → final {data.shap.final_value.toFixed(2)}</p>
+            <p className="text-[10px] text-amber-600 mb-3 italic">
+              SHAP via SageMaker Clarify — Clarify is in maintenance mode (unavailable to new customers), so real SHAP output can&apos;t be produced here; values shown are illustrative.
+            </p>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={data.shap.shap_values.map((s: ShapValue) => ({ name: s.feature, value: s.shap_value, dir: s.direction }))} layout="vertical" margin={{ left: 5, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -260,7 +362,7 @@ function CounterfactualSection({ cf }: { cf: typeof MODEL_EXPLAINABILITY[string]
       <div className={card}>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-100 text-rose-700">Current: {cf.current_decision}</span>
-          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+          <Icon name="arrow-right" className="w-3.5 h-3.5 text-slate-400" strokeWidth={2} />
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Target: {cf.target_decision}</span>
           <span className="ml-auto text-[10px] text-slate-500">{cf.minimum_changes_needed} minimum changes needed</span>
         </div>
@@ -383,7 +485,9 @@ function AuditSection({ decisions }: { decisions: typeof MODEL_EXPLAINABILITY[st
               <td className="py-2.5 px-5">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${d.integrity === 'INTACT' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                    {d.integrity === 'INTACT' ? '✓ INTACT' : '⚠ TAMPERED'}
+                    {d.integrity === 'INTACT'
+                      ? <><Icon name="check" className="w-3 h-3 inline-block align-middle mr-0.5" />INTACT</>
+                      : <><Icon name="exclamation-triangle" className="w-3 h-3 inline-block align-middle mr-0.5" />TAMPERED</>}
                   </span>
                 </div>
                 <div className="font-mono text-[9px] text-slate-400 mt-0.5">{d.integrityHash}</div>

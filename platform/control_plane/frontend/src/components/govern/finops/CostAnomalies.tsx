@@ -9,17 +9,17 @@
  *
  * Part of the FinOps module's cost governance surface.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { useCostAnomalies, type AnomalySeverity } from '../useCostAnomalies';
-import { useAwsCostDetail } from '../useAwsCost';
+import { useCostAnomalies } from '../useCostAnomalies';
 import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
 import { Icon } from '../icons';
 import { tooltipStyle } from '../mockData';
+import { governCostApi, type AwsAnomalyMonitorsResponse } from '../../../api/client';
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
@@ -30,14 +30,17 @@ const severityConfig = {
   low: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', icon: 'text-slate-400', badge: 'bg-slate-100 text-slate-600' },
 };
 
-// Mock anomaly trend data for illustration when no live data
+// Illustrative anomaly trend for when no live data is available. Fully
+// deterministic (a fixed sinusoidal shape, no randomness) so the chart is
+// stable across renders and never masquerades as a live series. Rendered
+// under a Demo badge.
 const MOCK_ANOMALY_TREND = Array.from({ length: 12 }, (_, i) => {
   const week = `W${i + 1}`;
   const base = 2 + Math.sin(i / 2) * 1.5;
   return {
     week,
-    count: Math.max(0, Math.round(base + (Math.random() - 0.5) * 2)),
-    impact: Math.round((150 + Math.sin(i / 3) * 80 + (Math.random() - 0.3) * 60) * (base > 2 ? 1.3 : 1)),
+    count: Math.max(0, Math.round(base)),
+    impact: Math.round((150 + Math.sin(i / 3) * 80) * (base > 2 ? 1.3 : 1)),
   };
 });
 
@@ -59,42 +62,64 @@ export default function CostAnomalies({ days = 60, compact = false }: Props) {
     hasAlerts: hasActiveAlerts,
     avgScore,
   } = useCostAnomalies(days, true);
-  const { trend } = useAwsCostDetail(30, 3, days, 6);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Configured AWS Cost Anomaly Detection monitors — which monitors & dimensions
+  // are set up to watch for spend anomalies.
+  const [monitors, setMonitors] = useState<AwsAnomalyMonitorsResponse | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    governCostApi.anomalyMonitors()
+      .then(d => { if (!cancelled) setMonitors(d); })
+      .catch(() => { if (!cancelled) setMonitors(null); });
+    return () => { cancelled = true; };
+  }, []);
+  const monitorsLive = !!monitors?.live;
 
   const criticalCount = bySeverity.critical;
   const highCount = bySeverity.high;
 
-  // Build trend data from daily trend (aggregate to weekly for cleaner viz)
+  // Build the weekly trend series by bucketing the SAME aiAnomalies the list below
+  // renders, so the charts and the list can never disagree.
+  //
+  // Gated on `live` (the anomaly feed's own flag, from useCostAnomalies) — NOT on the
+  // daily-spend trend feed. Those are two independent Cost Explorer calls that can
+  // disagree, and gating on the wrong one produced a dishonest render both ways:
+  // when the spend feed was live but the anomaly feed was not, these charts drew
+  // all-zero buckets (aiAnomalies is empty) under a Live badge, asserting a *measured*
+  // "no anomalies" when nothing had actually been measured. Keep this predicate
+  // identical to the one behind the charts' badges — if you gate the badge and the
+  // data on different flags, the badge stops describing what is on screen.
   const trendData = useMemo(() => {
-    if (!trend?.live || trend.days.length === 0) return MOCK_ANOMALY_TREND;
-    // Group by week and count anomalies
-    const weeks: Record<string, { count: number; impact: number }> = {};
+    if (!live) return MOCK_ANOMALY_TREND;
+    // Bucket by whole weeks-ago (0 = the most recent 7-day window … 7 = eight weeks
+    // back) using the SAME index the fill loop below uses, so no anomaly is dropped
+    // (the old "week of month" ceil(day/7) produced W1-W5 while the loop only made
+    // W1-W4) and no two calendar weeks collide onto one label across month boundaries.
+    const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const buckets: Record<number, { count: number; impact: number }> = {};
     aiAnomalies.forEach(a => {
-      const date = new Date(a.start);
-      const weekNum = Math.ceil((date.getDate()) / 7);
-      const month = date.toLocaleDateString('en-US', { month: 'short' });
-      const key = `${month} W${weekNum}`;
-      weeks[key] = weeks[key] || { count: 0, impact: 0 };
-      weeks[key].count += 1;
-      weeks[key].impact += a.impact;
+      const weeksAgo = Math.floor((startOfToday.getTime() - new Date(a.start).getTime()) / MS_PER_WEEK);
+      if (weeksAgo < 0 || weeksAgo > 7) return;
+      buckets[weeksAgo] = buckets[weeksAgo] || { count: 0, impact: 0 };
+      buckets[weeksAgo].count += 1;
+      buckets[weeksAgo].impact += a.impact;
     });
-    // Fill in missing weeks
+    // Fill 8 weeks, oldest first, labeling each bucket by its most-recent day.
     const result = [];
-    for (let i = 0; i < 8; i++) {
-      const d = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now);
       d.setDate(d.getDate() - i * 7);
-      const weekNum = Math.ceil(d.getDate() / 7);
-      const month = d.toLocaleDateString('en-US', { month: 'short' });
-      const key = `${month} W${weekNum}`;
-      result.unshift({
-        week: key,
-        count: weeks[key]?.count ?? 0,
-        impact: weeks[key]?.impact ?? 0,
+      result.push({
+        week: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        count: buckets[i]?.count ?? 0,
+        impact: buckets[i]?.impact ?? 0,
       });
     }
     return result;
-  }, [trend, aiAnomalies]);
+  }, [live, aiAnomalies]);
 
   // Compact view for dashboard embedding
   if (compact) {
@@ -215,10 +240,60 @@ export default function CostAnomalies({ days = 60, compact = false }: Props) {
         </div>
       </div>
 
+      {/* Configured anomaly monitors — from AWS Cost Anomaly Detection */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-semibold text-slate-900">Configured Anomaly Monitors</div>
+            {monitorsLive
+              ? <LiveDataBadge source="Cost Explorer" detail="AWS Cost Anomaly Detection monitors" />
+              : <MockDataBadge integration="Create AWS Cost Anomaly Detection monitors" />}
+            <span className="text-[11px] text-slate-400">what AWS is watching for spend anomalies</span>
+          </div>
+          {monitorsLive && (
+            <span className="text-[11px] text-slate-500">{monitors?.total ?? 0} monitor{(monitors?.total ?? 0) === 1 ? '' : 's'}</span>
+          )}
+        </div>
+        {!monitorsLive ? (
+          <div className="flex items-start gap-2 text-[12px] text-slate-500 bg-slate-50 rounded-lg px-4 py-3">
+            <span className="text-amber-500">*</span>
+            <span>{monitors?.note ?? 'No anomaly monitors detected — enable AWS Cost Anomaly Detection and create a monitor (e.g. by SERVICE, or a Bedrock/SageMaker cost category) to power live anomaly alerts.'}</span>
+          </div>
+        ) : (monitors?.monitors.length ?? 0) === 0 ? (
+          <div className="flex items-start gap-2 text-[12px] text-slate-500 bg-amber-50 rounded-lg px-4 py-3">
+            <span className="text-amber-500">*</span>
+            <span>Cost Anomaly Detection is reachable but no monitors are configured yet. Create a monitor in Cost Explorer to start detecting AI spend anomalies.</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {(monitors?.monitors ?? []).map((m, i) => (
+              <div key={i} className="border border-slate-100 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon name="eye" className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-slate-900 truncate" title={m.monitor_name}>{m.monitor_name}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{m.monitor_type}</span>
+                  {m.monitor_dimension && <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{m.monitor_dimension}</span>}
+                </div>
+                {m.creation_date && <div className="text-[10px] text-slate-400 mt-1">Created {m.creation_date.slice(0, 10)}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Trend chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-          <div className="text-sm font-semibold text-slate-900 mb-1">Anomaly Trend</div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="text-sm font-semibold text-slate-900">Anomaly Trend</div>
+            {/* Same `live` predicate that selects trendData above — the card carries its
+                own badge so this chart never borrows provenance from the page header. */}
+            {live
+              ? <LiveDataBadge source="Cost Explorer" detail="Weekly anomaly counts from AWS Cost Anomaly Detection" />
+              : <MockDataBadge integration="Illustrative — powered by live anomalies once Cost Explorer data flows" />}
+          </div>
           <div className="text-[11px] text-slate-500 mb-3">Weekly anomaly count and impact over time</div>
           {loading ? (
             <div className="h-40 flex items-center justify-center text-xs text-slate-400">Loading...</div>
@@ -239,7 +314,14 @@ export default function CostAnomalies({ days = 60, compact = false }: Props) {
         </div>
 
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
-          <div className="text-sm font-semibold text-slate-900 mb-1">Impact by Week</div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="text-sm font-semibold text-slate-900">Impact by Week</div>
+            {/* Dollar figures — the most damaging thing to mislabel. Gated on the anomaly
+                feed's own flag, never on the page header or the daily-spend feed. */}
+            {live
+              ? <LiveDataBadge source="Cost Explorer" detail="Weekly dollar impact from AWS Cost Anomaly Detection" />
+              : <MockDataBadge integration="Illustrative — powered by live anomalies once Cost Explorer data flows" />}
+          </div>
           <div className="text-[11px] text-slate-500 mb-3">Dollar impact of detected anomalies</div>
           {loading ? (
             <div className="h-40 flex items-center justify-center text-xs text-slate-400">Loading...</div>

@@ -39,10 +39,10 @@ export default function DataQuality() {
   return (
     <GovernPageLayout
       title="Data Quality"
-      description="Quality rules computed from live AWS data sources."
+      description="Guardrail and AWS Config coverage used as a data-quality proxy. Enable Glue Data Quality for measured dataset pass-rates."
       badge={
         <div className="flex items-center gap-2">
-          <LiveDataBadge />
+          <LiveDataBadge live={quality.liveSourcesCount > 0} />
           <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
             {quality.liveSourcesCount} sources
           </span>
@@ -84,7 +84,7 @@ export default function DataQuality() {
               <div className="text-[10px] text-slate-400">require attention</div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="text-[10px] text-slate-500 uppercase font-medium">Pass Rate</div>
+              <div className="text-[10px] text-slate-500 uppercase font-medium">Coverage Pass Rate</div>
               <div className={`text-2xl font-bold ${
                 quality.passRate >= 90 ? 'text-emerald-600' :
                 quality.passRate >= 70 ? 'text-amber-600' :
@@ -92,7 +92,10 @@ export default function DataQuality() {
               }`}>
                 {quality.passRate}%
               </div>
-              <div className="text-[10px] text-slate-400">overall quality</div>
+              <div className="text-[10px] text-slate-400">
+                {quality.passedChecks} of {quality.totalChecks} checks
+                {quality.hasGlueQuality ? ' · incl. Glue DQ results' : ' · guardrail / config proxy'}
+              </div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-[10px] text-slate-500 uppercase font-medium">Live Sources</div>
@@ -169,7 +172,13 @@ export default function DataQuality() {
           {/* Quality Rules Table */}
           {quality.rules.length > 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
-              <h3 className="text-sm font-semibold text-slate-900 mb-4">Quality Rules</h3>
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-slate-900">Guardrail Coverage (data-quality proxy)</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Coverage checks derived from Bedrock Guardrails and AWS Config. Rows sourced from Glue Data Quality are measured results; the rest are configuration coverage, not measured dataset quality.
+                  The AWS Config row summarises every evaluated Config rule, so the pass rate pools each row by its own rule count instead of counting every row as one rule.
+                </p>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>

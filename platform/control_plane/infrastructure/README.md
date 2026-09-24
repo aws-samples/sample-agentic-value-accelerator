@@ -8,7 +8,7 @@ The infrastructure includes:
 
 - **API Gateway**: HTTP API with VPC Link for private integration
 - **ECS Fargate**: Containerized backend service with auto-scaling
-- **DynamoDB**: Application Catalog and Deployment Metadata tables
+- **DynamoDB**: 17 control-plane tables from `modules/dynamodb`, each named `<name_prefix>-*` — `app-factory`, `application-catalog`, `deployment-metadata`, `deployments`, `guardrails`, `policies`, `prioritization`, `maturity`, `business-cases`, `knowledge`, `operating-model`, `organization-design`, `mcp-servers`, `identity-providers`, `approval-policies`, `approval-requests`, `a2a-agents`. All 17 set `point_in_time_recovery { enabled = true }`. Note that **no Govern table is declared in this module** — the 11 `fsi-control-plane-*` tables the Govern module reads and writes live in `environments/dev/main.tf` and are documented in [environments/dev/README.md](environments/dev/README.md). Each has its own home region (see [Region model](#region-model-three-tiers-do-not-collapse-them))
 - **S3**: Project archives (Quick Deploy source) and frontend static hosting
 - **Step Functions**: CI/CD deployment pipeline orchestration (Validate → Normalize → Build → Monitor → Capture → Record); source-agnostic — drives both S3 archive and CodeCommit-backed deployments
 - **CodeBuild**: Dual-source IaC execution in isolated Docker containers (Terraform, CDK, CloudFormation). Clones from CodeCommit *or* unzips an S3 archive based on Step Functions input
@@ -20,6 +20,88 @@ The infrastructure includes:
 - **CloudWatch**: Logs, metrics, alarms, and dashboards
 - **ECR**: Container registry for backend Docker images
 - **VPC** (Optional): Can use existing VPC or create new one
+
+## Region model (three tiers, do not collapse them)
+
+"Region" is three unrelated questions in this platform, and they are resolved
+separately in `backend/src/core/region_config.py`. They used to share a single
+`region` field, and the failure mode was silent rather than loud: an AWS API call
+against the wrong region *succeeds* and returns that region's smaller or empty
+inventory instead of raising. That is how the Operations Hub reported a 1-agent
+fleet when the real fleet was 36 — under a Live badge.
+
+| Setting | Tier | Points at | Demo account |
+|---------|------|-----------|--------------|
+| `AWS_REGION` | 1 — control plane | AVA's own DynamoDB tables and infrastructure | `us-east-2` |
+| `GOVERN_AWS_REGION` | 2 — governed fleet | The governed estate: Bedrock agents, AgentCore runtimes, guardrails, and the CloudWatch metrics they emit | `us-east-1` |
+| `CONTROL_PLANE_TABLE_REGION` | 1 — override | Relocates **every** control-plane table at once. Empty means `AWS_REGION` | unset |
+| `<TABLE_KEY>_TABLE_REGION` | 1 — override | Relocates **one** table. `<TABLE_KEY>` is the settings prefix before `_TABLE_NAME`, e.g. `GOVERN_OPERATIONS_TABLE_REGION`, `GOVERN_COMPLIANCE_TABLE_REGION`, `FINOPS_SPEND_TABLE_REGION` | `GUARDRAILS_TABLE_REGION=us-east-1` |
+
+A control-plane table's home region resolves most-specific-first through
+`region_config.table_region()`:
+
+```
+<TABLE_KEY>_TABLE_REGION  →  CONTROL_PLANE_TABLE_REGION  →  AWS_REGION
+```
+
+Resolution is **configured, never discovered**. Probing candidate regions for a
+matching table name was considered and rejected: if the same name exists in two
+regions, discovery silently picks one, and a control-plane table (read-write)
+picked at random is a split-brain write target.
+
+**Tier 3 — global and pinned services**, via `region_config.resolve_service_region()`.
+Two sub-cases that are not interchangeable:
+
+- botocore auto-pins the endpoint for `ce`, `budgets`, `organizations`, and `iam`, so
+  whatever region you pass is ignored. Cost Explorer and Budgets fall here — passing a
+  governed region is harmless but misleading, because it implies a per-region call that
+  cannot happen.
+- botocore does **not** auto-pin `health` or `support`, so a wrong region there is a
+  real failure. These need the explicit pin.
+
+Coverage gap, verified by grep over this directory: nothing under `infrastructure/`
+references `GOVERN_AWS_REGION`, `CONTROL_PLANE_TABLE_REGION`, or any `*_TABLE_REGION`.
+This IaC wires `AWS_REGION` only (`environments/dev/main.tf` sets it to `us-east-2` in
+the backend task definition). Tier 2 and the per-table overrides currently come from
+the defaults in `backend/src/core/config.py`, or from `docker-compose.yaml` for local
+runs.
+
+## Known state and coverage caveats
+
+Recorded rather than hidden — read these before trusting a `terraform plan` from
+this tree.
+
+- **There is no `terraform.tfstate` anywhere under `infrastructure/`.** The root stack's
+  `backend "s3"` block in `main.tf` is commented out, and `environments/dev/backend.tf`
+  declares `backend "local"` with no state file present. Verification of this tree is
+  therefore limited to `terraform init -backend=false`, `terraform fmt -check`, and
+  `terraform validate` — **`terraform apply` has never been run from it.** Resources
+  that already exist in AWS, including the two new Govern tables, exist in no state
+  file, so a first `apply` would attempt to create rather than adopt them; they need
+  `terraform import` first.
+- **State divergence:** `fsi-control-plane-guardrails` is declared in the us-east-2
+  `environments/dev` root but actually lives in us-east-1. That is why the running
+  backend sets `GUARDRAILS_TABLE_REGION=us-east-1` (see `docker-compose.yaml`).
+- **`modules/dynamodb` declares no Govern table.** All 11 `fsi-control-plane-*` tables
+  the Govern module uses are declared directly in `environments/dev/main.tf`.
+- **PITR on the `environments/dev` tables: 2 of 11 declared, 0 of 11 in effect.**
+  `fsi-control-plane-govern-compliance` and `fsi-control-plane-govern-operations` now
+  declare `point_in_time_recovery { enabled = true }`, because neither table's contents
+  can be regenerated — the first is the store of record for control attestations and
+  evidence, the second holds hand-entered incident records. The other nine declare
+  nothing and sit at the AWS default of off — the deliberate demo posture, also recorded
+  under "Hardening required before production" in the root `SECURITY.md`. The 17 tables in
+  `modules/dynamodb` all enable PITR.
+  **The two declarations are not yet in effect**: those tables were created outside
+  Terraform and are in no state file, so nothing has reconciled the declaration against
+  the live tables. That needs `terraform import` plus an apply, or a one-off
+  `aws dynamodb update-continuous-backups`. Treat the live tables as PITR-off until then.
+- **`deletion_protection_enabled` is unset on all 11**, and on all 17 in
+  `modules/dynamodb`, so `terraform destroy` still works for dev teardown. Turn it on
+  before this stack backs anything audited.
+- Comments in `environments/dev/main.tf` next to the `govern_compliance` and
+  `govern_operations` resources name the previous table names on purpose, as historical
+  notes explaining why the rename happened. Do not "fix" them.
 
 ## Prerequisites
 
@@ -42,6 +124,10 @@ Edit `.env` with your configuration:
 
 ```bash
 # Required
+# Tier 1 ONLY: the control-plane region — where AVA's own tables and infra go.
+# This does NOT set where the governed fleet lives; that is GOVERN_AWS_REGION,
+# read by the backend, not by this Terraform. See "Region model" above. In the
+# demo account the control plane is us-east-2 and the governed fleet us-east-1.
 AWS_REGION=us-east-1
 ENVIRONMENT=dev
 
@@ -176,7 +262,8 @@ export ECR_REPO=$(terraform output -raw ecr_repository_url)
 2. Authenticate Docker to ECR:
 
 ```bash
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REPO
+# ECR lives in the CONTROL-PLANE region (tier 1), not the governed-fleet region.
+aws ecr get-login-password --region "${AWS_REGION:-us-east-1}" | docker login --username AWS --password-stdin $ECR_REPO
 ```
 
 3. Build and push Docker image:
@@ -322,6 +409,9 @@ aws cloudfront create-invalidation --distribution-id <ID> --paths "/*"
 
 ## Remote State Management
 
+No state file exists in this tree today — see [Known state and coverage caveats](#known-state-and-coverage-caveats)
+before assuming a `plan` reflects what is actually deployed.
+
 For production, enable remote state:
 
 1. Uncomment the backend configuration in `main.tf`:
@@ -361,6 +451,11 @@ terraform init -migrate-state
 - DynamoDB tables use encryption at rest
 - CloudWatch logs are retained for 7 days
 - Cognito enforces strong password policy
+
+Not yet in place: deletion protection is off on every `environments/dev` DynamoDB table,
+and point-in-time recovery — though now *declared* on the compliance and operations
+tables — is not yet in effect on the live ones, because they exist in no state file. See
+[Known state and coverage caveats](#known-state-and-coverage-caveats).
 
 ## Support
 

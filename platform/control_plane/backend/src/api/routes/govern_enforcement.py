@@ -11,6 +11,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_enforcement import (
@@ -26,6 +27,9 @@ from services.govern_enforcement_service import GovernEnforcementService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/enforcement", tags=["govern-enforcement"])
+
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_enforcement", region_scope.CONTROL_PLANE, prefix="/govern/enforcement")
 
 _svc: Optional[GovernEnforcementService] = None
 

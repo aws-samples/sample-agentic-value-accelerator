@@ -28,7 +28,7 @@ export interface ProviderConnectivity {
   needs: string;
 }
 
-// AWS is the only live-capable provider today; the rest name their real connector.
+// AWS, Azure, and GCP are live-capable; the rest name their real connector.
 export const PROVIDER_CONNECTIVITY: Record<Exclude<AgentProvider, 'custom'>, ProviderConnectivity> = {
   aws: {
     provider: 'aws',
@@ -38,15 +38,15 @@ export const PROVIDER_CONNECTIVITY: Record<Exclude<AgentProvider, 'custom'>, Pro
   },
   azure: {
     provider: 'azure',
-    liveCapable: false,
-    connectorLabel: 'Azure AI Foundry',
-    needs: 'Needs an Azure connector (AI Foundry / Agent Service listing + Cost Management) — not wired.',
+    liveCapable: true,
+    connectorLabel: 'Azure AI Foundry + Cost Management',
+    needs: 'Configure Azure connector in Govern > Multi-Cloud > Providers to connect.',
   },
   gcp: {
     provider: 'gcp',
-    liveCapable: false,
-    connectorLabel: 'Google Vertex AI',
-    needs: 'Needs a Google Cloud connector (Vertex Agent Builder + Billing/BigQuery export) — not wired.',
+    liveCapable: true,
+    connectorLabel: 'Google Vertex AI + BigQuery Billing',
+    needs: 'Configure GCP connector in Govern > Multi-Cloud > Providers to connect.',
   },
   servicenow: {
     provider: 'servicenow',

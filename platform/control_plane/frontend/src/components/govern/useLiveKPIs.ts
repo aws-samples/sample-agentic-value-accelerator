@@ -23,6 +23,7 @@ import {
   governCostApi,
   governModelsApi,
   governTrailApi,
+  governResourceTagsApi,
   type AwsDiscoveredAgentsResponse,
   type AwsConfigCompliance,
   type AwsRiskPostureResponse,
@@ -32,7 +33,9 @@ import {
   type AwsCostModelBreakdown,
   type AwsModelMetricsResponse,
   type AwsAiCallersResponse,
+  type AwsGovernanceResourceTagsResponse,
 } from '../../api/client';
+import { useDataSources } from './DataSourceContext';
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -76,6 +79,16 @@ export interface LiveKPIs {
 
   // Runtime
   totalInvocations: number;
+  /**
+   * Trailing window the CloudWatch invocation count covers, in days.
+   *
+   * Load-bearing: `totalCost` comes from governCostApi.byModel(12) - TWELVE MONTHS -
+   * while `totalInvocations` comes from governModelsApi.runtimeMetrics(7) - SEVEN DAYS.
+   * Dividing one by the other without normalising overstated cost per invocation by
+   * roughly the ratio of the windows. Any consumer combining the two must reduce both
+   * to a daily rate first.
+   */
+  runtimeWindowDays: number;
   fleetErrorRatePct: number;
   avgLatencyMs: number;
 
@@ -109,7 +122,11 @@ const DEFAULT_KPIS: LiveKPIs = {
   totalAgents: 0,
   bedrockAgents: 0,
   agentcoreRuntimes: 0,
-  externalAgents: 45,  // Multi-cloud + SaaS placeholder
+  // This hook has NO multi-cloud/SaaS source, so it cannot produce a real external-agent count.
+  // It stays 0 rather than carrying a fabricated constant that leaked into the governed
+  // denominator below and into the command center's External KPI. Consumers that need this
+  // figure must sum the live connector inventories themselves (see GovernanceCommandCenter).
+  externalAgents: 0,
   governedAgents: 0,
   governedPct: 0,
 
@@ -144,6 +161,7 @@ const DEFAULT_KPIS: LiveKPIs = {
 
   // Runtime
   totalInvocations: 0,
+  runtimeWindowDays: 7,
   fleetErrorRatePct: 0,
   avgLatencyMs: 0,
 
@@ -159,6 +177,9 @@ export function useLiveKPIs(pollIntervalMs = 60_000): LiveKPIsResult {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Data source context for health reporting
+  const { updateSource } = useDataSources();
+
   // Live data slices
   const [agents, setAgents] = useState<AwsDiscoveredAgentsResponse | null>(null);
   const [config, setConfig] = useState<AwsConfigCompliance | null>(null);
@@ -169,6 +190,7 @@ export function useLiveKPIs(pollIntervalMs = 60_000): LiveKPIsResult {
   const [cost, setCost] = useState<AwsCostModelBreakdown | null>(null);
   const [runtime, setRuntime] = useState<AwsModelMetricsResponse | null>(null);
   const [callers, setCallers] = useState<AwsAiCallersResponse | null>(null);
+  const [resourceTags, setResourceTags] = useState<AwsGovernanceResourceTagsResponse | null>(null);
 
   // Polling effect
   useEffect(() => {
@@ -183,9 +205,10 @@ export function useLiveKPIs(pollIntervalMs = 60_000): LiveKPIsResult {
         governSecurityApi.posture(),
         governGuardrailsApi.telemetry(30),
         governInvocationSafetyApi.telemetry(7),
-        governCostApi.byModel(30),
+        governCostApi.byModel(12),
         governModelsApi.runtimeMetrics(7),
         governTrailApi.aiCallers(168),
+        governResourceTagsApi.coverage(),
       ]);
 
       // Process each result independently - failures don't block others
@@ -199,6 +222,7 @@ export function useLiveKPIs(pollIntervalMs = 60_000): LiveKPIsResult {
         costRes,
         runtimeRes,
         callersRes,
+        resourceTagsRes,
       ] = results;
 
       if (agentsRes.status === 'fulfilled') setAgents(agentsRes.value);
@@ -210,6 +234,39 @@ export function useLiveKPIs(pollIntervalMs = 60_000): LiveKPIsResult {
       if (costRes.status === 'fulfilled') setCost(costRes.value);
       if (runtimeRes.status === 'fulfilled') setRuntime(runtimeRes.value);
       if (callersRes.status === 'fulfilled') setCallers(callersRes.value);
+      if (resourceTagsRes.status === 'fulfilled') setResourceTags(resourceTagsRes.value);
+
+      // Update data source health based on fetch results
+      const now = Date.now();
+      // Bedrock (agents, guardrails)
+      if (agentsRes.status === 'fulfilled' && agentsRes.value?.live) {
+        updateSource('aws-bedrock', { status: 'live', lastFetch: now });
+      } else if (agentsRes.status === 'rejected') {
+        updateSource('aws-bedrock', { status: 'error', error: 'API unavailable' });
+      }
+      // Config
+      if (configRes.status === 'fulfilled' && configRes.value?.live) {
+        updateSource('aws-config', { status: 'live', lastFetch: now });
+      } else if (configRes.status === 'rejected') {
+        updateSource('aws-config', { status: 'error', error: 'API unavailable' });
+      }
+      // Security Hub
+      if ((riskRes.status === 'fulfilled' && riskRes.value?.live) ||
+          (securityRes.status === 'fulfilled' && securityRes.value?.live)) {
+        updateSource('aws-security-hub', { status: 'live', lastFetch: now });
+      }
+      // CloudWatch (runtime metrics)
+      if (runtimeRes.status === 'fulfilled' && runtimeRes.value?.live) {
+        updateSource('aws-cloudwatch', { status: 'live', lastFetch: now });
+      }
+      // Cost Explorer
+      if (costRes.status === 'fulfilled' && costRes.value?.live) {
+        updateSource('aws-cost-explorer', { status: 'live', lastFetch: now });
+      }
+      // CloudTrail (callers)
+      if (callersRes.status === 'fulfilled' && callersRes.value?.live) {
+        updateSource('aws-cloudtrail', { status: 'live', lastFetch: now });
+      }
 
       // Check if all critical fetches failed
       const anySuccess = results.some(r => r.status === 'fulfilled');
@@ -322,6 +379,7 @@ export function useLiveKPIs(pollIntervalMs = 60_000): LiveKPIsResult {
     // Runtime metrics
     if (runtime?.live) {
       result.totalInvocations = runtime.total_invocations;
+      result.runtimeWindowDays = runtime.window_days ?? 7;
       result.fleetErrorRatePct = runtime.fleet_error_rate_pct;
       result.avgLatencyMs = runtime.avg_latency_ms;
     }
@@ -329,25 +387,28 @@ export function useLiveKPIs(pollIntervalMs = 60_000): LiveKPIsResult {
     // AI callers (shadow AI)
     if (callers?.live) {
       result.unrecognizedCallers = callers.unrecognized;
-      result.totalAiCallers = callers.total;
+      result.totalAiCallers = callers.total_callers;
     }
 
-    // Compute governed percentage
-    // Agents with policies = agents covered by at least one active guardrail
-    // Using guardrailsWithMetrics as proxy for governed agents
+    // Compute governed percentage.
+    // Prefer the REAL governed denominator from Resource Groups Tagging (AI resources carrying
+    // owner/project governance tags) over the old guardrails*3 heuristic; fall back to the
+    // heuristic only when the tag source is not live.
     const totalManagedAgents = result.totalAgents + result.externalAgents;
-    if (totalManagedAgents > 0 && result.guardrailsWithMetrics > 0) {
-      // Assume each guardrail with metrics covers some agents
-      // This is a heuristic - real implementation would track agent-guardrail mappings
+    if (resourceTags?.live && resourceTags.total_ai_resources > 0) {
+      result.governedAgents = resourceTags.governed_denominator;
+      result.governedPct = resourceTags.governed_pct;
+    } else if (totalManagedAgents > 0 && result.guardrailsWithMetrics > 0) {
+      // Fallback heuristic (tag source unavailable): ~3 agents per guardrail-with-metrics.
       result.governedAgents = Math.min(
-        result.guardrailsWithMetrics * 3, // Assume ~3 agents per guardrail
+        result.guardrailsWithMetrics * 3,
         totalManagedAgents,
       );
       result.governedPct = Math.round((result.governedAgents / totalManagedAgents) * 100);
     }
 
     return result;
-  }, [agents, config, security, riskHub, guardrails, invSafety, cost, runtime, callers]);
+  }, [agents, config, security, riskHub, guardrails, invSafety, cost, runtime, callers, resourceTags]);
 
   const refresh = () => setRefreshKey(k => k + 1);
 

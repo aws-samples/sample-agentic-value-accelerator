@@ -8,9 +8,10 @@ returns conformance % + evidence_backed_pct.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_sr26 import SR26Mapping, SR26MappingCreate, SR26MappingUpdate
@@ -19,6 +20,9 @@ from services.govern_sr26_service import GovernSr26Service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/sr26", tags=["govern-sr26"])
+
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_sr26", region_scope.CONTROL_PLANE, prefix="/govern/sr26")
 
 _svc: Optional[GovernSr26Service] = None
 
@@ -34,8 +38,19 @@ def get_service() -> GovernSr26Service:
 
 
 @router.post("/mappings", response_model=SR26Mapping, status_code=201)
-async def create_mapping(req: SR26MappingCreate, _=Depends(require_role(Role.OPERATOR))):
-    return get_service().create(req, created_by="user")
+async def create_mapping(
+    req: SR26MappingCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    """Create an SR 26-2 control mapping.
+
+    `created_by` comes from the `x-user-email` header, or `"unknown"` when absent -
+    `require_role` returns only a Role, never a principal. The previous literal
+    "user" read like a real principal on an MRM artifact, so the missing
+    attribution went unnoticed.
+    """
+    return get_service().create(req, created_by=x_user_email or "unknown")
 
 
 @router.get("/mappings", response_model=List[SR26Mapping])

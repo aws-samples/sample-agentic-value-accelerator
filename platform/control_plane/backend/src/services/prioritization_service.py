@@ -10,6 +10,7 @@ from typing import List, Optional
 
 import boto3
 from boto3.dynamodb.conditions import Attr
+from botocore.exceptions import ClientError
 
 from models.prioritization import (
     UseCase,
@@ -89,10 +90,18 @@ class PrioritizationService:
         return uc
 
     def get(self, use_case_id: str) -> Optional[UseCase]:
-        resp = self.table.get_item(Key={
-            "pk": f"{self.PK_PREFIX}{use_case_id}",
-            "sk": self.SK_LATEST,
-        })
+        try:
+            resp = self.table.get_item(Key={
+                "pk": f"{self.PK_PREFIX}{use_case_id}",
+                "sk": self.SK_LATEST,
+            })
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Prioritization table not provisioned; returning None for use case get"
+                )
+                return None
+            raise
         item = resp.get("Item")
         if not item:
             return None
@@ -102,7 +111,15 @@ class PrioritizationService:
         scan_kwargs = {"FilterExpression": Attr("pk").begins_with(self.PK_PREFIX)}
         if status:
             scan_kwargs["FilterExpression"] = scan_kwargs["FilterExpression"] & Attr("status").eq(status.value)
-        resp = self.table.scan(**scan_kwargs)
+        try:
+            resp = self.table.scan(**scan_kwargs)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Prioritization table not provisioned; returning empty use case list"
+                )
+                return []
+            raise
         items = resp.get("Items", [])
         ucs = [self._from_item(i) for i in items]
         ucs.sort(key=lambda u: (u.computed.composite if u.computed else 0), reverse=True)

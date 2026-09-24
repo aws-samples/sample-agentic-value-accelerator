@@ -208,8 +208,13 @@ export default function DataOntology() {
                     }`}>{uc.status}</span>
                   </div>
                   <div className="text-[10px] text-slate-500 mb-2">{uc.businessDomain}</div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-slate-400">Ontology Objects:</span>
+                  <div
+                    className="flex items-center gap-2"
+                    title="Illustrative ontology-object mapping — not derived from this use case. Map from Amazon DataZone / Glue Data Catalog for real per-use-case objects."
+                  >
+                    <span className="text-[9px] text-slate-400">
+                      Ontology Objects <span className="text-slate-300">(illustrative)</span>:
+                    </span>
                     <span className="text-[9px] px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded">Customer</span>
                     <span className="text-[9px] px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded">Order</span>
                   </div>
@@ -219,17 +224,45 @@ export default function DataOntology() {
           )}
         </div>
 
-        {/* Connected Agents */}
+        {/* Connected Agents.
+
+            Deployment identity (name, status) and the data-source list are live, but the
+            Guardrails and PII counts below are NOT per-agent measurements: useDataGovernance.ts
+            (336-349, 351-355) attaches EVERY active guardrail to EVERY deployment because the
+            platform cannot yet resolve real Bedrock agent guardrail associations, and derives
+            piiEntitiesProtected from the union across all guardrails rather than the ones bound
+            to this agent. Every agent therefore shows an identical count. That binding's own
+            comment requires it be surfaced as illustrative, never as live measured coverage — so
+            this section carries a Demo badge, not a Live one. Do not "upgrade" it back until
+            useDataGovernance resolves a real per-agent association. */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-slate-900">Agents Using Ontology</h3>
-              <LiveDataBadge />
+              {/* Same `integration` string as the sibling surfaces (AgentDataProfiles.tsx,
+                  DataGovernanceLanding.tsx). MockDataBadge renders it as "Integration
+                  needed: <string>", so it must NAME the missing source — the earlier
+                  "per-agent guardrail binding not yet resolved" restated the badge's own
+                  meaning instead, and made one gap read as two different gaps across views. */}
+              <MockDataBadge integration="Bedrock agent guardrail associations" />
             </div>
             <Link to="/govern/agents" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
               View Registry →
             </Link>
           </div>
+          {/* Same disclosure the sibling view (AgentDataProfiles.tsx) carries for the identical
+              data, so two surfaces fed by one approximation cannot disagree about it. */}
+          {dg.agentProfiles.length > 0 && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
+              <Icon name="information-circle" className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800">
+                <strong>Illustrative protection coverage.</strong> Deployment inventory (names, status, data
+                sources) is live. The guardrail-to-agent binding below is an approximation — every active
+                guardrail is currently associated with every deployment, so the Guardrails and PII counts are
+                identical across agents and not yet measured from real Bedrock agent guardrail associations.
+              </p>
+            </div>
+          )}
           {dg.agentProfiles.length === 0 ? (
             <div className="text-center py-6">
               <Icon name="cpu-chip" className="w-8 h-8 text-slate-300 mx-auto mb-2" />
@@ -251,8 +284,23 @@ export default function DataOntology() {
                   </div>
                   <div className="flex items-center gap-4 text-[10px]">
                     <span className="text-slate-500">Data Sources: <span className="text-blue-600 font-medium">{agent.dataSources.length}</span></span>
-                    <span className="text-slate-500">Guardrails: <span className="text-emerald-600 font-medium">{agent.guardrails.length}</span></span>
-                    <span className="text-slate-500">PII: <span className="text-violet-600 font-medium">{agent.dataProtectionSummary.piiEntitiesProtected.length}</span></span>
+                    {/* Marked illustrative per value, not just per section — these cards are the
+                        part a reader screenshots, and the same `title` convention is already used
+                        for the illustrative ontology-object chips above. */}
+                    <span
+                      className="text-slate-500"
+                      title="Illustrative — every active guardrail is attached to every deployment, so this count is the account-wide active-guardrail total, not this agent's real association."
+                    >
+                      Guardrails: <span className="text-emerald-600 font-medium">{agent.guardrails.length}</span>
+                      <span className="text-slate-300"> (illustrative)</span>
+                    </span>
+                    <span
+                      className="text-slate-500"
+                      title="Illustrative — the union of PII entity types across all guardrails, not scoped to this agent."
+                    >
+                      PII: <span className="text-violet-600 font-medium">{agent.dataProtectionSummary.piiEntitiesProtected.length}</span>
+                      <span className="text-slate-300"> (illustrative)</span>
+                    </span>
                   </div>
                 </div>
               ))}

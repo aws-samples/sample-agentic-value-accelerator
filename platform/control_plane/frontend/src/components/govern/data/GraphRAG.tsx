@@ -129,7 +129,7 @@ export default function GraphRAG() {
                   <MockDataBadge integration="Neptune Analytics" />
                 </div>
                 <p className="text-slate-500 text-sm mt-0.5">
-                  Knowledge graph-enhanced retrieval for complex multi-hop reasoning
+                  Knowledge-graph-enhanced retrieval for multi-hop reasoning — model entities and links so agents answer complex, connected questions.
                 </p>
               </div>
             </div>

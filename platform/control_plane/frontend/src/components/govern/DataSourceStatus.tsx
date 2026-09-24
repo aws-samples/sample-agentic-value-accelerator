@@ -6,6 +6,7 @@
  */
 import { useState, useMemo } from 'react';
 import { useDataSources, PROVIDERS, type DataSource, type ProviderCategory, type DataSourceStatus as Status } from './DataSourceContext';
+import { Icon, type IconName } from './icons';
 
 const STATUS_CONFIG: Record<Status, { label: string; color: string; bg: string; dot: string }> = {
   live: { label: 'Live', color: 'text-emerald-700', bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
@@ -15,10 +16,10 @@ const STATUS_CONFIG: Record<Status, { label: string; color: string; bg: string; 
   unknown: { label: 'Unknown', color: 'text-slate-500', bg: 'bg-slate-50', dot: 'bg-slate-300' },
 };
 
-const HEALTH_CONFIG = {
-  healthy: { label: 'All Systems Live', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', icon: '✓' },
-  degraded: { label: 'Degraded Mode', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', icon: '⚠' },
-  offline: { label: 'Offline Mode', color: 'text-rose-700', bg: 'bg-rose-50 border-rose-200', icon: '✕' },
+const HEALTH_CONFIG: Record<'healthy' | 'degraded' | 'offline', { label: string; color: string; bg: string; icon: IconName }> = {
+  healthy: { label: 'All Systems Live', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', icon: 'check-circle' },
+  degraded: { label: 'Degraded Mode', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', icon: 'exclamation-triangle' },
+  offline: { label: 'Offline Mode', color: 'text-rose-700', bg: 'bg-rose-50 border-rose-200', icon: 'x-circle' },
 };
 
 function formatAge(ms: number): string {
@@ -72,7 +73,7 @@ function ProviderSection({ provider, sources, onRefresh }: { provider: ProviderC
   return (
     <div className="mb-3">
       <div className="flex items-center gap-2 mb-1 px-2">
-        <span style={{ color: info.color }}>{info.icon}</span>
+        <Icon name={info.icon} className="w-4 h-4" style={{ color: info.color }} />
         <span className="text-[11px] font-semibold text-slate-800">{info.name}</span>
         <span className="text-[10px] text-slate-400">
           {liveCount}/{sources.length} live
@@ -116,7 +117,7 @@ export default function DataSourceStatus({ compact = false }: Props) {
         className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-lg border transition-colors ${cfg.bg} ${cfg.color}`}
         title={`${health.counts.live} live, ${health.counts.cached} cached, ${health.counts.demo} demo, ${health.counts.error} errors`}
       >
-        <span>{cfg.icon}</span>
+        <Icon name={cfg.icon} className="w-3.5 h-3.5" />
         <span>{cfg.label}</span>
         <span className="text-[9px] opacity-70">
           ({health.counts.live}/{sources.size})
@@ -131,7 +132,7 @@ export default function DataSourceStatus({ compact = false }: Props) {
         onClick={() => setExpanded(!expanded)}
         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${cfg.bg} ${cfg.color}`}
       >
-        <span className="text-sm">{cfg.icon}</span>
+        <Icon name={cfg.icon} className="w-4 h-4" />
         <div className="text-left">
           <div className="text-[11px] font-semibold">{cfg.label}</div>
           <div className="text-[9px] opacity-80">
@@ -139,14 +140,11 @@ export default function DataSourceStatus({ compact = false }: Props) {
             {health.counts.error > 0 && <span className="text-rose-600"> · {health.counts.error} errors</span>}
           </div>
         </div>
-        <svg
+        <Icon
+          name="chevron-down"
           className={`w-4 h-4 ml-1 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+          strokeWidth={2}
+        />
       </button>
 
       {expanded && (

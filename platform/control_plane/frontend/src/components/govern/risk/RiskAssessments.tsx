@@ -26,6 +26,8 @@ interface UseCaseAssessment {
   completedDate?: string;
   risksIdentified: number;
   controlsEvaluated: number;
+  /** Raw risk_governance sub-scores (1-5, higher = lower risk) in fixed dimension order. Empty for mock/no-governance assessments. */
+  dimensionScores: number[];
   findings: number;
   goNoGo: string;
   riskScore: number;
@@ -60,14 +62,19 @@ export default function RiskAssessments() {
           goNoGo === 'NO GO' ? 'completed' :
           rg ? 'in-progress' : 'draft';
 
-        // Count risks identified (categories with high risk)
-        const risksIdentified = rg ? [
+        // Raw risk_governance sub-scores (1-5, higher = lower risk) in a fixed
+        // dimension order. Empty when a use case only has a computed risk_score
+        // without per-dimension governance scores.
+        const dimensionScores = rg ? [
           rg.regulatory_compliance,
           rg.data_privacy_security,
           rg.ethical_bias_risk,
           rg.model_reliability,
           rg.autonomous_decision_risk,
-        ].filter(score => score <= 2).length : 0; // Low scores = high risk (1-5 scale inverted)
+        ] : [];
+
+        // Count risks identified (dimensions scored as high risk)
+        const risksIdentified = dimensionScores.filter(score => score <= 2).length; // Low scores = high risk (1-5 scale inverted)
 
         return {
           id: `ASM-UC-${uc.use_case_id.slice(0, 6)}`,
@@ -79,7 +86,8 @@ export default function RiskAssessments() {
           startDate: uc.created_at.split('T')[0],
           completedDate: status === 'approved' || status === 'completed' ? uc.updated_at.split('T')[0] : undefined,
           risksIdentified,
-          controlsEvaluated: 5, // 5 risk dimensions evaluated
+          controlsEvaluated: dimensionScores.length, // derived: one per governance dimension evaluated
+          dimensionScores,
           findings: risksIdentified,
           goNoGo,
           riskScore,
@@ -96,6 +104,7 @@ export default function RiskAssessments() {
       ...a,
       goNoGo: a.status === 'approved' ? 'GO' : a.status === 'completed' ? 'CONDITIONAL GO' : 'N/A',
       riskScore: a.risksIdentified > 2 ? 65 : a.risksIdentified > 0 ? 45 : 25,
+      dimensionScores: [], // mock assessments have no per-dimension governance breakdown
       useCaseStatus: 'Production',
       isLive: false,
     }));
@@ -316,19 +325,30 @@ export default function RiskAssessments() {
             </div>
           </div>
 
-          {/* Risk Dimensions Evaluated */}
-          {selectedData.isLive && (
+          {/* Risk Dimensions Evaluated — each bar's width and color reflect that
+              dimension's real risk_governance sub-score (1-5), converted to a
+              0-100% risk level ((5 - score) * 25). */}
+          {selectedData.isLive && selectedData.dimensionScores.length > 0 && (
             <div className="mb-6">
               <div className="text-sm font-semibold text-slate-900 mb-3">Risk Dimensions Evaluated</div>
               <div className="grid grid-cols-5 gap-2">
-                {['Regulatory', 'Data Privacy', 'Ethical/Bias', 'Model Reliability', 'Autonomy Risk'].map((dim) => (
-                  <div key={dim} className="p-2 bg-slate-50 rounded-lg text-center">
-                    <div className="text-[10px] text-slate-500 truncate">{dim}</div>
-                    <div className="w-full h-1 bg-slate-200 rounded-full mt-1">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: '80%' }} />
+                {['Regulatory', 'Data Privacy', 'Ethical/Bias', 'Model Reliability', 'Autonomy Risk'].map((dim, i) => {
+                  const raw = selectedData.dimensionScores[i] ?? 0; // 1-5, higher = lower risk
+                  const riskPct = Math.max(0, Math.min(100, (5 - raw) * 25));
+                  const barColor =
+                    riskPct >= 75 ? 'bg-rose-500' :
+                    riskPct >= 50 ? 'bg-orange-500' :
+                    riskPct >= 25 ? 'bg-amber-500' : 'bg-emerald-500';
+                  return (
+                    <div key={dim} className="p-2 bg-slate-50 rounded-lg text-center">
+                      <div className="text-[10px] text-slate-500 truncate" title={dim}>{dim}</div>
+                      <div className="w-full h-1 bg-slate-200 rounded-full mt-1">
+                        <div className={`h-full ${barColor} rounded-full`} style={{ width: `${riskPct}%` }} />
+                      </div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">{riskPct}% risk</div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

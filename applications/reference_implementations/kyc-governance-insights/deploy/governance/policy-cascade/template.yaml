@@ -1,0 +1,213 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Controlled Quality Output — Policy Cascade service.
+  Lambda evaluating a three-layer policy cascade (ORG -> APP -> REQ) with
+  most-restrictive-wins (BLOCK > ESCALATE > ALLOW). Invoked directly by the agent
+  runtime with IAM auth — there is no HTTP endpoint. Risk thresholds and the
+  prohibited-jurisdiction list are read at eval time from the policy-config
+  DynamoDB table (config, not code — invariant #3); on a config-load failure the
+  request fails loud with a 503 status (no hardcoded fallback — invariant #5).
+
+Parameters:
+  ResourcePrefix:
+    Type: String
+    Default: kyc-gov
+    Description: Prefix for resource names (keeps this stack isolated from other use cases)
+  PolicyConfigTable:
+    Type: String
+    Default: kyc-gov-policy-config
+    Description: >
+      Name of the policy-config DynamoDB table (created by the policy-config
+      stack). Thresholds + prohibited jurisdictions are read from here at eval time.
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS allowed origin (e.g. https://<dist>.cloudfront.net). Default '*' for local dev; override in prod.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  PolicyCascadeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-policy-cascade-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PolicyConfigRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PolicyConfigTable}'
+
+  PolicyCascadeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-policy-cascade'
+      RetentionInDays: 30
+
+  PolicyCascadeFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: PolicyCascadeLogGroup
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-policy-cascade'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt PolicyCascadeRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          POLICY_CONFIG_TABLE: !Ref PolicyConfigTable
+          CONFIG_CACHE_TTL_SECONDS: '5'
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: policy-cascade}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, logging, os, time
+          import boto3
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+          POLICY_CONFIG_TABLE = os.environ.get('POLICY_CONFIG_TABLE', '')
+          CONFIG_CACHE_TTL_SECONDS = float(os.environ.get('CONFIG_CACHE_TTL_SECONDS', '5'))
+          _dynamodb = None
+          _config_cache = {}
+
+          class ConfigUnavailable(Exception):
+              pass
+
+          def _config_table():
+              global _dynamodb
+              if _dynamodb is None:
+                  _dynamodb = boto3.resource('dynamodb')
+              return _dynamodb.Table(POLICY_CONFIG_TABLE)
+
+          def _load_config(tenant_id):
+              now = time.time()
+              cached = _config_cache.get(tenant_id)
+              if cached and (now - cached['ts'] < CONFIG_CACHE_TTL_SECONDS):
+                  return cached['cfg']
+              if not POLICY_CONFIG_TABLE:
+                  raise ConfigUnavailable('POLICY_CONFIG_TABLE not configured')
+              table = _config_table()
+              item = table.get_item(Key={'tenant_id': tenant_id}, ConsistentRead=True).get('Item')
+              if item is None and tenant_id != 'default':
+                  item = table.get_item(Key={'tenant_id': 'default'}, ConsistentRead=True).get('Item')
+              if item is None:
+                  raise ConfigUnavailable('no policy config for tenant %r (and no default)' % tenant_id)
+              try:
+                  cfg = {
+                      'risk_escalate_threshold': int(item['risk_escalate_threshold']),
+                      'risk_block_threshold': int(item['risk_block_threshold']),
+                      'prohibited_jurisdictions': {str(j).upper() for j in item.get('prohibited_jurisdictions', [])},
+                  }
+              except (KeyError, ValueError, TypeError) as e:
+                  raise ConfigUnavailable('malformed policy config row: %s' % e)
+              _config_cache[tenant_id] = {'ts': now, 'cfg': cfg}
+              return cfg
+
+          def handler(event, context):
+              t0 = time.time()
+              rid = getattr(context, 'aws_request_id', None)
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', 'POST')
+              if method == 'OPTIONS':
+                  return resp(200, {})
+              try:
+                  # Direct invoke (the AgentCore runtime calls this function with IAM auth) delivers
+                  # the payload at the top level; an API Gateway proxy event nests it under "body".
+                  # Accept both so `aws lambda invoke` and any legacy HTTP caller keep working.
+                  _raw = event.get('body') if isinstance(event, dict) and 'body' in event else event
+                  ctx = json.loads(_raw) if isinstance(_raw, str) else (_raw or {})
+              except Exception:
+                  ctx = {}
+              tenant_id = str(ctx.get('tenantId') or ctx.get('tenant_id') or 'default')
+              try:
+                  cfg = _load_config(tenant_id)
+              except ConfigUnavailable as e:
+                  logger.error(json.dumps({'svc': 'policy-cascade', 'request_id': rid, 'tenant': tenant_id,
+                                           'event': 'config_unavailable', 'detail': str(e),
+                                           'latency_ms': round((time.time() - t0) * 1000, 1)}))
+                  return resp(503, {'error': 'policy_config_unavailable', 'detail': str(e)})
+              result = evaluate(ctx, cfg)
+              logger.info(json.dumps({'svc': 'policy-cascade', 'request_id': rid, 'tenant': tenant_id,
+                                      'decision': result['decision'], 'deciding_rule': result['deciding_rule'],
+                                      'risk_score': int(ctx.get('riskScore', ctx.get('risk_score', 0)) or 0),
+                                      'latency_ms': round((time.time() - t0) * 1000, 1)}))
+              return resp(200, result)
+
+          def evaluate(ctx, cfg):
+              risk_escalate_threshold = int(cfg['risk_escalate_threshold'])
+              risk_block_threshold = int(cfg['risk_block_threshold'])
+              prohibited = cfg['prohibited_jurisdictions']
+              risk = int(ctx.get('riskScore', ctx.get('risk_score', 0)) or 0)
+              sanctions_hit = bool(ctx.get('sanctionsHit', ctx.get('sanctions_hit', False)))
+              pep_flag = bool(ctx.get('pepFlag', ctx.get('pep_flag', False)))
+              fatf = bool(ctx.get('fatfHighRisk', ctx.get('fatf_high_risk', False)))
+              jur = (ctx.get('jurisdiction') or '').upper()
+              ev = []
+              if sanctions_hit:
+                  ev.append({'layer': 'ORG', 'rule': 'ORG-001', 'result': 'BLOCK', 'reason': 'Sanctions match exceeds threshold — MLRO escalation required'})
+              if jur in prohibited:
+                  ev.append({'layer': 'ORG', 'rule': 'ORG-002', 'result': 'BLOCK', 'reason': f'Prohibited jurisdiction: {jur}'})
+              if pep_flag:
+                  ev.append({'layer': 'ORG', 'rule': 'ORG-004', 'result': 'ESCALATE', 'reason': 'PEP flag present — enhanced due diligence required'})
+              if fatf:
+                  ev.append({'layer': 'ORG', 'rule': 'ORG-005', 'result': 'ESCALATE', 'reason': 'Operations in FATF high-risk / conflict-zone jurisdiction — board approval required'})
+              if risk >= risk_block_threshold:
+                  ev.append({'layer': 'APP', 'rule': 'APP-006', 'result': 'BLOCK', 'reason': f'Risk score {risk} >= block threshold {risk_block_threshold}'})
+              elif risk >= risk_escalate_threshold:
+                  ev.append({'layer': 'APP', 'rule': 'APP-RISK', 'result': 'ESCALATE', 'reason': f'Risk score {risk} >= escalate threshold {risk_escalate_threshold}'})
+              if not ev:
+                  ev.append({'layer': 'REQ', 'rule': 'REQ-000', 'result': 'ALLOW', 'reason': 'All governance gates passed'})
+              order = {'BLOCK': 3, 'ESCALATE': 2, 'ALLOW': 1}
+              d = max(ev, key=lambda e: order[e['result']])
+              return {'decision': d['result'], 'deciding_layer': d['layer'], 'deciding_rule': d['rule'], 'reason': d['reason'], 'evaluations': ev}
+
+          def resp(code, body):
+              return {'statusCode': code,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+                                  'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type'},
+                      'body': json.dumps(body)}
+
+  PolicyCascadeUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/policy-cascade-function'
+      Type: String
+      Value: !Ref PolicyCascadeFunction
+      Description: Lambda function name for kyc-gov policy-cascade, invoked directly by the AgentCore runtime with IAM auth (no public endpoint).
+      Tags:
+        Project: !Ref ProjectTag
+        Environment: !Ref EnvironmentTag
+        Component: policy-cascade
+
+Outputs:
+  PolicyCascadeFunctionName:
+    Description: Function name for the POLICY_CASCADE_FUNCTION env var
+    Value: !Ref PolicyCascadeFunction

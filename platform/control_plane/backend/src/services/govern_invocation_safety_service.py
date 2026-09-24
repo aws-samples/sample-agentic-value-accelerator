@@ -28,6 +28,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 from core.ttl_cache import get_or_load
 from models.govern_invocation_safety import (
     DailyPoint,
+    InvocationRecord,
+    InvocationRecordsResponse,
     InvocationSafetyResponse,
     ModelInvocationRollup,
     StopReasonCount,
@@ -59,6 +61,16 @@ def _short_model(identifier: str) -> str:
     return _REGION_PREFIX.sub("", name)
 
 
+def _to_int_or_none(value) -> int | None:
+    """Coerce a Logs Insights scalar to int, or None when absent/blank/malformed."""
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 class GovernInvocationSafetyService:
     def __init__(self, region: str = "us-east-1"):
         self.region = region
@@ -83,7 +95,28 @@ class GovernInvocationSafetyService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
+        return result
+
+    def get_invocations(self, days: int = 7, limit: int = 100) -> InvocationRecordsResponse:
+        """Cached wrapper around the per-invocation METADATA query (3 min TTL)."""
+        result, cached_at = get_or_load(
+            f"invsafety:records:{self.region}:{days}:{limit}", _TTL,
+            lambda: self._fetch_invocations(days, limit), should_cache=lambda r: r.live,
+        )
+        if result.live and (time.time() - cached_at) >= 2:
+            stamp = f"Cached {int(time.time() - cached_at)}s ago"
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _log_group(self) -> tuple[str | None, bool]:
@@ -150,6 +183,7 @@ class GovernInvocationSafetyService:
                 ),
                 "by_model": (
                     'parse @message /"stopReason":"(?<sr>[^"]+)"/ '
+                    '| filter ispresent(sr) '
                     '| stats count(*) as calls, sum(sr="guardrail_intervened") as intv by modelId '
                     '| sort calls desc | limit 20'
                 ),
@@ -239,11 +273,96 @@ class GovernInvocationSafetyService:
                 logging_enabled=True,
                 live=total_calls > 0,
                 source="bedrock-invocation-logs",
-                note=None if total_calls > 0 else f"Logging enabled but no invocations recorded in the last {days}d.",
+                note=None if total_calls > 0 else (
+                    f"Invocation logging is enabled but no invocation log records were captured in the last {days}d. "
+                    "If Bedrock invocation metrics show traffic for this window, the model-invocation log group is "
+                    "missing or the delivery role lacks write access (recreate the log group / verify the role)."
+                ),
             )
         except (ClientError, BotoCoreError, KeyError, ValueError) as e:
             logger.warning("Invocation safety telemetry unavailable, returning fallback: %s", e)
             return InvocationSafetyResponse(
+                window_days=days, logging_enabled=enabled, log_group=None,
+                live=False, source="unavailable-fallback",
+                note="CloudWatch Logs unreachable or logs:StartQuery not granted.",
+            )
+
+    def _fetch_invocations(self, days: int = 7, limit: int = 100) -> InvocationRecordsResponse:
+        """Per-invocation METADATA rows from the same log group / logs client as the aggregate path.
+
+        PRIVACY (load-bearing): the Logs Insights query below selects ONLY scalar
+        metadata fields — @timestamp, modelId, operation, token counts — plus the
+        stopReason parsed out of @message. It NEVER selects, parses, logs, or returns
+        input.inputBodyJson / output.outputBodyJson (the prompt and completion text).
+        """
+        log_group, enabled = self._log_group()
+        if not enabled or not log_group:
+            # Not "mock": this response carries no records at all. Labelling an empty
+            # payload "mock" claims there is illustrative data to look at, when the real
+            # state is that the customer has not turned invocation logging on. The
+            # aggregate path 15 lines above already uses a reason-shaped source for the
+            # same class of condition.
+            return InvocationRecordsResponse(
+                window_days=days, logging_enabled=False, live=False, source="logging-disabled",
+                note="Bedrock model-invocation logging is not enabled — per-invocation telemetry is unavailable.",
+            )
+        try:
+            end = int(datetime.now(timezone.utc).timestamp())
+            start = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp())
+
+            # METADATA-ONLY query — no `stats`, one row per invocation. Reuses the exact
+            # field paths the aggregate queries use (modelId, input.inputTokenCount,
+            # output.outputTokenCount, stopReason via @message regex). Content bodies
+            # (input.inputBodyJson / output.outputBodyJson) are deliberately NOT selected.
+            # NOTE: the parsed capture `sr` must NOT be re-listed in `| fields` — a parsed
+            # ephemeral field auto-appears in results, and listing it again makes Logs
+            # Insights reject the query with "Ephemeral field is already defined". So we
+            # parse it (read below as d["sr"]) but only list the raw fields in `fields`.
+            query = (
+                'parse @message /"stopReason":"(?<sr>[^"]+)"/ '
+                '| fields @timestamp, modelId, operation, '
+                'input.inputTokenCount as inTok, output.outputTokenCount as outTok '
+                '| sort @timestamp desc '
+                f'| limit {int(limit)}'
+            )
+            rows = self._run_query(log_group, start, end, query)
+
+            records: list[InvocationRecord] = []
+            for r in rows:
+                d = self._row(r)
+                stop_reason = d.get("sr") or None
+                intervened = stop_reason == "guardrail_intervened"
+                records.append(InvocationRecord(
+                    timestamp=d.get("@timestamp", ""),
+                    model_id=_short_model(d.get("modelId", "")),
+                    region=self.region,
+                    operation=d.get("operation") or None,
+                    stop_reason=stop_reason,
+                    input_tokens=_to_int_or_none(d.get("inTok")),
+                    output_tokens=_to_int_or_none(d.get("outTok")),
+                    guardrail_intervened=intervened,
+                    guardrail_action=stop_reason if intervened else None,
+                ))
+
+            truncated = len(records) >= int(limit)
+            return InvocationRecordsResponse(
+                window_days=days,
+                records=records,
+                count=len(records),
+                truncated=truncated,
+                log_group=None,  # Redacted: log group name can reveal internal naming
+                logging_enabled=True,
+                live=True,  # query returned — honest empty when no records captured
+                source="bedrock-invocation-logs",
+                note=None if records else (
+                    f"Invocation logging is enabled but no invocation log records were captured in the last {days}d."
+                ),
+            )
+        except (ClientError, BotoCoreError, KeyError, ValueError) as e:
+            logger.warning("Invocation records unavailable, returning fallback: %s", e)
+            # Same correction, and the same token the aggregate path uses for this exact
+            # failure: no records were returned, so there is nothing illustrative here.
+            return InvocationRecordsResponse(
                 window_days=days, logging_enabled=enabled, log_group=None,
                 live=False, source="unavailable-fallback",
                 note="CloudWatch Logs unreachable or logs:StartQuery not granted.",

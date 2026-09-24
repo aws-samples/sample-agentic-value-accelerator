@@ -14,7 +14,7 @@
  * - Suggested owners and timelines
  * - Persisted state via localStorage
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon, type IconName } from '../icons';
 
@@ -22,7 +22,6 @@ import { Icon, type IconName } from '../icons';
 
 type GapCategory = 'non-technical' | 'hybrid';
 type GapPriority = 'critical' | 'high' | 'medium' | 'low';
-type GapStatus = 'not-started' | 'in-progress' | 'complete';
 
 interface ActionItem {
   id: string;

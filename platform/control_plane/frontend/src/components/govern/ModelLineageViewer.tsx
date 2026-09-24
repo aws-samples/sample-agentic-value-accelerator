@@ -10,7 +10,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useModelLineage, type LineageNode, type LineageNodeType } from './useModelLineage';
-import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
+import { LiveDataBadge } from './DataSourceIndicator';
 import { Icon, type IconName } from './icons';
 import { rowButtonProps } from './a11y';
 
@@ -45,7 +45,7 @@ interface PositionedNode extends LineageNode {
   row: number;
 }
 
-function layoutGraph(nodes: LineageNode[], edges: { sourceId: string; targetId: string }[]): PositionedNode[] {
+function layoutGraph(nodes: LineageNode[]): PositionedNode[] {
   // Group nodes by type for column layout
   const datasets = nodes.filter(n => n.type === 'dataset');
   const models = nodes.filter(n => n.type === 'model');
@@ -97,7 +97,7 @@ export default function ModelLineageViewer({ isOpen, onClose }: Props) {
     const filtered = filterType === 'all'
       ? lineage.graph.nodes
       : lineage.graph.nodes.filter(n => n.type === filterType);
-    return layoutGraph(filtered, lineage.graph.edges);
+    return layoutGraph(filtered);
   }, [lineage.graph, filterType]);
 
   // Filter edges to only include visible nodes
@@ -129,6 +129,13 @@ export default function ModelLineageViewer({ isOpen, onClose }: Props) {
     URL.revokeObjectURL(url);
   }, [lineage]);
 
+  // ML-SBOM only carries meaning when there is at least one real model in the
+  // lineage graph. With an empty graph we gate the export so we never ship an
+  // empty or fabricated SBOM.
+  const hasSbomData = lineage.stats.models > 0;
+
+  const isEmpty = lineage.graph.nodes.length === 0;
+
   // Keyboard handling
   useEffect(() => {
     if (!isOpen) return;
@@ -155,15 +162,31 @@ export default function ModelLineageViewer({ isOpen, onClose }: Props) {
               <p className="text-sm text-slate-500">Model provenance and supply chain governance</p>
             </div>
             {lineage.live ? (
-              <LiveDataBadge source="SageMaker" detail="QueryLineage API" />
+              <LiveDataBadge source="SageMaker" detail="SageMaker ML Lineage (ListArtifacts / ListContexts / ListAssociations)" />
             ) : (
-              <MockDataBadge integration="SageMaker QueryLineage API" />
+              <span
+                className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 cursor-help"
+                title="SageMaker ML Lineage unavailable — API unreachable or list permissions (sagemaker:ListArtifacts / ListContexts / ListAssociations) not granted"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Unavailable
+              </span>
             )}
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={handleExportSBOM}
-              className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
+              disabled={!hasSbomData}
+              title={
+                hasSbomData
+                  ? 'Export ML-SBOM (CycloneDX JSON) built from real lineage data'
+                  : 'ML-SBOM requires SageMaker model-registry / lineage metadata — none found in this account'
+              }
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                hasSbomData
+                  ? 'bg-violet-600 text-white hover:bg-violet-700'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
             >
               <Icon name="document-arrow-down" className="w-4 h-4" />
               Export ML-SBOM
@@ -249,7 +272,31 @@ export default function ModelLineageViewer({ isOpen, onClose }: Props) {
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 max-w-md text-center">
                 <Icon name="exclamation-triangle" className="w-8 h-8 text-rose-500 mx-auto mb-2" />
                 <p className="text-sm text-rose-700">{lineage.error}</p>
-                <p className="text-xs text-rose-500 mt-1">Showing mock data instead</p>
+                <p className="text-xs text-rose-500 mt-1">
+                  SageMaker ML Lineage could not be loaded. Check connectivity and that
+                  sagemaker:ListArtifacts / ListContexts / ListAssociations are granted.
+                </p>
+              </div>
+            </div>
+          ) : isEmpty ? (
+            <div className="flex-1 flex items-center justify-center p-6">
+              <div className="max-w-md text-center">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <Icon name="link" className="w-7 h-7 text-slate-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-800 mb-1">
+                  No SageMaker model lineage found in this account
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {lineage.note
+                    || 'SageMaker ML Lineage tracking is not enabled, or no models, datasets, or endpoints have been registered. Lineage entities appear here once SageMaker records model provenance.'}
+                </p>
+                <div className="mt-4 inline-flex items-start gap-2 text-left bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  <Icon name="document-arrow-down" className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-[11px] text-slate-500">
+                    ML-SBOM export requires SageMaker model-registry / lineage metadata — none found.
+                  </p>
+                </div>
               </div>
             </div>
           ) : viewMode === 'graph' ? (
@@ -326,7 +373,7 @@ interface GraphViewProps {
   stats: { totalNodes: number };
 }
 
-function GraphView({ nodes, edges, viewBox, selectedNode, onSelectNode, stats }: GraphViewProps) {
+function GraphView({ nodes, edges, viewBox, selectedNode, onSelectNode }: GraphViewProps) {
   if (nodes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -487,7 +534,7 @@ interface ListViewProps {
   onSelectNode: (id: string | null) => void;
 }
 
-function ListView({ nodes, edges, selectedNode, onSelectNode }: ListViewProps) {
+function ListView({ nodes, selectedNode, onSelectNode }: ListViewProps) {
   // Group by type
   const grouped = useMemo(() => {
     const groups: Record<string, LineageNode[]> = {};

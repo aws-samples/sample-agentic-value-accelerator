@@ -10,8 +10,10 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { PII_COVERAGE_TARGET } from './useDataReadiness';
+import { pooledScore } from './dataReadinessEngine';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export interface QualityRule {
   id: string;
@@ -24,6 +26,14 @@ export interface QualityRule {
   status: 'pass' | 'fail';
   lastRun: string;
   live: boolean;
+  /**
+   * How many underlying checks this row stands in for, and how many of them
+   * passed. Most rows are a single check (1 / 0-or-1), but the AWS Config row
+   * summarises every evaluated Config rule, so it carries its own counts and is
+   * pooled with that weight rather than counting as one rule.
+   */
+  checkCount: number;
+  passedCheckCount: number;
 }
 
 export interface QualityMetric {
@@ -41,10 +51,14 @@ export interface DataQualityResult {
   error: string | null;
   rules: QualityRule[];
   metrics: QualityMetric[];
+  /** Pooled Sum(passedChecks) / Sum(totalChecks) coverage, 0-100. */
   passRate: number;
   totalRules: number;
   passedRules: number;
   failedRules: number;
+  /** Underlying checks behind `passRate` (rows weighted by their own counts). */
+  totalChecks: number;
+  passedChecks: number;
   liveSourcesCount: number;
   hasGlueQuality: boolean;
   refresh: () => void;
@@ -88,8 +102,12 @@ export function useDataQuality(): DataQualityResult {
         if (configRes.status === 'fulfilled') {
           configCompliance = {
             totalRules: configRes.value.total_rules || 0,
-            compliantRules: configRes.value.compliant_rules || 0,
-            live: configRes.value.live ?? true,
+            compliantRules: configRes.value.compliant || 0,
+            // `?? false`, matching its glueQuality sibling below. A response with no `live`
+            // field is one that never claimed to be measured, so defaulting to `true`
+            // promoted "the backend did not say" into a Live badge on a compliance figure -
+            // the one direction of error nobody investigates.
+            live: configRes.value.live ?? false,
           };
         }
 
@@ -128,6 +146,8 @@ export function useDataQuality(): DataQualityResult {
         totalRules: 0,
         passedRules: 0,
         failedRules: 0,
+        totalChecks: 0,
+        passedChecks: 0,
         liveSourcesCount: 0,
         hasGlueQuality: false,
       };
@@ -155,6 +175,8 @@ export function useDataQuality(): DataQualityResult {
           status: piiCount >= 10 ? 'pass' : 'fail',
           lastRun: 'Real-time',
           live: true,
+          checkCount: 1,
+          passedCheckCount: piiCount >= 10 ? 1 : 0,
         });
       }
 
@@ -170,6 +192,8 @@ export function useDataQuality(): DataQualityResult {
           status: filterCount >= 3 ? 'pass' : 'fail',
           lastRun: 'Real-time',
           live: true,
+          checkCount: 1,
+          passedCheckCount: filterCount >= 3 ? 1 : 0,
         });
       }
     });
@@ -192,7 +216,7 @@ export function useDataQuality(): DataQualityResult {
       metrics.push({
         label: 'PII Types Protected',
         value: totalPii,
-        total: 25, // common standard
+        total: PII_COVERAGE_TARGET, // shared denominator across the data-governance module
         unit: 'types',
         status: totalPii >= 15 ? 'good' : totalPii >= 8 ? 'warning' : 'critical',
         source: 'Guardrails',
@@ -215,6 +239,10 @@ export function useDataQuality(): DataQualityResult {
         status: complianceRate >= 90 ? 'pass' : 'fail',
         lastRun: 'Continuous',
         live: configCompliance.live,
+        // One row, but it summarises every evaluated AWS Config rule — carry the
+        // real rule counts so pooling weights it accordingly.
+        checkCount: configCompliance.totalRules,
+        passedCheckCount: configCompliance.compliantRules,
       });
 
       metrics.push({
@@ -243,14 +271,21 @@ export function useDataQuality(): DataQualityResult {
           status: r.status === 'pass' ? 'pass' : 'fail',
           lastRun: r.last_run || '-',
           live: true,
+          checkCount: 1,
+          passedCheckCount: r.status === 'pass' ? 1 : 0,
         });
       });
     }
 
-    // Calculate totals
+    // Calculate totals. Row counts describe the table; the pass rate pools every
+    // row's OWN check counts under ONE denominator — Sum(passed) / Sum(total) —
+    // so the single AWS Config row is weighted by the Config rules it summarises
+    // instead of counting as one rule beside the per-guardrail and Glue rows.
     const passedRules = rules.filter(r => r.status === 'pass').length;
     const failedRules = rules.filter(r => r.status === 'fail').length;
-    const passRate = rules.length > 0 ? Math.round((passedRules / rules.length) * 100) : 0;
+    const passedChecks = rules.reduce((sum, r) => sum + r.passedCheckCount, 0);
+    const totalChecks = rules.reduce((sum, r) => sum + r.checkCount, 0);
+    const passRate = pooledScore(rules.map(r => ({ score: r.passedCheckCount, maxScore: r.checkCount })));
 
     return {
       loading,
@@ -261,6 +296,8 @@ export function useDataQuality(): DataQualityResult {
       totalRules: rules.length,
       passedRules,
       failedRules,
+      totalChecks,
+      passedChecks,
       liveSourcesCount: liveCount,
       hasGlueQuality: glueQuality.live && glueQuality.rules.length > 0,
     };

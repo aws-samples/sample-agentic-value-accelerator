@@ -1,0 +1,7 @@
+.terraform
+terraform.tfstate.d
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+lambda_proxy.zip
+lambda_worker.zip

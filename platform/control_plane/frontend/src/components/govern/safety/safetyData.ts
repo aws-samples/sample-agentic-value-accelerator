@@ -140,7 +140,7 @@ export const SAFETY_SURFACES: SafetySurface[] = [
     id: 'threat-modeling', name: 'Threat Modeling', path: '/govern/safety/threat-modeling',
     blurb: 'MAESTRO 7-layer threat model for autonomous capabilities, mapped to OWASP Agentic T1–T17 and the platform controls that mitigate each.',
     icon: 'shield-exclamation', dimensions: ['safety', 'controllability'],
-    status: 'live', tag: 'MAESTRO · OWASP', phase: 'assess',
+    status: 'illustrative', tag: 'MAESTRO · OWASP', phase: 'assess',
   },
   {
     id: 'capabilities', name: 'Frontier Capability Thresholds', path: '/govern/safety/capabilities',
@@ -176,6 +176,6 @@ export const SAFETY_SURFACES: SafetySurface[] = [
     id: 'runtime-safety', name: 'Runtime Safety Controls', path: '/govern/safety/runtime',
     blurb: 'Forbidden targets (blocklist), alignment drift detection, and reliability metrics — runtime controls from LLM pen-testing research.',
     icon: 'shield-check', dimensions: ['safety', 'controllability', 'veracity-robustness'],
-    status: 'live', tag: 'Happe&Cito 2025 · CaMeL', phase: 'prevent',
+    status: 'illustrative', tag: 'Happe&Cito 2025 · CaMeL', phase: 'prevent',
   },
 ];

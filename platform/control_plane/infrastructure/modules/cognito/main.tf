@@ -10,14 +10,23 @@ resource "aws_cognito_user_pool" "main" {
 
   auto_verified_attributes = ["email"]
 
-  # Disable self-service sign-up — admin creates users only
+  # Self-service sign-up is allowed. The PreSignUp Lambda enforces the
+  # corporate-email domain policy — that is the real gate. The invite
+  # template still applies when an admin creates a user by hand.
   admin_create_user_config {
-    allow_admin_create_user_only = true
+    allow_admin_create_user_only = false
     invite_message_template {
       email_subject = "Control Plane - Your temporary password"
       email_message = "Your username is {username} and temporary password is {####}."
       sms_message   = "Your username is {username} and temporary password is {####}."
     }
+  }
+
+  # Self-signup triggers — see signup_lambdas.tf
+  lambda_config {
+    pre_sign_up         = aws_lambda_function.pre_signup_domain_check.arn
+    post_confirmation   = aws_lambda_function.post_confirmation_viewer.arn
+    post_authentication = aws_lambda_function.post_auth_log_login.arn
   }
 
   # Password policy

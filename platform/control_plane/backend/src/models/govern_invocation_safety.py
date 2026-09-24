@@ -17,6 +17,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from models.govern_region_provenance import RegionProvenance
+
 
 class StopReasonCount(BaseModel):
     """How often a model stopped for a given reason (e.g. guardrail_intervened)."""
@@ -27,6 +29,12 @@ class StopReasonCount(BaseModel):
 
 class ModelInvocationRollup(BaseModel):
     """Per-model invocation counts over the window."""
+
+    # `model_id` here and on InvocationRecord below is an AI model identifier (a
+    # Bedrock modelId) - meaningful domain vocabulary, not a pydantic internal.
+    # Pydantic reserves the `model_` prefix, so the namespace guard is disabled
+    # deliberately; renaming the field would break the API contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
 
     model_id: str = Field(..., description="Short model id (region + provider prefixes stripped)")
     calls: int = 0
@@ -39,6 +47,49 @@ class DailyPoint(BaseModel):
     date: str = Field(..., description="YYYY-MM-DD (UTC)")
     calls: int = 0
     guardrail_intervened: int = 0
+
+
+class InvocationRecord(BaseModel):
+    """One logged model invocation — METADATA ONLY.
+
+    NEVER carries the prompt or the response/completion text. Only scalar metadata
+    read from the log record's non-content fields (timestamp, model, operation,
+    stop reason, token counts, guardrail signal). The content bodies
+    (input.inputBodyJson / output.outputBodyJson) are never selected or read.
+    """
+
+    model_config = {"protected_namespaces": ()}
+
+    timestamp: str = Field(..., description="Invocation time (UTC, from @timestamp)")
+    model_id: str = Field(..., description="Short model id (region + provider prefixes stripped)")
+    region: Optional[str] = None
+    operation: Optional[str] = Field(default=None, description="e.g. Converse / InvokeModel / InvokeModelWithResponseStream")
+    stop_reason: Optional[str] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    guardrail_intervened: bool = Field(False, description="True when stopReason == guardrail_intervened")
+    guardrail_action: Optional[str] = Field(default=None, description="Guardrail signal derived from stopReason metadata")
+
+
+class InvocationRecordsResponse(BaseModel):
+    """Per-invocation metadata rows from Bedrock invocation logs — never content."""
+
+    window_days: int = 7
+    records: List[InvocationRecord] = Field(default_factory=list)
+    count: int = 0
+    truncated: bool = Field(False, description="True when the result hit the requested limit")
+    log_group: Optional[str] = Field(default=None, description="Redacted in responses")
+    logging_enabled: bool = Field(False, description="True when Bedrock model-invocation logging is configured")
+    live: bool
+    source: str
+    note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )
 
 
 class InvocationSafetyResponse(BaseModel):
@@ -59,3 +110,10 @@ class InvocationSafetyResponse(BaseModel):
     live: bool
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )

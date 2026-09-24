@@ -3,10 +3,11 @@
  * Category schemas integrated with AVA platform and AWS services
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useDataGovernance } from './useDataGovernance';
+import { governDataCatalogApi } from '../../../api/client';
 import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
 import { tooltipStyle } from './dataGovernanceData';
 import StatCard from '../StatCard';
@@ -17,6 +18,16 @@ interface TaxonomyNode {
   name: string;
   count?: number;
   children?: TaxonomyNode[];
+}
+
+// Shapes returned by the (untyped) data-catalog sensitivity/domains endpoints.
+interface SensitivityResponse {
+  live: boolean;
+  breakdown: { category: string; count: number; color: string; examples: string[] }[];
+}
+interface DomainsResponse {
+  live: boolean;
+  domains: { name: string; table_count: number; classification: string | null }[];
 }
 
 const SAMPLE_TAXONOMY: TaxonomyNode[] = [
@@ -55,8 +66,8 @@ const SAMPLE_TAXONOMY: TaxonomyNode[] = [
   },
 ];
 
-function TaxonomyTree({ nodes, useCases, depth = 0 }: { nodes: TaxonomyNode[]; useCases: { businessDomain: string }[]; depth?: number }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['1', '2', '3']));
+function TaxonomyTree({ nodes, useCases, depth = 0, preferNodeCount = false }: { nodes: TaxonomyNode[]; useCases: { businessDomain: string }[]; depth?: number; preferNodeCount?: boolean }) {
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(nodes.map(n => n.id)));
 
   const toggle = (id: string) => {
     setExpanded(prev => {
@@ -74,10 +85,15 @@ function TaxonomyTree({ nodes, useCases, depth = 0 }: { nodes: TaxonomyNode[]; u
     ).length;
   };
 
+  // With live data, use the node's own count (Macie objects / Glue tables);
+  // otherwise derive counts from the registered use cases.
+  const resolveCount = (n: TaxonomyNode): number =>
+    preferNodeCount && n.count != null ? n.count : getCount(n.name);
+
   return (
     <div className="space-y-0.5">
       {nodes.map(node => {
-        const count = node.children ? node.children.reduce((acc, c) => acc + getCount(c.name), 0) : getCount(node.name);
+        const count = node.children ? node.children.reduce((acc, c) => acc + resolveCount(c), 0) : resolveCount(node);
         return (
           <div key={node.id}>
             <div
@@ -88,14 +104,11 @@ function TaxonomyTree({ nodes, useCases, depth = 0 }: { nodes: TaxonomyNode[]; u
               onClick={() => node.children && toggle(node.id)}
             >
               {node.children ? (
-                <svg
+                <Icon
+                  name="chevron-right"
                   className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded.has(node.id) ? 'rotate-90' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                  strokeWidth={2}
+                />
               ) : (
                 <span className="w-3.5 h-3.5 flex items-center justify-center">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
@@ -107,7 +120,7 @@ function TaxonomyTree({ nodes, useCases, depth = 0 }: { nodes: TaxonomyNode[]; u
               )}
             </div>
             {node.children && expanded.has(node.id) && (
-              <TaxonomyTree nodes={node.children} useCases={useCases} depth={depth + 1} />
+              <TaxonomyTree nodes={node.children} useCases={useCases} depth={depth + 1} preferNodeCount={preferNodeCount} />
             )}
           </div>
         );
@@ -122,6 +135,34 @@ export default function DataTaxonomy() {
   const dg = useDataGovernance();
   const [toast, setToast] = useState<string | null>(null);
 
+  // Live classification taxonomy: Glue data domains + Macie sensitivity categories.
+  const [liveTaxonomy, setLiveTaxonomy] = useState<TaxonomyNode[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([governDataCatalogApi.sensitivity(), governDataCatalogApi.domains()])
+      .then(([sensRes, domRes]) => {
+        if (cancelled) return;
+        const sens: SensitivityResponse | null = sensRes.status === 'fulfilled' ? sensRes.value : null;
+        const dom: DomainsResponse | null = domRes.status === 'fulfilled' ? domRes.value : null;
+        const nodes: TaxonomyNode[] = [];
+        if (dom?.live && dom.domains?.length) {
+          nodes.push({
+            id: 'domains', name: 'Data Domains',
+            children: dom.domains.map((d, i) => ({ id: `dom-${i}`, name: d.name, count: d.table_count })),
+          });
+        }
+        if (sens?.live && sens.breakdown?.length) {
+          nodes.push({
+            id: 'sensitivity', name: 'Data Sensitivity',
+            children: sens.breakdown.map((b, i) => ({ id: `sens-${i}`, name: b.category, count: b.count })),
+          });
+        }
+        if (nodes.length) setLiveTaxonomy(nodes);
+      })
+      .catch(() => { /* keep SAMPLE_TAXONOMY */ });
+    return () => { cancelled = true; };
+  }, []);
+
   const flashToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2800);
@@ -130,12 +171,16 @@ export default function DataTaxonomy() {
   // Extract unique business domains from use cases
   const domains = [...new Set(dg.useCaseRequirements.map(uc => uc.businessDomain).filter(Boolean))];
 
-  // Taxonomy structure metrics derived from SAMPLE_TAXONOMY
-  const topCategories = SAMPLE_TAXONOMY.length;
-  const totalSubcategories = SAMPLE_TAXONOMY.reduce((acc, n) => acc + (n.children?.length ?? 0), 0);
+  // Prefer the live catalog taxonomy; fall back to the sample structure.
+  const taxonomy = liveTaxonomy ?? SAMPLE_TAXONOMY;
+  const taxonomyLive = liveTaxonomy != null;
+
+  // Taxonomy structure metrics derived from the active taxonomy
+  const topCategories = taxonomy.length;
+  const totalSubcategories = taxonomy.reduce((acc, n) => acc + (n.children?.length ?? 0), 0);
   const totalNodes = topCategories + totalSubcategories;
-  const hierarchyDepth = SAMPLE_TAXONOMY.some(n => n.children?.length) ? 2 : 1;
-  const categoryChartData = SAMPLE_TAXONOMY.map((n, i) => ({
+  const hierarchyDepth = taxonomy.some(n => n.children?.length) ? 2 : 1;
+  const categoryChartData = taxonomy.map((n, i) => ({
     name: n.name,
     subcategories: n.children?.length ?? 0,
     color: TAXONOMY_COLORS[i % TAXONOMY_COLORS.length],
@@ -198,7 +243,9 @@ export default function DataTaxonomy() {
         <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-slate-900">Subcategories per Top-Level Facet</h3>
-            <MockDataBadge />
+            {taxonomyLive
+              ? <LiveDataBadge source="Macie + Glue" detail="Live sensitivity categories (Macie) and data domains (Glue)" />
+              : <MockDataBadge />}
           </div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={categoryChartData} margin={{ left: 4, right: 8 }}>
@@ -263,10 +310,12 @@ export default function DataTaxonomy() {
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-900">Taxonomy Browser</div>
-              <MockDataBadge />
+              {taxonomyLive
+                ? <LiveDataBadge source="Macie + Glue" detail="Live data classification from Macie sensitivity + Glue domains" />
+                : <MockDataBadge />}
             </div>
             <div className="p-4 max-h-[350px] overflow-y-auto">
-              <TaxonomyTree nodes={SAMPLE_TAXONOMY} useCases={dg.useCaseRequirements} />
+              <TaxonomyTree key={taxonomyLive ? 'live' : 'sample'} nodes={taxonomy} useCases={dg.useCaseRequirements} preferNodeCount={taxonomyLive} />
             </div>
           </div>
 

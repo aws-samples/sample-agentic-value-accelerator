@@ -23,9 +23,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, List, Optional, Tuple
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError, ParamValidationError
 
+from core.cloudtrail_paging import lookup_events_paged
+from core.ttl_cache import get_or_load
 from models.govern_controls import (
+    AwsConfigRule,
+    AwsConfigRulesResponse,
     ControlEvaluation,
     ControlEvaluationRequest,
     EvaluateControlsResponse,
@@ -34,6 +38,17 @@ from models.govern_controls import (
 )
 
 logger = logging.getLogger(__name__)
+
+# AWS Config rules move slowly — a short TTL collapses repeat page loads.
+_CONFIG_RULES_TTL = 300  # 5 min
+
+# Order per-rule detail so problems surface first in the UI.
+_COMPLIANCE_SORT_ORDER = {
+    "NON_COMPLIANT": 0,
+    "INSUFFICIENT_DATA": 1,
+    "NOT_APPLICABLE": 2,
+    "COMPLIANT": 3,
+}
 
 
 class GovernControlsService:
@@ -154,30 +169,57 @@ class GovernControlsService:
                     status = ct.get_trail_status(Name=trail_name)
                     if status.get("IsLogging"):
                         active_trails.append(trail_name)
-                except (ClientError, BotoCoreError):
-                    pass
+                except (ClientError, BotoCoreError) as e:
+                    # Was a bare `pass`. A trail whose status cannot be read drops out of
+                    # active_trails, which can flip this control from PASS to FAIL - that
+                    # direction is at least conservative, but silently is the wrong way to
+                    # do it. Log so the FAIL can be told from a real "not logging".
+                    logger.warning("CloudTrail get_trail_status failed for %s: %s", trail_name, e)
 
-            # Look up recent AI-related events (last 24h)
+            # Count recent AI-service activity (last 24h) to show the trail is capturing it.
+            #
+            # Deliberately still the EventSource axis, not EventName. These are CLOUD-PLANE
+            # calls (ListFoundationModels, CreateEndpoint, ...), and that is the right signal
+            # for THIS control: the question is whether the trail is recording AI-service API
+            # activity at all, which control-plane calls demonstrate. Switching to EventName
+            # invocations would report 0 on any account without data events enabled and would
+            # quietly change what the control asserts. The evidence string below says "API
+            # calls" so the number is not read as model invocations.
+            event_note: Optional[str] = None
             if active_trails:
-                try:
-                    start_time = datetime.now(timezone.utc) - timedelta(hours=24)
-                    for src in ["bedrock.amazonaws.com", "sagemaker.amazonaws.com"]:
-                        resp = ct.lookup_events(
-                            LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": src}],
-                            StartTime=start_time,
-                            MaxResults=50,
-                        )
-                        total_events += len(resp.get("Events", []))
-                except (ClientError, BotoCoreError):
-                    pass
+                start_time = datetime.now(timezone.utc) - timedelta(hours=24)
+                # This loop read one 50-event page per source and summed it, so total_events
+                # could never exceed 100 no matter how busy the account was - a hard ceiling
+                # reported as a measured 24h total at confidence 0.95. It also swallowed
+                # every failure with a bare `pass`, so a lookup that failed on every request
+                # produced "0 events in last 24h" under a Live badge.
+                lookup = lookup_events_paged(
+                    ct,
+                    attribute_key="EventSource",
+                    attribute_values=["bedrock.amazonaws.com", "sagemaker.amazonaws.com"],
+                    start_time=start_time,
+                )
+                total_events = len(lookup.events)
+                event_note = lookup.note
+                if lookup.failed:
+                    # Not a measured zero. Say so rather than letting a failure read as quiet.
+                    total_events = None
 
-            self._track_source("cloudtrail", start, live=True)
+            self._track_source("cloudtrail", start, live=True, note=event_note)
 
             if active_trails:
+                if total_events is None:
+                    activity = "AI service API call count unavailable (CloudTrail lookup failed)"
+                elif event_note:
+                    # A bounded read has to say the number is a floor, or the floor reads
+                    # as a total.
+                    activity = f"at least {total_events} AI service API calls in last 24h"
+                else:
+                    activity = f"{total_events} AI service API calls in last 24h"
                 return ControlEvaluation(
                     controlId=control_id,
                     status=EvaluationStatus.PASS,
-                    evidence=f"CloudTrail trail '{active_trails[0]}' active with {total_events} events in last 24h",
+                    evidence=f"CloudTrail trail '{active_trails[0]}' active; {activity}",
                     lastEvaluated=datetime.utcnow(),
                     confidence=0.95,
                     source="cloudtrail",
@@ -185,6 +227,8 @@ class GovernControlsService:
                         "active_trails": len(active_trails),
                         "trail_names": active_trails[:3],
                         "events_24h": total_events,
+                        "events_24h_is_floor": bool(event_note) and total_events is not None,
+                        "note": event_note,
                     },
                 )
             else:
@@ -197,6 +241,11 @@ class GovernControlsService:
                     source="cloudtrail",
                 )
 
+        except ParamValidationError:
+            # Subclasses BotoCoreError, so the handler below would report a malformed
+            # request THIS code built as a CloudTrail outage - degrading honestly to a
+            # conclusion that is wrong for a reason nobody can see.
+            raise
         except (ClientError, BotoCoreError) as e:
             self._track_source("cloudtrail", start, live=False, error=str(e))
             return ControlEvaluation(
@@ -522,6 +571,142 @@ class GovernControlsService:
                 lastEvaluated=datetime.utcnow(),
                 confidence=0.0,
                 source="config",
+            )
+
+    # ─────────────────── AWS Config Rules (surfaced view) ───────────────────
+
+    def get_config_rules(self) -> AwsConfigRulesResponse:
+        """AWS Config rules + per-rule compliance, with a short TTL cache.
+
+        Mirrors the other Govern read-through slices: honest live/source/note,
+        graceful live=False fallback, should_cache=lambda r: r.live so a
+        transient failure never poisons the cache. Never raises.
+        """
+        try:
+            result, cached_at = get_or_load(
+                f"govern_controls:config_rules:{self.region}",
+                _CONFIG_RULES_TTL,
+                self._fetch_config_rules,
+                should_cache=lambda r: r.live,
+            )
+            if result.live and (time.time() - cached_at) >= 2:
+                stamp = f"Cached {int(time.time() - cached_at)}s ago"
+                # ttl_cache hands back the object it still holds, so mutating result.note
+                # would append a stamp per hit and grow the cached note without bound.
+                # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+                result = result.model_copy(
+                    update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+                )
+            return result
+        except Exception as e:  # defensive — this endpoint must never raise
+            logger.warning(f"AWS Config rules unavailable: {e}")
+            return AwsConfigRulesResponse(
+                live=False,
+                source="aws-config",
+                note="AWS Config not enabled or config:Describe* not granted",
+            )
+
+    def _fetch_config_rules(self) -> AwsConfigRulesResponse:
+        """Enumerate Config rules + join their per-rule compliance status."""
+        try:
+            config = self._get_client("config")
+
+            # 1. Enumerate rules → name, description, source owner.
+            rule_meta: Dict[str, Dict[str, Optional[str]]] = {}
+            token = None
+            while True:
+                kwargs = {"NextToken": token} if token else {}
+                resp = config.describe_config_rules(**kwargs)
+                for rule in resp.get("ConfigRules", []):
+                    name = rule.get("ConfigRuleName")
+                    if not name:
+                        continue
+                    rule_meta[name] = {
+                        "description": rule.get("Description"),
+                        "source": (rule.get("Source", {}) or {}).get("Owner"),
+                    }
+                token = resp.get("NextToken")
+                if not token:
+                    break
+
+            # 2. Compliance by rule → ComplianceType + capped non-compliant count.
+            compliance_by_rule: Dict[str, Dict[str, Optional[object]]] = {}
+            token = None
+            while True:
+                kwargs = {"NextToken": token} if token else {}
+                resp = config.describe_compliance_by_config_rule(**kwargs)
+                for item in resp.get("ComplianceByConfigRules", []):
+                    name = item.get("ConfigRuleName")
+                    if not name:
+                        continue
+                    comp = item.get("Compliance", {}) or {}
+                    ctype = comp.get("ComplianceType") or "INSUFFICIENT_DATA"
+                    noncompliant_resources = None
+                    if ctype == "NON_COMPLIANT":
+                        contributor = comp.get("ComplianceContributorCount") or {}
+                        capped = contributor.get("CappedCount")
+                        if isinstance(capped, int):
+                            noncompliant_resources = capped
+                    compliance_by_rule[name] = {
+                        "compliance": ctype,
+                        "noncompliant_resources": noncompliant_resources,
+                    }
+                token = resp.get("NextToken")
+                if not token:
+                    break
+
+            # 3. Join by rule name (union of both calls) and tally counts.
+            rules: List[AwsConfigRule] = []
+            compliant = noncompliant = not_applicable = insufficient = 0
+            for name in set(rule_meta) | set(compliance_by_rule):
+                meta = rule_meta.get(name, {})
+                comp = compliance_by_rule.get(name, {})
+                ctype = comp.get("compliance") or "INSUFFICIENT_DATA"
+                if ctype == "COMPLIANT":
+                    compliant += 1
+                elif ctype == "NON_COMPLIANT":
+                    noncompliant += 1
+                elif ctype == "NOT_APPLICABLE":
+                    not_applicable += 1
+                else:
+                    ctype = "INSUFFICIENT_DATA"
+                    insufficient += 1
+                rules.append(AwsConfigRule(
+                    name=name,
+                    description=meta.get("description"),
+                    compliance=ctype,
+                    noncompliant_resources=comp.get("noncompliant_resources"),
+                    source=meta.get("source"),
+                ))
+
+            # Surface problems first, then alphabetical for stable ordering.
+            rules.sort(key=lambda r: (_COMPLIANCE_SORT_ORDER.get(r.compliance, 4), r.name.lower()))
+
+            total = len(rules)
+            if total == 0:
+                return AwsConfigRulesResponse(
+                    live=True,
+                    source="aws-config",
+                    note="AWS Config has no rules configured",
+                )
+
+            return AwsConfigRulesResponse(
+                rules=rules,
+                total=total,
+                compliant=compliant,
+                noncompliant=noncompliant,
+                not_applicable=not_applicable,
+                insufficient_data=insufficient,
+                live=True,
+                source="aws-config",
+            )
+
+        except (ClientError, BotoCoreError) as e:
+            logger.warning(f"AWS Config rules fetch failed: {e}")
+            return AwsConfigRulesResponse(
+                live=False,
+                source="aws-config",
+                note="AWS Config not enabled or config:Describe* not granted",
             )
 
     # ─────────────────── SageMaker Evaluation ───────────────────

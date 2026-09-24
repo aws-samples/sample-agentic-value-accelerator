@@ -14,6 +14,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from models.govern_region_provenance import RegionProvenance
+
 
 class GovernanceDistribution(BaseModel):
     """Governance status distribution across the fleet."""
@@ -69,6 +71,13 @@ class FleetSummaryResponse(BaseModel):
     live: bool
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )
 
 
 class SegmentRow(BaseModel):
@@ -92,6 +101,13 @@ class FleetSegmentsResponse(BaseModel):
     live: bool
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )
 
 
 class ExceptionAgent(BaseModel):
@@ -109,6 +125,10 @@ class ExceptionAgent(BaseModel):
     has_policy: bool = False
     attention_score: int = Field(0, description="composite score driving queue order")
     reasons: List[str] = Field(default_factory=list, description="why this agent is flagged")
+    region: Optional[str] = Field(
+        None,
+        description="AWS region this agent was read from; None for non-region-scoped sources",
+    )
 
 
 class FleetExceptionsResponse(BaseModel):
@@ -122,6 +142,13 @@ class FleetExceptionsResponse(BaseModel):
     live: bool
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )
 
 
 class InventoryRow(BaseModel):
@@ -140,3 +167,10 @@ class FleetInventoryResponse(BaseModel):
     live: bool
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )

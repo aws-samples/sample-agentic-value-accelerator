@@ -8,48 +8,27 @@
  * Plan module or the shared API types.
  */
 
-export interface TokenPrice {
-  /** USD per 1,000 input tokens. */
-  input: number;
-  /** USD per 1,000 output tokens. */
-  output: number;
-}
+// Model token pricing now lives in the single shared source, ./modelPricing.
+// It is imported for the cost math below and re-exported here so existing
+// FinOps importers of ./expectedCost keep working unchanged.
+import {
+  MODEL_PRICING,
+  PRICED_MODEL_LABELS,
+  PRICED_MODEL_IDS,
+  isPricedModelId,
+  priceFor,
+  type TokenPrice,
+  type PricedModelId,
+} from './modelPricing';
 
-/** Canonical fleet model ids that have pricing. */
-export type PricedModelId =
-  | 'opus-4-7'
-  | 'sonnet-4-5'
-  | 'haiku-4-5'
-  | 'nova-pro'
-  | 'nova-lite';
-
-/**
- * AWS Bedrock on-demand list prices, USD per 1,000 tokens. Update here on change.
- * Anthropic prices verified against the Bedrock pricing page (US East, on-demand):
- * Opus 4.7 $5/$25, Sonnet 4.5 $3/$15, Haiku 4.5 $1/$5 per 1M tokens. Nova prices
- * per the Amazon Nova on-demand rates.
- */
-export const MODEL_PRICING: Record<PricedModelId, TokenPrice> = {
-  'opus-4-7':   { input: 0.005,   output: 0.025   },
-  'sonnet-4-5': { input: 0.003,   output: 0.015   },
-  'haiku-4-5':  { input: 0.001,   output: 0.005   },
-  'nova-pro':   { input: 0.0008,  output: 0.0032  },
-  'nova-lite':  { input: 0.00006, output: 0.00024 },
+export {
+  MODEL_PRICING,
+  PRICED_MODEL_LABELS,
+  PRICED_MODEL_IDS,
+  isPricedModelId,
+  priceFor,
 };
-
-export const PRICED_MODEL_LABELS: Record<PricedModelId, string> = {
-  'opus-4-7':   'Claude Opus 4.7',
-  'sonnet-4-5': 'Claude Sonnet 4.5',
-  'haiku-4-5':  'Claude Haiku 4.5',
-  'nova-pro':   'Nova Pro',
-  'nova-lite':  'Nova Lite',
-};
-
-export const PRICED_MODEL_IDS = Object.keys(MODEL_PRICING) as PricedModelId[];
-
-export function isPricedModelId(id: string | undefined | null): id is PricedModelId {
-  return id != null && id in MODEL_PRICING;
-}
+export type { TokenPrice, PricedModelId };
 
 /** Default tokens-per-task heuristic when a use case hasn't specified its own. */
 export const DEFAULT_TOKENS_PER_TASK = { input: 1500, output: 340 }; // ~1,840 tokens/call

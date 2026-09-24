@@ -177,7 +177,7 @@ export default function Observability() {
                     </div>
                     <a
                       href={foundationDeployment.outputs.langfuse_host}
-                      onClick={(e) => { e.preventDefault(); openFsiApp(foundationDeployment.outputs.langfuse_host); }}
+                      onClick={(e) => { e.preventDefault(); openFsiApp(foundationDeployment.outputs?.langfuse_host); }}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"

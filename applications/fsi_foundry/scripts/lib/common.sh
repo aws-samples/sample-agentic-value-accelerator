@@ -183,16 +183,22 @@ check_aws_credentials() {
 # Fresh Account Pre-Flight Checks
 # ============================================================================
 
-# Check Bedrock model access in the target region
-# Usage: check_bedrock_model_access "us-west-2" "anthropic.claude-3-sonnet-20240229-v1:0"
+# Check Bedrock model access in the target region.
+# Usage: check_bedrock_model_access "us-west-2" "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+# Inference-profile geo prefixes (us./eu./apac./jp./global.) are stripped here
+# because get-foundation-model only accepts base foundation-model IDs; the
+# default matches the AgentCore runtime Terraform default (variables.tf).
 check_bedrock_model_access() {
     local region="${1:-$AWS_REGION}"
-    local model_id="${2:-anthropic.claude-3-sonnet-20240229-v1:0}"
-    
+    local model_id="${2:-${BEDROCK_MODEL_ID:-us.anthropic.claude-haiku-4-5-20251001-v1:0}}"
+
     if [[ -z "$region" ]]; then
         region="us-west-2"
     fi
-    
+
+    # Normalize inference-profile IDs to their base foundation-model ID
+    model_id=$(echo "$model_id" | sed -E 's/^(us|eu|apac|jp|global)\.//')
+
     # Check if model is accessible
     if ! aws bedrock get-foundation-model \
         --model-identifier "$model_id" \

@@ -202,8 +202,8 @@ export default function HandoffWorkspace() {
                     <span className="text-[10px] text-slate-400">{it.agentName} · {it.businessUnit}</span>
                     <span className="text-[10px] text-slate-400">risk {it.riskScore} · conf {it.confidence.toFixed(2)}</span>
                   </div>
-                  {it.status === 'awaiting-agent' && <div className="mt-1 text-[9px] text-indigo-600 font-medium">● awaiting agent reply</div>}
-                  {it.status === 'resolved' && it.decision && <div className="mt-1 text-[9px] text-slate-500 font-medium capitalize">✓ {it.decision.replace(/-/g, ' ')}</div>}
+                  {it.status === 'awaiting-agent' && <div className="mt-1 flex items-center gap-1 text-[9px] text-indigo-600 font-medium"><Icon name="circle" className="w-2 h-2" strokeWidth={2} /> awaiting agent reply</div>}
+                  {it.status === 'resolved' && it.decision && <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-500 font-medium capitalize"><Icon name="check" className="w-2.5 h-2.5" strokeWidth={2.5} /> {it.decision.replace(/-/g, ' ')}</div>}
                 </div>
               );
             })}
@@ -246,8 +246,9 @@ export default function HandoffWorkspace() {
               {/* Readiness — did the agent do its homework */}
               <div className={`rounded-lg border p-3 ${selected.readiness.ready ? 'border-emerald-100 bg-emerald-50/40' : 'border-rose-200 bg-rose-50/50'}`}>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: selected.readiness.ready ? '#047857' : '#be123c' }}>
-                    {selected.readiness.ready ? '✓ Handoff ready' : '⚠ Not ready — incomplete handoff'} · {selected.readiness.score}/100
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: selected.readiness.ready ? '#047857' : '#be123c' }}>
+                    {selected.readiness.ready ? <Icon name="check" className="w-3 h-3" strokeWidth={2.5} /> : <Icon name="exclamation-triangle" className="w-3 h-3" strokeWidth={2} />}
+                    <span>{selected.readiness.ready ? 'Handoff ready' : 'Not ready — incomplete handoff'} · {selected.readiness.score}/100</span>
                   </span>
                   {!selected.readiness.ready && (
                     <button onClick={() => askAgent(selected, 'Handoff incomplete — please complete the failed readiness checks before escalating.')}
@@ -257,7 +258,7 @@ export default function HandoffWorkspace() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                   {selected.readiness.checks.map((c, i) => (
                     <div key={i} className="flex items-center gap-1.5 text-[10px]">
-                      <span className={c.met ? 'text-emerald-600' : c.blocking ? 'text-rose-600' : 'text-amber-500'}>{c.met ? '✓' : c.blocking ? '✕' : '!'}</span>
+                      <span className={c.met ? 'text-emerald-600' : c.blocking ? 'text-rose-600' : 'text-amber-500'}><Icon name={c.met ? 'check' : c.blocking ? 'x-mark' : 'exclamation-triangle'} className="w-3 h-3" strokeWidth={2.5} /></span>
                       <span className={c.met ? 'text-slate-600' : 'text-slate-700 font-medium'}>{c.label}</span>
                     </div>
                   ))}
@@ -274,7 +275,7 @@ export default function HandoffWorkspace() {
                     {selected.workTrace.map((s, i) => (
                       <li key={i} className="relative">
                         <span className={`absolute -left-[1.05rem] top-1 w-2 h-2 rounded-full ${s.status === 'flag' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                        <div className="text-[11px] font-medium text-slate-700">{s.label}{s.status === 'flag' && <span className="ml-1 text-[9px] text-amber-600">⚑ uncertain</span>}</div>
+                        <div className="text-[11px] font-medium text-slate-700">{s.label}{s.status === 'flag' && <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] text-amber-600"><Icon name="flag" className="w-2.5 h-2.5" strokeWidth={2} /> uncertain</span>}</div>
                         <div className="text-[10px] text-slate-500">{s.detail}</div>
                       </li>
                     ))}

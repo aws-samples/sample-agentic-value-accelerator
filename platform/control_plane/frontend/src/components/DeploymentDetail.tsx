@@ -316,7 +316,7 @@ export default function DeploymentDetail() {
                   The deployment is complete. Open the Amplify URL below to access the UI.
                 </p>
                 <button
-                  onClick={() => openFsiApp(deployment.outputs.AmplifyUrl)}
+                  onClick={() => openFsiApp(deployment.outputs?.AmplifyUrl)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Open App

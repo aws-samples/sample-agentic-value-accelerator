@@ -1,14 +1,21 @@
 /**
  * DeveloperAiUsageView -- Developer AI Usage and Shadow AI Detection dashboard.
  *
- * Surfaces:
+ * Surfaces (all sourced from the backend /developer-ai endpoints):
  * 1. Usage Overview (24h/7d/30d): tokens consumed, cost, active users, sessions
  * 2. Usage by Team/Department: table with tokens, cost, users per team
- * 3. Top Users: user email, tokens, cost, sessions, last active, anomaly flags
+ * 3. Top Users: user email, tokens, cost, sessions, last active
  * 4. Anomaly Alerts: spend spikes, runaway loops with severity
  * 5. Shadow AI Detection: unapproved users, unknown tools, unapproved model access
  *
- * Uses LiveDataBadge when data is live from CloudWatch/CloudTrail; MockDataBadge otherwise.
+ * Data is live from CloudWatch (OTel metrics) + CloudTrail. When those integrations
+ * emit no data, the surfaces render honest empty states rather than fabricated values.
+ *
+ * Nullability contract: shadow-AI token counts and per-model cost are `number | null`.
+ * `null` means "not measured" (no matching Bedrock invocation-log record, or no published
+ * per-1K rate — there is no default rate to fall back on) and renders as an em-dash with a
+ * tooltip, never as 0 / $0.00. A measured 0 is a real 0 and renders as 0, so every check
+ * uses `== null` rather than truthiness.
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -16,66 +23,13 @@ import { Link } from 'react-router-dom';
 import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import GovernPageLayout from './GovernPageLayout';
 import StatCard from './StatCard';
-import { Icon } from './icons';
-import { governDeveloperAiApi, type DeveloperAiUsageResponse } from '../../api/client';
+import { Icon, type IconName } from './icons';
+import { governDeveloperAiApi, type DeveloperAiUsageResponse, type DeveloperAiAnomaly } from '../../api/client';
 
 // ─────────────────────────── Types ───────────────────────────
 
 type TimeWindow = '24h' | '7d' | '30d';
-
-// ─────────────────────────── Mock Data for Illustration ───────────────────────────
-
-const MOCK_USAGE_DATA: DeveloperAiUsageResponse = {
-  overview: {
-    '24h': { tokens: 2_450_000, cost: 312.50, active_users: 47, sessions: 234 },
-    '7d': { tokens: 14_200_000, cost: 1_845.00, active_users: 89, sessions: 1_420 },
-    '30d': { tokens: 58_000_000, cost: 7_320.00, active_users: 124, sessions: 5_890 },
-  },
-  by_team: [
-    { team: 'Platform Engineering', tokens: 18_500_000, cost: 2_340.00, users: 28, pct_of_total: 31.9 },
-    { team: 'Data Science', tokens: 15_200_000, cost: 1_920.00, users: 18, pct_of_total: 26.2 },
-    { team: 'Product Development', tokens: 12_800_000, cost: 1_620.00, users: 34, pct_of_total: 22.1 },
-    { team: 'DevOps / SRE', tokens: 6_400_000, cost: 810.00, users: 12, pct_of_total: 11.0 },
-    { team: 'QA / Testing', tokens: 3_200_000, cost: 405.00, users: 22, pct_of_total: 5.5 },
-    { team: 'Other', tokens: 1_900_000, cost: 225.00, users: 10, pct_of_total: 3.3 },
-  ],
-  top_users: [
-    { email: 'alice.chen@company.com', tokens: 4_200_000, cost: 530.00, sessions: 342, last_active: '2026-07-21T10:15:00Z', anomaly: null },
-    { email: 'bob.kumar@company.com', tokens: 3_800_000, cost: 480.00, sessions: 289, last_active: '2026-07-21T09:45:00Z', anomaly: 'spend_spike' },
-    { email: 'carol.smith@company.com', tokens: 3_100_000, cost: 392.00, sessions: 267, last_active: '2026-07-20T18:30:00Z', anomaly: null },
-    { email: 'dave.jones@company.com', tokens: 2_900_000, cost: 366.00, sessions: 198, last_active: '2026-07-21T08:22:00Z', anomaly: null },
-    { email: 'eve.wilson@company.com', tokens: 2_600_000, cost: 328.00, sessions: 234, last_active: '2026-07-21T07:50:00Z', anomaly: 'runaway_loop' },
-    { email: 'frank.lee@company.com', tokens: 2_400_000, cost: 303.00, sessions: 187, last_active: '2026-07-20T22:10:00Z', anomaly: null },
-    { email: 'grace.brown@company.com', tokens: 2_100_000, cost: 265.00, sessions: 156, last_active: '2026-07-20T16:45:00Z', anomaly: null },
-    { email: 'henry.davis@company.com', tokens: 1_950_000, cost: 246.00, sessions: 142, last_active: '2026-07-21T11:05:00Z', anomaly: null },
-  ],
-  anomalies: [
-    { id: 'anom-001', type: 'spend_spike', user: 'bob.kumar@company.com', amount: 480.00, baseline: 210.00, timestamp: '2026-07-21T09:00:00Z', severity: 'high', description: 'User spent 2.3x their 30-day average in a single day' },
-    { id: 'anom-002', type: 'runaway_loop', user: 'eve.wilson@company.com', amount: 145_000, baseline: 8_000, timestamp: '2026-07-20T14:30:00Z', severity: 'critical', description: 'Sustained high token rate (145K tokens/hour) for 3+ hours' },
-    { id: 'anom-003', type: 'spend_spike', user: 'new.hire@company.com', amount: 89.00, baseline: 0, timestamp: '2026-07-19T11:15:00Z', severity: 'medium', description: 'New user with unusually high first-day usage' },
-    { id: 'anom-004', type: 'off_hours', user: 'night.owl@company.com', amount: 125.00, baseline: 45.00, timestamp: '2026-07-18T03:30:00Z', severity: 'low', description: 'Significant usage outside normal business hours (3 AM)' },
-  ],
-  shadow_ai: {
-    unapproved_users: [
-      { email: 'contractor.ext@vendor.com', first_seen: '2026-07-15T10:00:00Z', tokens: 45_000, source: 'API key shared via Slack', recommended_action: 'Review contractor access, provision proper credentials' },
-      { email: 'unknown-user@gmail.com', first_seen: '2026-07-18T14:22:00Z', tokens: 12_000, source: 'Personal email using corporate API key', recommended_action: 'Revoke API key, investigate source' },
-    ],
-    unknown_tools: [
-      { tool_name: 'cursor-ai-extension', first_seen: '2026-07-10T09:00:00Z', users: 8, requests: 1_240, evidence: 'User-Agent: Cursor/0.42.0', recommended_action: 'Evaluate for approved tool list or block' },
-      { tool_name: 'github-copilot-chat', first_seen: '2026-07-12T11:30:00Z', users: 15, requests: 3_420, evidence: 'User-Agent: GithubCopilot-Chat/1.0', recommended_action: 'Already approved - update detection rules' },
-      { tool_name: 'custom-cli-wrapper', first_seen: '2026-07-20T08:15:00Z', users: 2, requests: 89, evidence: 'User-Agent: python-requests/2.31.0', recommended_action: 'Identify owner, add to approved list or block' },
-    ],
-    unapproved_models: [
-      { model_id: 'anthropic.claude-3-opus-20240229', users: 3, requests: 156, cost: 45.00, evidence: 'Model not in approved list for this team', recommended_action: 'Request approval via Model Governance or block' },
-      { model_id: 'meta.llama3-70b-instruct-v1:0', users: 1, requests: 23, cost: 2.80, evidence: 'Model disabled in guardrail policy', recommended_action: 'Investigate bypass, enforce guardrail' },
-    ],
-    total_shadow_events: 5,
-    shadow_cost_estimate: 47.80,
-  },
-  live: false,
-  source: 'mock',
-  note: 'Connect CloudWatch and CloudTrail for live developer AI usage metrics',
-};
+const WINDOW_DAYS: Record<TimeWindow, number> = { '24h': 1, '7d': 7, '30d': 30 };
 
 // ─────────────────────────── Severity Badge ───────────────────────────
 
@@ -96,11 +50,13 @@ function SeverityBadge({ severity }: { severity: string }) {
 }
 
 // ─────────────────────────── Anomaly Type Badge ───────────────────────────
+// Keyed on backend UsageAnomaly.anomaly_type values.
 
-const anomalyTypeConfig: Record<string, { label: string; icon: string; bg: string; text: string }> = {
-  spend_spike: { label: 'Spend Spike', icon: 'arrow-trending-up', bg: 'bg-orange-50', text: 'text-orange-700' },
-  runaway_loop: { label: 'Runaway Loop', icon: 'arrow-path', bg: 'bg-rose-50', text: 'text-rose-700' },
-  off_hours: { label: 'Off-Hours', icon: 'calendar', bg: 'bg-purple-50', text: 'text-purple-700' },
+const anomalyTypeConfig: Record<string, { label: string; icon: IconName; bg: string; text: string }> = {
+  'spend-spike': { label: 'Spend Spike', icon: 'arrow-trending-up', bg: 'bg-orange-50', text: 'text-orange-700' },
+  'runaway-loop': { label: 'Runaway Loop', icon: 'arrow-path', bg: 'bg-rose-50', text: 'text-rose-700' },
+  'burst': { label: 'Usage Burst', icon: 'bolt', bg: 'bg-amber-50', text: 'text-amber-700' },
+  'unusual-hours': { label: 'Off-Hours', icon: 'calendar', bg: 'bg-purple-50', text: 'text-purple-700' },
 };
 
 // ─────────────────────────── Sort Icon ───────────────────────────
@@ -113,18 +69,56 @@ function SortIcon({ col, sortColumn, sortDirection }: { col: 'tokens' | 'cost' |
   );
 }
 
+// ─────────────────────────── Unmeasured Value ───────────────────────────
+
+/**
+ * Glyph used for a value the backend could not measure.
+ *
+ * Honesty contract for the developer-AI DTOs: `null` means "not measured", which is
+ * NOT the same as zero. Shadow-AI per-identity token counts come from Bedrock
+ * invocation logs and per-model cost from per-1K pricing — either can be absent, and
+ * there is no default pricing rate to fall back on. So a null must never render as
+ * `0`, `$0.00` or a blank cell. A *measured* 0 is a real 0 and still renders as `0`,
+ * which is why every check below is `== null` / `!= null` and never truthiness.
+ */
+const NOT_MEASURED = '—';
+
+/** Em-dash placeholder with a tooltip saying why the value is absent. */
+function Unmeasured({ reason }: { reason: string }) {
+  return (
+    <span className="text-slate-300 cursor-help" title={reason}>
+      {NOT_MEASURED}
+    </span>
+  );
+}
+
+/** Inline "this number is incomplete" marker for a measured total whose components are partly unmeasured. */
+function PartialMeasurement({ reason }: { reason: string }) {
+  return (
+    <span className="ml-1 text-slate-400 cursor-help" title={reason}>
+      (partial)
+    </span>
+  );
+}
+
 // ─────────────────────────── Utility Functions ───────────────────────────
 
-const formatNumber = (n: number): string => {
+// Both formatters accept null/undefined and centrally return the not-measured glyph,
+// so no call site can render `NaN`, `$0.00`, or throw on `null.toLocaleString()`.
+const formatNumber = (n: number | null | undefined): string => {
+  if (n == null) return NOT_MEASURED;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
 };
 
-const formatCost = (n: number): string => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatCost = (n: number | null | undefined): string =>
+  n == null ? NOT_MEASURED : `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const formatTimestamp = (ts: string): string => {
+const formatTimestamp = (ts?: string | null): string => {
+  if (!ts) return '—';
   const date = new Date(ts);
+  if (isNaN(date.getTime())) return '—';
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -142,54 +136,89 @@ const formatTimestamp = (ts: string): string => {
 export default function DeveloperAiUsageView() {
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('30d');
   const [data, setData] = useState<DeveloperAiUsageResponse | null>(null);
+  const [anomalies, setAnomalies] = useState<DeveloperAiAnomaly[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [sortColumn, setSortColumn] = useState<'tokens' | 'cost' | 'users'>('tokens');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Fetch data from API (falls back to mock if API unavailable)
+  // Fetch usage + anomalies for the selected window. No fabricated fallback:
+  // if the API is unavailable we surface an honest degraded state.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    governDeveloperAiApi.usage()
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(MOCK_USAGE_DATA); })
+    const days = WINDOW_DAYS[timeWindow];
+    Promise.all([
+      governDeveloperAiApi.usage(days).then(d => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
+      governDeveloperAiApi.anomalies(days).then(r => r.anomalies).catch(() => [] as DeveloperAiAnomaly[]),
+    ])
+      .then(([usage, anom]) => {
+        if (cancelled) return;
+        setData(usage.d);
+        setFailed(!usage.ok);
+        setAnomalies(anom ?? []);
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [timeWindow]);
 
-  const effectiveData = data || MOCK_USAGE_DATA;
-  const isLive = effectiveData.live;
-  const overview = effectiveData.overview[timeWindow];
+  const isLive = !!data?.live;
+  const shadow = data?.shadow_ai ?? null;
 
-  // Sorted team data
+  // Overview cards from flat backend totals.
+  const overview = {
+    tokens: data?.total_tokens ?? 0,
+    cost: data?.total_cost_usd ?? 0,
+    active_users: data?.active_users ?? 0,
+    sessions: data?.total_sessions ?? 0,
+  };
+
+  // Team breakdown — map backend fields and compute share of total tokens.
   const sortedTeams = useMemo(() => {
-    const teams = [...effectiveData.by_team];
-    teams.sort((a, b) => {
-      const aVal = a[sortColumn];
-      const bVal = b[sortColumn];
-      return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
-    });
-    return teams;
-  }, [effectiveData.by_team, sortColumn, sortDirection]);
+    const teams = data?.by_team ?? [];
+    const totalTokens = teams.reduce((s, t) => s + (t.total_tokens || 0), 0) || 1;
+    const rows = teams.map(t => ({
+      team: t.team_id,
+      tokens: t.total_tokens,
+      cost: t.total_cost_usd,
+      users: t.user_count,
+      pct_of_total: (t.total_tokens / totalTokens) * 100,
+    }));
+    rows.sort((a, b) => (sortDirection === 'desc' ? b[sortColumn] - a[sortColumn] : a[sortColumn] - b[sortColumn]));
+    return rows;
+  }, [data?.by_team, sortColumn, sortDirection]);
+
+  // Top users by token consumption.
+  const topUsers = useMemo(() => {
+    const users = [...(data?.by_user ?? [])];
+    users.sort((a, b) => (b.total_tokens || 0) - (a.total_tokens || 0));
+    return users.slice(0, 8);
+  }, [data?.by_user]);
 
   const toggleSort = (col: 'tokens' | 'cost' | 'users') => {
     if (sortColumn === col) {
-      setSortDirection(d => d === 'desc' ? 'asc' : 'desc');
+      setSortDirection(d => (d === 'desc' ? 'asc' : 'desc'));
     } else {
       setSortColumn(col);
       setSortDirection('desc');
     }
   };
 
-  // Count shadow AI issues for the badge
-  const shadowIssueCount = (effectiveData.shadow_ai.unapproved_users.length +
-    effectiveData.shadow_ai.unknown_tools.length +
-    effectiveData.shadow_ai.unapproved_models.length);
+  const shadowIssueCount = shadow
+    ? shadow.unapproved_users.length + shadow.unknown_tools.length + shadow.unapproved_models.length
+    : 0;
+
+  // Coverage of the shadow-AI numbers. `shadow_cost_estimate` is a backend sum over the
+  // models it could actually price; models with `cost === null` are absent from it, so the
+  // total is a floor. Rather than blanking a total that is mostly real, we keep the measured
+  // subtotal and disclose exactly how many rows it excludes right next to it.
+  const unpricedModelCount = shadow?.unapproved_models.filter(m => m.cost == null).length ?? 0;
+  const unmeasuredUserTokenCount = shadow?.unapproved_users.filter(u => u.tokens == null).length ?? 0;
 
   return (
     <GovernPageLayout
       title="Developer AI Usage"
-      description="Monitor developer AI tool consumption, detect anomalies, and identify shadow AI usage."
+      description="See how developers use AI — tool consumption, spend, usage anomalies, and shadow-AI detection across teams."
       badge={isLive
         ? <LiveDataBadge source="CloudWatch + CloudTrail" />
         : <MockDataBadge integration="CloudWatch Metrics + CloudTrail Events" />
@@ -203,6 +232,18 @@ export default function DeveloperAiUsageView() {
         </Link>
       }
     >
+      {/* Degraded / no-instrumentation notice */}
+      {!loading && (failed || (!data?.total_tokens && (data?.by_user?.length ?? 0) === 0)) && (
+        <div className="mb-6 rounded-xl border border-slate-200/70 bg-slate-50/70 p-4 text-[12px] text-slate-600 flex items-start gap-2">
+          <Icon name="information-circle" className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+          <span>
+            {failed
+              ? 'Developer AI usage service is unavailable right now.'
+              : 'No developer AI usage recorded in this window. Emit OpenTelemetry metrics from developer tools (Claude Code, etc.) to CloudWatch, and enable CloudTrail, to populate this view.'}
+          </span>
+        </div>
+      )}
+
       {/* Time Window Selector */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
@@ -265,58 +306,62 @@ export default function DeveloperAiUsageView() {
             <Icon name="users" className="w-4 h-4 text-slate-500" />
             <span className="text-sm font-semibold text-slate-900">Usage by Team / Department</span>
           </div>
-          <span className="text-[11px] text-slate-400">30-day window</span>
+          <span className="text-[11px] text-slate-400">{timeWindow} window</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="text-slate-400 text-[10px] uppercase tracking-wide text-left border-b border-slate-100">
-                <th className="font-medium pb-2">Team</th>
-                <th
-                  className="font-medium pb-2 text-right cursor-pointer hover:text-slate-600"
-                  onClick={() => toggleSort('tokens')}
-                >
-                  Tokens<SortIcon col="tokens" sortColumn={sortColumn} sortDirection={sortDirection} />
-                </th>
-                <th
-                  className="font-medium pb-2 text-right cursor-pointer hover:text-slate-600"
-                  onClick={() => toggleSort('cost')}
-                >
-                  Cost<SortIcon col="cost" sortColumn={sortColumn} sortDirection={sortDirection} />
-                </th>
-                <th
-                  className="font-medium pb-2 text-right cursor-pointer hover:text-slate-600"
-                  onClick={() => toggleSort('users')}
-                >
-                  Users<SortIcon col="users" sortColumn={sortColumn} sortDirection={sortDirection} />
-                </th>
-                <th className="font-medium pb-2 text-right">% of Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedTeams.map((team, i) => (
-                <tr key={team.team} className={i > 0 ? 'border-t border-slate-50' : ''}>
-                  <td className="py-2.5 font-medium text-slate-700">{team.team}</td>
-                  <td className="py-2.5 text-right tabular-nums">{formatNumber(team.tokens)}</td>
-                  <td className="py-2.5 text-right tabular-nums font-medium text-slate-900">{formatCost(team.cost)}</td>
-                  <td className="py-2.5 text-right tabular-nums">{team.users}</td>
-                  <td className="py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 rounded-full"
-                          style={{ width: `${team.pct_of_total}%` }}
-                        />
-                      </div>
-                      <span className="text-slate-500 w-10">{team.pct_of_total.toFixed(1)}%</span>
-                    </div>
-                  </td>
+        {sortedTeams.length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-sm">No team usage in this window</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-slate-400 text-[10px] uppercase tracking-wide text-left border-b border-slate-100">
+                  <th className="font-medium pb-2">Team</th>
+                  <th
+                    className="font-medium pb-2 text-right cursor-pointer hover:text-slate-600"
+                    onClick={() => toggleSort('tokens')}
+                  >
+                    Tokens<SortIcon col="tokens" sortColumn={sortColumn} sortDirection={sortDirection} />
+                  </th>
+                  <th
+                    className="font-medium pb-2 text-right cursor-pointer hover:text-slate-600"
+                    onClick={() => toggleSort('cost')}
+                  >
+                    Cost<SortIcon col="cost" sortColumn={sortColumn} sortDirection={sortDirection} />
+                  </th>
+                  <th
+                    className="font-medium pb-2 text-right cursor-pointer hover:text-slate-600"
+                    onClick={() => toggleSort('users')}
+                  >
+                    Users<SortIcon col="users" sortColumn={sortColumn} sortDirection={sortDirection} />
+                  </th>
+                  <th className="font-medium pb-2 text-right">% of Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sortedTeams.map((team, i) => (
+                  <tr key={team.team} className={i > 0 ? 'border-t border-slate-50' : ''}>
+                    <td className="py-2.5 font-medium text-slate-700">{team.team}</td>
+                    <td className="py-2.5 text-right tabular-nums">{formatNumber(team.tokens)}</td>
+                    <td className="py-2.5 text-right tabular-nums font-medium text-slate-900">{formatCost(team.cost)}</td>
+                    <td className="py-2.5 text-right tabular-nums">{team.users}</td>
+                    <td className="py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${team.pct_of_total}%` }}
+                          />
+                        </div>
+                        <span className="text-slate-500 w-10">{team.pct_of_total.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Top Users */}
@@ -326,52 +371,47 @@ export default function DeveloperAiUsageView() {
             <Icon name="user" className="w-4 h-4 text-slate-500" />
             <span className="text-sm font-semibold text-slate-900">Top Users</span>
           </div>
-          <span className="text-[11px] text-slate-400">30-day window</span>
+          <span className="text-[11px] text-slate-400">{timeWindow} window</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="text-slate-400 text-[10px] uppercase tracking-wide text-left border-b border-slate-100">
-                <th className="font-medium pb-2">User</th>
-                <th className="font-medium pb-2 text-right">Tokens</th>
-                <th className="font-medium pb-2 text-right">Cost</th>
-                <th className="font-medium pb-2 text-right">Sessions</th>
-                <th className="font-medium pb-2 text-right">Last Active</th>
-                <th className="font-medium pb-2 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {effectiveData.top_users.map((user, i) => (
-                <tr key={user.email} className={i > 0 ? 'border-t border-slate-50' : ''}>
-                  <td className="py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-[10px] font-medium text-slate-600">
-                        {user.email.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-slate-700">{user.email}</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 text-right tabular-nums">{formatNumber(user.tokens)}</td>
-                  <td className="py-2.5 text-right tabular-nums font-medium text-slate-900">{formatCost(user.cost)}</td>
-                  <td className="py-2.5 text-right tabular-nums">{user.sessions}</td>
-                  <td className="py-2.5 text-right text-slate-500">{formatTimestamp(user.last_active)}</td>
-                  <td className="py-2.5 text-center">
-                    {user.anomaly ? (
-                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
-                        user.anomaly === 'runaway_loop' ? 'bg-rose-100 text-rose-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {user.anomaly === 'runaway_loop' ? 'Loop' : 'Spike'}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] text-slate-400">Normal</span>
-                    )}
-                  </td>
+        {topUsers.length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-sm">No user activity in this window</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-slate-400 text-[10px] uppercase tracking-wide text-left border-b border-slate-100">
+                  <th className="font-medium pb-2">User</th>
+                  <th className="font-medium pb-2 text-right">Tokens</th>
+                  <th className="font-medium pb-2 text-right">Cost</th>
+                  <th className="font-medium pb-2 text-right">Sessions</th>
+                  <th className="font-medium pb-2 text-right">Last Active</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {topUsers.map((user, i) => {
+                  const label = user.email || user.user_id;
+                  return (
+                    <tr key={user.user_id} className={i > 0 ? 'border-t border-slate-50' : ''}>
+                      <td className="py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-[10px] font-medium text-slate-600">
+                            {label.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-slate-700">{label}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-right tabular-nums">{formatNumber(user.total_tokens)}</td>
+                      <td className="py-2.5 text-right tabular-nums font-medium text-slate-900">{formatCost(user.total_cost_usd)}</td>
+                      <td className="py-2.5 text-right tabular-nums">{user.session_count}</td>
+                      <td className="py-2.5 text-right text-slate-500">{formatTimestamp(user.last_active)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Anomaly Alerts */}
@@ -381,20 +421,21 @@ export default function DeveloperAiUsageView() {
             <Icon name="exclamation-triangle" className="w-4 h-4 text-amber-500" />
             <span className="text-sm font-semibold text-slate-900">Anomaly Alerts</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">
-              {effectiveData.anomalies.length} detected
+              {anomalies.length} detected
             </span>
           </div>
         </div>
 
-        {effectiveData.anomalies.length === 0 ? (
+        {anomalies.length === 0 ? (
           <div className="text-center py-6 text-slate-400 text-sm">No anomalies detected</div>
         ) : (
           <div className="space-y-3">
-            {effectiveData.anomalies.map(anomaly => {
-              const typeConfig = anomalyTypeConfig[anomaly.type] || anomalyTypeConfig.spend_spike;
+            {anomalies.map((anomaly, idx) => {
+              const typeConfig = anomalyTypeConfig[anomaly.anomaly_type] || anomalyTypeConfig['spend-spike'];
+              const isTokenMetric = anomaly.anomaly_type !== 'spend-spike';
               return (
                 <div
-                  key={anomaly.id}
+                  key={`${anomaly.anomaly_type}-${anomaly.user_id ?? 'na'}-${idx}`}
                   className={`p-3 rounded-lg border ${
                     anomaly.severity === 'critical' ? 'border-rose-200 bg-rose-50/50' :
                     anomaly.severity === 'high' ? 'border-orange-200 bg-orange-50/50' :
@@ -411,22 +452,22 @@ export default function DeveloperAiUsageView() {
                           <span className={`text-xs font-semibold ${typeConfig.text}`}>{typeConfig.label}</span>
                           <SeverityBadge severity={anomaly.severity} />
                         </div>
-                        <div className="text-xs text-slate-700">{anomaly.user}</div>
+                        <div className="text-xs text-slate-700">{anomaly.user_id || anomaly.team_id || 'Fleet-wide'}</div>
                         <div className="text-[11px] text-slate-500 mt-1">{anomaly.description}</div>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-sm font-semibold text-slate-900">
-                        {typeof anomaly.amount === 'number' && anomaly.amount > 1000
-                          ? formatNumber(anomaly.amount) + ' tokens/hr'
-                          : formatCost(anomaly.amount)}
+                        {isTokenMetric
+                          ? formatNumber(anomaly.metric_value) + ' tokens'
+                          : formatCost(anomaly.metric_value)}
                       </div>
                       <div className="text-[10px] text-slate-400">
-                        vs {typeof anomaly.baseline === 'number' && anomaly.baseline > 1000
-                          ? formatNumber(anomaly.baseline) + ' baseline'
-                          : formatCost(anomaly.baseline) + ' avg'}
+                        vs {isTokenMetric
+                          ? formatNumber(anomaly.baseline_value) + ' baseline'
+                          : formatCost(anomaly.baseline_value) + ' avg'}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-1">{formatTimestamp(anomaly.timestamp)}</div>
+                      <div className="text-[10px] text-slate-400 mt-1">{formatTimestamp(anomaly.detected_at)}</div>
                     </div>
                   </div>
                 </div>
@@ -447,47 +488,82 @@ export default function DeveloperAiUsageView() {
                 {shadowIssueCount} issues
               </span>
             )}
+            {/* Gated on the detector's own honest-degrade flag, not on "the fetch succeeded".
+                Shadow AI has a separate live/source/note triple from the usage response. */}
+            {shadow && <LiveDataBadge live={shadow.live} source={shadow.source} />}
           </div>
           <Link to="/govern/shadow-ai" className="text-[11px] text-blue-600 hover:text-blue-700 font-medium">
             Full Shadow AI View →
           </Link>
         </div>
 
+        {/* Detector caveats straight from the backend note (unmeasured models, paging bounds). */}
+        {shadow?.note && (
+          <div className="mb-4 rounded-lg border border-slate-200/70 bg-slate-50/70 p-2.5 text-[10px] text-slate-600 flex items-start gap-1.5">
+            <Icon name="information-circle" className="w-3.5 h-3.5 text-slate-400 mt-px flex-shrink-0" />
+            <span>{shadow.note}</span>
+          </div>
+        )}
+
         {/* Unapproved Users */}
-        {effectiveData.shadow_ai.unapproved_users.length > 0 && (
+        {shadow && shadow.unapproved_users.length > 0 && (
           <div className="mb-4">
             <div className="text-[11px] font-semibold text-rose-700 uppercase tracking-wide mb-2">
-              Unapproved Users ({effectiveData.shadow_ai.unapproved_users.length})
+              Unapproved Users ({shadow.unapproved_users.length})
             </div>
             <div className="space-y-2">
-              {effectiveData.shadow_ai.unapproved_users.map(user => (
-                <div key={user.email} className="p-3 bg-white rounded-lg border border-rose-100">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-xs font-medium text-slate-800">{user.email}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">
-                        {formatNumber(user.tokens)} tokens since {formatTimestamp(user.first_seen)}
+              {shadow.unapproved_users.map(user => {
+                // Which halves of the input/output split the backend explicitly reported as
+                // unmeasured. `=== null` (never falsiness) so a genuine 0-token side still
+                // counts as measured; `undefined` means the field was not sent at all, which
+                // is not a claim of non-measurement and so must not flag the row as partial.
+                const missingSides: string[] = [];
+                if (user.input_tokens === null) missingSides.push('input');
+                if (user.output_tokens === null) missingSides.push('output');
+                return (
+                  <div key={user.email} className="p-3 bg-white rounded-lg border border-rose-100">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-slate-800">{user.email}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {user.tokens == null ? (
+                            <>
+                              <Unmeasured reason="No Bedrock invocation-log token count could be matched to this identity. Not measured — not zero." />{' '}
+                              tokens since {formatTimestamp(user.first_seen)}
+                            </>
+                          ) : (
+                            <>
+                              {formatNumber(user.tokens)} tokens
+                              {missingSides.length > 0 && (
+                                <PartialMeasurement
+                                  reason={`Unmeasured: ${missingSides.join(' and ')} tokens for this identity. The total shown covers only the tokens that were measured — treat it as a floor.`}
+                                />
+                              )}{' '}
+                              since {formatTimestamp(user.first_seen)}
+                            </>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">Source: {user.source}</div>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">Source: {user.source}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[10px] text-rose-600 font-medium">{user.recommended_action}</div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-rose-600 font-medium">{user.recommended_action}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* Unknown Tools */}
-        {effectiveData.shadow_ai.unknown_tools.length > 0 && (
+        {shadow && shadow.unknown_tools.length > 0 && (
           <div className="mb-4">
             <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-2">
-              Unknown Tools / Sources ({effectiveData.shadow_ai.unknown_tools.length})
+              Unknown Tools / Sources ({shadow.unknown_tools.length})
             </div>
             <div className="space-y-2">
-              {effectiveData.shadow_ai.unknown_tools.map(tool => (
+              {shadow.unknown_tools.map(tool => (
                 <div key={tool.tool_name} className="p-3 bg-white rounded-lg border border-amber-100">
                   <div className="flex items-start justify-between">
                     <div>
@@ -508,28 +584,46 @@ export default function DeveloperAiUsageView() {
         )}
 
         {/* Unapproved Models */}
-        {effectiveData.shadow_ai.unapproved_models.length > 0 && (
+        {shadow && shadow.unapproved_models.length > 0 && (
           <div>
             <div className="text-[11px] font-semibold text-purple-700 uppercase tracking-wide mb-2">
-              Unapproved Model Access ({effectiveData.shadow_ai.unapproved_models.length})
+              Unapproved Model Access ({shadow.unapproved_models.length})
             </div>
             <div className="space-y-2">
-              {effectiveData.shadow_ai.unapproved_models.map(model => (
-                <div key={model.model_id} className="p-3 bg-white rounded-lg border border-purple-100">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-xs font-medium text-slate-800 font-mono">{model.model_id}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">
-                        {model.users} users, {model.requests} requests, {formatCost(model.cost)}
+              {shadow.unapproved_models.map(model => {
+                const missingSides: string[] = [];
+                // See the unapproved-users block above for why this is `=== null`.
+                if (model.input_tokens === null) missingSides.push('input');
+                if (model.output_tokens === null) missingSides.push('output');
+                return (
+                  <div key={model.model_id} className="p-3 bg-white rounded-lg border border-purple-100">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-slate-800 font-mono">{model.model_id}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {model.users} users, {model.requests} requests,{' '}
+                          {model.cost == null ? (
+                            <Unmeasured reason="No published per-1K rate for this model, or no measured tokens in the Bedrock invocation logs. Cost is unknown — not $0.00." />
+                          ) : (
+                            <>
+                              {formatCost(model.cost)}
+                              {missingSides.length > 0 && (
+                                <PartialMeasurement
+                                  reason={`Unmeasured: ${missingSides.join(' and ')} tokens for this model. The cost shown is priced only from the tokens that were measured — treat it as a floor.`}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{model.evidence}</div>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{model.evidence}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[10px] text-purple-600 font-medium">{model.recommended_action}</div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-purple-600 font-medium">{model.recommended_action}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -540,16 +634,29 @@ export default function DeveloperAiUsageView() {
             <Icon name="check-circle" className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
             <div className="text-sm font-medium text-emerald-700">No Shadow AI Detected</div>
             <div className="text-[11px] text-slate-500 mt-1">
-              All usage is from approved users, tools, and models
+              All observed usage is from approved users, tools, and models
             </div>
           </div>
         )}
 
         {/* Shadow AI Summary */}
-        {shadowIssueCount > 0 && (
-          <div className="mt-4 pt-4 border-t border-rose-100 flex items-center justify-between">
+        {shadow && shadowIssueCount > 0 && (
+          <div className="mt-4 pt-4 border-t border-rose-100 flex items-start justify-between gap-3">
             <div className="text-[11px] text-slate-500">
-              Estimated shadow AI cost: <span className="font-semibold text-rose-600">{formatCost(effectiveData.shadow_ai.shadow_cost_estimate)}</span>
+              Estimated shadow AI cost: <span className="font-semibold text-rose-600">{formatCost(shadow.shadow_cost_estimate)}</span>
+              {/* The total is a sum over priced models only. Disclose what it leaves out
+                  rather than letting a Live badge imply it is complete. */}
+              {(unpricedModelCount > 0 || unmeasuredUserTokenCount > 0) && (
+                <span
+                  className="block mt-1 text-[10px] text-slate-400 cursor-help"
+                  title="Models with no published per-1K rate (or no measured tokens) contribute nothing to this sum. Their cost is unknown, not zero, so the total is a floor."
+                >
+                  Floor, not a total — excludes{' '}
+                  {unpricedModelCount > 0 && `${unpricedModelCount} model${unpricedModelCount === 1 ? '' : 's'} with unmeasured cost`}
+                  {unpricedModelCount > 0 && unmeasuredUserTokenCount > 0 && ' and '}
+                  {unmeasuredUserTokenCount > 0 && `${unmeasuredUserTokenCount} identit${unmeasuredUserTokenCount === 1 ? 'y' : 'ies'} with unmeasured tokens`}
+                </span>
+              )}
             </div>
             <button className="text-[11px] px-3 py-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors font-medium">
               Generate Report

@@ -201,7 +201,9 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
     const passed = controls.filter(c => c.status === 'pass').length;
     const inProgress = controls.filter(c => c.status === 'in-progress').length;
     const gaps = controls.filter(c => c.status === 'fail').length;
-    const score = total > 0 ? Math.round((passed / total) * 100) : 0;
+    // Match the Compliance Center hub denominator: applicable = total − not-started.
+    const applicable = controls.filter(c => c.status !== 'not-started').length;
+    const score = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
     return { score, passed, inProgress, gaps, total };
   }, [atlasFramework]);
 
@@ -305,6 +307,7 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Defended</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> In Progress</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Gap</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" /> Not started</span>
           </div>
         </div>
 
@@ -318,12 +321,15 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
 
               const statusColor = status?.status === 'pass' ? 'bg-emerald-500' :
                                   status?.status === 'in-progress' ? 'bg-amber-500' :
+                                  status?.status === 'not-started' ? 'bg-slate-300' :
                                   'bg-rose-500';
               const borderColor = status?.status === 'pass' ? 'border-emerald-300' :
                                   status?.status === 'in-progress' ? 'border-amber-300' :
+                                  status?.status === 'not-started' ? 'border-slate-200' :
                                   'border-rose-300';
               const bgColor = status?.status === 'pass' ? 'bg-emerald-50' :
                               status?.status === 'in-progress' ? 'bg-amber-50' :
+                              status?.status === 'not-started' ? 'bg-slate-50' :
                               'bg-rose-50';
 
               return (
@@ -396,6 +402,7 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                               ctrl.status === 'pass' ? 'bg-emerald-500' :
                               ctrl.status === 'in-progress' ? 'bg-amber-500' :
+                              ctrl.status === 'not-started' ? 'bg-slate-300' :
                               'bg-rose-500'
                             }`} />
                             <span className="text-slate-600 flex-1">{ctrl.label}</span>
@@ -442,7 +449,6 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
         <div className="divide-y divide-slate-100">
           {ATLAS_TACTICS.map(tactic => {
             const status = tacticStatuses[tactic.id];
-            const controls = getControlsForTactic(tactic.id);
 
             return (
               <div key={tactic.id} className="px-5 py-3 hover:bg-slate-50/50 transition-colors">
@@ -451,6 +457,7 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
                     <div className={`w-2 h-2 rounded-full ${
                       status?.status === 'pass' ? 'bg-emerald-500' :
                       status?.status === 'in-progress' ? 'bg-amber-500' :
+                      status?.status === 'not-started' ? 'bg-slate-300' :
                       'bg-rose-500'
                     }`} />
                     <div>
@@ -480,6 +487,7 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
                     <span className={`text-[9px] px-2 py-1 rounded ${
                       status?.status === 'pass' ? 'bg-emerald-100 text-emerald-700' :
                       status?.status === 'in-progress' ? 'bg-amber-100 text-amber-700' :
+                      status?.status === 'not-started' ? 'bg-slate-100 text-slate-500' :
                       'bg-rose-100 text-rose-700'
                     }`}>
                       {status?.passed || 0}/{status?.controls || 0} controls
@@ -574,12 +582,23 @@ export default function MitreAtlasView({ embedded = false, onNavigateToProgram }
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. This mapping is seeded unconditionally,
+  // which made the dropped badge worse than elsewhere: embedded under ComplianceCenter it
+  // inherited whatever the page header claimed, and the header can read Live.
+  const badge = <MockDataBadge integration="ATLAS mapping - control-plane backend" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
+
   return (
     <GovernPageLayout
       title="MITRE ATLAS"
       description="Adversarial Threat Landscape for AI Systems - knowledge base of attacker tactics, techniques, and procedures targeting AI/ML."
-      badge={<MockDataBadge integration="ATLAS mapping - control-plane backend" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

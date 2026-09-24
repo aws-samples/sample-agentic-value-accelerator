@@ -170,10 +170,12 @@ resource "aws_opensearchserverless_access_policy" "data" {
   ])
 }
 
-# AOSS data-access policy propagation is eventually consistent. Wait before
-# creating the index / the KB to avoid intermittent 403s on first apply.
+# AOSS data-access policy propagation is eventually consistent, and on a
+# first-time collection creation it can take longer than a minute. Wait before
+# creating the index / the KB to avoid intermittent HEAD healthcheck / 403
+# failures on first apply (seen both locally and via the AVA one-click deploy).
 resource "time_sleep" "wait_for_data_access" {
-  create_duration = "60s"
+  create_duration = "180s"
   depends_on = [
     aws_opensearchserverless_access_policy.data,
     aws_opensearchserverless_collection.this

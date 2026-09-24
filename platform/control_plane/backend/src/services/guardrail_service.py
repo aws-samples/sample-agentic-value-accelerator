@@ -1,6 +1,12 @@
-"""Guardrail service for managing guardrail templates via Bedrock SDK + DynamoDB"""
+"""Guardrail service for managing guardrail templates via Bedrock SDK + DynamoDB.
+
+Spans two region tiers: the template store is a control-plane DynamoDB table, the
+guardrails and their metrics are governed Bedrock/CloudWatch resources. See
+core.region_config for why those must not share one region argument.
+"""
 
 import boto3
+from botocore.exceptions import ClientError
 import logging
 import json
 import re
@@ -10,6 +16,9 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
+from core import region_config
+from core.aws_paging import paginate_bounded
+from core.config import settings
 from models.guardrail import (
     GuardrailTemplate,
     GuardrailTemplateCreate,
@@ -32,6 +41,16 @@ from models.guardrail import (
 )
 
 logger = logging.getLogger(__name__)
+
+# bedrock:ListGuardrails maxResults maximum, verified against the botocore 1.43.10 service
+# model (min 1, max 1000). The old calls asked for 100 and 50 - round numbers that read as
+# performance knobs, so nobody revisited them - and read exactly one page.
+_GUARDRAIL_PAGE = 1000
+
+# Bound on one reconcile/discovery walk. An account cannot realistically hold this many
+# guardrails, so reaching it means something is wrong, and reaching it is disclosed rather
+# than quietly turning a total into a floor.
+_MAX_GUARDRAILS = 2000
 
 
 # --- FSI Presets ---
@@ -132,17 +151,74 @@ class GuardrailService:
     _sync_lock = threading.Lock()
     _SYNC_INTERVAL_SECONDS = 300  # 5 minutes between auto-syncs
 
-    def __init__(self, table_name: str = "fsi-control-plane-guardrails", region: str = "us-east-1", auto_sync: bool = True):
+    def __init__(
+        self,
+        table_name: str = "fsi-control-plane-guardrails",
+        control_region: Optional[str] = None,
+        governed_region: Optional[str] = None,
+        auto_sync: bool = True,
+    ):
+        """Two regions, because this service straddles two of them.
+
+        The template store is AVA's own DynamoDB table, which lives in the
+        control-plane region. The guardrails those templates describe are Bedrock
+        resources in the customer's governed region, and their metrics are in that
+        same region's CloudWatch. A single `region` argument conflated all three:
+        every call site passed settings.AWS_REGION, so with the control plane in
+        us-east-2 and Bedrock in us-east-1 the DynamoDB lookup went to a region
+        that has no such table and the Bedrock calls went to a region that has no
+        guardrails - while the endpoint returned a clean, empty, 200.
+
+        Defaults resolve through core.region_config so the tier rules live in one
+        place. Pass explicit values only to override.
+        """
         self.table_name = table_name
-        self.region = region
-        self.dynamodb = boto3.resource("dynamodb", region_name=region)
+        self.control_region = (control_region or region_config.table_region("GUARDRAILS")).strip()
+        self.governed_region = (
+            governed_region or settings.GOVERN_AWS_REGION or self.control_region
+        ).strip()
+        self.dynamodb = boto3.resource("dynamodb", region_name=self.control_region)
         self.table = self.dynamodb.Table(table_name)
-        self.bedrock_client = boto3.client("bedrock", region_name=region)
-        self.cloudwatch_client = boto3.client("cloudwatch", region_name=region)
+        self.bedrock_client = boto3.client("bedrock", region_name=self.governed_region)
+        self.cloudwatch_client = boto3.client("cloudwatch", region_name=self.governed_region)
+        # None until a store call proves otherwise. Set to a human-readable reason
+        # when the backing table cannot be read, so store_status() can report the
+        # failure instead of a caller inferring "no guardrails exist" from [].
+        self._store_error: Optional[str] = None
 
         # Auto-sync on first initialization if enabled
         if auto_sync:
             self._maybe_auto_sync()
+
+    def store_status(self) -> dict:
+        """Provenance for the template store: which table, which region, reachable.
+
+        Exists because `list_templates()` returns a plain list and a list cannot
+        distinguish "no templates" from "table unreachable". Callers that render a
+        count should read this and degrade honestly rather than showing zero.
+        """
+        return {
+            "table_name": self.table_name,
+            "control_region": self.control_region,
+            "governed_region": self.governed_region,
+            "reachable": self._store_error is None,
+            "note": self._store_error,
+        }
+
+    def _record_store_failure(self, operation: str) -> str:
+        """Log and remember an unreadable-table failure; returns the note."""
+        note = (
+            f"DynamoDB table '{self.table_name}' not found in {self.control_region} "
+            f"({operation}). Guardrail templates cannot be read. If the table lives in "
+            f"another region, set GUARDRAILS_TABLE_REGION; if it was never provisioned, "
+            f"apply the control-plane Terraform."
+        )
+        self._store_error = note
+        # ERROR, not WARNING: the previous message said "table not provisioned" and
+        # returned [], which read as a normal empty state. A misconfigured region is
+        # not a normal empty state.
+        logger.error(note)
+        return note
 
     def _maybe_auto_sync(self) -> bool:
         """Run auto-sync if enough time has passed since last sync.
@@ -228,7 +304,14 @@ class GuardrailService:
         return template
 
     def get_template(self, template_id: str) -> Optional[GuardrailTemplate]:
-        resp = self.table.get_item(Key={"pk": f"GUARDRAIL#{template_id}", "sk": "META"})
+        try:
+            resp = self.table.get_item(Key={"pk": f"GUARDRAIL#{template_id}", "sk": "META"})
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                self._record_store_failure("GetItem")
+                return None
+            raise
+        self._store_error = None
         item = resp.get("Item")
         if not item:
             return None
@@ -250,7 +333,18 @@ class GuardrailService:
         if status:
             scan_kwargs["FilterExpression"] = scan_kwargs["FilterExpression"] & Attr("status").eq(status.value)
 
-        resp = self.table.scan(**scan_kwargs)
+        try:
+            resp = self.table.scan(**scan_kwargs)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                # Still [] - the signature is List[GuardrailTemplate] and callers
+                # depend on it - but the reason is now recorded and served by
+                # store_status(), so an unreadable table can be told apart from an
+                # account that genuinely has no templates.
+                self._record_store_failure("Scan")
+                return []
+            raise
+        self._store_error = None
         items = resp.get("Items", [])
         templates = [self._from_item(item) for item in items]
         templates.sort(key=lambda t: t.created_at, reverse=True)
@@ -296,6 +390,95 @@ class GuardrailService:
 
         self.table.put_item(Item=self._to_item(template))
         return template
+
+    def reconcile_orphans(self, dry_run: bool = True) -> dict:
+        """Mark template rows whose Bedrock guardrail no longer exists as DELETED.
+
+        This is NOT delete_template. That method calls _delete_bedrock_guardrail first,
+        which for an orphan throws (the guardrail is already gone) and leaves the row in
+        FAILED rather than DELETED - and, if a template ever carried the wrong id, would
+        delete a live guardrail. This method makes NO AWS mutation of any kind. It reads
+        list_guardrails, diffs, and writes only the control-plane row.
+
+        Why the rows matter: an orphan keeps status=active, so every count derived from
+        template rows over-reports guardrail enforcement. Measured on the reference
+        account, 11 active rows stood against 7 real guardrails.
+
+        dry_run defaults True: callers see exactly what would change before it changes.
+
+        The read has to be COMPLETE, not merely non-empty. `list_guardrails(maxResults=100)`
+        read one page against an API maximum of 1000, and the result is used as a
+        set-difference denominator: every guardrail past the truncation point looks absent
+        from AWS, so with dry_run=False this method would write live guardrails' rows to
+        DELETED and then report a smaller "aws_guardrails" count as the reason. That is the
+        one place in this sweep where a truncated read causes a wrong WRITE rather than a
+        wrong number, so the walk is bounded and the abort covers incompleteness of any kind.
+        """
+        templates = self.list_templates(auto_sync=False)
+        tracked = {t.guardrail_id: t for t in templates
+                   if t.guardrail_id and t.status != GuardrailStatus.DELETED}
+
+        # A read. If it fails, abort rather than guess - marking rows deleted because a
+        # list call failed would be far worse than leaving the drift in place.
+        read = paginate_bounded(
+            self.bedrock_client, "list_guardrails", "guardrails",
+            page_size=_GUARDRAIL_PAGE, max_items=_MAX_GUARDRAILS,
+        )
+        aws_ids = {g.get("id") for g in read.items}
+        if not read.complete:
+            # Truncated, timed out, or failed. All three mean the same thing here: this set
+            # is a floor, and a floor is unusable as the "exists in AWS" side of a diff.
+            return {
+                "dry_run": dry_run,
+                "aborted": True,
+                "reason": (
+                    "The guardrail listing did not complete, so it cannot be used to decide "
+                    f"what is absent from AWS. No row was touched. {read.note}"
+                ),
+                "aws_guardrails_read": len(aws_ids),
+                "orphans": [],
+                "updated": [],
+            }
+        if not aws_ids:
+            return {
+                "dry_run": dry_run,
+                "aborted": True,
+                "reason": (
+                    "list_guardrails returned nothing. That is indistinguishable from a "
+                    "permission or wrong-region problem, so no row was touched. Confirm the "
+                    "client is pointed at the governed region before retrying."
+                ),
+                "orphans": [],
+                "updated": [],
+            }
+
+        orphan_ids = sorted(set(tracked) - aws_ids)
+        orphans = [
+            {"guardrail_id": gid, "template_id": tracked[gid].template_id,
+             "name": tracked[gid].name, "current_status": tracked[gid].status.value}
+            for gid in orphan_ids
+        ]
+
+        updated = []
+        if not dry_run:
+            for gid in orphan_ids:
+                t = tracked[gid]
+                self._add_status(
+                    t, GuardrailStatus.DELETED,
+                    "Reconciled: guardrail absent from AWS. No Bedrock call was made; the "
+                    "row is closed so guardrail counts stop over-reporting enforcement.",
+                )
+                self.table.put_item(Item=self._to_item(t))
+                updated.append(t.template_id)
+
+        return {
+            "dry_run": dry_run,
+            "aborted": False,
+            "aws_guardrails": len(aws_ids),
+            "tracked_active_rows": len(tracked),
+            "orphans": orphans,
+            "updated": updated,
+        }
 
     def publish_version(self, template_id: str) -> Optional[GuardrailTemplate]:
         template = self.get_template(template_id)
@@ -524,10 +707,21 @@ class GuardrailService:
             existing = self.list_templates(auto_sync=False)
             tracked_ids = {t.guardrail_id for t in existing if t.guardrail_id}
 
-            # List all Bedrock guardrails in the account
+            # List all Bedrock guardrails in the account.
+            #
+            # This loop is NOT the unpaginated-count defect: it threads nextToken and only
+            # breaks when the token is absent, so `discovered` has always been an exact
+            # total. Left as a manual loop rather than moved to core.aws_paging because the
+            # per-item body writes (get_guardrail + put_item per new guardrail), and pulling
+            # the walk out would either buffer the whole account first or need the import
+            # body restructured for no gain in honesty.
+            #
+            # maxResults raised from 50 to the API maximum of 1000. Page size is a pure
+            # transport detail here - every item on every page is processed either way - so
+            # this only cuts round trips, it does not change any count.
             paginator_token = None
             while True:
-                kwargs = {"maxResults": 50}
+                kwargs = {"maxResults": _GUARDRAIL_PAGE}
                 if paginator_token:
                     kwargs["nextToken"] = paginator_token
                 resp = self.bedrock_client.list_guardrails(**kwargs)

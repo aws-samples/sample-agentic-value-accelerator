@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import boto3
+from botocore.exceptions import ClientError
 
 from models.knowledge import KnowledgeRegistration, KnowledgeRegistrationCreate
 
@@ -57,17 +58,33 @@ class KnowledgeService:
         return reg
 
     def get(self, registration_id: str) -> Optional[KnowledgeRegistration]:
-        resp = self.table.get_item(Key={"pk": f"KNOWLEDGE#{registration_id}", "sk": "META"})
+        try:
+            resp = self.table.get_item(Key={"pk": f"KNOWLEDGE#{registration_id}", "sk": "META"})
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Knowledge table not provisioned; returning None for get"
+                )
+                return None
+            raise
         item = resp.get("Item")
         if not item:
             return None
         return self._from_item(item)
 
     def list_all(self) -> list[KnowledgeRegistration]:
-        resp = self.table.scan(
-            FilterExpression="begins_with(pk, :prefix)",
-            ExpressionAttributeValues={":prefix": "KNOWLEDGE#"},
-        )
+        try:
+            resp = self.table.scan(
+                FilterExpression="begins_with(pk, :prefix)",
+                ExpressionAttributeValues={":prefix": "KNOWLEDGE#"},
+            )
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Knowledge table not provisioned; returning empty registration list"
+                )
+                return []
+            raise
         return [self._from_item(item) for item in resp.get("Items", [])]
 
     def update_status(self, registration_id: str, status: str, **kwargs) -> None:

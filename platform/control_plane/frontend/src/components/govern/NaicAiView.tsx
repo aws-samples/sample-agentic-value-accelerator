@@ -21,8 +21,9 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
+import { useControlEvaluation } from './useControlEvaluation';
 import {
   COMPLIANCE_CENTER_FRAMEWORKS,
   type ComplianceControl,
@@ -31,6 +32,20 @@ import {
 import UnfairDiscriminationTesting from './compliance/UnfairDiscriminationTesting';
 import { ComplianceGapGuidanceCompact } from './compliance/ComplianceGapGuidance';
 import { Icon } from './icons';
+
+/**
+ * A control's autoDetectSource is "live" when the control-evaluation backend
+ * returned live AWS data for that source. The evaluator tracks `config-rules`
+ * under the `config` key, so normalize that alias before the lookup.
+ */
+function isEvalSourceLive(
+  sources: Record<string, { live: boolean; latency_ms: number }>,
+  autoDetectSource?: string,
+): boolean {
+  if (!autoDetectSource) return false;
+  const key = autoDetectSource.toLowerCase() === 'config-rules' ? 'config' : autoDetectSource.toLowerCase();
+  return sources[key]?.live === true;
+}
 
 // ─────────────────────────── Status Metadata ───────────────────────────
 
@@ -132,7 +147,9 @@ function computeExhibitStats(controls: ComplianceControl[]) {
   const passed = controls.filter(c => c.status === 'pass').length;
   const inProgress = controls.filter(c => c.status === 'in-progress').length;
   const failed = controls.filter(c => c.status === 'fail').length;
-  const compliancePct = total > 0 ? Math.round((passed / total) * 100) : 0;
+  // Match the hub denominator: % is pass over applicable (total minus not-started), not raw total.
+  const applicable = total - controls.filter(c => c.status === 'not-started').length;
+  const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
   return { total, passed, inProgress, failed, compliancePct };
 }
 
@@ -142,7 +159,9 @@ function computeOverallStats(framework: ComplianceFramework) {
   const passed = allControls.filter(c => c.status === 'pass').length;
   const inProgress = allControls.filter(c => c.status === 'in-progress').length;
   const failed = allControls.filter(c => c.status === 'fail').length;
-  const compliancePct = total > 0 ? Math.round((passed / total) * 100) : 0;
+  // Match the hub denominator: % is pass over applicable (total minus not-started), not raw total.
+  const applicable = total - allControls.filter(c => c.status === 'not-started').length;
+  const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
   return { total, passed, inProgress, failed, compliancePct };
 }
 
@@ -163,9 +182,40 @@ export default function NaicAiView({ embedded = false, onNavigateToProgram }: Na
     COMPLIANCE_CENTER_FRAMEWORKS.find(f => f.id === 'naic-ai') as ComplianceFramework | undefined,
   []);
 
+  // Live control evaluation — overlay real AWS pass/fail onto controls whose
+  // autoDetectSource the backend evaluated live (cloudtrail, cloudwatch). Controls
+  // without a live source keep their static status.
+  const frameworkControls = useMemo(
+    () => (naicFramework ? naicFramework.categories.flatMap(c => c.controls) : []),
+    [naicFramework],
+  );
+  const { sources: evalSources, mergeControl } = useControlEvaluation({ controls: frameworkControls });
+
+  const resolvedCategories = useMemo(
+    () =>
+      (naicFramework?.categories ?? []).map(cat => ({
+        ...cat,
+        controls: cat.controls.map(c =>
+          isEvalSourceLive(evalSources, c.autoDetectSource) ? mergeControl(c) : c,
+        ),
+      })),
+    [naicFramework, evalSources, mergeControl],
+  );
+
+  // Show the live badge only when at least one control's source returned live data.
+  const anyControlLive = useMemo(
+    () =>
+      (naicFramework?.categories ?? []).some(cat =>
+        cat.controls.some(c => isEvalSourceLive(evalSources, c.autoDetectSource)),
+      ),
+    [naicFramework, evalSources],
+  );
+
   const overallStats = useMemo(() =>
-    naicFramework ? computeOverallStats(naicFramework) : { total: 0, passed: 0, inProgress: 0, failed: 0, compliancePct: 0 },
-  [naicFramework]);
+    naicFramework
+      ? computeOverallStats({ ...naicFramework, categories: resolvedCategories })
+      : { total: 0, passed: 0, inProgress: 0, failed: 0, compliancePct: 0 },
+  [naicFramework, resolvedCategories]);
 
   const toggleExhibit = (name: string) => {
     const next = new Set(expandedExhibits);
@@ -176,12 +226,12 @@ export default function NaicAiView({ embedded = false, onNavigateToProgram }: Na
 
   const filteredCategories = useMemo(() => {
     if (!naicFramework) return [];
-    if (filterStatus === 'all') return naicFramework.categories;
-    return naicFramework.categories.map(cat => ({
+    if (filterStatus === 'all') return resolvedCategories;
+    return resolvedCategories.map(cat => ({
       ...cat,
       controls: cat.controls.filter(c => c.status === filterStatus),
     })).filter(cat => cat.controls.length > 0);
-  }, [naicFramework, filterStatus]);
+  }, [naicFramework, resolvedCategories, filterStatus]);
 
   if (!naicFramework) {
     return (
@@ -215,7 +265,7 @@ export default function NaicAiView({ embedded = false, onNavigateToProgram }: Na
           <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-blue-200 via-violet-200 via-orange-200 to-emerald-200 -translate-y-1/2 rounded-full hidden md:block" />
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 relative">
             {EXHIBIT_META.map((exhibit) => {
-              const category = naicFramework.categories.find(c => c.name.includes(exhibit.key) || c.name.includes(exhibit.name));
+              const category = resolvedCategories.find(c => c.name.includes(exhibit.key) || c.name.includes(exhibit.name));
               const stats = category ? computeExhibitStats(category.controls) : { total: 0, passed: 0, compliancePct: 0 };
               const isExpanded = category && expandedExhibits.has(category.name);
 
@@ -379,15 +429,11 @@ export default function NaicAiView({ embedded = false, onNavigateToProgram }: Na
                   }`}>{stats.compliancePct}%</div>
                   <div className="text-[9px] text-slate-500">{stats.passed}/{stats.total} controls</div>
                 </div>
-                <svg
+                <Icon
+                  name="chevron-down"
                   className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
                   strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
+                />
               </div>
             </button>
 
@@ -501,15 +547,11 @@ export default function NaicAiView({ embedded = false, onNavigateToProgram }: Na
             <span className="text-[10px] px-2 py-1 rounded-lg bg-rose-100 text-rose-700 font-medium">
               Four-fifths rule testing
             </span>
-            <svg
+            <Icon
+              name="chevron-down"
               className={`w-5 h-5 text-slate-400 transition-transform ${showDiscriminationTesting ? 'rotate-180' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
               strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
+            />
           </div>
         </button>
 
@@ -574,13 +616,25 @@ export default function NaicAiView({ embedded = false, onNavigateToProgram }: Na
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a framework whose controls are seeded would inherit a Live header.
+  const badge = anyControlLive
+    ? <LiveDataBadge source="AWS control evaluation" detail="Controls with an auto-detect source (CloudTrail, CloudWatch) evaluated live against AWS; other controls remain illustrative." />
+    : <MockDataBadge integration="NAIC controls — control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
 
   return (
     <GovernPageLayout
       title="NAIC AI Systems Evaluation"
       description="National Association of Insurance Commissioners AI regulatory assessment framework for state insurance regulators."
-      badge={<MockDataBadge integration="NAIC controls — control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

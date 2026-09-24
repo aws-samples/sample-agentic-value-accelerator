@@ -9,6 +9,9 @@ Shape notes (verified against the account):
   - applicationType is ModelEvaluation or RagEvaluation.
   - summaries carry evaluationTaskTypes; model ids live under `modelIdentifiers`
     (ModelEvaluation) as ARNs or bare ids; RAG jobs carry `ragIdentifiers` instead.
+  - GetEvaluationJob's jobIdentifier takes an ARN and nothing else; a job name is
+    rejected with ValidationException. Names reach an ARN only through the list
+    response (see resolve_job_arn), never by string-building one.
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 _EVALS_TTL = 60     # 1 min — surface new/updated jobs quickly
 _SCORES_TTL = 1800  # 30 min — scores for a finished job never change
+_JOB_ARN_TTL = 300  # 5 min — a job's name→ARN binding never changes once created
 # Cap records parsed per job: result files reach ~7.5MB, so stream + stop early.
 _MAX_RECORDS = 2000
 
@@ -94,18 +98,97 @@ class GovernEvalsService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
-    def get_job_scores_by_name(self, job_name: str) -> "EvalScoresResponse":
-        """Look up job by name and fetch scores (safer than exposing ARNs to frontend).
+    def resolve_job_arn(self, job_name: str) -> str | None:
+        """Resolve a job NAME to its real job ARN off ListEvaluationJobs (5 min cache).
 
-        Uses the job name as the identifier for GetEvaluationJob (Bedrock accepts
-        either jobArn or jobName). This avoids passing full job ARNs (which contain
-        account IDs) through the frontend.
+        GetEvaluationJob's jobIdentifier is ARN-ONLY. Verified against the botocore
+        service model shipped in this image: the member is documented as "The Amazon
+        Resource Name (ARN) of the evaluation job" and constrained to the pattern
+        arn:aws(-[^:]+)?:bedrock:<region>:<12-digit-account>:evaluation-job/[a-z0-9]{12}.
+        Passing a name fails with ValidationException "The provided evaluation job ARN
+        is invalid" — which is exactly what the previous code did on every request.
+
+        The ARN also cannot be hand-built: that [a-z0-9]{12} tail is a Bedrock-generated
+        job id bearing no relation to the job name — a name like `evaluation-job-<use
+        case>-<model>` maps to an opaque twelve-character id, confirmed against a live
+        account. So string-formatting an ARN from a name plus the account id yields a
+        valid-looking ARN for a job that does not exist. The ARN has to come from the list
+        response that produced the name, which is what this does.
         """
-        # Bedrock GetEvaluationJob accepts jobName as the jobIdentifier.
-        return self.get_job_scores(job_arn=job_name)
+        if not job_name:
+            return None
+        arn, _ = get_or_load(
+            f"evals:arn:{self.region}:{job_name}", _JOB_ARN_TTL,
+            lambda: self._lookup_job_arn(job_name),
+            # Never cache a miss. A job created seconds ago would otherwise stay
+            # "not found" for the whole TTL after it became listable.
+            should_cache=lambda a: bool(a),
+        )
+        return arn
+
+    def _lookup_job_arn(self, job_name: str) -> str | None:
+        """One ListEvaluationJobs pass filtered by name; None when nothing matches."""
+        try:
+            client = self._client()
+            matches: list[dict] = []
+            token = None
+            pages = 0
+            while pages < 5:
+                kwargs = {"maxResults": 50, "nameContains": job_name}
+                if token:
+                    kwargs["nextToken"] = token
+                resp = client.list_evaluation_jobs(**kwargs)
+                # nameContains is a SUBSTRING filter, so an exact-name compare is
+                # required: a request for "eval-claude" would otherwise resolve to
+                # whichever "eval-claude-v2" the page happened to return first.
+                matches.extend(
+                    s for s in resp.get("jobSummaries", [])
+                    if s.get("jobName") == job_name and s.get("jobArn")
+                )
+                token = resp.get("nextToken")
+                pages += 1
+                if not token:
+                    break
+            if not matches:
+                return None
+            # Nothing guarantees one job per name across time, so newest-first makes
+            # repeat lookups for the same name deterministic instead of page-order luck.
+            matches.sort(key=lambda s: str(s.get("creationTime") or ""), reverse=True)
+            return matches[0].get("jobArn")
+        except (ClientError, BotoCoreError, KeyError, ValueError) as e:
+            logger.warning("Could not resolve eval job ARN for %s in %s: %s", job_name, self.region, e)
+            return None
+
+    def get_job_scores_by_name(self, job_name: str) -> "EvalScoresResponse":
+        """Look up job by name and fetch scores (the frontend never sees a full ARN).
+
+        Two steps on purpose: resolve name → real ARN via ListEvaluationJobs, then
+        GetEvaluationJob with that ARN (see resolve_job_arn for why a name cannot be
+        passed and an ARN cannot be built). The response's job_arn stays masked, so
+        account IDs still do not leave the backend.
+
+        A failure to resolve returns live=False with source="job-not-found" rather than
+        an empty metric list under the old note, because "no metrics" renders as a job
+        with nothing to flag — the opposite of "we could not read this job's scores".
+        """
+        arn = self.resolve_job_arn(job_name)
+        if not arn:
+            return EvalScoresResponse(
+                job_arn=job_name, job_name=job_name, live=False, source="job-not-found",
+                note=(
+                    f"No evaluation job named '{job_name}' found in {self.region} via "
+                    "ListEvaluationJobs. Scores are UNKNOWN for this job, not clean."
+                ),
+            )
+        return self.get_job_scores(job_arn=arn)
 
     def _fetch_job_scores(self, job_arn: str) -> "EvalScoresResponse":
         """Parse real per-metric scores from a job's S3 result JSONL.
@@ -114,7 +197,12 @@ class GovernEvalsService:
         line-stream (capped) → aggregate mean per metricName. Handles both layouts:
         ModelEvaluation (automatedEvaluationResult.scores[]) and RagEvaluation
         (conversationTurns[].results[]).
+
+        `job_arn` must be a real job ARN (see resolve_job_arn). It is masked before it
+        goes into the response so the account ID stays server-side, matching what
+        _fetch_jobs does with each summary's jobArn.
         """
+        masked = mask_arn(job_arn) or job_arn
         try:
             job = self._client().get_evaluation_job(jobIdentifier=job_arn)
             job_name = job.get("jobName", "")
@@ -122,7 +210,7 @@ class GovernEvalsService:
             s3_uri = (job.get("outputDataConfig", {}) or {}).get("s3Uri", "")
             if not s3_uri:
                 return EvalScoresResponse(
-                    job_arn=job_arn, job_name=job_name, application_type=app_type,
+                    job_arn=masked, job_name=job_name, application_type=app_type,
                     live=False, source="no-output", note="Job has no S3 output location.",
                 )
 
@@ -147,7 +235,7 @@ class GovernEvalsService:
 
             if not keys:
                 return EvalScoresResponse(
-                    job_arn=job_arn, job_name=job_name, application_type=app_type,
+                    job_arn=masked, job_name=job_name, application_type=app_type,
                     live=False, source="no-results",
                     note="No *_output.jsonl result files found for this job yet.",
                 )
@@ -180,16 +268,29 @@ class GovernEvalsService:
                 for m in sorted(sums)
             ]
             return EvalScoresResponse(
-                job_arn=job_arn, job_name=job_name, application_type=app_type,
+                job_arn=masked, job_name=job_name, application_type=app_type,
                 metrics=metrics, records_scored=records, capped=capped,
                 live=len(metrics) > 0, source="bedrock-eval-s3",
                 note=None if metrics else "Result files found but no metric scores parsed.",
             )
         except (ClientError, BotoCoreError, KeyError, ValueError) as e:
-            logger.warning("Eval scores unavailable for %s: %s", job_arn, e)
+            # Name the actual AWS failure instead of listing three possible causes. The
+            # old note guessed ("job not finished, S3 access denied, or results absent")
+            # and so hid a ValidationException behind a benign-sounding explanation for
+            # weeks. Carry the error code, and say plainly that zero metrics here means
+            # unknown rather than clean.
+            code = (
+                e.response.get("Error", {}).get("Code", "ClientError")
+                if isinstance(e, ClientError) else type(e).__name__
+            )
+            logger.warning("Eval scores unavailable for %s in %s: %s", masked, self.region, e)
             return EvalScoresResponse(
-                job_arn=job_arn, live=False, source="unavailable-fallback",
-                note="Could not read eval results — job not finished, S3 access denied, or results absent.",
+                job_arn=masked, live=False, source="unavailable-fallback",
+                note=(
+                    f"Could not read eval results ({code}) in {self.region}: job not "
+                    "finished, S3 access denied, or results absent. Scores are UNKNOWN "
+                    "for this job, not clean."
+                ),
             )
 
     def get_jobs(self, max_jobs: int = 100) -> EvaluationJobsResponse:
@@ -200,7 +301,12 @@ class GovernEvalsService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_jobs(self, max_jobs: int = 100) -> EvaluationJobsResponse:

@@ -70,6 +70,9 @@ source "$PROJECT_ROOT/applications/fsi_foundry/scripts/lib/docker.sh"
 # Source Terraform module (workspace management, apply/destroy)
 source "$PROJECT_ROOT/applications/fsi_foundry/scripts/lib/terraform.sh"
 
+# Source control-plane integration (evaluation auto-enrollment, best-effort)
+source "$PROJECT_ROOT/applications/fsi_foundry/scripts/lib/control_plane.sh"
+
 # ============================================================================
 # AgentCore-Specific Paths
 # ============================================================================
@@ -184,6 +187,8 @@ main() {
     fi
     
     # Check Bedrock model access (required for AI agents)
+    # Helper resolves BEDROCK_MODEL_ID (falling back to the runtime Terraform
+    # default) and normalizes inference-profile prefixes itself.
     if ! check_bedrock_model_access "$AWS_REGION"; then
         die "Bedrock model access required. Please enable Claude models in AWS Console."
     fi
@@ -352,6 +357,15 @@ main() {
         UI_DEPLOYED=false
     fi
     echo ""
+
+    # ========================================================================
+    # Step 10: Control-plane registration (evaluation auto-enrollment)
+    # ========================================================================
+
+    if [[ -n "$RUNTIME_ARN" ]]; then
+        register_with_control_plane "$RUNTIME_ARN"
+        echo ""
+    fi
 
     # ========================================================================
     # Deployment Complete

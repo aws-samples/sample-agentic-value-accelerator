@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Controlled Quality Output — Deterministic Financial Check service.
+  Lambda that independently recomputes financial ratios and compares them
+  against the specialist agent's claimed values. Invoked directly by the agent
+  runtime with IAM auth — there is no HTTP endpoint.
+
+Parameters:
+  ResourcePrefix:
+    Type: String
+    Default: kyc-gov
+    Description: Prefix for resource names (keeps this stack isolated from other use cases)
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS allowed origin (e.g. https://<dist>.cloudfront.net). Default '*' for local dev; override in prod.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  DeterministicCheckRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-deterministic-check-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  DeterministicCheckLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-deterministic-check'
+      RetentionInDays: 30
+
+  DeterministicCheckFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: DeterministicCheckLogGroup
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-deterministic-check'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt DeterministicCheckRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: deterministic-check}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, os, time, logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+          RATIO_TOL = 0.05
+          MARGIN_TOL = 0.01
+          PCT_TOL = 1.0
+
+          def _f(value, default=0.0):
+              try:
+                  return float(value)
+              except (TypeError, ValueError):
+                  return default
+
+          def handler(event, context):
+              rid = getattr(context, "aws_request_id", None)
+              t0 = time.time()
+              method = event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method", "POST")
+              if method == "OPTIONS":
+                  return resp(200, {})
+              try:
+                  # Direct invoke (the AgentCore runtime calls this function with IAM auth) delivers
+                  # the payload at the top level; an API Gateway proxy event nests it under "body".
+                  # Accept both so `aws lambda invoke` and any legacy HTTP caller keep working.
+                  raw_body = event.get("body") if isinstance(event, dict) and "body" in event else event
+                  body = json.loads(raw_body) if isinstance(raw_body, str) else (raw_body or {})
+              except (json.JSONDecodeError, TypeError):
+                  body = {}
+              raw = body.get("raw_financials", {}) or {}
+              claims = body.get("agent_claims", {}) or {}
+              if not raw:
+                  return resp(400, {"error": "raw_financials is required"})
+              total_assets = _f(raw.get("total_assets"))
+              total_liabilities = _f(raw.get("total_liabilities"))
+              equity = total_assets - total_liabilities
+              current_assets = _f(raw.get("current_assets"))
+              current_liabilities = _f(raw.get("current_liabilities"))
+              revenue = _f(raw.get("revenue"))
+              net_income = _f(raw.get("net_income"))
+              payments_on_time = _f(raw.get("payments_on_time"))
+              payments_total = _f(raw.get("payments_total"))
+              de_ratio = round(total_liabilities / equity, 2) if equity > 0 else 999.99
+              current_ratio = round(current_assets / current_liabilities, 2) if current_liabilities > 0 else 999.99
+              net_margin = round(net_income / revenue, 4) if revenue > 0 else 0.0
+              payment_pct = round(payments_on_time / payments_total * 100, 2) if payments_total > 0 else 0.0
+              computed = {
+                  "de_ratio": (de_ratio, RATIO_TOL),
+                  "current_ratio": (current_ratio, RATIO_TOL),
+                  "net_margin": (net_margin, MARGIN_TOL),
+                  "payment_pct": (payment_pct, PCT_TOL),
+              }
+              checks = []
+              overall = "PASS"
+              for metric, (value, tol) in computed.items():
+                  stated = claims.get(metric)
+                  if stated is None:
+                      result = "PASS"
+                  else:
+                      result = "PASS" if abs(_f(stated) - value) <= tol else "FAIL"
+                  if result == "FAIL":
+                      overall = "FAIL"
+                  checks.append({"metric": metric, "computed": value,
+                                 "agent_stated": _f(stated) if stated is not None else None,
+                                 "result": result})
+              logger.info(json.dumps({"svc": "deterministic-check", "request_id": rid,
+                                      "event": "recompute", "overall": overall,
+                                      "failed": [c["metric"] for c in checks if c["result"] == "FAIL"],
+                                      "latency_ms": int((time.time() - t0) * 1000)}))
+              return resp(200, {"overall": overall, "checks": checks})
+
+          def resp(code, body):
+              return {"statusCode": code,
+                      "headers": {"Content-Type": "application/json",
+                                  "Access-Control-Allow-Origin": ORIGIN,
+                                  "Access-Control-Allow-Methods": "POST, OPTIONS",
+                                  "Access-Control-Allow-Headers": "Content-Type"},
+                      "body": json.dumps(body)}
+
+  DeterministicCheckUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/deterministic-check-function'
+      Type: String
+      Value: !Ref DeterministicCheckFunction
+      Description: Lambda function name for kyc-gov deterministic-check, invoked directly by the AgentCore runtime with IAM auth (no public endpoint).
+      Tags:
+        Project: !Ref ProjectTag
+        Environment: !Ref EnvironmentTag
+        Component: deterministic-check
+
+Outputs:
+  DeterministicCheckFunctionName:
+    Description: Function name for the DETERMINISTIC_CHECK_FUNCTION env var
+    Value: !Ref DeterministicCheckFunction

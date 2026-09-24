@@ -67,3 +67,41 @@ class EvaluateControlsResponse(BaseModel):
     evaluations: List[ControlEvaluation] = Field(..., description="Evaluation results per control")
     sources: Dict[str, SourceStatus] = Field(..., description="Status of each data source used")
     evaluated_at: datetime = Field(default_factory=datetime.utcnow, description="When the evaluation was performed")
+
+
+# ─────────────────── AWS Config Rules Compliance ───────────────────
+
+
+class AwsConfigRule(BaseModel):
+    """A single AWS Config rule and its current compliance status."""
+    name: str = Field(..., description="Config rule name (ConfigRuleName)")
+    description: Optional[str] = Field(None, description="Rule description, if provided")
+    compliance: str = Field(
+        ...,
+        description="ComplianceType: COMPLIANT | NON_COMPLIANT | NOT_APPLICABLE | INSUFFICIENT_DATA",
+    )
+    noncompliant_resources: Optional[int] = Field(
+        None,
+        description="Capped count of non-compliant resources (from ComplianceContributorCount), when available",
+    )
+    source: Optional[str] = Field(
+        None, description="Rule source owner, e.g. AWS or CUSTOM_LAMBDA"
+    )
+
+
+class AwsConfigRulesResponse(BaseModel):
+    """AWS Config rules compliance summary + per-rule detail.
+
+    Honest live/source/note envelope mirroring the other Govern read-through
+    slices: live=True on a successful call (empty rule set is still live),
+    live=False with a note on graceful fallback.
+    """
+    rules: List[AwsConfigRule] = Field(default_factory=list, description="Per-rule compliance detail")
+    total: int = Field(0, description="Total number of Config rules")
+    compliant: int = Field(0, description="Rules with ComplianceType COMPLIANT")
+    noncompliant: int = Field(0, description="Rules with ComplianceType NON_COMPLIANT")
+    not_applicable: int = Field(0, description="Rules with ComplianceType NOT_APPLICABLE")
+    insufficient_data: int = Field(0, description="Rules with ComplianceType INSUFFICIENT_DATA")
+    live: bool = Field(False, description="Whether the data came from a live AWS Config call")
+    source: str = Field("aws-config", description="Data source identifier")
+    note: Optional[str] = Field(None, description="Honest note about status / staleness / fallback")

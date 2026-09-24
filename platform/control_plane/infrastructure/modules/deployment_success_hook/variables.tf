@@ -46,6 +46,11 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "artifacts_bucket" {
+  description = "S3 bucket the Lambda deployment zip is uploaded to. Referenced via s3_bucket/s3_key on the function so the CreateFunction call doesn't inline the 17 MB vendored-boto3 blob (which fails SigV4 timeout on slower links)."
+  type        = string
+}
+
 variable "tags" {
   description = "Shared tags applied to all resources."
   type        = map(string)

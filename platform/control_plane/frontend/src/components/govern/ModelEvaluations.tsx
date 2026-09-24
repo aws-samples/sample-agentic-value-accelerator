@@ -25,6 +25,7 @@ import {
 } from './evalData';
 import { Link } from 'react-router-dom';
 import { rowButtonProps } from './a11y';
+import { Icon } from './icons';
 import LiveBedrockEvals from './safety/LiveBedrockEvals';
 import { MockDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
@@ -167,7 +168,7 @@ export default function ModelEvaluations({ modelId }: { modelId?: string } = {})
 
       {/* Summary KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <StatCard label="Evaluation Jobs" value={EVAL_JOBS.length} sub="Last 30 days" />
+        <StatCard label="Sample Jobs" value={EVAL_JOBS.length} sub="Illustrative · last 30 days" />
         <StatCard label="Completed" value={completedJobs.length} sub="Scored & ranked" variant="success" />
         <StatCard label="Judge Metrics" value={12} sub="9 quality · 3 safety" variant="info" />
         <StatCard label="Running" value={EVAL_JOBS.filter(j => j.status === 'InProgress').length} sub="In progress" variant="info" />
@@ -177,7 +178,7 @@ export default function ModelEvaluations({ modelId }: { modelId?: string } = {})
       {/* Job selector — horizontal scroll of evaluation jobs */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-slate-900">Evaluation Jobs</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Sample Evaluation Jobs <span className="text-[11px] font-normal text-slate-400">· illustrative</span></h3>
           <span className="text-[11px] text-slate-400">LLM-as-Judge: Nova Pro · Select a completed job to inspect</span>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2">
@@ -244,7 +245,7 @@ export default function ModelEvaluations({ modelId }: { modelId?: string } = {})
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-semibold text-slate-800">{METRIC_SHORT[name]}</span>
                       <span className={`text-[11px] font-bold px-1.5 rounded ${good ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        <span className="mr-0.5" aria-hidden="true">{good ? '✓' : '!'}</span>{data.percent}%
+                        <span className="mr-0.5" aria-hidden="true">{good ? <Icon name="check" className="w-3 h-3 inline-block align-middle" /> : '!'}</span>{data.percent}%
                       </span>
                     </div>
                     <div className="h-1.5 rounded-full bg-slate-100 mt-2 overflow-hidden">
@@ -299,7 +300,7 @@ export default function ModelEvaluations({ modelId }: { modelId?: string } = {})
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-slate-900">Score by Category</h3>
               {categoryFilter
-                ? <button onClick={() => setCategoryFilter(null)} className="text-[11px] font-medium text-blue-600 hover:text-blue-700">Clear filter ✕</button>
+                ? <button onClick={() => setCategoryFilter(null)} className="text-[11px] font-medium text-blue-600 hover:text-blue-700">Clear filter <Icon name="x-mark" className="w-3 h-3 inline-block align-middle ml-0.5" /></button>
                 : <span className="text-[10px] text-slate-400">Click a category to filter cases below</span>}
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
@@ -426,7 +427,7 @@ export default function ModelEvaluations({ modelId }: { modelId?: string } = {})
       {!results && loadError && (
         <div className="bg-white/80 rounded-xl border border-rose-200 p-10 text-center text-sm">
           <div className="text-rose-600 font-medium">
-            <span className="mr-1.5" aria-hidden="true">✕</span>
+            <span className="mr-1.5" aria-hidden="true"><Icon name="x-mark" className="w-4 h-4 inline-block align-middle" /></span>
             Failed to load evaluation results.
           </div>
           <button
@@ -459,7 +460,7 @@ function FragmentRow({
   onToggle: () => void;
 }) {
   const badge = pct >= 90 ? 'bg-emerald-100 text-emerald-700' : pct >= 70 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
-  const glyph = pct >= 90 ? '✓' : pct >= 70 ? '!' : '✕';
+  const glyph = pct >= 90 ? <Icon name="check" className="w-3 h-3 inline-block align-middle" /> : pct >= 70 ? '!' : <Icon name="x-mark" className="w-3 h-3 inline-block align-middle" />;
   return (
     <>
       <tr
@@ -472,9 +473,7 @@ function FragmentRow({
         <td className="py-2.5 px-3"><span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600">{caseItem.category}</span></td>
         <td className="py-2.5 px-3 text-center"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${badge}`}><span className="mr-0.5" aria-hidden="true">{glyph}</span>{pct}%</span></td>
         <td className="py-2.5 px-4 text-right">
-          <svg className={`w-3.5 h-3.5 text-slate-400 inline transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <Icon name="chevron-down" className={`w-3.5 h-3.5 text-slate-400 inline transition-transform ${isExpanded ? 'rotate-180' : ''}`} strokeWidth={2} />
         </td>
       </tr>
       {isExpanded && (
@@ -497,7 +496,7 @@ function FragmentRow({
                 const warn = !good && (neg ? data.score < 0.5 : data.score >= 0.6);
                 const accent = good ? '#10b981' : warn ? '#f59e0b' : '#dc2626';
                 const badgeCls = good ? 'bg-emerald-100 text-emerald-700' : warn ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
-                const glyph = good ? '✓' : warn ? '!' : '✕';
+                const glyph = good ? <Icon name="check" className="w-3 h-3 inline-block align-middle" /> : warn ? '!' : <Icon name="x-mark" className="w-3 h-3 inline-block align-middle" />;
                 return (
                   <div key={metric} className="bg-white rounded-lg p-2.5 border border-slate-200/70" style={{ borderLeft: `3px solid ${accent}` }}>
                     <div className="flex items-center justify-between mb-1">

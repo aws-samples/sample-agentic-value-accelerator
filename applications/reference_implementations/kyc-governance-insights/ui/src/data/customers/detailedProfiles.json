@@ -1,0 +1,148 @@
+{
+  "CUST002": {
+    "customer_id": "CUST002",
+    "name": "Al-Rashid Trading FZE",
+    "jurisdiction": "UAE (Dubai DIFC)",
+    "incorporated": "2018",
+    "ubos": [{"name": "Ahmed Al-Rashid", "stake": 70, "role": "Director"}, {"name": "Fatima Al-Rashid", "stake": 30, "role": "Silent Partner"}],
+    "financials": {"revenue": 42000000, "total_assets": 35000000, "total_liabilities": 18000000, "current_assets": 22000000, "current_liabilities": 14000000, "net_income": 3200000, "credit_score": 680, "payments_on_time": 42, "payments_total": 50},
+    "compliance": {"sanctions_match": 0.0, "pep_level": 0, "adverse_media_count": 2, "adverse_media_category": "regulatory_fine", "adverse_media_jurisdiction": "UAE", "geographic_risk": "elevated", "geographic_score": 3},
+    "decision": "APPROVE",
+    "conditions": ["Enhanced transaction monitoring (12 months)", "Quarterly geographic risk review", "Source of funds verification for transactions >$1M"],
+    "risk_score": 44,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "PASS", "reason": "No sanctions match"},
+      {"layer": "APP", "rule": "APP-004", "result": "ESCALATE", "reason": "Geographic risk elevated (Dubai) — resolved by enhanced monitoring"},
+      {"layer": "APP", "rule": "APP-007", "result": "PASS", "reason": "Adverse media count 2 < 3 threshold"},
+      {"layer": "REQ", "rule": "REQ-002", "result": "PASS", "reason": "Standard processing with conditions"}
+    ]
+  },
+  "CUST003": {
+    "customer_id": "CUST003",
+    "name": "Meridian Pension Trust",
+    "jurisdiction": "UK (FCA regulated)",
+    "incorporated": "2001",
+    "ubos": [{"name": "Meridian Fund Managers Ltd", "stake": 100, "role": "Trustee"}, {"name": "Note: 47,000 beneficiaries", "stake": 0, "role": "Beneficiaries"}],
+    "financials": {"revenue": 0, "total_assets": 2800000000, "total_liabilities": 2650000000, "current_assets": 180000000, "current_liabilities": 45000000, "net_income": 42000000, "credit_score": 820, "payments_on_time": 50, "payments_total": 50},
+    "compliance": {"sanctions_match": 0.0, "pep_level": 0, "adverse_media_count": 0, "geographic_risk": "low", "geographic_score": 1},
+    "decision": "APPROVE",
+    "conditions": [],
+    "risk_score": 18,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "PASS", "reason": "No sanctions match"},
+      {"layer": "APP", "rule": "APP-001", "result": "PASS", "reason": "FCA-regulated entity — reduced due diligence permitted"},
+      {"layer": "REQ", "rule": "REQ-001", "result": "PASS", "reason": "Standard processing"}
+    ]
+  },
+  "CUST004": {
+    "customer_id": "CUST004",
+    "name": "Kensington Holdings SA",
+    "jurisdiction": "Switzerland (Geneva)",
+    "incorporated": "2016",
+    "ubos": [{"name": "Victoria Hartley-Morrison", "stake": 85, "role": "Director"}, {"name": "Trust structure", "stake": 15, "role": "Family trust"}],
+    "financials": {"revenue": 28000000, "total_assets": 120000000, "total_liabilities": 15000000, "current_assets": 45000000, "current_liabilities": 8000000, "net_income": 12000000, "credit_score": 790, "payments_on_time": 50, "payments_total": 50},
+    "compliance": {"sanctions_match": 0.0, "pep_level": 1, "pep_relationship": "Daughter of serving Cabinet Minister (UK)", "adverse_media_count": 0, "geographic_risk": "low", "geographic_score": 1},
+    "decision": "ESCALATE",
+    "escalation_to": "Board Risk Committee",
+    "escalation_reason": "PEP Level 1 — immediate family of serving government minister. Enhanced due diligence mandatory regardless of financial profile.",
+    "conditions": ["Board Risk Committee approval required", "Annual PEP re-screening", "Source of wealth declaration", "Enhanced transaction monitoring (permanent)"],
+    "risk_score": 62,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "PASS", "reason": "No sanctions match"},
+      {"layer": "APP", "rule": "APP-003", "result": "ESCALATE", "reason": "PEP Level 1 — mandatory board review"},
+      {"layer": "REQ", "rule": "REQ-003", "result": "ESCALATE", "reason": "PEP relationship requires senior sign-off"}
+    ]
+  },
+  "CUST005": {
+    "customer_id": "CUST005",
+    "name": "Northgate Industrial Ltd",
+    "jurisdiction": "UK (Companies House)",
+    "incorporated": "2012",
+    "ubos": [{"name": "Robert Whitfield", "stake": 60, "role": "Director"}, {"name": "Carol Whitfield", "stake": 40, "role": "Director"}],
+    "financials": {"revenue": 8500000, "total_assets": 12000000, "total_liabilities": 10500000, "current_assets": 3200000, "current_liabilities": 4800000, "net_income": -420000, "credit_score": 480, "payments_on_time": 28, "payments_total": 50, "defaults_count": 4, "de_ratio": 8.0, "current_ratio": 0.67},
+    "compliance": {"sanctions_match": 0.0, "pep_level": 0, "adverse_media_count": 0, "geographic_risk": "low", "geographic_score": 1},
+    "decision": "DECLINE",
+    "decline_reason": "Credit risk exceeds all thresholds. D/E 8.0 (max 4.0), Current Ratio 0.67 (min 1.0), 4 defaults in 24 months, negative net income.",
+    "risk_score": 28,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "PASS", "reason": "No sanctions match"},
+      {"layer": "APP", "rule": "APP-005", "result": "BLOCK", "reason": "Credit score 480 < 550 minimum threshold"},
+      {"layer": "REQ", "rule": "REQ-005", "result": "BLOCK", "reason": "D/E ratio 8.0 exceeds 4.0 maximum"}
+    ]
+  },
+  "CUST006": {
+    "customer_id": "CUST006",
+    "name": "Pacific Ventures BVI",
+    "jurisdiction": "British Virgin Islands",
+    "incorporated": "2023",
+    "ubos": [{"name": "Nominee Director Services Ltd", "stake": 100, "role": "Nominee Director"}, {"name": "UBO: UNKNOWN", "stake": 0, "role": "Cannot be determined"}],
+    "financials": {"revenue": 250000, "total_assets": 1200000, "total_liabilities": 800000, "current_assets": 400000, "current_liabilities": 350000, "net_income": 15000, "credit_score": 550, "payments_on_time": 6, "payments_total": 8},
+    "compliance": {"sanctions_match": 0.12, "pep_level": 0, "adverse_media_count": 0, "geographic_risk": "high", "geographic_score": 4, "shell_indicators": ["Nominee directors", "Registered agent address", "Minimal trading history (8 months)", "Single UBO cannot be identified", "No physical office"]},
+    "decision": "ESCALATE",
+    "escalation_to": "Financial Crime Investigation Unit",
+    "escalation_reason": "Shell company indicators — cannot verify beneficial ownership. BVI jurisdiction with nominee structure.",
+    "conditions": ["Full source of funds investigation", "UBO identification required before proceeding", "Enhanced geographic due diligence"],
+    "risk_score": 71,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "PASS", "reason": "Sanctions match 12% below 70% threshold"},
+      {"layer": "APP", "rule": "APP-004", "result": "ESCALATE", "reason": "BVI high-risk jurisdiction (score 4/5)"},
+      {"layer": "APP", "rule": "APP-006", "result": "ESCALATE", "reason": "Nominee structure — UBO cannot be verified"},
+      {"layer": "REQ", "rule": "REQ-006", "result": "ESCALATE", "reason": "Shell company indicators present"}
+    ]
+  },
+  "CUST007": {
+    "customer_id": "CUST007",
+    "name": "GlobalFX Solutions Inc",
+    "jurisdiction": "USA (Delaware, FinCEN MSB)",
+    "incorporated": "2014",
+    "ubos": [{"name": "James Chen", "stake": 55, "role": "CEO/Director"}, {"name": "Sarah Park", "stake": 30, "role": "COO"}, {"name": "Institutional investors", "stake": 15, "role": "Series B"}],
+    "financials": {"revenue": 520000000, "total_assets": 180000000, "total_liabilities": 95000000, "current_assets": 120000000, "current_liabilities": 78000000, "net_income": 18000000, "credit_score": 740, "payments_on_time": 49, "payments_total": 50},
+    "compliance": {"sanctions_match": 0.0, "pep_level": 0, "adverse_media_count": 0, "geographic_risk": "low", "geographic_score": 1, "velocity_flags": ["Monthly volume $43M (99th percentile)", "4,200 daily transactions", "Cross-border flow: 67% of volume"]},
+    "decision": "APPROVE",
+    "conditions": ["Enhanced transaction monitoring (velocity-based)", "Monthly AML reporting", "Quarterly correspondent banking review"],
+    "risk_score": 35,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "PASS", "reason": "No sanctions match"},
+      {"layer": "APP", "rule": "APP-008", "result": "PASS", "reason": "MSB-licensed entity — velocity thresholds adjusted for business type"},
+      {"layer": "REQ", "rule": "REQ-007", "result": "PASS", "reason": "Volume within licensed parameters, enhanced monitoring applied"}
+    ]
+  },
+  "CUST008": {
+    "customer_id": "CUST008",
+    "name": "Volkov Enterprises LLC",
+    "jurisdiction": "Cyprus (Limassol)",
+    "incorporated": "2017",
+    "ubos": [{"name": "Dimitri Volkov", "stake": 90, "role": "Director"}, {"name": "Elena Volkov", "stake": 10, "role": "Secretary"}],
+    "financials": {"revenue": 67000000, "total_assets": 45000000, "total_liabilities": 22000000, "current_assets": 28000000, "current_liabilities": 12000000, "net_income": 8900000, "credit_score": 710, "payments_on_time": 47, "payments_total": 50},
+    "compliance": {"sanctions_match": 0.97, "sanctions_list": "OFAC SDN", "sanctions_entry_id": "SDN-31847", "sanctions_date_added": "2026-06-15", "pep_level": 0, "adverse_media_count": 5, "adverse_media_category": "sanctions_designation", "geographic_risk": "high", "geographic_score": 4},
+    "decision": "BLOCK",
+    "block_reason": "OFAC SDN match 97% — recently designated (2026-06-15). Previously clean customer, caught by re-screening workflow.",
+    "incident_id": "INC-2026-0947",
+    "risk_score": 95,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "BLOCK", "reason": "Sanctions match 97% exceeds 70% threshold — OFAC SDN-31847"},
+      {"layer": "APP", "rule": "APP-003", "result": "N/A", "reason": "Blocked at ORG layer"},
+      {"layer": "REQ", "rule": "REQ-004", "result": "N/A", "reason": "Blocked at ORG layer"}
+    ]
+  },
+  "CUST009": {
+    "customer_id": "CUST009",
+    "name": "Syria Relief Foundation",
+    "jurisdiction": "UK (Charity Commission registered)",
+    "incorporated": "2013",
+    "ubos": [{"name": "Board of Trustees (7 members)", "stake": 0, "role": "Trustees"}, {"name": "Dr. Amira Hassan", "stake": 0, "role": "Chair"}],
+    "financials": {"revenue": 12000000, "total_assets": 8500000, "total_liabilities": 2100000, "current_assets": 6200000, "current_liabilities": 1800000, "net_income": 0, "credit_score": 700, "payments_on_time": 48, "payments_total": 50},
+    "compliance": {"sanctions_match": 0.0, "pep_level": 0, "adverse_media_count": 1, "adverse_media_category": "operational_risk_reporting", "geographic_risk": "critical", "geographic_score": 5, "conflict_zone": "Syria", "operating_regions": ["Aleppo", "Idlib", "Turkey (border)"]},
+    "decision": "ESCALATE",
+    "escalation_to": "Board Risk Committee + Charity Commission liaison",
+    "escalation_reason": "Legitimate charity operating in FATF high-risk jurisdiction (Syria). No sanctions/PEP concerns but geographic risk requires board-level approval.",
+    "conditions": ["Board Risk Committee approval", "Enhanced due diligence on fund flows", "Quarterly reporting to Charity Commission", "Correspondent bank notification", "Transaction-level monitoring on Syria-linked payments"],
+    "risk_score": 58,
+    "policy_cascade": [
+      {"layer": "ORG", "rule": "ORG-001", "result": "PASS", "reason": "No sanctions match"},
+      {"layer": "ORG", "rule": "ORG-004", "result": "ESCALATE", "reason": "Conflict zone operations (Syria) — board approval required"},
+      {"layer": "APP", "rule": "APP-004", "result": "ESCALATE", "reason": "Geographic risk score 5/5 (critical)"},
+      {"layer": "REQ", "rule": "REQ-008", "result": "ESCALATE", "reason": "Charity + conflict zone = enhanced governance path"}
+    ]
+  }
+}

@@ -167,6 +167,7 @@ module "ecs" {
   # Deployments
   deployments_table_name              = module.dynamodb.deployments_table_name
   deployments_table_arn               = module.dynamodb.deployments_table_arn
+  evaluations_table_name              = module.dynamodb.evaluations_table_name
   deployments_bucket_arn              = module.s3.deployments_bucket_arn
   state_machine_arn                   = module.step_functions.state_machine_arn
   frontier_agents_state_machine_arn   = module.frontier_agents_pipeline.state_machine_arn
@@ -464,6 +465,7 @@ module "deployment_success_hook" {
   agent_registry_id            = module.agent_registry.registry_id
   agent_registry_arn           = module.agent_registry.registry_arn
   aws_region                   = var.aws_region
+  artifacts_bucket             = module.s3.deployments_bucket_name
 
   tags = var.tags
 }
@@ -519,7 +521,30 @@ module "cognito" {
     var.domain_name != "" ? "https://${var.domain_name}" : "",
   ])
 
+  # Audit table the PostAuthentication trigger writes each successful login
+  # into. Table lives in modules/dynamodb; cognito module only needs the
+  # name (env var) and arn (IAM policy scope).
+  login_events_table_name = module.dynamodb.login_events_table_name
+  login_events_table_arn  = module.dynamodb.login_events_table_arn
+
   tags = var.tags
+}
+
+# ============================================================================
+# WAF (Bot Control) for CloudFront
+# ============================================================================
+# Must be created before the CloudFront module so its ARN can be threaded
+# through as var.web_acl_arn. CLOUDFRONT-scope ACLs live in us-east-1.
+
+module "waf" {
+  source = "./modules/waf"
+
+  providers = {
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  name_prefix = local.name_prefix
+  tags        = var.tags
 }
 
 # ============================================================================
@@ -545,6 +570,10 @@ module "cloudfront" {
   # lives outside this state) that also need OAC access to the frontend
   # bucket. Without this, terraform's bucket policy would lock them out.
   extra_distribution_arns = var.frontend_extra_cloudfront_arns
+
+  # WAF Bot Control ACL — see modules/waf/. Attaching the ACL to the
+  # distribution is the only place Bot Control actually runs.
+  web_acl_arn = module.waf.web_acl_arn
 
   tags = var.tags
 }

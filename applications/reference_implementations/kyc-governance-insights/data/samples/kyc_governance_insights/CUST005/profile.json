@@ -1,0 +1,43 @@
+{
+  "customer_id": "CUST005",
+  "name": "Northgate Industrial Ltd",
+  "account_type": "corporate",
+  "industry": "Industrial Manufacturing",
+  "incorporation": {
+    "country": "United Kingdom",
+    "state": "England",
+    "date": "2009-11-30"
+  },
+  "contact": {
+    "address": "Northgate Works, Sheffield, S9 1XA, UK",
+    "phone": "+44-114-555-0155",
+    "email": "accounts@northgate.example.co.uk"
+  },
+  "directors": [
+    {
+      "name": "Robert Kelso",
+      "role": "CEO",
+      "pep_status": false
+    },
+    {
+      "name": "Diane Kelso",
+      "role": "Director",
+      "pep_status": false
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "Robert Kelso",
+      "ownership_percentage": 55
+    },
+    {
+      "name": "Diane Kelso",
+      "ownership_percentage": 45
+    }
+  ],
+  "kyc_status": "verified",
+  "risk_flags": [
+    "credit_distress"
+  ],
+  "annual_revenue": "$10M-$20M"
+}

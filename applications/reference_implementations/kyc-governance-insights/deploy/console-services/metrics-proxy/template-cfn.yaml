@@ -1,0 +1,356 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'KYC Metrics Proxy - Lambda + API Gateway fronting CloudWatch and X-Ray'
+
+Parameters:
+  AgentRuntimeId:
+    Type: String
+    Default: ava_kyc_langgraph-wXV6vMEcly
+  WafWebAclName:
+    Type: String
+    Default: kyc-banking-waf
+  GuardrailId:
+    Type: String
+    Default: ''
+  AllowedOrigin:
+    Type: String
+    Default: https://d34f241zukf5gh.cloudfront.net
+  MetricsHistoryTable:
+    Type: String
+    Default: kyc-metrics-history
+    Description: DynamoDB table holding the seeded 30-day governance metric history.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  ProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CloudWatchReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:ListMetrics
+                Resource: '*'
+        - PolicyName: XRayReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:GetTraceSummaries
+                  - xray:BatchGetTraces
+                Resource: '*'
+        - PolicyName: MetricsHistoryReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MetricsHistoryTable}'
+
+  HandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-handler'
+      RetentionInDays: 30
+
+  HandlerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: HandlerLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-handler'
+      Role: !GetAtt ProxyRole.Arn
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: 10
+      Handler: index.handler
+      Environment:
+        Variables:
+          AGENT_RUNTIME_ID: !Ref AgentRuntimeId
+          WAF_WEB_ACL_NAME: !Ref WafWebAclName
+          GUARDRAIL_ID: !Ref GuardrailId
+          REGION: !Ref AWS::Region
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+          METRICS_HISTORY_TABLE: !Ref MetricsHistoryTable
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: metrics}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, os, boto3
+          from datetime import datetime, timedelta, timezone
+          from decimal import Decimal
+          from boto3.dynamodb.conditions import Key
+          from botocore.exceptions import ClientError
+
+          cw = boto3.client('cloudwatch', region_name=os.environ['REGION'])
+          xray = boto3.client('xray', region_name=os.environ['REGION'])
+          ddb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
+          RUNTIME_ID = os.environ['AGENT_RUNTIME_ID']
+          WAF_ACL = os.environ['WAF_WEB_ACL_NAME']
+          GUARDRAIL_ID = os.environ.get('GUARDRAIL_ID', '')
+          ORIGIN = os.environ['ALLOWED_ORIGIN']
+          METRICS_HISTORY_TABLE = os.environ.get('METRICS_HISTORY_TABLE', 'kyc-metrics-history')
+
+          def cors(body, status=200):
+              return {
+                  'statusCode': status,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': ORIGIN,
+                      'Access-Control-Allow-Headers': 'Content-Type',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                  },
+                  'body': json.dumps(body, default=str),
+              }
+
+          def handler(event, context):
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', '')
+              path = event.get('path') or event.get('rawPath', '')
+
+              # Auth is enforced at the edge by the shared origin-verify API Gateway
+              # authorizer (invariant #1) — this handler contains no auth logic.
+
+              if method == 'OPTIONS':
+                  return cors({})
+
+              tenant_id = (event.get('headers') or {}).get('x-tenant-id', 'default')
+
+              try:
+                  if method == 'GET' and path.endswith('/metrics-history'):
+                      return get_metrics_history()
+                  if method == 'GET' and path.endswith('/metrics'):
+                      return get_metrics()
+                  if method == 'GET' and path.endswith('/traces'):
+                      return get_traces()
+                  if method == 'GET' and path.endswith('/waf-stats'):
+                      return get_waf_stats()
+              except Exception as e:
+                  return cors({'error': str(e)}, 500)
+
+              if method == 'GET' and path.endswith('/health'):
+                  return cors({'status': 'ok', 'service': 'metrics-proxy', 'timestamp': __import__('datetime').datetime.utcnow().isoformat()})
+
+              return cors({'error': 'Not found'}, 404)
+
+          def get_metrics_history():
+              # Seeded 30-day governance trend (kyc-metrics-history, seed_phase3.py).
+              # Returns numeric daily rows sorted by date. On an unseeded deployment
+              # (table absent/empty) returns an empty list so the UI can show a
+              # "run the seed script" state rather than fabricated data.
+              try:
+                  table = ddb.Table(METRICS_HISTORY_TABLE)
+                  resp = table.query(
+                      KeyConditionExpression=Key('metric_series').eq('governance-daily')
+                  )
+                  items = resp.get('Items', [])
+              except ClientError:
+                  items = []
+              rows = []
+              for it in sorted(items, key=lambda x: x.get('date', '')):
+                  row = {k: (float(v) if isinstance(v, Decimal) else v) for k, v in it.items()}
+                  rows.append(row)
+              return cors({'series': 'governance-daily', 'history': rows})
+
+          def get_metrics():
+              now = datetime.now(timezone.utc)
+              start = now - timedelta(hours=24)
+              resp = cw.get_metric_data(
+                  MetricDataQueries=[
+                      {'Id': 'invocations', 'MetricStat': {'Metric': {'Namespace': 'AWS/Lambda', 'MetricName': 'Invocations', 'Dimensions': [{'Name': 'FunctionName', 'Value': f'kyc-agentcore-proxy-handler'}]}, 'Period': 3600, 'Stat': 'Sum'}},
+                      {'Id': 'duration', 'MetricStat': {'Metric': {'Namespace': 'AWS/Lambda', 'MetricName': 'Duration', 'Dimensions': [{'Name': 'FunctionName', 'Value': f'kyc-agentcore-proxy-handler'}]}, 'Period': 3600, 'Stat': 'Average'}},
+                      {'Id': 'errors', 'MetricStat': {'Metric': {'Namespace': 'AWS/Lambda', 'MetricName': 'Errors', 'Dimensions': [{'Name': 'FunctionName', 'Value': f'kyc-agentcore-proxy-handler'}]}, 'Period': 3600, 'Stat': 'Sum'}},
+                      {'Id': 'guardrail', 'MetricStat': {'Metric': {'Namespace': 'AWS/Bedrock/Guardrails', 'MetricName': 'Invocations', 'Dimensions': [{'Name': 'GuardrailId', 'Value': GUARDRAIL_ID}]}, 'Period': 3600, 'Stat': 'Sum'}},
+                  ],
+                  StartTime=start,
+                  EndTime=now,
+              )
+              metrics = {}
+              for result in resp.get('MetricDataResults', []):
+                  metrics[result['Id']] = {
+                      'timestamps': result.get('Timestamps', []),
+                      'values': result.get('Values', []),
+                  }
+              return cors({'metrics': metrics, 'period': '24h'})
+
+          def get_traces():
+              now = datetime.now(timezone.utc)
+              start = now - timedelta(hours=6)
+              resp = xray.get_trace_summaries(
+                  StartTime=start,
+                  EndTime=now,
+                  Sampling=False,
+              )
+              traces = []
+              for t in resp.get('TraceSummaries', [])[:50]:
+                  traces.append({
+                      'traceId': t.get('Id'),
+                      'duration': t.get('Duration'),
+                      'responseTime': t.get('ResponseTime'),
+                      'hasFault': t.get('HasFault', False),
+                      'hasError': t.get('HasError', False),
+                      'http': t.get('Http', {}),
+                  })
+              return cors({'traces': traces})
+
+          def get_waf_stats():
+              now = datetime.now(timezone.utc)
+              start = now - timedelta(hours=24)
+              resp = cw.get_metric_data(
+                  MetricDataQueries=[
+                      {'Id': 'blocked', 'MetricStat': {'Metric': {'Namespace': 'AWS/WAFV2', 'MetricName': 'BlockedRequests', 'Dimensions': [{'Name': 'WebACL', 'Value': WAF_ACL}, {'Name': 'Region', 'Value': os.environ['REGION']}, {'Name': 'Rule', 'Value': 'ALL'}]}, 'Period': 3600, 'Stat': 'Sum'}},
+                      {'Id': 'allowed', 'MetricStat': {'Metric': {'Namespace': 'AWS/WAFV2', 'MetricName': 'AllowedRequests', 'Dimensions': [{'Name': 'WebACL', 'Value': WAF_ACL}, {'Name': 'Region', 'Value': os.environ['REGION']}, {'Name': 'Rule', 'Value': 'ALL'}]}, 'Period': 3600, 'Stat': 'Sum'}},
+                      {'Id': 'counted', 'MetricStat': {'Metric': {'Namespace': 'AWS/WAFV2', 'MetricName': 'CountedRequests', 'Dimensions': [{'Name': 'WebACL', 'Value': WAF_ACL}, {'Name': 'Region', 'Value': os.environ['REGION']}, {'Name': 'Rule', 'Value': 'ALL'}]}, 'Period': 3600, 'Stat': 'Sum'}},
+                  ],
+                  StartTime=start,
+                  EndTime=now,
+              )
+              stats = {}
+              for result in resp.get('MetricDataResults', []):
+                  stats[result['Id']] = {
+                      'timestamps': result.get('Timestamps', []),
+                      'values': result.get('Values', []),
+                  }
+              return cors({'wafStats': stats, 'webAclName': WAF_ACL, 'period': '24h'})
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+        MaxAge: 3600
+
+  # Edge auth (invariant #1): shared origin-verify REQUEST authorizer, imported from the
+  # origin-verify-authorizer stack. metrics-proxy is reached same-origin via CloudFront
+  # (/svc/metrics/metrics-history), so the injected x-origin-verify header applies here too.
+  OriginVerifyAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: REQUEST
+      Name: kyc-origin-verify
+      IdentitySource:
+        - '$request.header.x-origin-verify'
+      AuthorizerPayloadFormatVersion: '2.0'
+      EnableSimpleResponses: true
+      AuthorizerResultTtlInSeconds: 300
+      AuthorizerUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnArn}/invocations'
+        - FnArn: !ImportValue kyc-origin-verify-authorizer-arn
+
+  OriginVerifyAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue kyc-origin-verify-authorizer-arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/authorizers/${OriginVerifyAuthorizer}'
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt HandlerFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  MetricsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /metrics'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  MetricsHistoryRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /metrics-history'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  TracesRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /traces'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  WafStatsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /waf-stats'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: Metrics Proxy API endpoint URL
+    Value: !GetAtt HttpApi.ApiEndpoint

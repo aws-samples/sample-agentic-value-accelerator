@@ -6,6 +6,8 @@ import { DIMENSIONS, DIM_ACCENTS, MATURITY_LEVELS, STATUSES } from './maturity/t
 import { levelColor } from './maturity/scoring';
 import AssessmentDrawer from './maturity/AssessmentDrawer';
 import ConfirmDialog from './ConfirmDialog';
+import ExportReportButton from './ExportReportButton';
+import { buildMaturityReport } from './maturity/report';
 
 type SortKey = 'composite' | 'completion' | 'updated' | 'name';
 
@@ -304,6 +306,7 @@ function AssessmentCard({ a, onEdit, onDelete }: { a: MaturityAssessment; onEdit
       <div className="border-t border-slate-100 px-5 py-2.5 flex items-center justify-between bg-slate-50/40">
         <span className="text-[10px] text-slate-400">Updated {new Date(a.updated_at).toLocaleDateString()}</span>
         <div className="flex gap-1">
+          <ExportReportButton getDefinition={() => buildMaturityReport(a)} variant="link" label="Export" title="Download this assessment as a PDF report" />
           <button onClick={onEdit} className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md hover:bg-blue-100">Edit</button>
           <button onClick={onDelete} className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded-md hover:bg-red-100">Delete</button>
         </div>

@@ -17,6 +17,8 @@ import {
   SUB_CRITERIA,
 } from './types';
 import { computeLocal, verdictColor } from './scoring';
+import { buildUseCaseReport } from './report';
+import ExportReportButton from '../ExportReportButton';
 
 interface Props {
   open: boolean;
@@ -136,11 +138,37 @@ export default function UseCaseDrawer({ open, initial, onClose, onSubmit }: Prop
               {name || 'Untitled use case'}
             </h3>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" aria-label="Close">
-            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportReportButton
+              variant="subtle"
+              title="Download this use case as a PDF report (reflects current edits)"
+              getDefinition={() => buildUseCaseReport({
+                use_case_id: initial?.use_case_id ?? 'draft',
+                name: name.trim() || 'Untitled use case',
+                description,
+                ai_type: aiType ?? 'Generative AI',
+                business_domain: businessDomain,
+                complexity: complexity ?? 'Medium',
+                automation_scope: automationScope ?? 'Co-pilot',
+                integration_depth: integrationDepth ?? 'API-connected real-time',
+                business_owner: businessOwner,
+                technical_owner: technicalOwner,
+                target_go_live: targetGoLive,
+                status: status ?? 'Concept',
+                created_at: initial?.created_at ?? new Date().toISOString(),
+                updated_at: initial?.updated_at ?? new Date().toISOString(),
+                created_by: initial?.created_by ?? null,
+                scores,
+                weights,
+                computed,
+              })}
+            />
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" aria-label="Close">
+              <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Step tabs */}

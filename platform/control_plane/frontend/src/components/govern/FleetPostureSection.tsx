@@ -1,14 +1,18 @@
 /**
  * FleetPostureSection — Unified posture hero for Agent Fleet Governance.
  *
- * Combines ControlPlanePillars + FleetRiskPosture + 30-day trend into one
- * compact section. Surfaces gaps inline when meaningful issues exist.
+ * Combines the control-plane pillar tiles + FleetRiskPosture + 30-day trend into
+ * one compact section. Surfaces gaps inline when meaningful issues exist.
+ *
+ * This superseded the standalone `ControlPlanePillars.tsx`, which was deleted
+ * 2026-09-09 after it sat unimported.
  */
 
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { getPostureColor } from './postureColor';
+import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
 
 interface ControlGap {
   dimension: string;
@@ -16,19 +20,31 @@ interface ControlGap {
   agentName?: string;
 }
 
+/** The five control-plane posture pillars. */
+export type PosturePillarKey = 'registry' | 'access' | 'visualization' | 'interoperability' | 'security';
+
 interface Props {
   score: number;
-  pillarScores: {
-    registry: number;
-    access: number;
-    visualization: number;
-    interoperability: number;
-    security: number;
-  };
+  pillarScores: Record<PosturePillarKey, number>;
   statusCounts: { healthy: number; watch: number; gap: number };
   trendData: Array<{ day: string; trustScore: number }>;
   controlGaps: ControlGap[];
   onRemediateGap?: (gap: ControlGap) => void;
+  /**
+   * Pillar keys whose displayed score is an illustrative constant (e.g. a fixed
+   * 80/40 or 70/30 boolean gate) rather than a value derived from a live signal.
+   * These are flagged in the UI so a fabricated number never renders as "Live".
+   */
+  illustrativePillars?: PosturePillarKey[];
+  /**
+   * Pillar keys whose displayed score IS derived from a live measurement (a real
+   * ratio over real counts). Drives the Live badge's detail copy so the badge can
+   * only ever name the pillars that are actually live. Pillars in neither list are
+   * unavailable and render as "—".
+   */
+  livePillars?: PosturePillarKey[];
+  /** When true, the 30-day trend sparkline is simulated history (only "today" is live). */
+  trendIllustrative?: boolean;
   metrics?: {
     totalAgents?: number;
     bedrockAgents?: number;
@@ -53,6 +69,20 @@ const PILLARS = [
 
 const scoreColor = (score: number): string => getPostureColor(score);
 
+/**
+ * Renders a set of pillar keys as their human labels in PILLARS order
+ * ("Registry, Access Control & Security"). The badge copy is derived from the
+ * actual live/illustrative key sets via this helper so a badge can never
+ * describe pillars other than the ones it is gating.
+ */
+function pillarLabelList(keys: readonly string[]): string {
+  const set = new Set(keys);
+  const labels = PILLARS.filter(p => set.has(p.key)).map(p => p.label);
+  if (labels.length === 0) return '';
+  if (labels.length === 1) return labels[0];
+  return `${labels.slice(0, -1).join(', ')} & ${labels[labels.length - 1]}`;
+}
+
 function scoreGrade(score: number): string {
   if (score >= 90) return 'A';
   if (score >= 80) return 'B';
@@ -69,6 +99,9 @@ export default function FleetPostureSection({
   controlGaps,
   onRemediateGap,
   metrics,
+  illustrativePillars = [],
+  livePillars = [],
+  trendIllustrative = false,
 }: Props) {
   const [hoveredPillar, setHoveredPillar] = useState<string | null>(null);
 
@@ -79,8 +112,28 @@ export default function FleetPostureSection({
 
   const topGap = controlGaps[0];
 
-  // Detect if this is a new/unconfigured state (no real governance activity yet)
-  // Registry requires deployments, Access requires active guardrails - these indicate real setup
+  // Which pillars/trend are illustrative (not from a live signal) — used to avoid
+  // stamping a blanket green "Live" over fabricated numbers.
+  const illustrativeSet = new Set<string>(illustrativePillars);
+  const liveSet = new Set<string>(livePillars);
+  const hasIllustrative = illustrativePillars.length > 0 || trendIllustrative;
+
+  // Badge copy is DERIVED from the live/illustrative key sets (never hardcoded), so
+  // the Live badge can only claim the pillars the caller says are live and the Demo
+  // badge can only name the pillars that are actually illustrative.
+  const liveLabels = pillarLabelList(livePillars);
+  const liveDetail = liveLabels
+    ? `${liveLabels} scored from live AVA + AWS measurements`
+    : 'Fleet score and guardrail status counts from live AVA + AWS data';
+  const illustrativeLabels = pillarLabelList(illustrativePillars);
+  const illustrativeDetail = [
+    illustrativeLabels ? `${illustrativeLabels} scoring` : '',
+    trendIllustrative ? '30-day trend' : '',
+  ].filter(Boolean).join(', ');
+
+  // Detect if this is a new/unconfigured state (no real governance activity yet).
+  // Registry/Access are governance-tag coverage ratios over the AI estate, so a
+  // non-zero value on either means a real, scanned governance footprint exists.
   const totalActivity = statusCounts.healthy + statusCounts.watch + statusCounts.gap;
   const hasRealGovernanceSetup = pillarScores.registry > 0 || pillarScores.access > 0;
   const isUnconfigured = !hasRealGovernanceSetup && totalActivity === 0;
@@ -101,9 +154,15 @@ export default function FleetPostureSection({
             </svg>
           </div>
           <span className="text-sm font-semibold text-slate-900">Fleet Posture</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">Live</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">AWS</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">OWASP</span>
+          {/* Scope the "Live" claim to the pillars actually driven by live data; the
+              illustrative pillars/trend are disclosed separately so a fabricated
+              number never sits under a green Live badge. */}
+          <LiveDataBadge source="AVA + AWS" detail={liveDetail} />
+          {hasIllustrative && illustrativeDetail && (
+            <MockDataBadge integration={illustrativeDetail} />
+          )}
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium" title="Posture aligned to the AWS Generative AI Scoping Matrix">AWS</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium" title="Posture aligned to OWASP Agentic AI threats">OWASP</span>
         </div>
         <Link to="/govern/risk" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
           Risk Report →
@@ -144,7 +203,16 @@ export default function FleetPostureSection({
               </div>
             </div>
             {/* Trend Sparkline - Inline */}
-            <div className="w-20 h-12">
+            <div
+              className="w-20 h-12 relative"
+              title={trendIllustrative ? 'Illustrative 30-day trend — simulated history; only today reflects the live score' : undefined}
+            >
+              {trendIllustrative && (
+                <span
+                  className="absolute top-0 right-0 z-10 w-1.5 h-1.5 rounded-full border border-dashed border-amber-400 bg-amber-100 cursor-help"
+                  title="Illustrative — simulated history"
+                />
+              )}
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={sparklineData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
                   <defs>
@@ -165,6 +233,11 @@ export default function FleetPostureSection({
               const pillarScore = pillarScores[p.key as keyof typeof pillarScores];
               const pillarUnconfigured = pillarScore === 0;
               const isHovered = hoveredPillar === p.key;
+              // A pillar reading 0 that is neither declared live nor illustrative had
+              // its upstream signal degrade — the score is not genuinely zero. Say so
+              // on hover instead of letting "—" read as a measured zero. (A live pillar
+              // at 0, e.g. security with no controls implemented, IS a real zero.)
+              const pillarUnavailable = pillarUnconfigured && !liveSet.has(p.key) && !illustrativeSet.has(p.key);
               return (
                 <div
                   key={p.key}
@@ -175,10 +248,19 @@ export default function FleetPostureSection({
                   onMouseLeave={() => setHoveredPillar(null)}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[8px] font-medium text-slate-500">{p.shortLabel}</span>
+                    <span className="flex items-center gap-0.5 text-[8px] font-medium text-slate-500">
+                      {p.shortLabel}
+                      {illustrativeSet.has(p.key) && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full border border-dashed border-amber-400 bg-amber-100 cursor-help"
+                          title="Illustrative score — not yet derived from a live signal"
+                        />
+                      )}
+                    </span>
                     <span
                       className="text-[9px] font-bold"
                       style={{ color: pillarUnconfigured ? '#94a3b8' : scoreColor(pillarScore) }}
+                      title={pillarUnavailable ? 'Unavailable — the live signal backing this pillar could not be read' : undefined}
                     >
                       {pillarUnconfigured ? '—' : `${pillarScore}%`}
                     </span>

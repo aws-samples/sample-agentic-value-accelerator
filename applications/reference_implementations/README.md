@@ -13,6 +13,7 @@ End-to-end full-stack solutions for specific FSI use cases. Each reference imple
 | [Case Management](case-management/README.md) | Risk & Compliance | Fraud detection and case management with pattern recognition (smurfing, mule accounts, high-velocity), conversational investigation, and optional AgentCore SAR generation |
 | [Agent Safety](agent-safety/README.md) | Safety & Governance | Safety controls for Bedrock AgentCore — budget/eval/observability auto-provisioning, session interventions, kill switch, audit trail, and centralized dashboard |
 | [Payments Fraud](payments-fraud/README.md) | Payments & Fraud | Agent-native fraud scoring, NL investigation (smurfing, velocity, mule networks), and FinCEN-structured SAR drafting — a supervisor + 3 specialist agents on Bedrock AgentCore (Strands), with a Next.js UI and Cognito auth |
+| [KYC - Controlled Quality Output](kyc-governance-insights/README.md) | Risk & Compliance | Governed KYC onboarding: two specialist agents plus a non-bypassable governance layer (deterministic recomputation, sanctions/PEP screening, three-layer policy cascade, LLM-as-Judge) reaching APPROVE / ESCALATE / DECLINE / BLOCK, with a two-mode governance console |
 
 ---
 

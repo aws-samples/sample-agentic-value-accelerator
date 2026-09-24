@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_a2a_trust import (
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 # read or mutate governance records. Requires the caller's Cognito id_token to
 # resolve to at least VIEWER — matches every other CP router.
 router = APIRouter(prefix="/govern/a2a-trust", tags=["govern-a2a-trust"])
+
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_a2a_trust", region_scope.CONTROL_PLANE, prefix="/govern/a2a-trust")
 
 _svc: Optional[GovernA2ATrustService] = None
 

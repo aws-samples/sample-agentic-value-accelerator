@@ -1,0 +1,37 @@
+{
+  "customer_id": "CUST006",
+  "name": "Pacific Ventures BVI",
+  "account_type": "corporate",
+  "industry": "Investment / Trading (stated)",
+  "incorporation": {
+    "country": "British Virgin Islands",
+    "state": "Road Town, Tortola",
+    "date": "2025-10-01"
+  },
+  "contact": {
+    "address": "Registered Agent: Trident Chambers, PO Box 146, Road Town, Tortola, BVI",
+    "phone": "+1-284-555-0199",
+    "email": "admin@pacificventures.example.vg"
+  },
+  "directors": [
+    {
+      "name": "Nominee Director (Corporate Services Ltd)",
+      "role": "Director",
+      "pep_status": false,
+      "is_nominee": true
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "UNKNOWN \u2014 UBO not identified",
+      "ownership_percentage": null
+    }
+  ],
+  "kyc_status": "incomplete",
+  "risk_flags": [
+    "shell_company_indicators",
+    "ubo_unknown",
+    "nominee_directors"
+  ],
+  "annual_revenue": "unknown"
+}

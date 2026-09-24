@@ -32,6 +32,28 @@ Total runtime 15–25 min. Every phase state transition lands in DynamoDB so the
 
 ---
 
+## Catalog IDs
+
+Every submission is issued a short catalog ID — `AB01`, `AL07`, `AI03` — which the UI shows as the submission's authoritative identifier. The two-letter prefix encodes the business domain the user selected (`AB` Retail Banking, `AL` Lending, `AW` Wealth Management, `AC` Capital Markets, `AI` Insurance, `AR` Compliance & Risk, `AO` Operations, `AS` Customer Service, `AF` Fraud & Security, `AX` Other), matching the shape the FSI Foundry registry uses for its own offerings so both sources read consistently.
+
+The app-factory table therefore holds two kinds of item:
+
+| pk | sk | What it is |
+|---|---|---|
+| `SUBMISSION#<uuid>` | `META` | The submission itself, including its `catalog_id` |
+| `CATALOG_ID#<id>` | `CLAIM` | A marker recording that this ID is taken, and by which submission |
+
+Both are written in a single `TransactWriteItems`, each conditional on `attribute_not_exists(pk)`. The claim is what makes an ID exclusive: two submissions in the same domain that are created concurrently would otherwise both read the same highest-so-far number and both keep it, producing two rows sharing one identifier with no error on either request. Instead the second transaction's claim fails its condition, and the request recomputes from the next number and retries.
+
+Two consequences worth knowing:
+
+- **IDs are never reused.** A claim outlives the submission that took it, so a removed submission leaves a gap in the sequence rather than having its ID handed to something else later.
+- **Contention refuses rather than duplicates.** If a sustained burst exhausts the retry bound, the request returns 503 and saves nothing. The same is true if the ID cannot be determined at all: a failed read returns 503 instead of inventing an ID, because the set of IDs already in use is exactly what was unavailable.
+
+Claim items are invisible to the submissions API — `GET /app-factory/submissions` filters on `sk = "META"`. No extra IAM permission is required beyond the `dynamodb:PutItem` the backend already holds on the table; DynamoDB authorizes each arm of a transaction as its underlying item operation.
+
+---
+
 ## Builder architecture — `builder.py`
 
 `builder.py` is the Claude Agent SDK orchestrator that drives code generation. It defines a parent orchestrator (Opus, 80 turns) and six specialized subagents, each with its own prompt, tool allowlist, model, turn budget, and effort level:

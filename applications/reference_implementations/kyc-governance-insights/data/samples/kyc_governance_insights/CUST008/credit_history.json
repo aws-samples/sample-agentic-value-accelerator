@@ -1,0 +1,42 @@
+{
+  "customer_id": "CUST008",
+  "credit_score": 690,
+  "credit_rating": "BBB",
+  "existing_facilities": [
+    {
+      "type": "Trade Finance",
+      "limit": 12000000,
+      "utilized": 8000000,
+      "status": "FROZEN",
+      "bank": "Bank of Cyprus"
+    }
+  ],
+  "payment_history": {
+    "payments_on_time": 44,
+    "payments_total": 45,
+    "on_time_payments": 44,
+    "late_payments": 1,
+    "defaults": 0,
+    "average_days_to_pay": 26
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 70000000,
+    "total_liabilities": 30000000,
+    "current_assets": 25000000,
+    "current_liabilities": 15000000,
+    "revenue": 75000000,
+    "net_income": 5000000,
+    "debt_to_equity": 0.75,
+    "current_ratio": 1.67,
+    "net_margin": 0.0667
+  },
+  "agent_claims": {
+    "de_ratio": 0.75,
+    "current_ratio": 1.67,
+    "net_margin": 0.0667,
+    "payment_pct": 97.78
+  },
+  "credit_inquiries_last_12_months": 3
+}

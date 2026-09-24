@@ -1,21 +1,44 @@
 /**
- * useDataReadiness — Compute AI Data Readiness scores from live AWS data
+ * useDataReadiness — Compute an AI Data Readiness DERIVED SCORECARD from live AWS signals
  *
- * Pulls from multiple live sources to compute 7-dimension readiness:
+ * IMPORTANT: The dimension scores below are heuristic step-ladders derived from live
+ * AWS signals (guardrail counts, invocation totals, Config compliance, etc.). The
+ * underlying signals are live, but the resulting 0-100 scores are DERIVED estimates,
+ * not direct measurements — the UI must badge them as "Derived", never as "Live".
+ *
+ * Signal sources:
  * 1. Data Protection - Guardrails active count
  * 2. PII Coverage - Unique PII types protected
  * 3. Audit Trail - Invocation logs and CloudTrail activity
  * 4. Compliance - AWS Config rule compliance
  * 5. Security - Security findings (GuardDuty, Macie, Inspector)
  * 6. Access Governance - Service approvals
- * 7. Data Quality - Guardrail block/allow rates as proxy
+ * 7. Data Quality - AWS Glue Data Quality rule pass-rate (governDataCatalogApi.quality()).
+ *    When Glue DQ is integrated (live) the dimension is scored from the real pass-rate
+ *    and contributes to the radar / overall score. When it is not integrated (live=false)
+ *    it stays "not measured" — informational only, excluded from the scored score.
  *
  * No user deployment required - uses existing AWS data.
+ *
+ * This is the module's ONLY control-readiness ladder. Both the AI Data Readiness page
+ * and the Data Governance landing dashboard read it, so there is one readiness number
+ * on one 0-100 scale. `useDataGovernance` owns a separate ADOPTION MATURITY ladder
+ * (0-5 levels, self-reported + inventory) which measures a different thing and must
+ * never be rescaled into these units.
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { governDataCatalogApi } from '../../../api/client';
+import { PII_COVERAGE_TARGET, pooledScore } from './dataReadinessEngine';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+/**
+ * Re-exported for backward compatibility: the canonical single denominator and the
+ * pooled scoring math now live in ONE shared engine (./dataReadinessEngine). Still
+ * load-bearing — `useDataQuality` imports PII_COVERAGE_TARGET from here.
+ */
+export { PII_COVERAGE_TARGET };
 
 export interface ReadinessDimension {
   id: string;
@@ -29,7 +52,15 @@ export interface ReadinessDimension {
   sourceDetail: string;
   findings: string[];
   actions: string[];
+  /** Whether the underlying signal for this dimension was fetched live (drives the status dot). */
   live: boolean;
+  /**
+   * Whether this dimension contributes a real derived score to the radar / overall.
+   * `false` marks a dimension as "not measured" (e.g. Data Quality without Glue DQ),
+   * so it is shown as informational only and excluded from scored visualizations.
+   * Defaults to scored when omitted.
+   */
+  scored?: boolean;
 }
 
 export interface DataReadinessResult {
@@ -45,12 +76,13 @@ export interface DataReadinessResult {
 }
 
 interface RawData {
-  guardrails: { total: number; active: number; piiTypes: string[]; metrics: { blocked: number; allowed: number; total: number } };
+  guardrails: { total: number; active: number; piiTypes: string[]; metrics: { blocked: number; allowed: number; total: number }; live: boolean };
   invocationLogs: { totalCalls: number; live: boolean };
   cloudTrail: { totalCallers: number; live: boolean };
   configCompliance: { totalRules: number; compliantRules: number; live: boolean };
   security: { totalFindings: number; critical: number; high: number; live: boolean };
-  serviceApprovals: { total: number; completed: number };
+  serviceApprovals: { total: number; completed: number; live: boolean };
+  dataQuality: { live: boolean; passRate: number | null; totalRules: number; passing: number };
 }
 
 async function fetchJson(url: string) {
@@ -79,18 +111,20 @@ export function useDataReadiness(): DataReadinessResult {
           configRes,
           securityRes,
           approvalsRes,
+          qualityRes,
         ] = await Promise.allSettled([
           fetchJson(`${API_BASE}/api/v1/guardrails`),
           fetchJson(`${API_BASE}/api/v1/govern/invocation-safety/telemetry`),
           fetchJson(`${API_BASE}/api/v1/govern/trail/ai-callers`),
           fetchJson(`${API_BASE}/api/v1/govern/posture/config-compliance`),
           fetchJson(`${API_BASE}/api/v1/govern/security/posture`),
-          fetchJson(`${API_BASE}/api/v1/service-approvals`),
+          fetchJson(`${API_BASE}/api/v1/service-approval/runs`),
+          governDataCatalogApi.quality(),
         ]);
 
         // Parse guardrails
         const guardrails = (() => {
-          const defaults = { total: 0, active: 0, piiTypes: [] as string[], metrics: { blocked: 0, allowed: 0, total: 0 } };
+          const defaults = { total: 0, active: 0, piiTypes: [] as string[], metrics: { blocked: 0, allowed: 0, total: 0 }, live: false };
           if (guardrailsRes.status === 'fulfilled' && Array.isArray(guardrailsRes.value)) {
             const gList = guardrailsRes.value;
             const piiSet = new Set<string>();
@@ -102,6 +136,7 @@ export function useDataReadiness(): DataReadinessResult {
               total: gList.length,
               active: gList.filter((g: any) => g.status === 'active').length,
               piiTypes: Array.from(piiSet),
+              live: true,
             };
           }
           return defaults;
@@ -121,7 +156,7 @@ export function useDataReadiness(): DataReadinessResult {
         const configCompliance = configRes.status === 'fulfilled'
           ? {
               totalRules: configRes.value.total_rules || 0,
-              compliantRules: configRes.value.compliant_rules || 0,
+              compliantRules: configRes.value.compliant || 0,
               live: configRes.value.live ?? true,
             }
           : { totalRules: 0, compliantRules: 0, live: false };
@@ -141,8 +176,21 @@ export function useDataReadiness(): DataReadinessResult {
           ? {
               total: approvalsRes.value.length,
               completed: approvalsRes.value.filter((a: any) => a.status === 'completed').length,
+              live: true,
             }
-          : { total: 0, completed: 0 };
+          : { total: 0, completed: 0, live: false };
+
+        // Parse Glue Data Quality — `live` is true only when the catalog is live AND
+        // has quality rules (see govern_data_catalog route), so pass_rate is a real
+        // Glue DQ measurement when present.
+        const dataQuality = qualityRes.status === 'fulfilled'
+          ? {
+              live: !!qualityRes.value?.live,
+              passRate: typeof qualityRes.value?.pass_rate === 'number' ? qualityRes.value.pass_rate : null,
+              totalRules: qualityRes.value?.total_rules || 0,
+              passing: qualityRes.value?.passing || 0,
+            }
+          : { live: false, passRate: null, totalRules: 0, passing: 0 };
 
         if (!cancelled) {
           setRawData({
@@ -152,6 +200,7 @@ export function useDataReadiness(): DataReadinessResult {
             configCompliance,
             security,
             serviceApprovals,
+            dataQuality,
           });
         }
       } catch (err) {
@@ -181,7 +230,9 @@ export function useDataReadiness(): DataReadinessResult {
       };
     }
 
-    const { guardrails, invocationLogs, cloudTrail, configCompliance, security, serviceApprovals } = rawData;
+    const { guardrails, invocationLogs, cloudTrail, configCompliance, security, serviceApprovals, dataQuality } = rawData;
+    const qualityMeasured = dataQuality.live && dataQuality.passRate != null;
+    const qualityPct = qualityMeasured ? Math.round(dataQuality.passRate as number) : 0;
 
     // Build dimensions from live data
     const dimensions: ReadinessDimension[] = [
@@ -201,12 +252,12 @@ export function useDataReadiness(): DataReadinessResult {
         actions: guardrails.active >= 3
           ? ['Maintain current coverage', 'Review guardrail metrics regularly']
           : ['Create Bedrock Guardrails for each agent', 'Configure PII/PHI filters'],
-        live: true,
+        live: guardrails.live,
       },
       {
         id: 'pii',
         name: 'PII Coverage',
-        score: Math.min(100, guardrails.piiTypes.length * 5),
+        score: Math.min(100, Math.round((guardrails.piiTypes.length / PII_COVERAGE_TARGET) * 100)),
         maxScore: 100,
         target: 80,
         status: guardrails.piiTypes.length >= 15 ? 'met' : guardrails.piiTypes.length >= 8 ? 'at-risk' : 'not-met',
@@ -219,7 +270,7 @@ export function useDataReadiness(): DataReadinessResult {
         actions: guardrails.piiTypes.length >= 15
           ? ['Review for missing PII types', 'Add domain-specific patterns']
           : ['Add common PII types (SSN, email, phone)', 'Configure PHI types for healthcare data'],
-        live: true,
+        live: guardrails.live,
       },
       {
         id: 'audit',
@@ -266,14 +317,20 @@ export function useDataReadiness(): DataReadinessResult {
       {
         id: 'security',
         name: 'Security Posture',
-        score: security.totalFindings === 0 ? 100
+        // Gated on security.live: a non-live/empty feed defaults to {totalFindings:0}
+        // which would otherwise score a perfect 100 and inflate overallScore. When the
+        // feed is not live we treat it as "not measured" (score 0, scored:false) so it
+        // is excluded from the scored radar / overall — mirroring the Data Quality dimension.
+        score: !security.live ? 0
+          : security.totalFindings === 0 ? 100
           : security.critical > 0 ? 30
           : security.high > 5 ? 50
           : security.high > 0 ? 70
           : 85,
         maxScore: 100,
         target: 80,
-        status: security.critical === 0 && security.high <= 5 ? 'met'
+        status: !security.live ? 'not-met'
+          : security.critical === 0 && security.high <= 5 ? 'met'
           : security.critical === 0 ? 'at-risk'
           : 'not-met',
         description: 'Security findings from GuardDuty, Macie, and Inspector.',
@@ -286,6 +343,7 @@ export function useDataReadiness(): DataReadinessResult {
           ? ['Address critical findings immediately', 'Review high-severity findings']
           : ['Maintain security monitoring', 'Enable GuardDuty if not active'],
         live: security.live,
+        scored: security.live,
       },
       {
         id: 'access',
@@ -303,30 +361,53 @@ export function useDataReadiness(): DataReadinessResult {
         actions: serviceApprovals.completed > 3
           ? ['Review pending approvals', 'Audit completed approvals quarterly']
           : ['Implement service approval process', 'Define approval gates for AI access'],
-        live: true,
+        live: serviceApprovals.live,
       },
       {
         id: 'quality',
         name: 'Data Quality',
-        score: guardrails.active > 0 ? 75 : 30,
+        // Scored from the REAL AWS Glue Data Quality pass-rate when Glue DQ is integrated
+        // (dataQuality.live). Until then it stays "not measured" (score 0, scored:false) so
+        // a placeholder can't inflate readiness — presence of a guardrail is NOT a
+        // data-quality measurement.
+        score: qualityPct,
         maxScore: 100,
         target: 80,
-        status: guardrails.active > 0 ? 'at-risk' : 'not-met',
-        description: 'Data quality validation through guardrail enforcement.',
-        source: 'Guardrail Metrics',
-        sourceDetail: guardrails.active > 0 ? 'Proxy from guardrail activity' : 'No quality signals',
-        findings: guardrails.active > 0
-          ? ['Using guardrail enforcement as quality proxy', 'For full DQ, enable Glue Data Quality']
-          : ['No data quality monitoring', 'Enable Glue Data Quality for validation'],
-        actions: ['Enable AWS Glue Data Quality', 'Define quality rules for AI datasets'],
-        live: guardrails.active > 0,
+        status: qualityMeasured
+          ? (qualityPct >= 90 ? 'met' : qualityPct >= 70 ? 'at-risk' : 'not-met')
+          : 'not-met',
+        description: qualityMeasured
+          ? 'Dataset quality validation from AWS Glue Data Quality rule results.'
+          : 'Dataset quality validation. Not measured here — requires AWS Glue Data Quality.',
+        source: 'AWS Glue Data Quality',
+        sourceDetail: qualityMeasured
+          ? `${dataQuality.passing}/${dataQuality.totalRules} rules passing (${qualityPct}%)`
+          : 'Not measured (Glue Data Quality not integrated)',
+        findings: qualityMeasured
+          ? [
+              `${dataQuality.passing} of ${dataQuality.totalRules} Glue quality rules passing`,
+              `${qualityPct}% pass rate across evaluated datasets`,
+            ]
+          : [
+              'Data-quality is not measured from the current live signals',
+              'A guardrail existing is not a measure of dataset quality',
+              'Enable AWS Glue Data Quality for real dataset validation scores',
+            ],
+        actions: qualityMeasured
+          ? (qualityPct >= 90
+              ? ['Maintain quality rulesets', 'Add rules for new AI datasets']
+              : ['Investigate failing quality rules', 'Remediate datasets below threshold'])
+          : ['Enable AWS Glue Data Quality', 'Define quality rules for AI datasets'],
+        live: dataQuality.live,
+        scored: qualityMeasured,
       },
     ];
 
-    // Calculate overall score
-    const totalScore = dimensions.reduce((sum, d) => sum + d.score, 0);
-    const maxTotal = dimensions.reduce((sum, d) => sum + d.maxScore, 0);
-    const overallScore = Math.round((totalScore / maxTotal) * 100);
+    // Calculate overall score from SCORED dimensions only (exclude "not measured" ones
+    // like Data Quality so a heuristic/placeholder value can't inflate readiness).
+    // pooledScore applies the ONE pooled Sum(score)/Sum(maxScore) denominator.
+    const scoredDimensions = dimensions.filter(d => d.scored !== false);
+    const overallScore = pooledScore(scoredDimensions);
 
     const liveCount = dimensions.filter(d => d.live).length;
 

@@ -135,11 +135,34 @@ const APPROVAL_QUEUE: Item = {
   ],
 };
 
-// Order (5 tiles): Deployments → AgentCore Observability → Langfuse
-// Observability → Prompt Optimization → Approval Queue. Every operational
-// surface gets its own top-level tile — no rollup — so scanning the page
-// is a single row of decisions, not a decision tree.
-const ITEMS = [DEPLOYMENTS, AGENTCORE_OBS, LANGFUSE_OBS, PROMPT_OPTIMIZATION, APPROVAL_QUEUE];
+// Evaluation — LLM-as-judge scoring of deployed applications. Sits between
+// Prompt Optimization (improve) and Approval Queue (sign off): measure first,
+// then promote. Hard gates must pass for an agent to act autonomously.
+const EVALUATION: Item = {
+  id: 'evaluation',
+  path: '/operate/evaluation',
+  name: 'Evaluation',
+  tagline: 'Trust earned, not assumed.',
+  description:
+    'Score every deployed application against LLM-as-judge evaluators across accuracy, safety, compliance, quality, and performance. Hard gates must pass for an agent to act autonomously; soft gates inform the promotion decision.',
+  iconBg: 'from-indigo-500 to-violet-600',
+  iconPath:
+    'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z',
+  image: '/images/operate-evaluation-hero.svg',
+  tags: ['LLM-as-judge', 'Hard gates', 'Batch + continuous', 'Promotion'],
+  subItems: [
+    { name: 'Evaluator Scores', badge: 'Score', note: '10 evaluators, 5 categories' },
+    { name: 'Promotion Gate',   badge: 'Gate',  note: 'Hard gates → autonomy' },
+    { name: 'Run History',      badge: 'Trend', note: 'Score trend across runs' },
+    { name: 'Judge Transcripts',badge: 'Audit', note: 'Per-case reasoning' },
+  ],
+};
+
+// Order (6 tiles): Deployments → AgentCore Observability → Langfuse
+// Observability → Prompt Optimization → Evaluation → Approval Queue. Every
+// operational surface gets its own top-level tile — no rollup — so scanning
+// the page is a single row of decisions, not a decision tree.
+const ITEMS = [DEPLOYMENTS, AGENTCORE_OBS, LANGFUSE_OBS, PROMPT_OPTIMIZATION, EVALUATION, APPROVAL_QUEUE];
 
 export default function OperateLanding() {
   const navigate = useNavigate();
@@ -176,16 +199,17 @@ export default function OperateLanding() {
             Ship. Watch. Improve.
           </h1>
           <p className="text-slate-500 mt-4 max-w-3xl">
-            Five operational surfaces, one platform.{' '}
+            Six operational surfaces, one platform.{' '}
             <span className="font-semibold text-slate-700">Deployments</span> for launch and rollback,{' '}
             <span className="font-semibold text-slate-700">AgentCore Observability</span> for AWS-native X-Ray + CloudWatch traces,{' '}
             <span className="font-semibold text-slate-700">Langfuse Observability</span> for OSS traces + evals + cost,{' '}
-            <span className="font-semibold text-slate-700">Prompt Optimization</span> to close the improvement loop, and{' '}
+            <span className="font-semibold text-slate-700">Prompt Optimization</span> to close the improvement loop,{' '}
+            <span className="font-semibold text-slate-700">Evaluation</span> to score decision quality and gate autonomy, and{' '}
             <span className="font-semibold text-slate-700">Approval Queue</span> for human sign-off on sensitive actions.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 animate-fade-in stagger-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 animate-fade-in stagger-2">
           {ITEMS.map((item) => (
             <FeaturedCard key={item.id} item={item} onClick={() => navigate(item.path)} />
           ))}

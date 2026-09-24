@@ -17,7 +17,6 @@ import {
   guardDutyAIApi,
   type GuardDutyAIFinding,
   type GuardDutyAIFindingsResponse,
-  type GuardDutyAISeverity,
 } from '../../api/client';
 
 // ─────────────────────────── Types ───────────────────────────

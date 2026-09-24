@@ -12,6 +12,8 @@
  */
 
 import { useState } from 'react';
+import { Icon, type IconName } from '../icons';
+import { MockDataBadge } from '../DataSourceIndicator';
 
 interface PolicyRule {
   id: string;
@@ -38,12 +40,12 @@ interface PolicyExecution {
   remediation?: string;
 }
 
-const POLICY_ENGINES = [
-  { id: 'sentinel', name: 'HashiCorp Sentinel', icon: '🏛️', color: '#7B42BC', description: 'Terraform policy enforcement' },
-  { id: 'opa', name: 'Open Policy Agent', icon: '📜', color: '#566366', description: 'Rego-based policy decisions' },
-  { id: 'cedar', name: 'AWS Cedar', icon: '🌲', color: '#FF9900', description: 'Fine-grained authorization' },
-  { id: 'checkov', name: 'Checkov', icon: '✅', color: '#5C4EE5', description: 'IaC security scanning' },
-  { id: 'ava', name: 'AVA Native', icon: '🤖', color: '#4F46E5', description: 'Built-in governance rules' },
+const POLICY_ENGINES: { id: string; name: string; icon: IconName; color: string; description: string }[] = [
+  { id: 'sentinel', name: 'HashiCorp Sentinel', icon: 'building-office', color: '#7B42BC', description: 'Terraform policy enforcement' },
+  { id: 'opa', name: 'Open Policy Agent', icon: 'document-text', color: '#566366', description: 'Rego-based policy decisions' },
+  { id: 'cedar', name: 'AWS Cedar', icon: 'cube', color: '#FF9900', description: 'Fine-grained authorization' },
+  { id: 'checkov', name: 'Checkov', icon: 'check-circle', color: '#5C4EE5', description: 'IaC security scanning' },
+  { id: 'ava', name: 'AVA Native', icon: 'cpu-chip', color: '#4F46E5', description: 'Built-in governance rules' },
 ];
 
 const MOCK_POLICIES: PolicyRule[] = [
@@ -1067,17 +1069,15 @@ const SEVERITY_STYLES = {
 };
 
 const RESULT_STYLES = {
-  pass: { bg: '#dcfce7', text: '#166534', icon: '✓' },
-  fail: { bg: '#fee2e2', text: '#991b1b', icon: '✗' },
-  warn: { bg: '#fef3c7', text: '#92400e', icon: '⚠' },
-};
+  pass: { bg: '#dcfce7', text: '#166534', icon: 'check' },
+  fail: { bg: '#fee2e2', text: '#991b1b', icon: 'x-mark' },
+  warn: { bg: '#fef3c7', text: '#92400e', icon: 'exclamation-triangle' },
+} as const;
 
 export default function PolicyAsCode() {
   const [selectedEngine, setSelectedEngine] = useState<string | 'all'>('all');
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyRule | null>(null);
   const [activeTab, setActiveTab] = useState<'policies' | 'executions' | 'integration'>('policies');
-  const [showNewPolicyForm, setShowNewPolicyForm] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
   const filteredPolicies = selectedEngine === 'all'
     ? MOCK_POLICIES
@@ -1096,21 +1096,23 @@ export default function PolicyAsCode() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Policy as Code</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900">Policy as Code</h2>
+            {/* Stats and policy list below are summed from mock MOCK_POLICIES, not the
+                live policiesApi feed — disclose as Demo data. */}
+            <MockDataBadge integration="policiesApi (api/client.ts)" />
+          </div>
           <p className="text-sm text-slate-500">Governance policies enforced at deployment time via CI/CD integration</p>
         </div>
         <button
-          onClick={() => {
-            setShowNewPolicyForm(true);
-            setToast('Opening policy editor — select an engine to begin');
-            setTimeout(() => setToast(null), 2800);
-          }}
-          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+          type="button"
+          disabled
+          title="Planned — authoring new policies is not available in this build"
+          className="px-4 py-2 bg-slate-100 text-slate-400 text-sm font-medium rounded-lg cursor-not-allowed flex items-center gap-2"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <Icon name="plus" className="w-4 h-4" />
           New Policy
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-medium">Planned</span>
         </button>
       </div>
 
@@ -1157,7 +1159,7 @@ export default function PolicyAsCode() {
             }`}
             style={selectedEngine === engine.id ? { backgroundColor: engine.color } : {}}
           >
-            <span>{engine.icon}</span>
+            <Icon name={engine.icon} className="w-4 h-4" />
             {engine.name}
           </button>
         ))}
@@ -1201,7 +1203,7 @@ export default function PolicyAsCode() {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span>{engine?.icon}</span>
+                      {engine && <Icon name={engine.icon} className="w-4 h-4 text-slate-500" />}
                       <span className="font-medium text-slate-900">{policy.name}</span>
                     </div>
                     <span
@@ -1255,24 +1257,24 @@ export default function PolicyAsCode() {
                   {selectedPolicy.code}
                 </pre>
               </div>
-              <div className="p-4 border-t border-slate-200/60 flex justify-end gap-2">
+              <div className="p-4 border-t border-slate-200/60 flex justify-end items-center gap-2">
                 <button
-                  onClick={() => {
-                    setToast(`Editing policy: ${selectedPolicy.name}`);
-                    setTimeout(() => setToast(null), 2800);
-                  }}
-                  className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                  type="button"
+                  disabled
+                  title="Demo — policy editing is not available in this build"
+                  className="px-3 py-1.5 text-sm font-medium text-slate-400 cursor-not-allowed flex items-center gap-1.5"
                 >
                   Edit Policy
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-medium">Demo</span>
                 </button>
                 <button
-                  onClick={() => {
-                    setToast(`Running test for: ${selectedPolicy.name} — results will appear shortly`);
-                    setTimeout(() => setToast(null), 2800);
-                  }}
-                  className="px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  type="button"
+                  disabled
+                  title="Demo — policy testing is not wired to an engine in this build"
+                  className="px-3 py-1.5 text-sm font-medium bg-slate-100 text-slate-400 rounded-lg cursor-not-allowed flex items-center gap-1.5"
                 >
                   Test Policy
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-medium">Demo</span>
                 </button>
               </div>
             </div>
@@ -1303,7 +1305,7 @@ export default function PolicyAsCode() {
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
                           style={{ backgroundColor: result.bg, color: result.text }}
                         >
-                          {result.icon} {exec.result.toUpperCase()}
+                          <Icon name={result.icon} className="w-3.5 h-3.5" strokeWidth={2.5} /> {exec.result.toUpperCase()}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -1343,17 +1345,17 @@ export default function PolicyAsCode() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-2xl mb-2">🔄</div>
+                <Icon name="arrow-path" className="w-6 h-6 text-slate-700 mb-2" />
                 <div className="font-medium text-slate-900 mb-1">GitHub Actions</div>
                 <div className="text-xs text-slate-500">Pre-deployment checks via ava-policy-action</div>
               </div>
               <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-2xl mb-2">🚀</div>
+                <Icon name="rocket-launch" className="w-6 h-6 text-slate-700 mb-2" />
                 <div className="font-medium text-slate-900 mb-1">GitLab CI</div>
                 <div className="text-xs text-slate-500">Policy stage in .gitlab-ci.yml</div>
               </div>
               <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-2xl mb-2">⚡</div>
+                <Icon name="bolt" className="w-6 h-6 text-slate-700 mb-2" />
                 <div className="font-medium text-slate-900 mb-1">Terraform Cloud</div>
                 <div className="text-xs text-slate-500">Sentinel policy sets integration</div>
               </div>
@@ -1413,13 +1415,6 @@ Response:
 }`}</pre>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Toast notification */}
-      {toast && (
-        <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
-          {toast}
         </div>
       )}
     </div>

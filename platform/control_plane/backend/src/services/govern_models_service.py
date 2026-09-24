@@ -12,6 +12,12 @@ CloudWatch note: the model dimension is `ModelId`, and the SAME logical model
 appears under both a bare id (`anthropic.claude-...`) and a cross-region id
 (`us.anthropic.claude-...`). We normalize by stripping a leading region prefix
 so both roll up into one model row.
+
+Region scope: one instance reads exactly one region. Every record it emits is
+stamped with that region (`available_regions` / `active_regions`) so the route can
+fan out over the governed set and merge without having to guess where a row came
+from. Callers wanting the whole governed set go through api/routes/govern_models.py,
+which owns the fan-out and the merge.
 """
 
 from __future__ import annotations
@@ -25,12 +31,17 @@ from typing import Optional
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from core.security_utils import mask_account_id
 from core.ttl_cache import get_or_load
 from models.govern_models import (
     FoundationModel,
     FoundationModelCatalog,
+    InferenceProfile,
+    InferenceProfilesResponse,
     ModelMetricsResponse,
     ModelRuntimeMetrics,
+    PromptRouter,
+    PromptRoutersResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,6 +50,7 @@ logger = logging.getLogger(__name__)
 # move slowly over a multi-day window — short TTLs keep repeat page loads instant.
 _CATALOG_TTL = 900   # 15 min
 _METRICS_TTL = 120   # 2 min
+_ROUTING_TTL = 900   # 15 min — profiles/routers change rarely
 
 # CloudWatch AWS/Bedrock metric names we roll up per model.
 _METRICS = {
@@ -52,12 +64,44 @@ _METRICS = {
     "CacheWriteInputTokenCount": "Sum",
 }
 
-# Leading cross-region inference prefix, e.g. "us.anthropic..." -> "anthropic..."
-_REGION_PREFIX = re.compile(r"^(us|eu|apac|us-gov)\.")
+# Leading cross-region inference prefix, e.g. "us.anthropic..." or
+# "global.anthropic..." -> "anthropic...".
+_REGION_PREFIX = re.compile(r"^(us|eu|apac|us-gov|global)\.")
 
 
 def _canonical_model_id(model_id: str) -> str:
+    """Reduce a raw CloudWatch ModelId to one region-agnostic canonical id.
+
+    Strips a full model/inference-profile ARN down to its bare id
+    (`arn:aws:bedrock:...:foundation-model/anthropic.claude-...` ->
+    `anthropic.claude-...`), then removes a leading cross-region prefix
+    (us./eu./apac./us-gov./global.) so every regional and ARN form of one
+    logical model rolls up into a single row instead of double-counting.
+    """
+    if model_id and "/" in model_id:
+        model_id = model_id.split("/", 1)[1]
     return _REGION_PREFIX.sub("", model_id)
+
+
+def _region_from_model_arn(model_arn: str) -> Optional[str]:
+    """Parse the region out of a model ARN: arn:aws:bedrock:REGION:acct:... .
+
+    Foundation-model ARNs carry no account (`arn:aws:bedrock:us-east-1::…`),
+    inference-profile ARNs do — both keep the region at colon-index 3.
+    """
+    parts = (model_arn or "").split(":")
+    return parts[3] if len(parts) > 3 and parts[3] else None
+
+
+def _shorten_model_ref(model_arn: str) -> str:
+    """Reduce a model/profile ARN to its bare id so no account id is exposed.
+
+    `arn:aws:bedrock:us-east-1:123:inference-profile/us.amazon.nova-pro-v1:0`
+    → `us.amazon.nova-pro-v1:0`; a bare id is returned unchanged.
+    """
+    if model_arn and "/" in model_arn:
+        return model_arn.split("/", 1)[1]
+    return model_arn
 
 
 def _with_cache_note(result, cached_at: float):
@@ -72,8 +116,11 @@ def _with_cache_note(result, cached_at: float):
     if age < 2:
         return result
     stamp = f"Cached {int(age)}s ago"
-    result.note = f"{result.note} · {stamp}" if result.note else stamp
-    return result
+    # ttl_cache hands back the object it still holds, so mutating result.note
+    # would append a stamp per hit and grow the cached note without bound.
+    # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+    note = f"{result.note} · {stamp}" if result.note else stamp
+    return result.model_copy(update={"note": note})
 
 
 class GovernModelsService:
@@ -123,6 +170,7 @@ class GovernModelsService:
                     streaming=bool(s.get("responseStreamingSupported", False)),
                     inference_types=s.get("inferenceTypesSupported", []) or [],
                     lifecycle=(s.get("modelLifecycle", {}) or {}).get("status", "ACTIVE"),
+                    available_regions=[self.region],
                 ))
             models.sort(key=lambda m: (m.provider.lower(), m.name.lower()))
             providers = sorted({m.provider for m in models if m.provider})
@@ -199,23 +247,53 @@ class GovernModelsService:
 
             # 3) get_metric_data caps at 500 queries per call — chunk defensively.
             results: dict[str, float] = {}
+            # Query ids whose metric returned at least one datapoint. CloudWatch returns
+            # an EMPTY Values list both for "this metric summed to zero" and for "this
+            # metric was never published for this model" — and for the cache metrics
+            # those mean opposite things. A model that has never had prompt caching
+            # requested publishes no CacheReadInputTokenCount at all; reporting that as
+            # a measured 0 asserts a 0% cache hit rate was observed, when nothing was.
+            # Tracked here so the cache fields can be None rather than a fabricated 0.
+            with_data: set[str] = set()
             for k in range(0, len(queries), 450):
                 chunk = queries[k:k + 450]
                 resp = cw.get_metric_data(MetricDataQueries=chunk, StartTime=start, EndTime=end)
                 for r in resp.get("MetricDataResults", []):
                     vals = r.get("Values", [])
                     results[r["Id"]] = sum(vals) if vals else 0.0
+                    if vals:
+                        with_data.add(r["Id"])
 
-            # 4) Roll up per canonical model id.
-            agg: dict[str, dict[str, float]] = {}
+            # 4) Roll up per canonical model id. Organize the raw per-(id, metric)
+            #    results first so latency can be invocation-weighted correctly.
+            per_rid: dict[str, dict[str, float]] = {}
+            # Metric names that returned data for at least one raw id rolling up to a
+            # given canonical model. A canonical model can merge several raw ids (e.g.
+            # regional and cross-region copies of one model), and it counts as measured
+            # if ANY of them published the metric.
+            measured: dict[str, set[str]] = {}
             for qid, (rid, metric) in qid_map.items():
+                per_rid.setdefault(rid, {})[metric] = results.get(qid, 0.0)
+                if qid in with_data:
+                    measured.setdefault(_canonical_model_id(rid), set()).add(metric)
+
+            agg: dict[str, dict[str, float]] = {}
+            for rid, rid_metrics in per_rid.items():
                 canon = _canonical_model_id(rid)
                 bucket = agg.setdefault(canon, {})
-                bucket[metric] = bucket.get(metric, 0.0) + results.get(qid, 0.0)
-                # latency is an average — track weighted-ish by keeping max/mean later
-                if metric == "InvocationLatency":
-                    bucket.setdefault("_lat_samples", 0.0)
-                    bucket["_lat_samples"] += 1
+                rid_inv = rid_metrics.get("Invocations", 0.0)
+                for metric, val in rid_metrics.items():
+                    if metric == "InvocationLatency":
+                        continue
+                    bucket[metric] = bucket.get(metric, 0.0) + val
+                # InvocationLatency is a per-raw-id Average, so pool it as an
+                # invocation-weighted mean — and only over raw ids that actually
+                # served traffic and returned a latency, so a zero-traffic id's
+                # 0.0 average can't dilute the merged model's latency.
+                lat_avg = rid_metrics.get("InvocationLatency", 0.0)
+                if rid_inv > 0 and lat_avg > 0:
+                    bucket["_lat_weighted"] = bucket.get("_lat_weighted", 0.0) + lat_avg * rid_inv
+                    bucket["_lat_inv"] = bucket.get("_lat_inv", 0.0) + rid_inv
 
             by_model: list[ModelRuntimeMetrics] = []
             total_inv = 0
@@ -225,9 +303,9 @@ class GovernModelsService:
                 inv = int(b.get("Invocations", 0))
                 cerr = int(b.get("InvocationClientErrors", 0))
                 serr = int(b.get("InvocationServerErrors", 0))
-                # latency: our per-raw-id chunk summed the averages; divide by #raw ids merged
-                samples = b.get("_lat_samples", 1) or 1
-                lat = round(b.get("InvocationLatency", 0.0) / samples, 1)
+                # latency: invocation-weighted mean over the raw ids that served traffic
+                lat_inv = b.get("_lat_inv", 0.0)
+                lat = round(b.get("_lat_weighted", 0.0) / lat_inv, 1) if lat_inv > 0 else 0.0
                 errs = cerr + serr
                 by_model.append(ModelRuntimeMetrics(
                     model_id=canon,
@@ -237,9 +315,25 @@ class GovernModelsService:
                     server_errors=serr,
                     input_tokens=int(b.get("InputTokenCount", 0)),
                     output_tokens=int(b.get("OutputTokenCount", 0)),
-                    cache_read_tokens=int(b.get("CacheReadInputTokenCount", 0)),
-                    cache_write_tokens=int(b.get("CacheWriteInputTokenCount", 0)),
+                    # None when CloudWatch published no datapoint for the metric, i.e.
+                    # prompt caching was never exercised on this model in this window.
+                    # Distinct from 0, which would claim a cache hit rate of 0% was
+                    # measured. The UI renders None as "not measured".
+                    cache_read_tokens=(
+                        int(b.get("CacheReadInputTokenCount", 0))
+                        if "CacheReadInputTokenCount" in measured.get(canon, ())
+                        else None
+                    ),
+                    cache_write_tokens=(
+                        int(b.get("CacheWriteInputTokenCount", 0))
+                        if "CacheWriteInputTokenCount" in measured.get(canon, ())
+                        else None
+                    ),
                     error_rate_pct=round((errs / inv * 100), 2) if inv > 0 else 0.0,
+                    # Only when traffic was actually recorded: a ModelId dimension can
+                    # exist in this region's CloudWatch from an older window and report
+                    # zero over this one, which is not "active here".
+                    active_regions=[self.region] if inv > 0 else [],
                 ))
                 total_inv += inv
                 total_err += errs
@@ -262,4 +356,124 @@ class GovernModelsService:
             return ModelMetricsResponse(
                 by_model=[], window_days=days, live=False, source="unavailable-fallback",
                 note="CloudWatch unreachable or cloudwatch:GetMetricData not granted.",
+            )
+
+    def get_inference_profiles(self) -> InferenceProfilesResponse:
+        """Cached wrapper around the live inference-profile fetch (15 min TTL)."""
+        key = f"models:inference-profiles:{self.region}"
+        result, cached_at = get_or_load(
+            key, _ROUTING_TTL, self._fetch_inference_profiles,
+            should_cache=lambda r: r.live,
+        )
+        return _with_cache_note(result, cached_at)
+
+    def _fetch_inference_profiles(self) -> InferenceProfilesResponse:
+        """Real Bedrock inference profiles (bedrock:ListInferenceProfiles).
+
+        Cross-region system-defined + application-defined profiles. The routed
+        regions are parsed from each target model's ARN.
+        """
+        try:
+            bedrock = self._bedrock_client()
+            summaries: list[dict] = []
+            next_token: Optional[str] = None
+            while True:
+                kwargs: dict = {"maxResults": 100}
+                if next_token:
+                    kwargs["nextToken"] = next_token
+                resp = bedrock.list_inference_profiles(**kwargs)
+                summaries.extend(resp.get("inferenceProfileSummaries", []) or [])
+                next_token = resp.get("nextToken")
+                if not next_token:
+                    break
+
+            profiles: list[InferenceProfile] = []
+            for s in summaries:
+                models = s.get("models", []) or []
+                regions: list[str] = []
+                for m in models:
+                    r = _region_from_model_arn(m.get("modelArn", "") or "")
+                    if r and r not in regions:
+                        regions.append(r)
+                profiles.append(InferenceProfile(
+                    id=s.get("inferenceProfileId", ""),
+                    name=s.get("inferenceProfileName", s.get("inferenceProfileId", "")),
+                    arn=mask_account_id(s.get("inferenceProfileArn")),
+                    description=s.get("description"),
+                    type=s.get("type", "") or "",
+                    status=s.get("status", "") or "",
+                    model_count=len(models),
+                    regions=sorted(regions),
+                    available_regions=[self.region],
+                ))
+            profiles.sort(key=lambda p: (p.type, p.name.lower()))
+            system_defined = sum(1 for p in profiles if p.type == "SYSTEM_DEFINED")
+            application_defined = sum(1 for p in profiles if p.type == "APPLICATION_DEFINED")
+            return InferenceProfilesResponse(
+                profiles=profiles, total=len(profiles),
+                system_defined=system_defined, application_defined=application_defined,
+                live=True, source="bedrock-list-inference-profiles",
+            )
+        except (ClientError, BotoCoreError, KeyError, ValueError) as e:
+            logger.warning("ListInferenceProfiles unavailable, returning fallback: %s", e)
+            return InferenceProfilesResponse(
+                profiles=[], total=0, system_defined=0, application_defined=0,
+                live=False, source="unavailable-fallback",
+                note="Bedrock unreachable or bedrock:ListInferenceProfiles not granted.",
+            )
+
+    def get_prompt_routers(self) -> PromptRoutersResponse:
+        """Cached wrapper around the live prompt-router fetch (15 min TTL)."""
+        key = f"models:prompt-routers:{self.region}"
+        result, cached_at = get_or_load(
+            key, _ROUTING_TTL, self._fetch_prompt_routers,
+            should_cache=lambda r: r.live,
+        )
+        return _with_cache_note(result, cached_at)
+
+    def _fetch_prompt_routers(self) -> PromptRoutersResponse:
+        """Real Bedrock intelligent prompt routers (bedrock:ListPromptRouters).
+
+        The fallback model ARN is shortened to a bare model id so no account id
+        is surfaced to the UI.
+        """
+        try:
+            bedrock = self._bedrock_client()
+            summaries: list[dict] = []
+            next_token: Optional[str] = None
+            while True:
+                kwargs: dict = {"maxResults": 100}
+                if next_token:
+                    kwargs["nextToken"] = next_token
+                resp = bedrock.list_prompt_routers(**kwargs)
+                summaries.extend(resp.get("promptRouterSummaries", []) or [])
+                next_token = resp.get("nextToken")
+                if not next_token:
+                    break
+
+            routers: list[PromptRouter] = []
+            for s in summaries:
+                models = s.get("models", []) or []
+                fallback_arn = (s.get("fallbackModel") or {}).get("modelArn")
+                routers.append(PromptRouter(
+                    name=s.get("promptRouterName", "") or "",
+                    arn=mask_account_id(s.get("promptRouterArn")),
+                    description=s.get("description"),
+                    status=s.get("status", "") or "",
+                    type=s.get("type", "") or "",
+                    model_count=len(models),
+                    fallback_model=_shorten_model_ref(fallback_arn) if fallback_arn else None,
+                    available_regions=[self.region],
+                ))
+            routers.sort(key=lambda r: r.name.lower())
+            return PromptRoutersResponse(
+                routers=routers, total=len(routers),
+                live=True, source="bedrock-list-prompt-routers",
+            )
+        except (ClientError, BotoCoreError, KeyError, ValueError) as e:
+            logger.warning("ListPromptRouters unavailable, returning fallback: %s", e)
+            return PromptRoutersResponse(
+                routers=[], total=0,
+                live=False, source="unavailable-fallback",
+                note="Bedrock unreachable or bedrock:ListPromptRouters not granted.",
             )

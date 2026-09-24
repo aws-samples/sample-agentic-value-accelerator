@@ -18,12 +18,45 @@ import LiveHeader from './LiveHeader';
 const usd0 = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const compact = (n: number) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : `${n}`;
 
-// Strip provider prefixes + version suffixes so a CloudWatch/CE model id lines up
-// with a catalog modelName, e.g. 'anthropic.claude-opus-4-8' -> 'claude opus 4 8'.
+// Model lifecycle upgrade recommendations for LEGACY models
+const UPGRADE_RECOMMENDATIONS: Record<string, string> = {
+  'claude-3-opus': 'Claude Opus 4',
+  'claude-3-sonnet': 'Claude Sonnet 4',
+  'claude-3-haiku': 'Claude 3.5 Haiku',
+  'claude-3.5-sonnet': 'Claude Sonnet 4',
+  'titan-text-lite': 'Nova Lite',
+  'titan-text-express': 'Nova Lite',
+  'titan-text-premier': 'Nova Pro',
+  'titan-embed-text-v1': 'Titan Text Embeddings V2',
+  'titan-image-generator-v1': 'Titan Image Generator V2',
+  'llama3-1-405b': 'Llama 3.2 90B',
+  'llama3-1-70b': 'Llama 3.2 90B',
+  'llama3-1-8b': 'Llama 3.2 11B',
+  'command-r': 'Command R+',
+  'stable-diffusion-xl': 'Stable Diffusion 3',
+};
+
+// Find upgrade recommendation for a model by checking if model name/id contains a known legacy key
+const getUpgradeRecommendation = (modelId: string, modelName: string): string | null => {
+  const normalizedId = modelId.toLowerCase();
+  const normalizedName = modelName.toLowerCase();
+  for (const [legacyKey, upgrade] of Object.entries(UPGRADE_RECOMMENDATIONS)) {
+    if (normalizedId.includes(legacyKey) || normalizedName.includes(legacyKey)) {
+      return upgrade;
+    }
+  }
+  return null;
+};
+
+// Strip ARN form + cross-region/provider prefixes + version suffixes so a
+// CloudWatch/CE model id lines up with a catalog modelName, e.g.
+// 'arn:aws:bedrock:us-east-1::foundation-model/global.anthropic.claude-opus-4-8'
+// and 'us.anthropic.claude-opus-4-8' both -> 'claude opus 4 8'.
 const normalizeKey = (s: string) =>
   s.toLowerCase()
-    .replace(/^(us|eu|apac|us-gov)\./, '')
-    .replace(/^[a-z]+\./, '')
+    .replace(/^arn:[^/]*\//, '')                    // ARN -> bare id (foundation-model/…, inference-profile/…)
+    .replace(/^(us|eu|apac|us-gov|global)\./, '')   // cross-region inference prefix (incl. global.)
+    .replace(/^[a-z]+\./, '')                        // provider prefix (anthropic., amazon., …)
     .replace(/-v\d+(:\d+)?$/, '')
     .replace(/[.:_-]+/g, ' ')
     .replace(/\d{6,}/g, '')
@@ -136,10 +169,19 @@ export default function LiveModelInventory() {
     return (metrics?.by_model ?? []).map(m => {
       const key = normalizeKey(m.model_id);
       const cat = catById.get(key) ?? catByKey.get(key);
-      const monthlyCost = costByKey.get(key);
+      // Cost rows carry the CANONICAL Bedrock catalog display name (govern_cost
+      // normalizes every CE USAGE_TYPE format to '<Family> <Tier> <Version>'), so
+      // `normalizeKey` alone bridges them to the model id — 'Claude Sonnet 4.5'
+      // and 'anthropic.claude-sonnet-4-5-20250929-v1:0' both give
+      // 'claude sonnet 4 5'. No extra CE-name normalizer is needed here. The
+      // catalog-name fallback still covers SKUs whose id drops the family word
+      // (e.g. cost 'DeepSeek-R1' vs id 'deepseek.r1-v1:0').
+      const monthlyCost = costByKey.get(key) ?? (cat ? costByKey.get(normalizeKey(cat.name)) : undefined);
+      const modelName = cat?.name ?? friendlyModelName(m.model_id);
+      const lifecycle = cat?.lifecycle ?? 'ACTIVE';
       return {
         id: m.model_id,
-        name: cat?.name ?? friendlyModelName(m.model_id),
+        name: modelName,
         provider: cat?.provider ?? extractProvider(m.model_id),
         invocations: m.invocations,
         latencyMs: m.avg_latency_ms,
@@ -147,9 +189,14 @@ export default function LiveModelInventory() {
         inTokens: m.input_tokens,
         outTokens: m.output_tokens,
         cost: monthlyCost,
+        lifecycle,
+        upgradeRecommendation: lifecycle === 'LEGACY' ? getUpgradeRecommendation(m.model_id, modelName) : null,
       };
     });
   }, [catalog, metrics, cost]);
+
+  // Count legacy models that are actually in use (have runtime metrics)
+  const legacyModelsInUse = useMemo(() => rows.filter(r => r.lifecycle === 'LEGACY'), [rows]);
 
   const anyLive = catalogLive || metricsLive || !!cost?.live;
 
@@ -161,6 +208,25 @@ export default function LiveModelInventory() {
         caption="Bedrock catalog + CloudWatch runtime + Cost Explorer"
         autoRefresh
       />
+
+      {/* Legacy models warning banner */}
+      {legacyModelsInUse.length > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3">
+          <div className="flex-shrink-0 mt-0.5">
+            <svg className="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-medium text-amber-800">
+              {legacyModelsInUse.length} legacy model{legacyModelsInUse.length > 1 ? 's' : ''} in active use
+            </div>
+            <div className="text-xs text-amber-700 mt-0.5">
+              Legacy models may be deprecated soon. Review the models below and plan migrations to recommended alternatives to avoid service disruption.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -200,11 +266,13 @@ export default function LiveModelInventory() {
               <thead>
                 <tr className="text-slate-400 text-[10px] uppercase tracking-wide text-left">
                   <th scope="col" className="font-medium pb-2">Model</th>
+                  <th scope="col" className="font-medium pb-2">Status</th>
                   <th scope="col" className="font-medium pb-2 text-right">Invocations</th>
                   <th scope="col" className="font-medium pb-2 text-right">Avg latency</th>
                   <th scope="col" className="font-medium pb-2 text-right">Error rate</th>
                   <th scope="col" className="font-medium pb-2 text-right">Tokens (in/out)</th>
                   <th scope="col" className="font-medium pb-2 text-right">Cost (3mo)</th>
+                  {legacyModelsInUse.length > 0 && <th scope="col" className="font-medium pb-2">Recommended Upgrade</th>}
                 </tr>
               </thead>
               <tbody>
@@ -214,11 +282,37 @@ export default function LiveModelInventory() {
                       {r.name}
                       {r.provider !== '—' && <span className="text-[10px] text-slate-400 ml-1.5">{r.provider}</span>}
                     </td>
+                    <td className="py-2 pr-2">
+                      {r.lifecycle === 'LEGACY' ? (
+                        <span className="group relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                          </svg>
+                          Legacy
+                          <span className="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] font-normal text-white bg-slate-800 rounded shadow-lg whitespace-nowrap z-10">
+                            This model is deprecated and may be removed soon. Plan migration to avoid disruption.
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          Active
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 text-right tabular-nums font-semibold text-slate-900">{r.invocations.toLocaleString()}</td>
                     <td className="py-2 text-right tabular-nums text-slate-500">{(r.latencyMs / 1000).toFixed(1)}s</td>
                     <td className={`py-2 text-right tabular-nums ${r.errorPct > 2 ? 'text-rose-600' : 'text-slate-500'}`}>{r.errorPct}%</td>
                     <td className="py-2 text-right tabular-nums text-slate-500">{compact(r.inTokens)}/{compact(r.outTokens)}</td>
                     <td className="py-2 text-right tabular-nums text-slate-700">{r.cost != null ? usd0(r.cost) : '—'}</td>
+                    {legacyModelsInUse.length > 0 && (
+                      <td className="py-2 pl-2 text-[11px]">
+                        {r.upgradeRecommendation ? (
+                          <span className="text-indigo-600 font-medium">{r.upgradeRecommendation}</span>
+                        ) : r.lifecycle === 'LEGACY' ? (
+                          <span className="text-slate-400 italic">Check provider docs</span>
+                        ) : null}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

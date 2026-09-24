@@ -21,7 +21,7 @@ export default function TrustStackPage() {
           <div>
             <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Trust Stack</h1>
             <p className="text-slate-500 mt-1 max-w-2xl">
-              Classify every AI system on two AWS scoping matrices — GenAI sourcing scope (1–5, buy → build) and agentic agency (L1–L4) — then trace the build-side controls, AWS services, and Three Lines of Defense at each layer.
+              Classify every AI system by sourcing scope and autonomy, then trace the controls, AWS services, and lines of defense that govern each layer.
             </p>
           </div>
           <Link

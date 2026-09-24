@@ -19,7 +19,6 @@ import { Link } from 'react-router-dom';
 import { Icon } from './icons';
 import {
   COMPLIANCE_CENTER_FRAMEWORKS,
-  REFERENCE_NOW,
   type ControlStatus,
   type ComplianceFramework,
   type ControlType,
@@ -27,7 +26,7 @@ import {
 } from './mockData';
 import UnifiedGuide, { COMPLIANCE_GUIDE } from './UnifiedGuide';
 import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
-import { governPostureApi, maturityApi, type AwsConfigCompliance, type ControlStatus as ApiControlStatus, type MaturityAssessment } from '../../api/client';
+import { governScpApi, governControlsApi, maturityApi, governAuditApi, type AwsConfigRulesResponse, type AwsScpResponse, type ControlStatus as ApiControlStatus, type MaturityAssessment, type GovernAuditEvent } from '../../api/client';
 import { useControlEvaluation } from './useControlEvaluation';
 // GuardrailsCoverage and FailingConfigRules consolidated into ConfigGuardrailsSideBySide
 import { usePersistedState } from './usePersistedState';
@@ -52,6 +51,7 @@ import FriaWizard from './compliance/FriaWizard';
 import ComplianceGapGuidance from './compliance/ComplianceGapGuidance';
 import SecurityHubFindingsPanel from './compliance/SecurityHubFindingsPanel';
 import AISecurityControlsPanel from './compliance/AISecurityControlsPanel';
+import { DataSourceInfo, getPageDataSources } from './DataSourceInfo';
 
 // ─────────────────────────── Helpers ───────────────────────────
 
@@ -83,30 +83,30 @@ const CONTROL_TYPE_CONFIG: Record<ControlType, { label: string; color: string; b
   },
 };
 
-const CRITICALITY_CONFIG: Record<ControlCriticality, { label: string; color: string; bgColor: string; icon: string }> = {
+const CRITICALITY_CONFIG: Record<ControlCriticality, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
   'critical': {
     label: 'Critical',
     color: '#dc2626',
     bgColor: 'bg-red-100 border-red-300 text-red-800',
-    icon: '🔴',
+    icon: <Icon name="exclamation-circle" className="w-3 h-3 inline-block align-middle" />,
   },
   'high': {
     label: 'High',
     color: '#ea580c',
     bgColor: 'bg-orange-100 border-orange-300 text-orange-800',
-    icon: '🟠',
+    icon: <Icon name="exclamation-triangle" className="w-3 h-3 inline-block align-middle" />,
   },
   'medium': {
     label: 'Medium',
     color: '#ca8a04',
     bgColor: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-    icon: '🟡',
+    icon: <Icon name="circle-half" className="w-3 h-3 inline-block align-middle" />,
   },
   'low': {
     label: 'Low',
     color: '#16a34a',
     bgColor: 'bg-green-100 border-green-300 text-green-800',
-    icon: '🟢',
+    icon: <Icon name="check-circle" className="w-3 h-3 inline-block align-middle" />,
   },
 };
 
@@ -122,7 +122,42 @@ interface FrameworkControlMapping {
   template?: boolean;
   platform?: string;
   satisfies: {
+    /** Must be a `shortName` in COMPLIANCE_CENTER_FRAMEWORKS to resolve a checklist. */
     framework: string;
+    /**
+     * Control references. Each SHOULD name a control in that framework's checklist, and every
+     * consumer resolves it through `splitControlRefs` / CONTROL_REF_INDEX (below) rather than
+     * trusting the string: a reference resolves if it equals a `ComplianceControl.id`, or a
+     * `ComplianceControl.section` that names exactly one control in that framework.
+     *
+     * MEASURED 2026-09-14: 36 of the 155 references here resolve to nothing - EU AI Act 18/18
+     * (uses an EU-TRANS-1 scheme where the checklist ids are article numbers, 'Art.13'),
+     * CRI FS AI RMF 7/15 ('GV-1' vs 'CRI-GV-1.1.1'), OWASP Agentic 6/6 (no checklist exists
+     * for it at all), OSFI E-23 3/7 ('E23-DATA-1' where the families are GOV/DEV/VAL/IMP/MON/
+     * INV), OWASP LLM 1/15 ('LLM06-3' where LLM06 carries only -1 and -2), NIST AI RMF 1/14
+     * ('MEASURE 3.2', a subcategory this checklist stops short of). The other 119 resolve:
+     * 106 by id, and 13 NIST references by section - they carry published AI RMF subcategory
+     * identifiers ('GOVERN 1.1'), which are verbatim the `section` of exactly one control each.
+     *
+     * The 36 are NOT all the same defect. Where a framework is internally consistent (EU,
+     * OWASP Agentic) the references are a deliberate second namespace - published framework
+     * identifiers rather than this app's ids - and re-pointing them means re-deriving each
+     * mapping by meaning, which no id transform can do. Where a framework is internally MIXED
+     * (CRI, OSFI, OWASP LLM, and the one NIST outlier - 12 references) the odd ones out are
+     * simply wrong, since their siblings in the same list resolve.
+     *
+     * Not repaired: choosing the EU namespace and re-deriving those mappings is a design
+     * decision, and guessing them would invent cross-framework claims that no source supports.
+     * Two instances WERE repaired, in the 'guardrails' task below: 'AIR-P-001' and 'AIR-P-002'
+     * belonged to neither namespace - not published FINOS ids (the published families are
+     * AIR-OP/SEC/RC/PREV/DET) and not checklist ids - so they were unambiguous, and FINOS AIR
+     * now resolves 14 of 14.
+     *
+     * Until then the 36 are reported, not hidden: they are excluded from every mapped-control
+     * count in the program builder, and the counts that exclude them say so - per framework in
+     * the comparison table's "Mapped Refs" column and the coverage cards, and per reference in
+     * a task's expanded framework list.
+     */
     controls: string[];
     section?: string;
   }[];
@@ -417,7 +452,12 @@ const UNIFIED_CONTROL_MAPPINGS: FrameworkControlMapping[] = [
       { framework: 'OWASP LLM', controls: ['LLM01-1', 'LLM02-1', 'LLM06-1', 'LLM06-3'], section: 'Multiple' },
       { framework: 'EU AI Act', controls: ['EU-ROB-1'], section: 'Art. 15' },
       { framework: 'MITRE ATLAS', controls: ['ATLAS-IA-2', 'ATLAS-EXF-2'], section: 'Access & Exfil' },
-      { framework: 'FINOS AIR', controls: ['AIR-SEC-010', 'AIR-OP-004', 'AIR-OP-020', 'AIR-P-001', 'AIR-P-002'], section: 'Security & Preventative' },
+      // AIR-PREV-003 / AIR-PREV-017 were written 'AIR-P-001' / 'AIR-P-002' — a prefix that
+      // exists in no FINOS AIR taxonomy. Every other id in this file's `satisfies` lists is a
+      // real control id, and `efficiencyStats` counts these strings as distinct obligations
+      // (`${sat.framework}::${c}`), so two of the four FINOS obligations this task claimed to
+      // satisfy pointed at nothing that exists.
+      { framework: 'FINOS AIR', controls: ['AIR-SEC-010', 'AIR-OP-004', 'AIR-OP-020', 'AIR-PREV-003', 'AIR-PREV-017'], section: 'Security & Preventative' },
     ],
   },
   // Runtime Safety Controls (FINOS AIR agentic risks)
@@ -859,15 +899,15 @@ function MaturityReadinessCard() {
   );
 }
 
-function CompliancePostureStrip({ frameworks }: { frameworks: ComplianceFramework[] }) {
+function CompliancePostureStrip({ frameworks, live }: { frameworks: ComplianceFramework[]; live: boolean }) {
   const avgScore = useMemo(() => {
-    const scores = frameworks.map(fw => {
+    let passed = 0, applicable = 0;
+    frameworks.forEach(fw => {
       const controls = fw.categories.flatMap(c => c.controls);
-      const applicable = controls.filter(c => c.status !== 'not-started').length;
-      const passed = controls.filter(c => c.status === 'pass').length;
-      return applicable > 0 ? (passed / applicable) * 100 : 0;
+      applicable += controls.filter(c => c.status !== 'not-started').length;
+      passed += controls.filter(c => c.status === 'pass').length;
     });
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    return applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
   }, [frameworks]);
 
   const revalidation = useMemo(() => {
@@ -875,7 +915,7 @@ function CompliancePostureStrip({ frameworks }: { frameworks: ComplianceFramewor
     frameworks.forEach(fw => {
       fw.categories.flatMap(c => c.controls).forEach(ctrl => {
         if (ctrl.dueDate) {
-          const days = Math.round((new Date(ctrl.dueDate).getTime() - REFERENCE_NOW) / 86400000);
+          const days = Math.round((new Date(ctrl.dueDate).getTime() - Date.now()) / 86400000);
           if (days < 0) overdue++;
           else if (days <= 30) dueSoon++;
         }
@@ -895,18 +935,35 @@ function CompliancePostureStrip({ frameworks }: { frameworks: ComplianceFramewor
     return { active, total: frameworks.length };
   }, [frameworks]);
 
-  // Live AWS Config rule compliance (config:DescribeComplianceByConfigRule).
-  const [configCompliance, setConfigCompliance] = useState<AwsConfigCompliance | null>(null);
+  // Live AWS Config rule compliance. Sourced from the same endpoint as the AWS Config Rules
+  // card further down this page (governControlsApi.configRules) so both surfaces report one
+  // shared rule-set denominator instead of two. The percentage is over the rules AWS Config
+  // returned a pass/fail verdict for; rules with no verdict yet (INSUFFICIENT_DATA /
+  // NOT_APPLICABLE — e.g. Security Hub service-linked rules) are stated alongside it rather
+  // than dropped silently from the denominator. evaluated + noVerdict === total.
+  const [configRules, setConfigRules] = useState<AwsConfigRulesResponse | null>(null);
   useEffect(() => {
     let cancelled = false;
-    governPostureApi.configCompliance()
-      .then(d => { if (!cancelled) setConfigCompliance(d); })
-      .catch(() => { if (!cancelled) setConfigCompliance(null); });
+    governControlsApi.configRules()
+      .then(d => { if (!cancelled) setConfigRules(d); })
+      .catch(() => { if (!cancelled) setConfigRules(null); });
     return () => { cancelled = true; };
   }, []);
-  const configTone: 'success' | 'warning' | 'danger' | 'default' = !configCompliance?.live ? 'default'
-    : configCompliance.pct_compliant >= 80 ? 'success'
-    : configCompliance.pct_compliant >= 50 ? 'warning' : 'danger';
+  const configEvaluated = (configRules?.compliant ?? 0) + (configRules?.noncompliant ?? 0);
+  const configNoVerdict = (configRules?.insufficient_data ?? 0) + (configRules?.not_applicable ?? 0);
+  const configPct = configEvaluated > 0
+    ? Math.round((configRules!.compliant / configEvaluated) * 1000) / 10
+    : 0;
+  const configTone: 'success' | 'warning' | 'danger' | 'default' = !configRules?.live || configEvaluated === 0 ? 'default'
+    : configPct >= 80 ? 'success'
+    : configPct >= 50 ? 'warning' : 'danger';
+  const configSub = !configRules?.live
+    ? (configRules?.note ?? 'AWS Config unavailable')
+    : configEvaluated > 0
+      ? `${configRules.compliant}/${configEvaluated} evaluated rules passing · ${configNoVerdict} of ${configRules.total} awaiting a verdict`
+      : configRules.total > 0
+        ? `None of the ${configRules.total} Config rules have a verdict yet`
+        : (configRules.note ?? 'No AWS Config rules configured');
 
   const scoreTone = avgScore >= 80 ? 'success' : avgScore >= 60 ? 'warning' : 'danger';
   const revalTone = revalidation.overdue > 0 ? 'danger' : revalidation.dueSoon > 0 ? 'warning' : 'success';
@@ -917,8 +974,10 @@ function CompliancePostureStrip({ frameworks }: { frameworks: ComplianceFramewor
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3">
         <Icon name="chart-bar" className="w-4 h-4 text-blue-600" strokeWidth={2} />
-        <span className="text-sm font-semibold text-slate-800">Live Compliance Posture</span>
-        <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium uppercase tracking-wider">LIVE</span>
+        <span className="text-sm font-semibold text-slate-800">Compliance Posture</span>
+        {live
+          ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium uppercase tracking-wider">LIVE</span>
+          : <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium uppercase tracking-wider">Demo</span>}
         <span className="text-[10px] text-slate-400 ml-auto">across {frameworks.length} frameworks</span>
       </div>
 
@@ -948,14 +1007,269 @@ function CompliancePostureStrip({ frameworks }: { frameworks: ComplianceFramewor
           tone={attestTone}
         />
         <PostureTile
-          title="Config Rules"
-          metric={configCompliance?.live ? `${configCompliance.pct_compliant}%` : '—'}
-          sub={configCompliance?.live
-            ? `${configCompliance.compliant}/${configCompliance.total_rules} AWS Config rules passing`
-            : (configCompliance?.note ?? 'AWS Config unavailable')}
+          title="Config Rules (Evaluated)"
+          metric={configRules?.live && configEvaluated > 0 ? `${configPct}%` : '—'}
+          sub={configSub}
           tone={configTone}
         />
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── Preventive Controls (SCPs) ───────────────────────────
+
+/**
+ * Preventive Controls (SCPs) — real AWS Organizations Service Control Policies.
+ *
+ * Backed by governScpApi.policies(). SCPs are org-level preventive guardrails that
+ * cap what any account can do regardless of IAM. LiveDataBadge/MockDataBadge gated
+ * on `.live`. When the backend account is not the org management / delegated-admin
+ * account, Organizations returns AccessDenied — the card shows the honest note.
+ * When the only policy is the AWS-managed default FullAWSAccess, it is shown with a
+ * note that no custom restrictive SCPs are attached (no fabricated posture).
+ */
+function PreventiveControlsCard() {
+  const [data, setData] = useState<AwsScpResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    governScpApi.policies()
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const isLive = !!data?.live;
+  const policies = data?.policies ?? [];
+
+  return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon name="no-symbol" className="w-4 h-4 text-indigo-600" strokeWidth={2} />
+          <span className="text-sm font-semibold text-slate-900">Preventive Controls (SCPs)</span>
+          {isLive
+            ? <LiveDataBadge source="Organizations" detail={data?.source ?? undefined} />
+            : <MockDataBadge integration="AWS Organizations (management / delegated-admin access)" />}
+        </div>
+        <span className="text-[10px] text-slate-400">Org-level guardrails that cap account permissions</span>
+      </div>
+
+      {loading ? (
+        <div className="p-4 flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+          <span className="text-sm text-slate-500">Loading Service Control Policies…</span>
+        </div>
+      ) : !isLive ? (
+        <div className="p-4">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <Icon name="information-circle" className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" strokeWidth={2} />
+            <div className="text-xs text-slate-500">
+              {data?.note ?? 'Requires AWS Organizations management or delegated-admin access to enumerate Service Control Policies.'}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 space-y-3">
+          {/* Stat tiles — all from the live response */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Total SCPs</div>
+              <div className="text-2xl font-bold text-slate-800 tabular-nums">{data!.total}</div>
+            </div>
+            <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-200">
+              <div className="text-[10px] text-indigo-600 uppercase tracking-wide">Custom Restrictive</div>
+              <div className="text-2xl font-bold text-indigo-700 tabular-nums">{data!.custom_count}</div>
+              <div className="text-[9px] text-indigo-500">non AWS-managed</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">AWS-Managed</div>
+              <div className="text-2xl font-bold text-slate-700 tabular-nums">{data!.aws_managed_count}</div>
+              <div className="text-[9px] text-slate-400">e.g. FullAWSAccess</div>
+            </div>
+          </div>
+
+          {/* Honest note when only the default managed SCP exists */}
+          {data!.custom_count === 0 && data?.note && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <Icon name="exclamation-triangle" className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" strokeWidth={2} />
+              <div className="text-xs text-amber-700">{data.note}</div>
+            </div>
+          )}
+
+          {/* Policy list */}
+          {policies.length > 0 ? (
+            <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+              {policies.map(p => (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                  <Icon
+                    name={p.aws_managed ? 'lock-closed' : 'no-symbol'}
+                    className={`w-3.5 h-3.5 flex-shrink-0 ${p.aws_managed ? 'text-slate-400' : 'text-indigo-500'}`}
+                    strokeWidth={2}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-700 truncate" title={p.description ?? p.name}>{p.name}</div>
+                    {p.description && (
+                      <div className="text-[10px] text-slate-400 truncate">{p.description}</div>
+                    )}
+                  </div>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                    p.aws_managed ? 'bg-slate-100 text-slate-600' : 'bg-indigo-100 text-indigo-700'
+                  }`}>
+                    {p.aws_managed ? 'AWS-managed' : 'Custom'}
+                  </span>
+                  {typeof p.attached_target_count === 'number' && (
+                    <span
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600"
+                      title="Targets this SCP is attached to (accounts / OUs / root)"
+                    >
+                      {p.attached_target_count} target{p.attached_target_count !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-500 p-3 rounded-lg bg-slate-50 border border-slate-200">
+              No Service Control Policies returned.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────── AWS Config Rules ───────────────────────────
+
+/**
+ * AwsConfigRulesCard — real AWS Config rule compliance.
+ *
+ * Backed by governControlsApi.configRules() (config:DescribeConfigRules +
+ * DescribeComplianceByConfigRule). AWS Config already powers internal control
+ * evaluation in this platform; this surfaces the underlying rule set directly.
+ * LiveDataBadge / MockDataBadge gated on `.live`; the honest note is shown when
+ * Config is not enabled, config:Describe* is not granted, or no rules exist.
+ * All numbers come straight from the live response — none are fabricated.
+ */
+const CONFIG_COMPLIANCE_CONFIG: Record<string, { label: string; badge: string; dot: string }> = {
+  COMPLIANT: { label: 'Compliant', badge: 'bg-emerald-50 border-emerald-200 text-emerald-700', dot: 'bg-emerald-500' },
+  NON_COMPLIANT: { label: 'Non-compliant', badge: 'bg-rose-50 border-rose-200 text-rose-700', dot: 'bg-rose-500' },
+  NOT_APPLICABLE: { label: 'N/A', badge: 'bg-slate-100 border-slate-200 text-slate-500', dot: 'bg-slate-400' },
+  INSUFFICIENT_DATA: { label: 'Insufficient data', badge: 'bg-amber-50 border-amber-200 text-amber-700', dot: 'bg-amber-500' },
+};
+
+function AwsConfigRulesCard() {
+  const [data, setData] = useState<AwsConfigRulesResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    governControlsApi.configRules()
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const isLive = !!data?.live;
+  const rules = data?.rules ?? [];
+
+  const tiles = [
+    { key: 'compliant', label: 'Compliant', value: data?.compliant ?? 0, cls: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', sub: 'text-emerald-500' },
+    { key: 'noncompliant', label: 'Non-compliant', value: data?.noncompliant ?? 0, cls: 'bg-rose-50 border-rose-200', text: 'text-rose-700', sub: 'text-rose-500' },
+    { key: 'not_applicable', label: 'Not applicable', value: data?.not_applicable ?? 0, cls: 'bg-slate-50 border-slate-200', text: 'text-slate-700', sub: 'text-slate-400' },
+    { key: 'insufficient_data', label: 'Insufficient data', value: data?.insufficient_data ?? 0, cls: 'bg-amber-50 border-amber-200', text: 'text-amber-700', sub: 'text-amber-500' },
+  ];
+
+  return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon name="clipboard-document-check" className="w-4 h-4 text-emerald-600" strokeWidth={2} />
+          <span className="text-sm font-semibold text-slate-900">AWS Config Rules</span>
+          {isLive
+            ? <LiveDataBadge source="AWS Config" detail={data?.source ?? undefined} />
+            : <MockDataBadge integration="AWS Config (config:DescribeConfigRules)" />}
+        </div>
+        <span className="text-[10px] text-slate-400">Resource compliance evaluated by AWS Config rules</span>
+      </div>
+
+      {loading ? (
+        <div className="p-4 flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+          <span className="text-sm text-slate-500">Loading AWS Config rules…</span>
+        </div>
+      ) : !isLive ? (
+        <div className="p-4">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <Icon name="information-circle" className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" strokeWidth={2} />
+            <div className="text-xs text-slate-500">
+              {data?.note ?? 'AWS Config not enabled or config:Describe* not granted.'}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 space-y-3">
+          {/* Summary tiles — straight from the live response */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {tiles.map(t => (
+              <div key={t.key} className={`rounded-lg p-3 border ${t.cls}`}>
+                <div className={`text-[10px] uppercase tracking-wide ${t.sub}`}>{t.label}</div>
+                <div className={`text-2xl font-bold tabular-nums ${t.text}`}>{t.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Honest note (no rules configured, or cached-age stamp) */}
+          {data?.note && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
+              <Icon name="information-circle" className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" strokeWidth={2} />
+              <div className="text-xs text-slate-500">{data.note}</div>
+            </div>
+          )}
+
+          {/* Per-rule list — non-compliant surfaced first */}
+          {rules.length > 0 ? (
+            <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-96 overflow-y-auto">
+              {rules.map(rule => {
+                const cfg = CONFIG_COMPLIANCE_CONFIG[rule.compliance] ?? CONFIG_COMPLIANCE_CONFIG.INSUFFICIENT_DATA;
+                return (
+                  <div key={rule.name} className="flex items-center gap-2 px-3 py-2">
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-slate-700 truncate" title={rule.description ?? rule.name}>{rule.name}</div>
+                      {rule.description && (
+                        <div className="text-[10px] text-slate-400 truncate">{rule.description}</div>
+                      )}
+                    </div>
+                    {rule.source && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500" title="Config rule source owner">
+                        {rule.source}
+                      </span>
+                    )}
+                    {typeof rule.noncompliant_resources === 'number' && rule.noncompliant_resources > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700" title="Non-compliant resources (capped count)">
+                        {rule.noncompliant_resources} resource{rule.noncompliant_resources !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium ${cfg.badge}`}>
+                      {cfg.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-500 p-3 rounded-lg bg-slate-50 border border-slate-200">
+              AWS Config returned no rules for this account/region.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -985,8 +1299,23 @@ const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   consumer: { label: 'Consumer', color: '#ea580c' },
 };
 
-// Map framework names to tab IDs for navigation
-const FRAMEWORK_TAB_MAP: Record<string, TabId> = {
+// Framework deep-dive navigation identifiers. These are distinct from TabId
+// (the Compliance Center's own tab ids) — the main component translates them
+// into framework ids via fwIdMap before switching tabs.
+type FrameworkNavId =
+  | 'nist'
+  | 'eu-ai-act'
+  | 'finos-air'
+  | 'owasp-llm'
+  | 'sr26'
+  | 'cri-ai-rmf'
+  | 'osfi-e23'
+  | 'iso-42001'
+  | 'mitre-atlas'
+  | 'naic-ai';
+
+// Map framework names to framework nav IDs for navigation
+const FRAMEWORK_TAB_MAP: Record<string, FrameworkNavId> = {
   'NIST AI RMF': 'nist',
   'EU AI Act': 'eu-ai-act',
   'FINOS AIR': 'finos-air',
@@ -1000,31 +1329,134 @@ const FRAMEWORK_TAB_MAP: Record<string, TabId> = {
 };
 
 interface ProgramBuilderProps {
-  onNavigateToFramework?: (tabId: TabId) => void;
+  onNavigateToFramework?: (tabId: FrameworkNavId) => void;
 }
 
 // Implementation phases with timeline estimates
 const IMPLEMENTATION_PHASES = [
-  { id: 'foundation', label: 'Foundation', description: 'Governance charter, committee, risk appetite', weeks: '2-4', color: '#8b5cf6', icon: '🏛️' },
-  { id: 'policies', label: 'Policies', description: 'Data governance, vendor management, documentation standards', weeks: '3-6', color: '#3b82f6', icon: '📋' },
-  { id: 'processes', label: 'Processes', description: 'Model validation, bias testing, HITL workflows', weeks: '4-8', color: '#10b981', icon: '⚙️' },
-  { id: 'technology', label: 'Technology', description: 'Guardrails, security controls, runtime safety', weeks: '4-8', color: '#f59e0b', icon: '🔧' },
-  { id: 'operate', label: 'Operate', description: 'Training, incident response, continuous improvement', weeks: 'Ongoing', color: '#ef4444', icon: '🚀' },
+  { id: 'foundation', label: 'Foundation', description: 'Governance charter, committee, risk appetite', weeks: '2-4', color: '#8b5cf6', icon: <Icon name="building-office" className="w-5 h-5" /> },
+  { id: 'policies', label: 'Policies', description: 'Data governance, vendor management, documentation standards', weeks: '3-6', color: '#3b82f6', icon: <Icon name="clipboard-document-list" className="w-5 h-5" /> },
+  { id: 'processes', label: 'Processes', description: 'Model validation, bias testing, HITL workflows', weeks: '4-8', color: '#10b981', icon: <Icon name="cog-6-tooth" className="w-5 h-5" /> },
+  { id: 'technology', label: 'Technology', description: 'Guardrails, security controls, runtime safety', weeks: '4-8', color: '#f59e0b', icon: <Icon name="wrench" className="w-5 h-5" /> },
+  { id: 'operate', label: 'Operate', description: 'Training, incident response, continuous improvement', weeks: 'Ongoing', color: '#ef4444', icon: <Icon name="rocket-launch" className="w-5 h-5" /> },
 ];
 
-// Framework metadata for comparison
-const FRAMEWORK_METADATA: Record<string, { type: string; region: string; mandatory: boolean; totalControls: number }> = {
-  'NIST AI RMF': { type: 'Standards', region: 'US', mandatory: false, totalControls: 62 },
-  'SR 26-2': { type: 'Regulatory', region: 'US (Banking)', mandatory: true, totalControls: 36 },
-  'EU AI Act': { type: 'Regulatory', region: 'EU', mandatory: true, totalControls: 65 },
-  'CRI FS AI RMF': { type: 'Industry', region: 'Global (FSI)', mandatory: false, totalControls: 230 },
-  'ISO 42001': { type: 'Standards', region: 'Global', mandatory: false, totalControls: 61 },
-  'NAIC': { type: 'Regulatory', region: 'US (Insurance)', mandatory: true, totalControls: 74 },
-  'OSFI E-23': { type: 'Regulatory', region: 'Canada', mandatory: true, totalControls: 26 },
-  'FINOS AIR': { type: 'Industry', region: 'Global (FSI)', mandatory: false, totalControls: 46 },
-  'OWASP LLM': { type: 'Technical', region: 'Global', mandatory: false, totalControls: 22 },
-  'MITRE ATLAS': { type: 'Technical', region: 'Global', mandatory: false, totalControls: 74 },
+// Framework metadata for comparison — descriptive attributes only. Control counts are
+// deliberately not here; see CHECKLIST_CONTROL_TOTALS below.
+const FRAMEWORK_METADATA: Record<string, { type: string; region: string; mandatory: boolean }> = {
+  'NIST AI RMF': { type: 'Standards', region: 'US', mandatory: false },
+  'SR 26-2': { type: 'Regulatory', region: 'US (Banking)', mandatory: true },
+  'EU AI Act': { type: 'Regulatory', region: 'EU', mandatory: true },
+  'CRI FS AI RMF': { type: 'Industry', region: 'Global (FSI)', mandatory: false },
+  'ISO 42001': { type: 'Standards', region: 'Global', mandatory: false },
+  'NAIC': { type: 'Regulatory', region: 'US (Insurance)', mandatory: true },
+  'OSFI E-23': { type: 'Regulatory', region: 'Canada', mandatory: true },
+  'FINOS AIR': { type: 'Industry', region: 'Global (FSI)', mandatory: false },
+  'OWASP LLM': { type: 'Technical', region: 'Global', mandatory: false },
+  'MITRE ATLAS': { type: 'Technical', region: 'Global', mandatory: false },
 };
+
+// Controls per framework, COUNTED from COMPLIANCE_CENTER_FRAMEWORKS rather than transcribed.
+//
+// These were ten hardcoded `totalControls` literals on FRAMEWORK_METADATA above, and one had
+// drifted: 'CRI FS AI RMF' read 230 while that checklist carries 274. Nine of the ten
+// literals equalled the checklist roll-up exactly (NIST 62, SR 26-2 36, EU 65, ISO 61,
+// NAIC 74, OSFI 26, FINOS 46, OWASP 22, ATLAS 74), and nine exact hits on numbers that
+// arbitrary is what identifies the intended quantity: the size of *this repo's* checklist,
+// not the published size of the framework. OWASP LLM settles it — 22 is the checklist's
+// sub-control count, where the published framework has 10 entries. CRI's 230 was the one
+// row copied from the wrong source (the framework's own description string in mockData.ts
+// still says "230 control objectives") and then never re-copied as the checklist grew.
+//
+// Counting removes the class of defect, not just the instance: adding a control to any
+// checklist now moves this number, and a framework the checklist does not carry resolves to
+// undefined and renders '—' rather than a stale integer.
+//
+// Deliberately NOT read from GET /govern/compliance/posture. That endpoint's total_controls
+// is a different quantity — 45 for cri-fs-ai-rmf against these 274 — and the backend
+// annotates it "informational (the frontend is authoritative for displayed control counts)".
+// Substituting it would trade a stale count of the right thing for a live count of the
+// wrong thing.
+const CHECKLIST_CONTROL_TOTALS: Record<string, number> = Object.fromEntries(
+  COMPLIANCE_CENTER_FRAMEWORKS.map(fw => [
+    fw.shortName,
+    fw.categories.reduce((sum, cat) => sum + cat.controls.length, 0),
+  ]),
+);
+
+// Resolution of UNIFIED_CONTROL_MAPPINGS' `satisfies[].controls` references onto real controls.
+//
+// Two consumers read those strings as checklist control ids: `crossFrameworkImpact` (the "Also
+// satisfies N other frameworks" chip on a checklist row) and the obligation counts below.
+// Neither used to check that a reference names anything, so a reference that named nothing both
+// rendered no chip AND still counted toward a displayed total — silently understating the first
+// and inflating the second. Everything below counts only what resolves, and reports the rest.
+//
+// The index is BUILT from COMPLIANCE_CENTER_FRAMEWORKS rather than being a transcribed list of
+// known-bad strings, so adding a control to a checklist starts resolving references to it. Two
+// keys per control:
+//   - its `id`, the canonical form ('NIST-GV-1.1');
+//   - its `section`, but ONLY where that section names exactly one control in that framework.
+//     This is what admits the NIST references: they carry published AI RMF subcategory
+//     identifiers ('GOVERN 1.1'), and each is verbatim the `section` of exactly one control in
+//     this checklist ('NIST-GV-1.1' has `section: 'GOVERN 1.1'`), so the two strings are two
+//     spellings of one obligation. Sections shared by several controls (SR 26-2 '§IV.A', OWASP
+//     LLM 'LLM01:2025') stay ambiguous and resolve to nothing rather than to an arbitrary
+//     sibling — a wrong target would be a fabricated cross-framework claim, an unresolved one
+//     is merely an honest gap.
+// An `id` always wins over a `section` alias, so a canonical reference cannot be diverted.
+const CONTROL_REF_INDEX: Map<string, Map<string, string>> = (() => {
+  const byFramework = new Map<string, Map<string, string>>();
+  COMPLIANCE_CENTER_FRAMEWORKS.forEach(fw => {
+    const refs = new Map<string, string>();
+    const sectionOwners = new Map<string, string[]>();
+    fw.categories.forEach(cat => cat.controls.forEach(ctrl => {
+      refs.set(ctrl.id, ctrl.id);
+      if (ctrl.section) {
+        const owners = sectionOwners.get(ctrl.section);
+        if (owners) owners.push(ctrl.id);
+        else sectionOwners.set(ctrl.section, [ctrl.id]);
+      }
+    }));
+    sectionOwners.forEach((owners, section) => {
+      if (owners.length === 1 && !refs.has(section)) refs.set(section, owners[0]);
+    });
+    byFramework.set(fw.shortName, refs);
+  });
+  return byFramework;
+})();
+
+/**
+ * Split one `satisfies` entry's control references into the checklist control ids they resolve
+ * to and the references that match no control in the named framework. `resolved` is canonical
+ * (checklist ids) and deduped, so two spellings of one control count once.
+ */
+function splitControlRefs(framework: string, refs: string[]): { resolved: string[]; unresolved: string[] } {
+  const index = CONTROL_REF_INDEX.get(framework);
+  const resolved: string[] = [];
+  const unresolved: string[] = [];
+  refs.forEach(ref => {
+    const id = index?.get(ref);
+    if (id === undefined) unresolved.push(ref);
+    else if (!resolved.includes(id)) resolved.push(id);
+  });
+  return { resolved, unresolved };
+}
+
+// Per-framework reference resolution across the WHOLE mapping table, independent of which
+// frameworks the user has selected. Raw reference counts (a control referenced by two tasks
+// counts twice), which is the quantity the framework-comparison table reports.
+const MAPPING_REF_RESOLUTION: Record<string, { referenced: number; resolved: number }> = (() => {
+  const byFramework: Record<string, { referenced: number; resolved: number }> = {};
+  UNIFIED_CONTROL_MAPPINGS.forEach(task => task.satisfies.forEach(sat => {
+    const entry = byFramework[sat.framework] ?? { referenced: 0, resolved: 0 };
+    const { resolved } = splitControlRefs(sat.framework, sat.controls);
+    entry.referenced += sat.controls.length;
+    entry.resolved += resolved.length;
+    byFramework[sat.framework] = entry;
+  }));
+  return byFramework;
+})();
 
 function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps) {
   const [selectedFrameworks, setSelectedFrameworks] = useState<Set<string>>(() => {
@@ -1044,7 +1476,6 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
   });
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'unified' | 'by-framework' | 'timeline'>('unified');
-  const [showWizard, setShowWizard] = useState(false);
   const [showMatrix, setShowMatrix] = useState(false);
 
   const availableFrameworks = getFrameworksFromMappings();
@@ -1071,19 +1502,24 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
     );
   }, [selectedFrameworks]);
 
-  // Calculate total controls satisfied across all selected frameworks
+  // Calculate total controls satisfied across all selected frameworks. Only references that
+  // resolve to a control in that framework's checklist reach `total` — the rest are carried
+  // separately as `unresolved` and reported, rather than padding a coverage number with
+  // references to controls this build does not carry.
   const controlsSatisfied = useMemo(() => {
-    const byFramework: Record<string, { total: number; completed: number }> = {};
+    const byFramework: Record<string, { total: number; completed: number; unresolved: number }> = {};
     selectedFrameworks.forEach(fw => {
-      byFramework[fw] = { total: 0, completed: 0 };
+      byFramework[fw] = { total: 0, completed: 0, unresolved: 0 };
     });
 
     relevantTasks.forEach(task => {
       task.satisfies.forEach(s => {
         if (selectedFrameworks.has(s.framework)) {
-          byFramework[s.framework].total += s.controls.length;
+          const { resolved, unresolved } = splitControlRefs(s.framework, s.controls);
+          byFramework[s.framework].total += resolved.length;
+          byFramework[s.framework].unresolved += unresolved.length;
           if (completedTasks[task.taskId]) {
-            byFramework[s.framework].completed += s.controls.length;
+            byFramework[s.framework].completed += resolved.length;
           }
         }
       });
@@ -1091,6 +1527,10 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
 
     return byFramework;
   }, [selectedFrameworks, relevantTasks, completedTasks]);
+
+  // References the selected frameworks' mappings name but their checklists do not carry, so the
+  // roll-ups below can say how much of the mapping table they could not account for.
+  const unresolvedRefTotal = Object.values(controlsSatisfied).reduce((sum, s) => sum + s.unresolved, 0);
 
   const completedCount = relevantTasks.filter(t => completedTasks[t.taskId]).length;
   const overallProgress = relevantTasks.length > 0 ? Math.round((completedCount / relevantTasks.length) * 100) : 0;
@@ -1115,18 +1555,48 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
     return groups;
   }, [relevantTasks]);
 
-  // Calculate efficiency savings from unified approach
+  // Mapping-overlap stats — every number below is counted from UNIFIED_CONTROL_MAPPINGS,
+  // with no assumed effort model. `mappedControls` is the distinct (framework, control)
+  // pairs the selected tasks actually satisfy, and `workItemReduction` is the measured
+  // collapse of those obligations into shared tasks (1 - tasks / obligations). It is a
+  // count of work items, not an estimate of implementation effort or cost.
+  //
+  // "Actually satisfy" is load-bearing: a control reference is counted only once it resolves to
+  // a control in that framework's checklist (see CONTROL_REF_INDEX). Counting the raw strings
+  // inflated `mappedControls` with obligations that point at nothing — and because
+  // `workItemReduction` is 1 - tasks/obligations, every phantom obligation also pushed the
+  // headline percentage up. `unresolvedControls` is the size of that excluded set and is
+  // disclosed next to the totals, so the number shrinking is visible rather than silent.
   const efficiencyStats = useMemo(() => {
     if (selectedFrameworks.size <= 1) return null;
-    const totalControlsRaw = Array.from(selectedFrameworks).reduce((sum, fw) => {
-      return sum + (FRAMEWORK_METADATA[fw]?.totalControls || 0);
+    // Named for what it is. This was `publishedControls`, and the sentence it feeds said
+    // "controls published across the selected frameworks" — a claim the number does not
+    // support, since it is the roll-up of this app's checklists (see
+    // CHECKLIST_CONTROL_TOTALS). Frameworks with no checklist here contribute 0, so the
+    // denominator never counts a framework it cannot enumerate.
+    const checklistControls = Array.from(selectedFrameworks).reduce((sum, fw) => {
+      return sum + (CHECKLIST_CONTROL_TOTALS[fw] ?? 0);
     }, 0);
     const unifiedTasks = relevantTasks.length;
-    const avgControlsPerTask = relevantTasks.length > 0
-      ? Math.round(relevantTasks.reduce((sum, t) => sum + t.satisfies.reduce((s, sat) => s + (selectedFrameworks.has(sat.framework) ? sat.controls.length : 0), 0), 0) / relevantTasks.length)
-      : 0;
-    const effortReduction = Math.round((1 - (unifiedTasks / (totalControlsRaw * 0.3))) * 100);
-    return { totalControlsRaw, unifiedTasks, avgControlsPerTask, effortReduction: Math.min(Math.max(effortReduction, 0), 85) };
+    const mapped = new Set<string>();
+    const unresolved = new Set<string>();
+    relevantTasks.forEach(task => task.satisfies.forEach(sat => {
+      if (selectedFrameworks.has(sat.framework)) {
+        const split = splitControlRefs(sat.framework, sat.controls);
+        split.resolved.forEach(id => mapped.add(`${sat.framework}::${id}`));
+        split.unresolved.forEach(ref => unresolved.add(`${sat.framework}::${ref}`));
+      }
+    }));
+    const mappedControls = mapped.size;
+    const unresolvedControls = unresolved.size;
+    const referencedControls = mappedControls + unresolvedControls;
+    // Nothing referenced at all means nothing to report. Nothing *resolved* is a different
+    // state and is reported (the caller branches on `mappedControls === 0`), because a callout
+    // that vanished would hide the same fact the inflated count used to misstate.
+    if (unifiedTasks === 0 || referencedControls === 0) return null;
+    const controlsPerTask = mappedControls === 0 ? 0 : Math.round((mappedControls / unifiedTasks) * 10) / 10;
+    const workItemReduction = mappedControls === 0 ? 0 : Math.max(Math.round((1 - unifiedTasks / mappedControls) * 100), 0);
+    return { checklistControls, unifiedTasks, mappedControls, unresolvedControls, referencedControls, controlsPerTask, workItemReduction };
   }, [selectedFrameworks, relevantTasks]);
 
   return (
@@ -1192,20 +1662,57 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
           </div>
         </div>
 
-        {/* Efficiency Callout (when multiple frameworks selected) */}
-        {efficiencyStats && (
-          <div className="mt-4 p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+        {/* Mapping-overlap callout (when multiple frameworks selected). Counted from the
+            control mappings on this page — distinct obligations vs shared tasks — so the
+            model behind the percentage is stated rather than assumed. The second branch is the
+            case where the mappings for the selected frameworks reference controls but none of
+            them resolve: there is no overlap figure to state, and saying so beats rendering
+            nothing at all. */}
+        {efficiencyStats && (efficiencyStats.mappedControls === 0 ? (
+          <div className="mt-4 p-3 bg-amber-50/60 rounded-lg border border-amber-200">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-bold text-emerald-600">{efficiencyStats.effortReduction}%</span>
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Icon name="exclamation-triangle" className="w-5 h-5 text-amber-600" strokeWidth={2} />
               </div>
-              <div className="flex-1 text-xs text-emerald-700">
-                <span className="font-medium">Effort Reduction:</span> Instead of {efficiencyStats.totalControlsRaw} separate controls,
-                work is consolidated into {efficiencyStats.unifiedTasks} tasks (~{efficiencyStats.avgControlsPerTask} controls/task).
+              <div className="flex-1 text-xs text-amber-800">
+                <span className="font-medium">No overlap to report:</span> none of the {efficiencyStats.referencedControls} control
+                references these {efficiencyStats.unifiedTasks} tasks carry for the selected frameworks match a control id in this
+                platform's checklists, so there is no obligation count to collapse.
+                <span className="block text-[11px] text-amber-700/80 mt-0.5">
+                  The mappings name published framework identifiers this build's checklists do not use. Expand a task's frameworks
+                  to see which references are affected.
+                </span>
               </div>
             </div>
           </div>
-        )}
+        ) : (
+          <div className="mt-4 p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-bold text-emerald-600">{efficiencyStats.workItemReduction}%</span>
+              </div>
+              <div className="flex-1 text-xs text-emerald-700">
+                <span className="font-medium">Fewer work items:</span> the {efficiencyStats.mappedControls} distinct framework
+                controls these tasks map to are covered by {efficiencyStats.unifiedTasks} shared tasks
+                (~{efficiencyStats.controlsPerTask} controls per task).
+                <span className="block text-[11px] text-emerald-600/80 mt-0.5">
+                  Counted from the mappings below: {efficiencyStats.mappedControls} of the {efficiencyStats.checklistControls} controls
+                  in this platform's checklists for the selected frameworks are mapped here. Not an estimate of implementation effort or cost.
+                </span>
+                {efficiencyStats.unresolvedControls > 0 && (
+                  <span className="block text-[11px] text-amber-700 mt-0.5">
+                    {efficiencyStats.mappedControls} of the {efficiencyStats.referencedControls} control references in these mappings
+                    resolve to a control in the AVA checklist. Excluded from every count above:{' '}
+                    {efficiencyStats.unresolvedControls === 1
+                      ? 'one reference naming a control'
+                      : `${efficiencyStats.unresolvedControls} references naming controls`}{' '}
+                    the checklist does not carry.
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Framework Comparison Matrix (collapsible) */}
@@ -1228,7 +1735,22 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                   <th className="text-left px-3 py-2 font-semibold text-slate-600">Type</th>
                   <th className="text-left px-3 py-2 font-semibold text-slate-600">Region</th>
                   <th className="text-center px-3 py-2 font-semibold text-slate-600">Mandatory</th>
-                  <th className="text-center px-3 py-2 font-semibold text-slate-600">Controls</th>
+                  {/* "Controls" is the size of this platform's checklist for the framework,
+                      counted at module load — not the published control count of the
+                      framework itself. Labelled so a reader cannot take it for the latter. */}
+                  <th className="text-center px-3 py-2 font-semibold text-slate-600">
+                    Controls
+                    <span className="block font-normal text-[10px] text-slate-400">in AVA checklist</span>
+                  </th>
+                  {/* How much of the mapping table below can actually be pointed at a control
+                      in that framework's checklist. Reported rather than hidden: an unresolved
+                      reference is a real data-quality fact about this build, and it is the
+                      reason a framework's mapped-obligation count can be lower than the number
+                      of references written for it. */}
+                  <th className="text-center px-3 py-2 font-semibold text-slate-600">
+                    Mapped Refs
+                    <span className="block font-normal text-[10px] text-slate-400">resolved of written</span>
+                  </th>
                   <th className="text-center px-3 py-2 font-semibold text-slate-600">Selected</th>
                 </tr>
               </thead>
@@ -1237,6 +1759,8 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                   const meta = FRAMEWORK_METADATA[fw];
                   const isSelected = selectedFrameworks.has(fw);
                   const color = FRAMEWORK_COLORS[fw] || '#64748b';
+                  const refs = MAPPING_REF_RESOLUTION[fw];
+                  const refGap = refs ? refs.referenced - refs.resolved : 0;
                   return (
                     <tr key={fw} className={`border-b border-slate-100 ${isSelected ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}>
                       <td className="px-3 py-2">
@@ -1263,7 +1787,19 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                           <span className="text-slate-400">No</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-center font-medium text-slate-700">{meta?.totalControls || '—'}</td>
+                      <td className="px-3 py-2 text-center font-medium text-slate-700">{CHECKLIST_CONTROL_TOTALS[fw] ?? '—'}</td>
+                      <td
+                        className={`px-3 py-2 text-center font-medium ${refGap > 0 ? 'text-amber-700' : 'text-slate-700'}`}
+                        title={
+                          !refs
+                            ? 'No control references are written for this framework.'
+                            : refGap > 0
+                              ? `${refGap} of the ${refs.referenced} control references written for ${fw} match no control id in this platform's checklist for it, so they are excluded from the mapped-obligation counts.`
+                              : `All ${refs.referenced} control references written for ${fw} resolve to a control in this platform's checklist.`
+                        }
+                      >
+                        {refs ? `${refs.resolved} of ${refs.referenced}` : '—'}
+                      </td>
                       <td className="px-3 py-2 text-center">
                         <button
                           onClick={() => toggleFramework(fw)}
@@ -1321,10 +1857,10 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                       style={{
                         background: isComplete || isActive ? phase.color : '#e2e8f0',
                         color: isComplete || isActive ? 'white' : '#94a3b8',
-                        ringColor: phase.color,
+                        ['--tw-ring-color' as string]: phase.color,
                       }}
                     >
-                      {isComplete ? '✓' : phase.icon}
+                      {isComplete ? <Icon name="check" className="w-5 h-5" /> : phase.icon}
                     </div>
                     <div className="mt-2 text-center">
                       <div className="text-xs font-semibold text-slate-800">{phase.label}</div>
@@ -1439,6 +1975,17 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                     <div className="text-[9px] font-medium truncate" style={{ color }}>{fw}</div>
                     <div className="text-lg font-bold text-slate-800">{pct}%</div>
                     <div className="text-[9px] text-slate-400">{stats?.completed || 0}/{stats?.total || 0} controls</div>
+                    {/* Per-framework disclosure at the point of use: this framework's mappings
+                        reference controls the checklist does not carry, and they are not in the
+                        denominator above. */}
+                    {stats?.unresolved ? (
+                      <div
+                        className="text-[9px] text-amber-600"
+                        title={`${stats.unresolved} control reference(s) written for ${fw} match no control id in this platform's checklist for it, so they are not counted above.`}
+                      >
+                        +{stats.unresolved} not in AVA checklist
+                      </div>
+                    ) : null}
                     <div className="w-full h-1 bg-slate-200 rounded-full mt-1 overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
                     </div>
@@ -1457,11 +2004,20 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
             {selectedFrameworks.size >= 2 && (
               <div className="mt-3 p-2 bg-emerald-50 rounded-lg border border-emerald-200">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-600 text-sm">✓</span>
+                  <Icon name="check" className="w-4 h-4 text-emerald-600" strokeWidth={2} />
                   <span className="text-xs text-emerald-800">
                     <strong>{relevantTasks.length} unified tasks</strong> satisfy{' '}
                     <strong>{Object.values(controlsSatisfied).reduce((sum, s) => sum + s.total, 0)} total controls</strong>{' '}
                     across {selectedFrameworks.size} frameworks
+                    {unresolvedRefTotal > 0 && (
+                      <span className="block text-[11px] text-amber-700 mt-0.5">
+                        Counted from references that resolve to a control in the AVA checklist. Not counted:{' '}
+                        {unresolvedRefTotal === 1
+                          ? 'one further reference naming a control'
+                          : `${unresolvedRefTotal} further references naming controls`}{' '}
+                        the checklist does not carry.
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -1508,7 +2064,12 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                   {tasks.map(task => {
                     const done = completedTasks[task.taskId];
                     const isExpanded = expandedTask === task.taskId;
-                    const relevantSatisfies = task.satisfies.filter(s => selectedFrameworks.has(s.framework));
+                    // Each entry carries its reference split, so the badge count and the
+                    // expanded list agree on which of this task's references name a control
+                    // that exists here.
+                    const relevantSatisfies = task.satisfies
+                      .filter(s => selectedFrameworks.has(s.framework))
+                      .map(s => ({ ...s, ...splitControlRefs(s.framework, s.controls) }));
 
                     return (
                       <div
@@ -1522,7 +2083,7 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                               done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-slate-400'
                             }`}
                           >
-                            {done && <span className="text-xs">✓</span>}
+                            {done && <Icon name="check" className="w-3.5 h-3.5" strokeWidth={2.5} />}
                           </button>
                           <div className="flex-1">
                             <div className="flex items-start justify-between">
@@ -1549,9 +2110,13 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                                     color: FRAMEWORK_COLORS[s.framework],
                                     border: `1px solid ${FRAMEWORK_COLORS[s.framework]}40`,
                                   }}
-                                  title={`Satisfies ${s.controls.length} controls: ${s.controls.join(', ')}`}
+                                  title={
+                                    s.unresolved.length > 0
+                                      ? `Satisfies ${s.resolved.length} control(s) in the AVA checklist: ${s.resolved.join(', ') || 'none'}. ${s.unresolved.length} further reference(s) match no control id here: ${s.unresolved.join(', ')}.`
+                                      : `Satisfies ${s.resolved.length} controls: ${s.resolved.join(', ')}`
+                                  }
                                 >
-                                  {s.framework} ({s.controls.length})
+                                  {s.framework} ({s.unresolved.length > 0 ? `${s.resolved.length} of ${s.controls.length}` : s.resolved.length})
                                 </span>
                               ))}
                             </div>
@@ -1565,8 +2130,16 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                                       {s.framework} {s.section && `(${s.section})`}
                                     </div>
                                     <div className="text-[10px] text-slate-500">
-                                      Controls: {s.controls.join(', ')}
+                                      Controls: {s.resolved.join(', ') || 'none in AVA checklist'}
                                     </div>
+                                    {/* The most precise place to disclose the gap: the exact
+                                        reference strings this build cannot resolve, next to the
+                                        ones it can. */}
+                                    {s.unresolved.length > 0 && (
+                                      <div className="text-[10px] text-amber-600">
+                                        Not in AVA checklist: {s.unresolved.join(', ')}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -1622,6 +2195,7 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                   {fwTasks.map(task => {
                     const done = completedTasks[task.taskId];
                     const fwSatisfy = task.satisfies.find(s => s.framework === fw);
+                    const fwSplit = fwSatisfy ? splitControlRefs(fw, fwSatisfy.controls) : null;
                     const otherFrameworks = task.satisfies.filter(s => s.framework !== fw && selectedFrameworks.has(s.framework));
 
                     return (
@@ -1633,14 +2207,20 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                               done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-slate-400'
                             }`}
                           >
-                            {done && <span className="text-xs">✓</span>}
+                            {done && <Icon name="check" className="w-3.5 h-3.5" strokeWidth={2.5} />}
                           </button>
                           <div className="flex-1">
                             <div className={`text-sm font-medium ${done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                               {task.taskName}
                             </div>
                             <div className="text-[10px] text-slate-500 mt-0.5">
-                              {fwSatisfy?.section && <span className="font-medium">{fwSatisfy.section}:</span>} {fwSatisfy?.controls.join(', ')}
+                              {fwSatisfy?.section && <span className="font-medium">{fwSatisfy.section}:</span>} {fwSplit?.resolved.join(', ')}
+                              {fwSplit && fwSplit.unresolved.length > 0 && (
+                                <span className="text-amber-600">
+                                  {fwSplit.resolved.length > 0 ? ' · ' : ' '}
+                                  {fwSplit.unresolved.join(', ')} (not in AVA checklist)
+                                </span>
+                              )}
                             </div>
                             {otherFrameworks.length > 0 && (
                               <div className="flex items-center gap-1 mt-1.5">
@@ -1705,7 +2285,12 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                   {phaseTasks.map(task => {
                     const done = completedTasks[task.taskId];
                     const relevantSatisfies = task.satisfies.filter(s => selectedFrameworks.has(s.framework));
-                    const totalControls = relevantSatisfies.reduce((sum, s) => sum + s.controls.length, 0);
+                    // Resolved references only, so this agrees with the roll-ups above rather
+                    // than counting references to controls the checklists do not carry. The
+                    // remainder is shown beside it, so a task reading '0 controls' says why.
+                    const splits = relevantSatisfies.map(s => splitControlRefs(s.framework, s.controls));
+                    const totalControls = splits.reduce((sum, s) => sum + s.resolved.length, 0);
+                    const unresolvedControls = splits.reduce((sum, s) => sum + s.unresolved.length, 0);
 
                     return (
                       <div
@@ -1721,7 +2306,7 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                               done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 hover:border-slate-400'
                             }`}
                           >
-                            {done && <span className="text-xs">✓</span>}
+                            {done && <Icon name="check" className="w-3.5 h-3.5" strokeWidth={2.5} />}
                           </button>
                           <div className="flex-1 min-w-0">
                             <div className={`text-sm font-medium truncate ${done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
@@ -1730,6 +2315,14 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">{task.deliverable}</span>
                               <span className="text-[9px] text-slate-500">→ {totalControls} controls</span>
+                              {unresolvedControls > 0 && (
+                                <span
+                                  className="text-[9px] text-amber-600"
+                                  title={`${unresolvedControls} control reference(s) on this task match no control id in the selected frameworks' checklists here, so they are not counted.`}
+                                >
+                                  +{unresolvedControls} not in AVA checklist
+                                </span>
+                              )}
                             </div>
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {relevantSatisfies.slice(0, 4).map(s => (
@@ -1765,15 +2358,21 @@ function GovernanceProgramBuilder({ onNavigateToFramework }: ProgramBuilderProps
 type TabId = 'frameworks' | 'program' | 'conformance' | 'eu-conformity' | 'fria' | 'gap-guidance' | 'security-hub';
 type FrameworkViewMode = 'checklist' | 'deep-dive';
 
-// Map framework IDs to their deep-dive view components
+// Map framework IDs to their deep-dive view components.
+//
+// Keys MUST match COMPLIANCE_CENTER_FRAMEWORKS[].id exactly. Three of them did not, and
+// because a miss falls through to the "Deep dive view not available" placeholder rather
+// than failing loudly, three fully built deep-dive views were unreachable from their only
+// entry point: 'sr-26-2' vs the real 'sr26-2', 'owasp-llm-top-10' vs 'owasp-llm-top10',
+// and 'osfi-e-23' vs 'osfi-e23'. Verified against the ids in mockData.ts.
 const FRAMEWORK_DEEP_DIVE_MAP: Record<string, string> = {
   'nist-ai-rmf': 'nist',
   'eu-ai-act': 'eu-ai-act',
   'finos-air': 'finos-air',
-  'owasp-llm-top-10': 'owasp-llm',
-  'sr-26-2': 'sr26',
+  'owasp-llm-top10': 'owasp-llm',
+  'sr26-2': 'sr26',
   'cri-fs-ai-rmf': 'cri-ai-rmf',
-  'osfi-e-23': 'osfi-e23',
+  'osfi-e23': 'osfi-e23',
   'iso-42001': 'iso-42001',
   'mitre-atlas': 'mitre-atlas',
   'naic-ai': 'naic-ai',
@@ -1792,11 +2391,30 @@ export default function ComplianceCenter() {
   const [showAuditHistory, setShowAuditHistory] = useState(false);
   const [showTimelineView, setShowTimelineView] = useState(false);
 
+  // Live audit history from the Govern audit log (control-plane backend).
+  // Falls back to the illustrative demo entries when the log is empty/unavailable.
+  const [auditEvents, setAuditEvents] = useState<GovernAuditEvent[]>([]);
+  const [auditLive, setAuditLive] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    governAuditApi.list()
+      .then(events => {
+        if (cancelled) return;
+        setAuditEvents(events);
+        setAuditLive(events.length > 0);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAuditEvents([]);
+        setAuditLive(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   // Live compliance attestations from API
   const {
     frameworks: liveFrameworks,
     live: apiLive,
-    loading: apiLoading,
     updateStatus,
     runAutoDetection,
     refresh: refreshAttestations,
@@ -1820,7 +2438,6 @@ export default function ComplianceCenter() {
   const {
     evaluations: liveEvaluations,
     live: controlEvalsLive,
-    loading: controlEvalsLoading,
     sources: evalSources,
     refresh: refreshControlEvals,
     mergeControl,
@@ -1828,6 +2445,54 @@ export default function ComplianceCenter() {
     controls: frameworkControls,
     skip: activeTab !== 'frameworks' || frameworkViewMode !== 'checklist', // Only fetch when viewing checklists
   });
+
+  // THE single framework object every consumer must read.
+  //
+  // `mergeControl` overlays live AWS control evaluations onto the seeded framework.
+  // It used to be applied to `filteredCategories` alone, so the row pills showed the
+  // live status while `stats`, `typeStats`, `pct`, the critical-gaps banner and BOTH
+  // exports read the raw seeded framework. Reproduced end to end: the checklist showed
+  // AI-5 as "✓ Compliant" (live, evaluated pass) while the CSV download recorded it as
+  // "Gap / Tool permission matrix incomplete", and the summary strip simultaneously
+  // claimed 72% with AI-5 listed under "Gaps Requiring Attention". An audit artifact
+  // that contradicts the screen it was exported from is worse than no artifact.
+  //
+  // NOTE: `frameworkControls` above deliberately stays on the RAW framework - it is the
+  // input to the evaluation hook, so feeding it the merged result would be circular.
+  const mergedFramework = useMemo(() => ({
+    ...framework,
+    categories: framework.categories.map(cat => ({
+      ...cat,
+      controls: cat.controls.map(c => mergeControl(c)),
+    })),
+  }), [framework, mergeControl]);
+
+  // This badge sits beside the <h1> in GovernPageLayout, above the tab strip, so it
+  // vouches for everything below it — including twelve embedded framework views that
+  // drop their own badge in `embedded` mode. It must therefore describe `allFrameworks`,
+  // which is the page's dominant content.
+  //
+  // It previously gated on `apiLive || controlEvalsLive`. That OR defeated the honesty
+  // gate in useComplianceAttestations (:101-105), which sets live=false deliberately when
+  // posture exists but attestations are empty, precisely so "the LIVE badge and posture
+  // strip don't misrepresent mock control statuses as live". Because `allFrameworks`
+  // (:2135) falls back to COMPLIANCE_CENTER_FRAMEWORKS on `!apiLive`, the OR let one live
+  // control evaluation paint a green "Live attestations from the control-plane backend"
+  // pill over a page of entirely seeded frameworks, percentages, and owners.
+  //
+  // controlEvalsLive is still a real signal, but it is narrow: useControlEvaluation is
+  // skipped outside the Frameworks/checklist view, and it only overwrites the status of
+  // controls carrying an autoDetectSource. It stays gated where it is actually used —
+  // the evaluated-sources panel (:2656) and mergeControl's per-control LIVE chips.
+  const compliancePageBadge = apiLive
+    ? (
+      <LiveDataBadge
+        live={apiLive}
+        source="Compliance Attestations API"
+        detail="Live attestations from the control-plane backend. Individual controls show their own LIVE chip when auto-detected against AWS; unchipped controls remain illustrative."
+      />
+    )
+    : <MockDataBadge integration="AWS Audit Manager + Config + Security Hub" />;
 
   // Handler to update control status via API
   const handleStatusChange = useCallback(async (controlId: string, newStatus: ControlStatus) => {
@@ -1853,7 +2518,7 @@ export default function ComplianceCenter() {
   }, [runAutoDetection, showToast]);
 
   const stats = useMemo(() => {
-    const allControls = framework.categories.flatMap(c => c.controls);
+    const allControls = mergedFramework.categories.flatMap(c => c.controls);
     return {
       total: allControls.length,
       pass: allControls.filter(c => c.status === 'pass').length,
@@ -1861,11 +2526,11 @@ export default function ComplianceCenter() {
       fail: allControls.filter(c => c.status === 'fail').length,
       notStarted: allControls.filter(c => c.status === 'not-started').length,
     };
-  }, [framework]);
+  }, [mergedFramework]);
 
   // Stats by control type
   const typeStats = useMemo(() => {
-    const allControls = framework.categories.flatMap(c => c.controls);
+    const allControls = mergedFramework.categories.flatMap(c => c.controls);
     const byType = (type: ControlType) => {
       const controls = allControls.filter(c => c.controlType === type);
       const applicable = controls.filter(c => c.status !== 'not-started');
@@ -1910,12 +2575,20 @@ export default function ComplianceCenter() {
     return items.sort((a, b) => a.daysUntil - b.daysUntil);
   }, [allFrameworks]);
 
-  // Cross-framework impact - which other frameworks does a control satisfy
+  // Cross-framework impact - which other frameworks does a control satisfy.
+  //
+  // Indexed by resolved checklist control id (see splitControlRefs), not by the raw reference
+  // string. The read below is `crossFrameworkImpact[control.id]`, so a reference written in a
+  // framework's published spelling used to key an entry no checklist row could ever look up —
+  // the chip simply never rendered and nothing reported the miss. Resolving first restores the
+  // chip for those rows without inventing a mapping: the framework list still comes only from
+  // what UNIFIED_CONTROL_MAPPINGS already asserts. References that resolve to nothing are
+  // skipped, since there is no row they could belong to.
   const crossFrameworkImpact = useMemo(() => {
     const impact: Record<string, string[]> = {};
     UNIFIED_CONTROL_MAPPINGS.forEach(mapping => {
       mapping.satisfies.forEach(s => {
-        s.controls.forEach(ctrlId => {
+        splitControlRefs(s.framework, s.controls).resolved.forEach(ctrlId => {
           if (!impact[ctrlId]) impact[ctrlId] = [];
           if (!impact[ctrlId].includes(s.framework)) {
             impact[ctrlId].push(s.framework);
@@ -1952,25 +2625,23 @@ export default function ComplianceCenter() {
   };
 
   const filteredCategories = useMemo(() => {
-    return framework.categories.map(cat => ({
+    // `mergedFramework` has already applied mergeControl to every control, so this only
+    // filters. Re-merging here would be a redundant second pass over the same data.
+    return mergedFramework.categories.map(cat => ({
       ...cat,
-      // Merge live evaluations into controls: controls with autoDetectSource get live status,
-      // others keep their mockData/API status
-      controls: cat.controls
-        .map(c => mergeControl(c))
-        .filter(c => {
-          const statusMatch = filterStatus === 'all' || c.status === filterStatus;
-          const typeMatch = filterControlType === 'all' || c.controlType === filterControlType;
-          return statusMatch && typeMatch;
-        }),
+      controls: cat.controls.filter(c => {
+        const statusMatch = filterStatus === 'all' || c.status === filterStatus;
+        const typeMatch = filterControlType === 'all' || c.controlType === filterControlType;
+        return statusMatch && typeMatch;
+      }),
     })).filter(cat => cat.controls.length > 0);
-  }, [framework, filterStatus, filterControlType, mergeControl]);
+  }, [mergedFramework, filterStatus, filterControlType]);
 
   return (
     <GovernPageLayout
       title="Compliance Center"
-      description="Interactive compliance management with live posture tracking and governance program builder."
-      badge={<><CoreBadge pillar="govern" /><MockDataBadge integration="AWS Audit Manager + Config + Security Hub" /></>}
+      description="Prove compliance continuously — live posture across AI frameworks, evidence and attestations, and preventive-control tracking."
+      badge={<><CoreBadge pillar="govern" />{compliancePageBadge}</>}
       actions={
         <Link
           to="/govern/risk"
@@ -1984,7 +2655,7 @@ export default function ComplianceCenter() {
         <UnifiedGuide {...COMPLIANCE_GUIDE} />
 
         {/* Compliance Posture Strip */}
-        <CompliancePostureStrip frameworks={allFrameworks} />
+        <CompliancePostureStrip frameworks={allFrameworks} live={apiLive} />
 
         {/* Maturity Readiness Card - shows Plan maturity data in compliance context */}
         <MaturityReadinessCard />
@@ -2112,6 +2783,12 @@ export default function ComplianceCenter() {
             {/* AI Security Controls - Best Practices & Framework Mapping */}
             <AISecurityControlsPanel />
 
+            {/* Preventive Controls - real AWS Organizations Service Control Policies */}
+            <PreventiveControlsCard />
+
+            {/* AWS Config Rules - real per-rule compliance from AWS Config */}
+            <AwsConfigRulesCard />
+
             {/* Security Hub Findings Panel */}
             <div className="pt-2">
               <div className="flex items-center gap-2 mb-4">
@@ -2199,7 +2876,7 @@ export default function ComplianceCenter() {
                     disabled={isAutoDetecting}
                     className="text-[10px] px-2 py-1 rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors disabled:opacity-50"
                   >
-                    {isAutoDetecting ? 'Detecting...' : '⚡ Auto-Detect'}
+                    {isAutoDetecting ? 'Detecting...' : <span className="inline-flex items-center gap-1"><Icon name="bolt" className="w-3 h-3" />Auto-Detect</span>}
                   </button>
                 </div>
               </div>
@@ -2383,13 +3060,13 @@ export default function ComplianceCenter() {
                       onClick={() => setShowTimelineView(!showTimelineView)}
                       className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${showTimelineView ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
-                      📅 Timeline
+                      <span className="inline-flex items-center gap-1"><Icon name="calendar" className="w-3 h-3" />Timeline</span>
                     </button>
                     <button
                       onClick={() => setShowAuditHistory(!showAuditHistory)}
                       className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${showAuditHistory ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
-                      📜 Audit Log
+                      <span className="inline-flex items-center gap-1"><Icon name="document-text" className="w-3 h-3" />Audit Log</span>
                     </button>
                   </div>
                 </div>
@@ -2417,7 +3094,7 @@ export default function ComplianceCenter() {
                     }`}
                   >
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-blue-600 uppercase tracking-wide">⚡ Technical</span>
+                      <span className="text-[10px] text-blue-600 uppercase tracking-wide inline-flex items-center gap-1"><Icon name="bolt" className="w-3 h-3" />Technical</span>
                     </div>
                     <div className="text-xl font-bold text-blue-700">{typeStats.technical.passing}/{typeStats.technical.applicable}</div>
                     <div className="flex items-center gap-1">
@@ -2437,7 +3114,7 @@ export default function ComplianceCenter() {
                     }`}
                   >
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-violet-600 uppercase tracking-wide">📋 Policy</span>
+                      <span className="text-[10px] text-violet-600 uppercase tracking-wide inline-flex items-center gap-1"><Icon name="clipboard-document-list" className="w-3 h-3" />Policy</span>
                     </div>
                     <div className="text-xl font-bold text-violet-700">{typeStats['non-technical'].passing}/{typeStats['non-technical'].applicable}</div>
                     <div className="flex items-center gap-1">
@@ -2457,7 +3134,7 @@ export default function ComplianceCenter() {
                     }`}
                   >
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-amber-600 uppercase tracking-wide">🔀 Hybrid</span>
+                      <span className="text-[10px] text-amber-600 uppercase tracking-wide inline-flex items-center gap-1"><Icon name="arrows-right-left" className="w-3 h-3" />Hybrid</span>
                     </div>
                     <div className="text-xl font-bold text-amber-700">{typeStats.hybrid.passing}/{typeStats.hybrid.applicable}</div>
                     <div className="flex items-center gap-1">
@@ -2488,7 +3165,7 @@ export default function ComplianceCenter() {
               {showTimelineView && (
                 <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-slate-700">📅 Upcoming Due Dates</span>
+                    <span className="text-xs font-semibold text-slate-700 inline-flex items-center gap-1"><Icon name="calendar" className="w-3.5 h-3.5" />Upcoming Due Dates</span>
                     <span className="text-[10px] text-slate-500">{upcomingDueDates.length} items</span>
                   </div>
                   {upcomingDueDates.length === 0 ? (
@@ -2539,19 +3216,46 @@ export default function ComplianceCenter() {
               {showAuditHistory && (
                 <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold text-slate-700">📜 Audit History</span>
+                    <span className="text-xs font-semibold text-slate-700 inline-flex items-center gap-1">
+                      <Icon name="document-text" className="w-3.5 h-3.5" />Audit History
+                      {auditLive
+                        ? <LiveDataBadge source="Govern audit log" detail="Recent governance events from the control-plane audit log (guardrail / incident / approval / deployment / config / enforcement)" />
+                        : <MockDataBadge integration="AWS Audit Manager change history" />}
+                    </span>
                     <span className="text-[10px] text-slate-500">Recent changes</span>
                   </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {/* Mock audit entries - in a real implementation these would come from the API */}
-                    {[
-                      { action: 'Status changed', control: 'GOVERN 1.1', from: 'in-progress', to: 'pass', user: 'greg.sorrels', time: '2 hours ago' },
-                      { action: 'Evidence added', control: 'AIR-SEC-010', from: '', to: 'Guardrails config v2.1', user: 'system', time: '5 hours ago' },
-                      { action: 'Auto-detected', control: 'MEASURE 1.1', from: 'not-started', to: 'pass', user: 'aws-sync', time: '1 day ago' },
-                      { action: 'Status changed', control: 'EU-TRANS-1', from: 'pass', to: 'in-progress', user: 'compliance.team', time: '2 days ago' },
-                    ].map((entry, i) => (
+                    {/* Live audit events when the Govern audit log has entries; illustrative demo rows otherwise. */}
+                    {(auditLive
+                      ? auditEvents.slice(0, 25).map(e => ({
+                          action: e.action || e.category,
+                          control: e.category,
+                          from: '',
+                          to: '',
+                          detail: e.summary as string | undefined,
+                          user: e.actor,
+                          time: e.ts,
+                          severity: e.severity as string | undefined,
+                        }))
+                      : [
+                          // These rows are illustrative (MockDataBadge above), but they name
+                          // controls in the `control` field, so they use the same ids a real
+                          // attestation carries. 'GOVERN 1.1' and 'MEASURE 1.1' were the
+                          // `section` strings of NIST-GV-1.1 / NIST-MS-1.1, not their ids —
+                          // and the auto-detection row in particular showed an id the
+                          // backend's cloudwatch probe does not write, while the two rows
+                          // either side of it already used real ids.
+                          { action: 'Status changed', control: 'NIST-GV-1.1', from: 'in-progress', to: 'pass', detail: undefined as string | undefined, user: 'greg.sorrels', time: '2 hours ago', severity: undefined as string | undefined },
+                          { action: 'Evidence added', control: 'AIR-SEC-010', from: '', to: 'Guardrails config v2.1', detail: undefined as string | undefined, user: 'system', time: '5 hours ago', severity: undefined as string | undefined },
+                          { action: 'Auto-detected', control: 'NIST-MS-1.1', from: 'not-started', to: 'pass', detail: undefined as string | undefined, user: 'aws-sync', time: '1 day ago', severity: undefined as string | undefined },
+                          { action: 'Status changed', control: 'EU-TRANS-1', from: 'pass', to: 'in-progress', detail: undefined as string | undefined, user: 'compliance.team', time: '2 days ago', severity: undefined as string | undefined },
+                        ]
+                    ).map((entry, i) => (
                       <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 border border-slate-100">
                         <div className={`w-2 h-2 rounded-full ${
+                          entry.severity === 'critical' || entry.severity === 'high' ? 'bg-rose-500' :
+                          entry.severity === 'medium' ? 'bg-amber-500' :
+                          entry.severity === 'low' ? 'bg-emerald-500' :
                           entry.action === 'Auto-detected' ? 'bg-blue-500' :
                           entry.to === 'pass' ? 'bg-emerald-500' :
                           entry.to === 'fail' ? 'bg-rose-500' : 'bg-amber-500'
@@ -2561,11 +3265,13 @@ export default function ComplianceCenter() {
                             <span className="text-xs font-medium text-slate-700">{entry.action}</span>
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-mono">{entry.control}</span>
                           </div>
-                          {entry.from && (
+                          {entry.from ? (
                             <div className="text-[10px] text-slate-500">
                               {entry.from} → {entry.to}
                             </div>
-                          )}
+                          ) : entry.detail ? (
+                            <div className="text-[10px] text-slate-500 truncate">{entry.detail}</div>
+                          ) : null}
                         </div>
                         <div className="text-right">
                           <div className="text-[10px] text-slate-500">{entry.user}</div>
@@ -2625,7 +3331,7 @@ export default function ComplianceCenter() {
 
               {/* Critical Gaps Alert */}
               {(() => {
-                const criticalGaps = framework.categories
+                const criticalGaps = mergedFramework.categories
                   .flatMap(c => c.controls)
                   .filter(c => c.status === 'fail' && (c.criticality === 'critical' || c.criticality === 'high'));
                 if (criticalGaps.length === 0) return null;
@@ -2633,7 +3339,7 @@ export default function ComplianceCenter() {
                   <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-rose-700 uppercase flex items-center gap-1">
-                        <span>⚠️</span> Critical/High Gaps Requiring Attention
+                        <Icon name="exclamation-triangle" className="w-3.5 h-3.5" /> Critical/High Gaps Requiring Attention
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">
                         {criticalGaps.length} gap{criticalGaps.length !== 1 ? 's' : ''}
@@ -2696,14 +3402,11 @@ export default function ComplianceCenter() {
                       className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <svg
+                        <Icon
+                          name="chevron-right"
                           className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                          strokeWidth={2}
+                        />
                         <span className="text-sm font-semibold text-slate-900">{category.name}</span>
                         <span className="text-xs text-slate-400">({category.controls.length} controls)</span>
                       </div>
@@ -2754,7 +3457,7 @@ export default function ComplianceCenter() {
                                         : 'border-slate-300 hover:border-slate-400'
                                     }`}
                                   >
-                                    {state.checked && <span className="text-xs">✓</span>}
+                                    {state.checked && <Icon name="check" className="w-3.5 h-3.5" strokeWidth={2.5} />}
                                   </button>
                                   <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{control.id}</span>
                                   {/* Criticality Badge */}
@@ -2769,10 +3472,13 @@ export default function ComplianceCenter() {
                                   {/* Control Type Badge */}
                                   {control.controlType && (
                                     <span
-                                      className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${CONTROL_TYPE_CONFIG[control.controlType].bgColor}`}
+                                      className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${CONTROL_TYPE_CONFIG[control.controlType].bgColor}`}
                                       title={CONTROL_TYPE_CONFIG[control.controlType].description}
                                     >
-                                      {control.controlType === 'technical' && '⚡'}{control.controlType === 'non-technical' && '📋'}{control.controlType === 'hybrid' && '🔀'} {CONTROL_TYPE_CONFIG[control.controlType].label}
+                                      {control.controlType === 'technical' && <Icon name="bolt" className="w-3 h-3" />}
+                                      {control.controlType === 'non-technical' && <Icon name="clipboard-document-list" className="w-3 h-3" />}
+                                      {control.controlType === 'hybrid' && <Icon name="arrows-right-left" className="w-3 h-3" />}
+                                      {CONTROL_TYPE_CONFIG[control.controlType].label}
                                     </span>
                                   )}
                                 </div>
@@ -2848,8 +3554,9 @@ export default function ComplianceCenter() {
                               {/* Cross-Framework Impact */}
                               {crossFrameworkImpact[control.id] && crossFrameworkImpact[control.id].length > 1 && (
                                 <div className="mb-3 p-2 bg-emerald-50 rounded-lg border border-emerald-200">
-                                  <div className="text-[10px] text-emerald-700 font-medium mb-1">
-                                    ✓ Also satisfies {crossFrameworkImpact[control.id].length - 1} other framework{crossFrameworkImpact[control.id].length > 2 ? 's' : ''}:
+                                  <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-medium mb-1">
+                                    <Icon name="check" className="w-3 h-3 flex-shrink-0" strokeWidth={2} />
+                                    <span>Also satisfies {crossFrameworkImpact[control.id].length - 1} other framework{crossFrameworkImpact[control.id].length > 2 ? 's' : ''}:</span>
                                   </div>
                                   <div className="flex flex-wrap gap-1">
                                     {crossFrameworkImpact[control.id]
@@ -2881,12 +3588,21 @@ export default function ComplianceCenter() {
                                     This control requires remediation before the next audit cycle.
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <button className="text-[10px] px-2 py-1 bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors">
+                                    <button
+                                      disabled
+                                      title="Planned — not yet wired to a backend"
+                                      className="text-[10px] px-2 py-1 bg-rose-600 text-white rounded opacity-50 cursor-not-allowed"
+                                    >
                                       Create Remediation Task
                                     </button>
-                                    <button className="text-[10px] px-2 py-1 bg-white text-rose-600 border border-rose-300 rounded hover:bg-rose-50 transition-colors">
+                                    <button
+                                      disabled
+                                      title="Planned — not yet wired to a backend"
+                                      className="text-[10px] px-2 py-1 bg-white text-rose-600 border border-rose-300 rounded opacity-50 cursor-not-allowed"
+                                    >
                                       Request Exception
                                     </button>
+                                    <span className="text-[9px] text-slate-400 italic">(planned)</span>
                                   </div>
                                 </div>
                               )}
@@ -2904,14 +3620,23 @@ export default function ComplianceCenter() {
 
                               {/* Evidence Upload */}
                               <div className="mt-2 flex items-center gap-2">
-                                <button className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors flex items-center gap-1">
+                                <button
+                                  disabled
+                                  title="Planned — not yet wired to a backend"
+                                  className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded opacity-50 cursor-not-allowed flex items-center gap-1"
+                                >
                                   <Icon name="paper-clip" className="w-3 h-3" />
                                   Attach Evidence
                                 </button>
-                                <button className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors flex items-center gap-1">
+                                <button
+                                  disabled
+                                  title="Planned — not yet wired to a backend"
+                                  className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded opacity-50 cursor-not-allowed flex items-center gap-1"
+                                >
                                   <Icon name="link" className="w-3 h-3" />
                                   Link Evidence
                                 </button>
+                                <span className="text-[9px] text-slate-400 italic">(planned)</span>
                               </div>
                             </div>
                           );
@@ -2933,7 +3658,7 @@ export default function ComplianceCenter() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      exportComplianceCSV(framework, controlStates);
+                      exportComplianceCSV(mergedFramework, controlStates);
                       showToast(`${framework.shortName} exported to CSV`, 'success');
                     }}
                     className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
@@ -2942,7 +3667,7 @@ export default function ComplianceCenter() {
                   </button>
                   <button
                     onClick={() => {
-                      generateComplianceReport(framework, controlStates);
+                      generateComplianceReport(mergedFramework, controlStates);
                       showToast(`${framework.shortName} report generated`, 'success');
                     }}
                     className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
@@ -2967,6 +3692,13 @@ export default function ComplianceCenter() {
           {toast.message}
         </div>
       )}
+
+      {/* Data Source Info Panel */}
+      <DataSourceInfo
+        pageId="compliance"
+        pageTitle="Compliance Center"
+        sources={getPageDataSources('compliance')}
+      />
     </GovernPageLayout>
   );
 }

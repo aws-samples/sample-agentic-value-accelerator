@@ -17,12 +17,13 @@
  * - Amazon API Gateway: Request validation between agents
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon, type IconName } from './icons';
 import UnifiedGuide, { A2A_GUIDE } from './UnifiedGuide';
 import { rowButtonProps } from './a11y';
 import A2ATrustEvaluator from './A2ATrustEvaluator';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
+import { governA2AApi, type TrustPolicy } from '../../api/client';
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -276,6 +277,20 @@ const A2A_EVENTS: A2AEvent[] = [
   { id: 'evt-007', timestamp: '2026-06-22T14:29:00Z', sourceAgent: 'agent-supervisor', targetAgent: 'agent-credit', action: 'audit', status: 'success', latencyMs: 78, policyApplied: 'trust-002' },
 ];
 
+// A2A_EVENTS is a fixed illustrative snapshot, not a rolling feed — every event
+// carries the same hardcoded date. So the header tiles describe the fixture's own
+// window ("2026-06-22 sample · 7 events") instead of claiming "Last 24 hours" of
+// live traffic, and the latency tile computes a real P50 over the fixture rather
+// than showing an unrelated literal.
+const A2A_EVENT_DAYS = Array.from(new Set(A2A_EVENTS.map(e => e.timestamp.slice(0, 10)))).sort();
+const A2A_EVENT_WINDOW_LABEL =
+  `${A2A_EVENT_DAYS[0]}${A2A_EVENT_DAYS.length > 1 ? ` to ${A2A_EVENT_DAYS[A2A_EVENT_DAYS.length - 1]}` : ''}`
+  + ` sample · ${A2A_EVENTS.length} events`;
+const A2A_P50_LATENCY_MS = (() => {
+  const sorted = A2A_EVENTS.map(e => e.latencyMs).sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+})();
+
 // ─────────────────────────── AWS Integration Info ───────────────────────────
 
 const AWS_A2A_PATTERNS: { id: string; name: string; service: string; description: string; icon: IconName; color: string; useCase: string; configExample: string }[] = [
@@ -493,14 +508,81 @@ const statusColors: Record<A2AEvent['status'], string> = {
   'rate-limited': 'bg-amber-100 text-amber-700',
 };
 
+// Normalized policy shape rendered by the Trust Policies tab. Live policies
+// (DynamoDB, via governA2AApi.listPolicies) and the mock A2A_TRUST_POLICIES both
+// map into this shape. Provider-specific fields are optional so the card only
+// renders what the source actually provides — no fabricated rate limits / chain
+// depth appear under a Live badge.
+interface DisplayPolicy {
+  id: string;
+  name: string;
+  description: string;
+  sourceAgent: string;
+  targetAgent: string;
+  allowedActions: string[];
+  status: 'active' | 'testing' | 'disabled';
+  dataClassifications?: string[];
+  requiresAuthentication?: boolean;
+  requiresEncryption?: boolean;
+  maxChainDepth?: number;
+  rateLimit?: number;
+  effect?: string;
+  maxDelegatedAutonomy?: number;
+}
+
+function mockPolicyToDisplay(p: A2ATrustPolicy): DisplayPolicy {
+  return { ...p };
+}
+
+function livePolicyToDisplay(p: TrustPolicy): DisplayPolicy {
+  return {
+    id: p.policy_id,
+    name: p.name,
+    description: `Effect: ${p.effect}${p.max_delegated_autonomy != null ? ` • max delegated autonomy L${p.max_delegated_autonomy}` : ''}`,
+    sourceAgent: p.source_pattern,
+    targetAgent: p.target_pattern,
+    allowedActions: p.allowed_actions,
+    status: p.enabled ? 'active' : 'disabled',
+    effect: p.effect,
+    maxDelegatedAutonomy: p.max_delegated_autonomy,
+  };
+}
+
 export default function A2AGovernance() {
   const [activeTab, setActiveTab] = useState<TabId>('trust-policies');
-  const [selectedPolicy, setSelectedPolicy] = useState<A2ATrustPolicy | null>(null);
+  const [selectedPolicy, setSelectedPolicy] = useState<DisplayPolicy | null>(null);
   const [selectedPattern, setSelectedPattern] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<'all' | 'success' | 'denied' | 'failed'>('all');
   const [showAddPolicyToast, setShowAddPolicyToast] = useState(false);
 
-  const activePolices = A2A_TRUST_POLICIES.filter(p => p.status === 'active').length;
+  // Live A2A trust policies (DynamoDB via governA2AApi.listPolicies). The sibling
+  // A2ATrustEvaluator above is already live; this brings the policy list into line.
+  const [livePolicies, setLivePolicies] = useState<TrustPolicy[] | null>(null);
+  const [policiesLive, setPoliciesLive] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    governA2AApi.listPolicies()
+      .then(policies => {
+        if (cancelled) return;
+        setLivePolicies(policies);
+        setPoliciesLive(true);
+      })
+      .catch(() => {
+        // No live signal — fall back to illustrative policies, honestly badged.
+        if (cancelled) return;
+        setLivePolicies(null);
+        setPoliciesLive(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Normalized policy list: live when the store responded, otherwise mock.
+  const displayPolicies: DisplayPolicy[] = policiesLive && livePolicies
+    ? livePolicies.map(livePolicyToDisplay)
+    : A2A_TRUST_POLICIES.map(mockPolicyToDisplay);
+
+  const activePolices = displayPolicies.filter(p => p.status === 'active').length;
   const successRate = Math.round((A2A_EVENTS.filter(e => e.status === 'success').length / A2A_EVENTS.length) * 100);
   const deniedCount = A2A_EVENTS.filter(e => e.status === 'denied').length;
 
@@ -526,12 +608,12 @@ export default function A2AGovernance() {
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="text-xs text-slate-500 mb-1">Trust Policies</div>
           <div className="text-2xl font-bold text-blue-600">{activePolices}</div>
-          <div className="text-[10px] text-slate-400 mt-1">{A2A_TRUST_POLICIES.length} total defined</div>
+          <div className="text-[10px] text-slate-400 mt-1">{displayPolicies.length} total defined</div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="text-xs text-slate-500 mb-1">A2A Success Rate</div>
           <div className={`text-2xl font-bold ${successRate >= 90 ? 'text-emerald-600' : successRate >= 70 ? 'text-amber-600' : 'text-rose-600'}`}>{successRate}%</div>
-          <div className="text-[10px] text-slate-400 mt-1">Last 24 hours</div>
+          <div className="text-[10px] text-slate-400 mt-1">{A2A_EVENT_WINDOW_LABEL}</div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="text-xs text-slate-500 mb-1">Denied Requests</div>
@@ -539,9 +621,9 @@ export default function A2AGovernance() {
           <div className="text-[10px] text-slate-400 mt-1">Policy violations</div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="text-xs text-slate-500 mb-1">Avg Latency</div>
-          <div className="text-2xl font-bold text-slate-900">185ms</div>
-          <div className="text-[10px] text-slate-400 mt-1">P50 A2A calls</div>
+          <div className="text-xs text-slate-500 mb-1">P50 Latency</div>
+          <div className="text-2xl font-bold text-slate-900">{A2A_P50_LATENCY_MS}ms</div>
+          <div className="text-[10px] text-slate-400 mt-1">Median of sampled A2A calls</div>
         </div>
       </div>
 
@@ -569,8 +651,11 @@ export default function A2AGovernance() {
       {activeTab === 'trust-policies' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-600">
-              Define which agents can communicate with each other and what actions are permitted.
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <span>Define which agents can communicate with each other and what actions are permitted.</span>
+              {policiesLive
+                ? <LiveDataBadge source="DynamoDB" detail="Live A2A trust policies" />
+                : <MockDataBadge integration="A2A trust policy store" />}
             </div>
             <button
               onClick={() => {
@@ -590,8 +675,19 @@ export default function A2AGovernance() {
             )}
           </div>
 
+          {displayPolicies.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+              <Icon name="shield-check" className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <div className="text-sm font-semibold text-slate-800">No trust policies defined</div>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                {policiesLive
+                  ? 'The A2A trust policy store is connected but empty. Add a policy to start governing agent-to-agent communication.'
+                  : 'Connect the A2A trust policy store to manage agent-to-agent authorization.'}
+              </p>
+            </div>
+          ) : (
           <div className="grid gap-4">
-            {A2A_TRUST_POLICIES.map(policy => (
+            {displayPolicies.map(policy => (
               <div
                 key={policy.id}
                 className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition-shadow cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-400 focus:outline-none"
@@ -617,15 +713,17 @@ export default function A2AGovernance() {
                         {policy.sourceAgent} → {policy.targetAgent}
                       </span>
                       <span>Actions: {policy.allowedActions.join(', ')}</span>
-                      <span>Max depth: {policy.maxChainDepth}</span>
-                      <span>Rate: {policy.rateLimit}/min</span>
+                      {policy.effect && <span>Effect: {policy.effect}</span>}
+                      {policy.maxDelegatedAutonomy != null && <span>Max autonomy: L{policy.maxDelegatedAutonomy}</span>}
+                      {policy.maxChainDepth != null && <span>Max depth: {policy.maxChainDepth}</span>}
+                      {policy.rateLimit != null && <span>Rate: {policy.rateLimit}/min</span>}
                     </div>
                   </div>
                   <Icon name="chevron-right" className={`w-4 h-4 text-slate-400 transition-transform ${selectedPolicy?.id === policy.id ? 'rotate-90' : ''}`} />
                 </div>
 
                 {selectedPolicy?.id === policy.id && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-4 gap-4">
+                  <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Allowed Actions</div>
                       <div className="space-y-1">
@@ -637,39 +735,55 @@ export default function A2AGovernance() {
                         ))}
                       </div>
                     </div>
-                    <div>
-                      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Data Access</div>
-                      <div className="space-y-1">
-                        {policy.dataClassifications.map((cls, i) => (
-                          <div key={i} className="text-xs text-slate-700">{cls}</div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Security</div>
-                      <div className="space-y-1 text-xs text-slate-700">
-                        <div className="flex items-center gap-1">
-                          {policy.requiresAuthentication ? <Icon name="check" className="w-3 h-3 text-emerald-500" /> : <Icon name="x-mark" className="w-3 h-3 text-rose-500" />}
-                          Authentication
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {policy.requiresEncryption ? <Icon name="check" className="w-3 h-3 text-emerald-500" /> : <Icon name="x-mark" className="w-3 h-3 text-rose-500" />}
-                          Encryption
+                    {policy.effect && (
+                      <div>
+                        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Delegation</div>
+                        <div className="space-y-1 text-xs text-slate-700">
+                          <div>Effect: {policy.effect}</div>
+                          {policy.maxDelegatedAutonomy != null && <div>Max Autonomy: L{policy.maxDelegatedAutonomy}</div>}
                         </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Limits</div>
-                      <div className="space-y-1 text-xs text-slate-700">
-                        <div>Chain Depth: {policy.maxChainDepth}</div>
-                        <div>Rate Limit: {policy.rateLimit}/min</div>
+                    )}
+                    {policy.dataClassifications && policy.dataClassifications.length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Data Access</div>
+                        <div className="space-y-1">
+                          {policy.dataClassifications.map((cls, i) => (
+                            <div key={i} className="text-xs text-slate-700">{cls}</div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {(policy.requiresAuthentication != null || policy.requiresEncryption != null) && (
+                      <div>
+                        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Security</div>
+                        <div className="space-y-1 text-xs text-slate-700">
+                          <div className="flex items-center gap-1">
+                            {policy.requiresAuthentication ? <Icon name="check" className="w-3 h-3 text-emerald-500" /> : <Icon name="x-mark" className="w-3 h-3 text-rose-500" />}
+                            Authentication
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {policy.requiresEncryption ? <Icon name="check" className="w-3 h-3 text-emerald-500" /> : <Icon name="x-mark" className="w-3 h-3 text-rose-500" />}
+                            Encryption
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {(policy.maxChainDepth != null || policy.rateLimit != null) && (
+                      <div>
+                        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Limits</div>
+                        <div className="space-y-1 text-xs text-slate-700">
+                          {policy.maxChainDepth != null && <div>Chain Depth: {policy.maxChainDepth}</div>}
+                          {policy.rateLimit != null && <div>Rate Limit: {policy.rateLimit}/min</div>}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

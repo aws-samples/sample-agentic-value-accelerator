@@ -11,11 +11,12 @@
  *
  * Backend-first design; falls back to mock data when offline.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
+import { governConformanceApi, type ConformanceRecord } from '../../api/client';
 import { COMPLIANCE_CENTER_FRAMEWORKS } from './mockData';
 import { Icon, type IconName } from './icons';
 import { ComplianceGapGuidanceCompact } from './compliance/ComplianceGapGuidance';
@@ -231,6 +232,22 @@ export default function Iso42001View({ embedded = false, onNavigateToProgram }: 
   const [certReadinessExpanded, setCertReadinessExpanded] = useState(true);
   const [expandedCertPhase, setExpandedCertPhase] = useState<number | null>(null);
 
+  // Live ISO 42001 conformance record (server-computed conformance %), same
+  // source ConformanceView uses. Falls back to static clauses when absent.
+  const [liveConformance, setLiveConformance] = useState<ConformanceRecord | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    governConformanceApi.list()
+      .then(list => {
+        if (cancelled || !list || list.length === 0) return;
+        // Prefer an ISO/IEC 42001 record; fall back to the first record.
+        const iso = list.find(r => /42001/.test(`${r.standard} ${r.name}`)) ?? list[0];
+        setLiveConformance(iso);
+      })
+      .catch(() => { /* keep static clause data */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Get the ISO 42001 framework from COMPLIANCE_CENTER_FRAMEWORKS
   const isoFramework = useMemo(() => {
     return COMPLIANCE_CENTER_FRAMEWORKS.find(fw => fw.id === 'iso-42001');
@@ -260,6 +277,12 @@ export default function Iso42001View({ embedded = false, onNavigateToProgram }: 
     const conformancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
     return { total, passed, inProgress, failed, conformancePct };
   }, [isoFramework]);
+
+  // Prefer the live conformance record's server-computed figures when present.
+  const computed = liveConformance?.computed;
+  const displayStats = computed
+    ? { total: computed.total_controls, passed: computed.passed, inProgress: computed.in_progress, conformancePct: computed.conformance_pct }
+    : { total: stats.total, passed: stats.passed, inProgress: stats.inProgress, conformancePct: stats.conformancePct };
 
   // Count Annex A controls by status
   const annexAStats = useMemo(() => {
@@ -320,9 +343,7 @@ export default function Iso42001View({ embedded = false, onNavigateToProgram }: 
       <div className="bg-sky-50 rounded-xl border border-sky-200 p-4">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-            </svg>
+            <Icon name="check-badge" className="w-4 h-4 text-sky-600" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-sky-900">Certification Pathway</h3>
@@ -338,10 +359,10 @@ export default function Iso42001View({ embedded = false, onNavigateToProgram }: 
 
       {/* KPI Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard label="Clause Requirements" value={stats.total} />
-        <StatCard label="Compliant" value={stats.passed} variant="success" />
-        <StatCard label="In Progress" value={stats.inProgress} variant="warning" />
-        <StatCard label="Conformance" value={`${stats.conformancePct}%`} variant="info" sub="excl. not started" />
+        <StatCard label="Clause Requirements" value={displayStats.total} />
+        <StatCard label="Compliant" value={displayStats.passed} variant="success" />
+        <StatCard label="In Progress" value={displayStats.inProgress} variant="warning" />
+        <StatCard label="Conformance" value={`${displayStats.conformancePct}%`} variant="info" sub={computed ? 'server-computed, excl. N/A' : 'excl. not started'} />
         <StatCard label="Cert Progress" value={`${certProgress.pct}%`} variant="info" sub={`${certProgress.complete}/${certProgress.total} steps`} />
       </div>
 
@@ -745,8 +766,36 @@ export default function Iso42001View({ embedded = false, onNavigateToProgram }: 
         </div>
       </div>
 
-      {/* Control Categories from Framework Data */}
-      {isoFramework && (
+      {/* Control Categories — live conformance record when available, else framework mock */}
+      {liveConformance ? (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-900">Clause Controls</span>
+            <LiveDataBadge source="ISO 42001 conformance API" detail="Clause controls persisted in the control-plane backend (DynamoDB); conformance % recomputed server-side" />
+          </div>
+          {liveConformance.categories.map(cat => (
+            <div key={cat.name} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+              <div className="px-5 py-2.5 border-b border-slate-100 text-sm font-semibold text-slate-900">{cat.name}</div>
+              <div className="divide-y divide-slate-100">
+                {cat.controls.map(ctrl => {
+                  const sm = statusMeta[ctrl.status] ?? statusMeta['not-started'];
+                  return (
+                    <div key={ctrl.id} className="px-5 py-3 flex items-center gap-3">
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${sm.badge}`}>{sm.label}</span>
+                      <div className="flex-1">
+                        <div className="text-[11px] font-semibold text-slate-800">{ctrl.id} | {ctrl.label}</div>
+                        <div className="text-[10px] text-slate-400">{ctrl.section}{ctrl.owner ? ` | Owner: ${ctrl.owner}` : ''}</div>
+                        {ctrl.evidence && ctrl.evidence !== '' && <div className="text-[9px] text-slate-400 mt-0.5">Evidence: {ctrl.evidence}</div>}
+                      </div>
+                      {ctrl.due_date && <div className="text-[9px] text-amber-600">Due: {ctrl.due_date}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </>
+      ) : isoFramework ? (
         <>
           {isoFramework.categories.map(cat => (
             <div key={cat.name} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
@@ -770,7 +819,7 @@ export default function Iso42001View({ embedded = false, onNavigateToProgram }: 
             </div>
           ))}
         </>
-      )}
+      ) : null}
 
       {/* ISO Integration Opportunities */}
       <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
@@ -852,13 +901,25 @@ export default function Iso42001View({ embedded = false, onNavigateToProgram }: 
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a framework whose controls are seeded would inherit a Live header.
+  const badge = liveConformance
+    ? <LiveDataBadge source="ISO 42001 conformance API" detail="Conformance record persisted in the control-plane backend (DynamoDB); conformance % recomputed server-side" />
+    : <MockDataBadge integration="ISO 42001 mapping - control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
 
   return (
     <GovernPageLayout
       title="ISO/IEC 42001:2023 (AI Management Systems)"
       description="The first international standard for establishing, implementing, maintaining, and improving an AI management system. Certifiable via accredited bodies."
-      badge={<MockDataBadge integration="ISO 42001 mapping - control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

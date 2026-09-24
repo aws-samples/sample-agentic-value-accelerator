@@ -17,6 +17,7 @@ import {
 import { Icon, type IconName } from '../icons';
 import LiveSecurityPosture from './LiveSecurityPosture';
 import SecurityPostureCard from './SecurityPostureCard';
+import { MockDataBadge } from '../DataSourceIndicator';
 
 const SEVERITY_ICONS: Record<AlertSeverity, IconName> = {
   CRITICAL: 'exclamation-circle',
@@ -191,6 +192,14 @@ export default function RealTimeMonitoring() {
       {/* Unified security posture — GuardDuty/Macie/Inspector/Access Analyzer, each own API */}
       <SecurityPostureCard />
 
+      {/* Illustrative runtime feed disclosure: the KPI cards and signal feed below are
+          derived from mock RUNTIME_SIGNALS, not live CloudWatch/Guardrail/Security Hub
+          data. Surface a Demo badge so these numbers are not read as live. */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-900">Runtime Signal Monitoring</span>
+        <MockDataBadge integration="CloudWatch alarms + Guardrail interventions + Security Hub" />
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-6 gap-4">
         <div className="bg-white rounded-lg border border-slate-200 p-4">
@@ -298,6 +307,7 @@ export default function RealTimeMonitoring() {
         </div>
         <div className="flex-1" />
         <span className="text-xs text-slate-500">{filteredSignals.length} signals</span>
+        <MockDataBadge integration="CloudWatch alarms + Guardrail interventions + Security Hub" />
       </div>
 
       {/* Signal Feed */}

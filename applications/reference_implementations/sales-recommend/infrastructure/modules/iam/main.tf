@@ -213,6 +213,26 @@ data "aws_iam_policy_document" "ecs_task_permissions" {
       "arn:aws:bedrock:${var.aws_region}:${var.account_id}:*"
     ]
   }
+
+  # Leads table — the UI upserts captured emails (/api/lead) and reads them
+  # back for the Visitors view (/api/leads). Scoped to this deployment's table
+  # by its deterministic name so no dependency on the leads module is needed.
+  statement {
+    sid    = "LeadsTableReadWrite"
+    effect = "Allow"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:GetItem",
+      "dynamodb:Query",
+      "dynamodb:Scan",
+      "dynamodb:DescribeTable"
+    ]
+    resources = [
+      "arn:aws:dynamodb:${var.aws_region}:${var.account_id}:table/${var.project}-leads",
+      "arn:aws:dynamodb:${var.aws_region}:${var.account_id}:table/${var.project}-leads/index/*"
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "ecs_task_permissions" {

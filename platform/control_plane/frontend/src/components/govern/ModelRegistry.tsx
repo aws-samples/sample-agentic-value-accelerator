@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from './icons';
 import { rowButtonProps } from './a11y';
@@ -16,6 +16,7 @@ import { useGovernanceAggregator } from './useGovernanceAggregator';
 import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import LiveModelInventory from './LiveModelInventory';
 import { useGovernModels } from './useGovernModels';
+import { governSageMakerApi, type AwsModelRegistryResponse, type AwsModelCardsResponse } from '../../api/client';
 
 const tierBg: Record<string, string> = {
   'Tier 1': 'bg-rose-50 text-rose-700 ring-rose-200',
@@ -70,6 +71,26 @@ export default function ModelRegistry({ embedded = false }: Props) {
   // Live Bedrock model catalog + CloudWatch runtime metrics + cost
   const { catalog, metrics, cost, catalogLive } = useGovernModels(7, 3);
 
+  // Live SageMaker governance: model-package approval registry + model cards.
+  // Each dataset degrades independently — a failed call leaves it null so the
+  // section keeps its illustrative fallback under a Demo badge.
+  const [smRegistry, setSmRegistry] = useState<AwsModelRegistryResponse | null>(null);
+  const [smCards, setSmCards] = useState<AwsModelCardsResponse | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([
+      governSageMakerApi.modelRegistry(),
+      governSageMakerApi.modelCards(),
+    ]).then(([reg, cards]) => {
+      if (cancelled) return;
+      setSmRegistry(reg.status === 'fulfilled' ? reg.value : null);
+      setSmCards(cards.status === 'fulfilled' ? cards.value : null);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const smRegistryLive = !!smRegistry?.live;
+  const smCardsLive = !!smCards?.live;
+
   // Build unified model list: live catalog models merged with mock governance metadata.
   // When live catalog is available, use it as the source of truth for model inventory;
   // governance metadata (tier, attestation, eval, owner) still comes from mock data.
@@ -96,9 +117,17 @@ export default function ModelRegistry({ embedded = false }: Props) {
           name: liveModel.name,
           provider: liveModel.provider,
           owner: mockMatch?.owner ?? 'Unassigned',
-          tier: mockMatch?.tier ?? 'Tier 3' as const,
+          // null, not 'Tier 3'. The catalog lists ~122 real Bedrock models; only the handful
+          // with a seeded MODELS match carry a governance tier. Defaulting the rest to
+          // Tier 3 assigned every unclassified model the *most permissive* tier in the
+          // scheme - rendered emerald, and matching the Tier 3 filter as though someone had
+          // reviewed it and decided it was low risk.
+          tier: mockMatch?.tier ?? null,
           status: (runtime?.invocations ?? 0) > 0 ? 'Production' as const : 'Pending Review' as const,
-          evalScore: mockMatch?.evalScore ?? 75,
+          // null, not 75. An eval score is the output of running an evaluation; a model with
+          // no seeded match has never been evaluated here. 75 also landed in the amber band
+          // of the tone rule below, so it read as a real, merely-mediocre score.
+          evalScore: mockMatch?.evalScore ?? null,
           useCases: mockMatch?.useCases ?? 0,
           monthlyCost: modelCost ?? mockMatch?.monthlyCost ?? 0,
           lastValidated: mockMatch?.lastValidated ?? 'N/A',
@@ -128,8 +157,12 @@ export default function ModelRegistry({ embedded = false }: Props) {
 
   const totalCost = unifiedModels.reduce((s, m) => s + m.monthlyCost, 0);
   const totalUseCases = unifiedModels.reduce((s, m) => s + m.useCases, 0);
+  // Attestation register is illustrative (from MODEL_DETAILS). Compute the ratio
+  // over the SAME mock population so it doesn't read as a live compliance cliff
+  // against the (much larger) live Bedrock catalog — e.g. "3/50, 47 pending".
+  const attestationPopulation = Object.keys(MODEL_DETAILS).length;
   const attested = Object.values(MODEL_DETAILS).filter(d => d.attestation.sr26_2.attested).length;
-  const pendingAttestation = unifiedModels.length - attested;
+  const pendingAttestation = attestationPopulation - attested;
 
 
   const modelsWithComplianceGaps = MODELS.filter(m => {
@@ -195,6 +228,30 @@ export default function ModelRegistry({ embedded = false }: Props) {
     }));
   }, []);
 
+  // Summary KPI tiles. `live` gates the green Live badge (only genuinely live
+  // catalog counts); `mock` marks a tile as illustrative so hardcoded/blended
+  // figures never render under a Live badge.
+  const summaryKpis: { label: string; value: string | number; sub: string; live: boolean; mock?: string }[] = [
+    { label: 'Models Registered', value: unifiedModels.length, sub: `${unifiedModels.filter(m => m.status === 'Production').length} in production`, live: !!showingLiveData },
+    { label: 'Use Cases', value: totalUseCases, sub: 'across the fleet', live: false },
+    { label: 'Monthly Cost', value: `$${totalCost.toLocaleString()}`, sub: `~$${(totalCost * 12 / 1000).toFixed(1)}k/yr`, live: false, mock: 'Per-model cost join rarely matches — this total blends live + illustrative rates. Live cost totals are in the panel above.' },
+    { label: 'SR 26-2 Attested', value: `${attested}/${attestationPopulation}`, sub: `${pendingAttestation} pending`, live: false, mock: 'Model attestation register' },
+    // Average over the models that actually have a score, and say how many that was. The
+    // old form divided by every model in the catalog while treating each unevaluated one as
+    // a 75, so the average was dragged toward 75 by models that had never been evaluated.
+    ...(() => {
+      const scored = unifiedModels.map(m => m.evalScore).filter((s): s is number => s !== null);
+      return [{
+        label: 'Avg Eval Score',
+        value: scored.length > 0 ? Math.round(scored.reduce((s, v) => s + v, 0) / scored.length) : '—',
+        sub: scored.length > 0
+          ? `quality/safety/latency · ${scored.length} of ${unifiedModels.length} evaluated`
+          : 'no model in this catalog has an evaluation on record',
+        live: false,
+      }];
+    })(),
+  ];
+
   return (
     <div className={embedded ? '' : 'min-h-[calc(100vh-4rem)] relative'}>
       <div className={embedded ? '' : 'relative max-w-7xl mx-auto px-6 py-10'}>
@@ -216,9 +273,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
+                    <Icon name="chart-bar" className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-900">Analysis Tools</div>
@@ -231,9 +286,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
                     className="flex items-center gap-2 px-4 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm font-medium text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 transition-all shadow-sm hover:shadow"
                   >
                     <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-                      </svg>
+                      <Icon name="chart-bar-square" className="w-4 h-4 text-indigo-600" />
                     </div>
                     <div className="text-left">
                       <div className="font-semibold">Compare Models</div>
@@ -245,9 +298,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
                     className="flex items-center gap-2 px-4 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50 hover:border-amber-300 transition-all shadow-sm hover:shadow"
                   >
                     <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
+                      <Icon name="calculator" className="w-4 h-4 text-amber-600" />
                     </div>
                     <div className="text-left">
                       <div className="font-semibold">Risk Calculator</div>
@@ -259,9 +310,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
                     className="flex items-center gap-2 px-4 py-2.5 bg-white border border-violet-200 rounded-xl text-sm font-medium text-violet-700 hover:bg-violet-50 hover:border-violet-300 transition-all shadow-sm hover:shadow"
                   >
                     <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
+                      <Icon name="link" className="w-4 h-4 text-violet-600" />
                     </div>
                     <div className="text-left">
                       <div className="font-semibold">Dependency Graph</div>
@@ -273,9 +322,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
                     className="flex items-center gap-2 px-4 py-2.5 bg-white border border-emerald-200 rounded-xl text-sm font-medium text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 transition-all shadow-sm hover:shadow"
                   >
                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+                      <Icon name="document-text" className="w-4 h-4 text-emerald-600" />
                     </div>
                     <div className="text-left">
                       <div className="font-semibold">MRM Frameworks</div>
@@ -399,17 +446,12 @@ export default function ModelRegistry({ embedded = false }: Props) {
         </div>
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          {[
-            { label: 'Models Registered', value: unifiedModels.length,                 sub: `${unifiedModels.filter(m => m.status === 'Production').length} in production`, live: showingLiveData },
-            { label: 'Use Cases',          value: totalUseCases,                 sub: 'across the fleet', live: false },
-            { label: 'Monthly Cost',       value: `$${totalCost.toLocaleString()}`, sub: `~$${(totalCost * 12 / 1000).toFixed(1)}k/yr`, live: !!cost?.live },
-            { label: 'SR 26-2 Attested',   value: `${attested}/${unifiedModels.length}`,   sub: `${pendingAttestation} pending`, live: false },
-            { label: 'Avg Eval Score',     value: unifiedModels.length > 0 ? Math.round(unifiedModels.reduce((s, m) => s + m.evalScore, 0) / unifiedModels.length) : 0, sub: 'quality/safety/latency', live: false },
-          ].map(k => (
+          {summaryKpis.map(k => (
             <div key={k.label} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{k.label}</div>
                 {k.live && <LiveDataBadge />}
+                {k.mock && <MockDataBadge integration={k.mock} />}
               </div>
               <div className="text-2xl font-semibold text-slate-900 mt-1">{k.value}</div>
               <div className="text-[11px] text-slate-400 mt-0.5">{k.sub}</div>
@@ -530,9 +572,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
           {portfolioRisk.controlGaps > 0 && (
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-3">
               <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <Icon name="exclamation-triangle" className="w-4 h-4 text-amber-600" />
               </div>
               <div className="flex-1">
                 <div className="text-xs font-semibold text-amber-800">Control Coverage Gap</div>
@@ -566,7 +606,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
               <div key={i} className="rounded-lg border p-2" style={{ borderColor: `${fw.meta?.color}40`, backgroundColor: `${fw.meta?.color}08` }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-xs">
-                    {fw.framework.includes('US') ? '🇺🇸' : fw.framework.includes('Canada') ? '🇨🇦' : fw.framework.includes('EU') ? '🇪🇺' : fw.framework.includes('AWS') ? <Icon name="cloud" className="w-4 h-4" /> : <Icon name="globe-alt" className="w-4 h-4" />}
+                    {fw.framework.includes('US') ? <Icon name="flag" className="w-4 h-4" /> : fw.framework.includes('Canada') ? <Icon name="flag" className="w-4 h-4" /> : fw.framework.includes('EU') ? <Icon name="flag" className="w-4 h-4" /> : fw.framework.includes('AWS') ? <Icon name="cloud" className="w-4 h-4" /> : <Icon name="globe-alt" className="w-4 h-4" />}
                   </span>
                   <span className="text-[10px] font-semibold text-slate-900">{fw.meta?.shortCode || fw.framework.split(' ')[0]}</span>
                   <span className={`text-xs font-bold ml-auto ${fw.fail > 0 ? 'text-rose-600' : fw.pct === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -589,10 +629,10 @@ export default function ModelRegistry({ embedded = false }: Props) {
               <thead className="bg-slate-50">
                 <tr>
                   <th scope="col" className="text-left px-3 py-2 font-medium text-slate-600">Model</th>
-                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇺🇸 SR 26-2</th>
-                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇨🇦 OSFI</th>
-                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇺🇸 NIST</th>
-                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600">🇪🇺 EU AI</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600"><Icon name="flag" className="w-3.5 h-3.5 inline-block mr-0.5" />SR 26-2</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600"><Icon name="flag" className="w-3.5 h-3.5 inline-block mr-0.5" />OSFI</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600"><Icon name="flag" className="w-3.5 h-3.5 inline-block mr-0.5" />NIST</th>
+                  <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600"><Icon name="flag" className="w-3.5 h-3.5 inline-block mr-0.5" />EU AI</th>
                   <th scope="col" className="text-center px-2 py-2 font-medium text-slate-600"><Icon name="cloud" className="w-3.5 h-3.5 inline-block mr-0.5" />AWS RAI</th>
                   <th scope="col" className="px-2 py-2"></th>
                 </tr>
@@ -721,10 +761,10 @@ export default function ModelRegistry({ embedded = false }: Props) {
                     <span>MRM Frameworks</span>
                   </div>
                   <div className="flex items-center justify-center gap-1 mt-0.5 text-[9px] font-normal normal-case">
-                    <span title="SR 26-2 (US Fed)">🇺🇸SR</span>
-                    <span title="OSFI E-23 (Canada)">🇨🇦OSFI</span>
-                    <span title="NIST AI RMF">🇺🇸NIST</span>
-                    <span title="EU AI Act">🇪🇺EU</span>
+                    <span title="SR 26-2 (US Fed)" className="inline-flex items-center gap-0.5"><Icon name="flag" className="w-2.5 h-2.5" />SR</span>
+                    <span title="OSFI E-23 (Canada)" className="inline-flex items-center gap-0.5"><Icon name="flag" className="w-2.5 h-2.5" />OSFI</span>
+                    <span title="NIST AI RMF" className="inline-flex items-center gap-0.5"><Icon name="flag" className="w-2.5 h-2.5" />NIST</span>
+                    <span title="EU AI Act" className="inline-flex items-center gap-0.5"><Icon name="flag" className="w-2.5 h-2.5" />EU</span>
                   </div>
                 </th>
                 <th scope="col" className="text-right py-2.5 px-3 font-medium">Eval</th>
@@ -743,7 +783,16 @@ export default function ModelRegistry({ embedded = false }: Props) {
                     </td>
                     <td className="py-2.5 px-3 text-slate-700">{m.owner}</td>
                     <td className="py-2.5 px-3 text-center">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ${tierBg[m.tier]}`}>{m.tier}</span>
+                      {m.tier ? (
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ${tierBg[m.tier]}`}>{m.tier}</span>
+                      ) : (
+                        <span
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 bg-slate-50 text-slate-400 ring-slate-200"
+                          title="No governance tier assigned. Tiering is a review decision recorded against the model; this one is in the Bedrock catalog but has not been through it."
+                        >
+                          Untiered
+                        </span>
+                      )}
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       {detail?.riskProfile ? (
@@ -799,7 +848,16 @@ export default function ModelRegistry({ embedded = false }: Props) {
                       )}
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      <span className={`font-semibold tabular-nums ${m.evalScore >= 85 ? 'text-emerald-600' : m.evalScore >= 70 ? 'text-amber-600' : 'text-rose-600'}`}>{m.evalScore}</span>
+                      {m.evalScore === null ? (
+                        <span
+                          className="font-semibold tabular-nums text-slate-400"
+                          title="Not evaluated. No evaluation has been run against this model, so there is no score - this is an absence of data, not a low score."
+                        >
+                          —
+                        </span>
+                      ) : (
+                        <span className={`font-semibold tabular-nums ${m.evalScore >= 85 ? 'text-emerald-600' : m.evalScore >= 70 ? 'text-amber-600' : 'text-rose-600'}`}>{m.evalScore}</span>
+                      )}
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       {detail?.revalidation ? (
@@ -921,9 +979,128 @@ export default function ModelRegistry({ embedded = false }: Props) {
           </div>
         )}
 
+        {/* Live SageMaker Model Registry — real model-package approval status + model cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Model-package approval registry */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-slate-900">SageMaker Model Registry — Approval Status</div>
+              {smRegistryLive
+                ? <LiveDataBadge source="SageMaker" detail="ListModelPackages — live model-package approval status" />
+                : <MockDataBadge integration="SageMaker ListModelPackages (no registered model packages found or API unavailable)" />}
+            </div>
+            {smRegistryLive ? (
+              smRegistry && smRegistry.total > 0 ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
+                      <div className="text-lg font-semibold text-emerald-700">{smRegistry.approved}</div>
+                      <div className="text-[10px] text-emerald-600 uppercase tracking-wide">Approved</div>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                      <div className="text-lg font-semibold text-amber-700">{smRegistry.pending_approval}</div>
+                      <div className="text-[10px] text-amber-600 uppercase tracking-wide">Pending</div>
+                    </div>
+                    <div className="rounded-lg bg-rose-50 border border-rose-100 px-3 py-2">
+                      <div className="text-lg font-semibold text-rose-700">{smRegistry.rejected}</div>
+                      <div className="text-[10px] text-rose-600 uppercase tracking-wide">Rejected</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {smRegistry.packages.map(pkg => {
+                      const st = pkg.model_approval_status.toLowerCase();
+                      const badge = st.includes('approv') ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : st.includes('reject') ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200';
+                      return (
+                        <div key={pkg.model_package_arn} className="flex items-center justify-between gap-2 border border-slate-100 rounded-lg px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="text-xs font-medium text-slate-800 truncate">{pkg.model_package_name}</div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {pkg.model_package_group_name ?? '—'}{pkg.model_package_version != null ? ` · v${pkg.model_package_version}` : ''} · {pkg.model_package_status}
+                            </div>
+                          </div>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${badge}`}>
+                            {pkg.model_approval_status}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-slate-500 py-6 text-center">No model packages registered in SageMaker Model Registry.</div>
+              )
+            ) : (
+              <div className="text-xs text-slate-500 py-6 text-center">SageMaker Model Registry unavailable — approval status shown in the illustrative pipeline below.</div>
+            )}
+          </div>
+
+          {/* Model cards — attestation / documentation status */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-slate-900">SageMaker Model Cards — Attestation Status</div>
+              {smCardsLive
+                ? <LiveDataBadge source="SageMaker" detail="ListModelCards — live model-card documentation status" />
+                : <MockDataBadge integration="SageMaker ListModelCards (no model cards found or API unavailable)" />}
+            </div>
+            {smCardsLive ? (
+              smCards && smCards.total > 0 ? (
+                <>
+                  <div className="grid grid-cols-4 gap-2 mb-3">
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-2 py-2 text-center">
+                      <div className="text-base font-semibold text-emerald-700">{smCards.approved}</div>
+                      <div className="text-[9px] text-emerald-600 uppercase tracking-wide">Approved</div>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 border border-amber-100 px-2 py-2 text-center">
+                      <div className="text-base font-semibold text-amber-700">{smCards.pending_review}</div>
+                      <div className="text-[9px] text-amber-600 uppercase tracking-wide">Review</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-2 text-center">
+                      <div className="text-base font-semibold text-slate-700">{smCards.draft}</div>
+                      <div className="text-[9px] text-slate-500 uppercase tracking-wide">Draft</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-2 text-center">
+                      <div className="text-base font-semibold text-slate-500">{smCards.archived}</div>
+                      <div className="text-[9px] text-slate-400 uppercase tracking-wide">Archived</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {smCards.cards.map(card => {
+                      const st = card.model_card_status.toLowerCase();
+                      const badge = st.includes('approv') ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : st.includes('review') ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : st.includes('archiv') ? 'bg-slate-50 text-slate-400 border-slate-200'
+                        : 'bg-slate-50 text-slate-600 border-slate-200';
+                      return (
+                        <div key={card.model_card_arn} className="flex items-center justify-between gap-2 border border-slate-100 rounded-lg px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="text-xs font-medium text-slate-800 truncate">{card.model_card_name}</div>
+                            <div className="text-[10px] text-slate-500 truncate">{card.model_id ?? '—'}</div>
+                          </div>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${badge}`}>
+                            {card.model_card_status}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-slate-500 py-6 text-center">No SageMaker model cards found.</div>
+              )
+            ) : (
+              <div className="text-xs text-slate-500 py-6 text-center">SageMaker Model Cards unavailable — attestation register below is illustrative.</div>
+            )}
+          </div>
+        </div>
+
         {/* Approval Pipeline (pending models) */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm mb-6">
-          <div className="text-sm font-semibold text-slate-900 mb-3">Approval Pipeline — Pending Models</div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold text-slate-900">Approval Pipeline — Pending Models</div>
+            <MockDataBadge integration="Illustrative approval chain — live model-package/model-card approval status is in the panels above" />
+          </div>
           <div className="space-y-4">
             {MODELS.filter(m => {
               const detail = MODEL_DETAILS[m.id];
@@ -953,9 +1130,7 @@ export default function ModelRegistry({ embedded = false }: Props) {
                           <div className="text-[10px] opacity-80 mt-0.5">{a.approver}</div>
                         </div>
                         {i < detail.approvalChain.length - 1 && (
-                          <svg className="w-3 h-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
+                          <Icon name="arrow-right" className="w-3 h-3 text-slate-300" />
                         )}
                       </div>
                     ))}

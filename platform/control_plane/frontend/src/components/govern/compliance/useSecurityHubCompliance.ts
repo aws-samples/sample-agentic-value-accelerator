@@ -66,8 +66,17 @@ export interface ComplianceStandardBreakdown {
 export interface SeverityBreakdown {
   severity: SeverityLevel;
   count: number;
-  aiRelatedCount: number;
+  /**
+   * AI-related findings at this severity, counted from the returned `top_findings` SAMPLE -
+   * a different, much smaller population than `count`. null when it cannot be derived over
+   * the same population as `count`, which is the normal case: the API returns a severity
+   * breakdown over everything it scanned but only a handful of individual findings.
+   * Rendering it beside `count` without saying so compares two different denominators.
+   */
+  aiRelatedCount: number | null;
   pctOfTotal: number;
+  /** True when `count` came from the top_findings sample rather than the API breakdown. */
+  countFromSample: boolean;
 }
 
 export interface SecurityHubComplianceData {
@@ -81,6 +90,14 @@ export interface SecurityHubComplianceData {
   // Aggregations
   byStandard: ComplianceStandardBreakdown[];
   bySeverity: SeverityBreakdown[];
+
+  /**
+   * True when the scan hit its limit, so every count is a FLOOR - Security Hub holds more
+   * findings than were examined.
+   */
+  countsAreFloors: boolean;
+  /** How many findings the backend actually examined. */
+  scannedCount: number;
 
   // Summary stats
   totalFindings: number;
@@ -250,7 +267,7 @@ function calculateAgeInDays(updatedAt?: string | null): number {
 /**
  * Enrich a raw finding with AI-specific metadata
  */
-function enrichFinding(finding: AwsSecurityFinding, index: number): AISecurityFinding {
+function enrichFinding(finding: AwsSecurityFinding): AISecurityFinding {
   const { isAIRelated, service } = detectAIService(finding);
 
   return {
@@ -317,6 +334,8 @@ export function useSecurityHubCompliance(
         aiFindings: [],
         byStandard: [],
         bySeverity: [],
+        countsAreFloors: false,
+        scannedCount: 0,
         totalFindings: 0,
         aiRelatedFindings: 0,
         criticalCount: 0,
@@ -327,7 +346,7 @@ export function useSecurityHubCompliance(
     }
 
     // Enrich all findings
-    const allFindings = raw.top_findings.map((f, idx) => enrichFinding(f, idx));
+    const allFindings = raw.top_findings.map(f => enrichFinding(f));
     const aiFindings = allFindings.filter(f => f.isAIRelated);
 
     const targetFindings = aiOnly ? aiFindings : allFindings;
@@ -354,16 +373,38 @@ export function useSecurityHubCompliance(
       }))
       .sort((a, b) => b.total - a.total);
 
-    // Group by severity
+    // Group by severity.
+    //
+    // `allFindings` is raw.top_findings - a top-N SAMPLE, ten items on the reference account -
+    // so counting severities out of it produced a "Findings by Severity" chart describing ten
+    // findings while the panel reported it under a Live badge. The API already returns
+    // `by_severity` computed over everything it scanned (HIGH 4 / MEDIUM 83 / LOW 113 against
+    // 200 scanned, measured), and the hook was discarding it.
+    //
+    // Prefer the API breakdown. Fall back to counting the sample only when filtering to AI
+    // findings, where no server-side breakdown exists - and flag that with countFromSample so
+    // the UI can say the profile describes a sample.
     const severities: SeverityLevel[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL'];
+    const apiBySeverity = new Map((raw.by_severity ?? []).map(b => [b.severity, b.count]));
+    const useApiBreakdown = !aiOnly && apiBySeverity.size > 0;
+    const breakdownTotal = useApiBreakdown
+      ? [...apiBySeverity.values()].reduce((a, c) => a + c, 0)
+      : targetFindings.length;
+
     const bySeverity: SeverityBreakdown[] = severities.map(severity => {
-      const count = targetFindings.filter(f => f.severity === severity).length;
-      const aiRelatedCount = aiFindings.filter(f => f.severity === severity).length;
+      const count = useApiBreakdown
+        ? (apiBySeverity.get(severity) ?? 0)
+        : targetFindings.filter(f => f.severity === severity).length;
+      // Only comparable to `count` when both come from the same population.
+      const aiRelatedCount = useApiBreakdown
+        ? null
+        : aiFindings.filter(f => f.severity === severity).length;
       return {
         severity,
         count,
         aiRelatedCount,
-        pctOfTotal: targetFindings.length > 0 ? Math.round((count / targetFindings.length) * 100) : 0,
+        pctOfTotal: breakdownTotal > 0 ? Math.round((count / breakdownTotal) * 100) : 0,
+        countFromSample: !useApiBreakdown,
       };
     });
 
@@ -382,7 +423,12 @@ export function useSecurityHubCompliance(
       aiFindings,
       byStandard,
       bySeverity,
-      totalFindings: targetFindings.length,
+      countsAreFloors: !!raw.truncated,
+      scannedCount: raw.scanned ?? 0,
+      // raw.total is what the backend counted (a floor when truncated). targetFindings.length
+      // is the size of the returned SAMPLE - ten - and reporting that as the total understated
+      // the estate by an order of magnitude.
+      totalFindings: aiOnly ? aiFindings.length : (raw.total ?? targetFindings.length),
       aiRelatedFindings: aiFindings.length,
       criticalCount: raw.critical,
       highCount: raw.high,

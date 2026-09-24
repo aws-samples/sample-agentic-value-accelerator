@@ -21,6 +21,10 @@ resource "aws_cloudfront_distribution" "main" {
   price_class         = "PriceClass_100"
   aliases             = var.domain_name != "" && var.hosted_zone_id != "" ? [var.domain_name] : []
 
+  # WAFv2 Web ACL (CLOUDFRONT scope) — for the aws_cloudfront_distribution
+  # resource, the `web_acl_id` field accepts the ARN of a WAFv2 ACL.
+  web_acl_id = var.web_acl_arn != "" ? var.web_acl_arn : null
+
   origin {
     domain_name              = data.aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "S3-${var.frontend_bucket_id}"

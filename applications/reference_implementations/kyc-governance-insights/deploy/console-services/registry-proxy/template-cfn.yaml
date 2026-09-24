@@ -1,0 +1,336 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'KYC Registry + Evaluations Proxy - Lambda + API Gateway fronting DynamoDB'
+
+Parameters:
+  RegistryTable:
+    Type: String
+    Default: kyc-agent-registry
+  EvaluatorsTable:
+    Type: String
+    Default: kyc-agent-evaluators
+  ResultsTable:
+    Type: String
+    Default: kyc-evaluation-results
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  ProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistryTable}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EvaluatorsTable}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ResultsTable}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ResultsTable}/index/*'
+
+  HandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-handler'
+      RetentionInDays: 30
+
+  HandlerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: HandlerLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-handler'
+      Role: !GetAtt ProxyRole.Arn
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: 10
+      Handler: index.handler
+      Environment:
+        Variables:
+          REGISTRY_TABLE: !Ref RegistryTable
+          EVALUATORS_TABLE: !Ref EvaluatorsTable
+          RESULTS_TABLE: !Ref ResultsTable
+          EVALUATIONS_TABLE: !Ref ResultsTable
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: registry}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, os, boto3
+          from decimal import Decimal
+
+          dynamodb = boto3.resource('dynamodb')
+          registry_table = dynamodb.Table(os.environ['REGISTRY_TABLE'])
+          evaluators_table = dynamodb.Table(os.environ['EVALUATORS_TABLE'])
+          results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+          ORIGIN = os.environ['ALLOWED_ORIGIN']
+
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, o):
+                  if isinstance(o, Decimal):
+                      return float(o)
+                  if isinstance(o, set):
+                      return list(o)
+                  return super().default(o)
+
+          def cors(body, status=200):
+              return {
+                  'statusCode': status,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': ORIGIN,
+                      'Access-Control-Allow-Headers': 'Content-Type,x-api-key,x-tenant-id',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                  },
+                  'body': json.dumps(body, cls=DecimalEncoder),
+              }
+
+          def handler(event, context):
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', '')
+              path = event.get('path') or event.get('rawPath', '')
+
+              # Auth is enforced at the edge by the shared origin-verify API Gateway
+              # authorizer (invariant #1) — this handler contains no auth logic.
+
+              if method == 'OPTIONS':
+                  return cors({})
+
+              tenant_id = (event.get('headers') or {}).get('x-tenant-id', 'default')
+
+              try:
+                  if method == 'GET' and path.endswith('/agents'):
+                      return get_agents()
+                  if method == 'GET' and path.endswith('/evaluators'):
+                      return get_evaluators()
+                  if method == 'GET' and path.endswith('/evaluations'):
+                      return get_evaluations()
+                  if method == 'GET' and '/results' in path:
+                      qs = event.get('queryStringParameters') or {}
+                      return get_results(qs.get('evaluator_id'))
+                  if method == 'POST' and path.endswith('/evaluate'):
+                      body = json.loads(event.get('body', '{}'))
+                      return trigger_evaluation(body)
+                  if method == 'POST' and path.endswith('/record-evaluation'):
+                      body = json.loads(event.get('body', '{}'))
+                      return record_evaluation(body, tenant_id)
+              except Exception as e:
+                  return cors({'error': str(e)}, 500)
+
+              if method == 'GET' and path.endswith('/health'):
+                  return cors({'status': 'ok', 'service': 'registry-proxy', 'timestamp': __import__('datetime').datetime.utcnow().isoformat()})
+
+              return cors({'error': 'Not found'}, 404)
+
+          def get_agents():
+              resp = registry_table.scan()
+              return cors({'agents': resp.get('Items', [])})
+
+          def get_evaluators():
+              resp = evaluators_table.scan()
+              return cors({'evaluators': resp.get('Items', [])})
+
+          def get_results(evaluator_id=None):
+              if evaluator_id:
+                  resp = results_table.query(
+                      KeyConditionExpression=boto3.dynamodb.conditions.Key('evaluator_id').eq(evaluator_id)
+                  )
+              else:
+                  resp = results_table.scan()
+              return cors({'results': resp.get('Items', [])})
+
+          def trigger_evaluation(body):
+              # No evaluation runner is wired. The console UI does NOT call this route
+              # (it reads seeded results and persists real runs via /record-evaluation).
+              # Return an honest 501 rather than faking a 'triggered' status, so no
+              # caller is ever misled into thinking an evaluation actually ran.
+              return cors({'status': 'not_implemented',
+                           'detail': 'no evaluation runner is wired; POST /record-evaluation persists a real run'}, 501)
+
+          def get_evaluations():
+              resp = results_table.scan(Limit=50)
+              items = sorted(resp.get('Items', []), key=lambda x: x.get('timestamp', ''), reverse=True)
+              return cors({'evaluations': items})
+
+          def record_evaluation(body, tenant_id='default'):
+              import uuid
+              from datetime import datetime
+              item = {
+                  'evaluator_id': body.get('evaluator_id', 'run-summary'),
+                  'timestamp': datetime.utcnow().isoformat() + 'Z',
+                  'evaluation_id': f"{tenant_id}#{str(uuid.uuid4())}",
+                  'agent_id': body.get('agent_id', 'ava_kyc_langgraph'),
+                  'scenario': body.get('scenario', 'unknown'),
+                  'verdict': body.get('verdict', 'UNKNOWN'),
+                  'confidence': Decimal(str(body.get('confidence', 0))),
+                  'duration_ms': int(body.get('duration_ms', 0)),
+                  'checks_passed': body.get('checks_passed', []),
+                  'checks_failed': body.get('checks_failed', []),
+                  'grounding_score': Decimal(str(body.get('grounding_score', 0))),
+                  'ar_verdict': body.get('ar_verdict', 'UNKNOWN'),
+                  'model_id': body.get('model_id', 'anthropic.claude-sonnet-4-6'),
+                  'tenant_id': tenant_id,
+              }
+              results_table.put_item(Item=item)
+              return cors({'evaluation_id': item['evaluation_id'], 'status': 'recorded'}, 201)
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+        MaxAge: 3600
+
+  # Edge auth (invariant #1): shared origin-verify REQUEST authorizer, imported from the
+  # origin-verify-authorizer stack.
+  OriginVerifyAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: REQUEST
+      Name: kyc-origin-verify
+      IdentitySource:
+        - '$request.header.x-origin-verify'
+      AuthorizerPayloadFormatVersion: '2.0'
+      EnableSimpleResponses: true
+      AuthorizerResultTtlInSeconds: 300
+      AuthorizerUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnArn}/invocations'
+        - FnArn: !ImportValue kyc-origin-verify-authorizer-arn
+
+  OriginVerifyAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue kyc-origin-verify-authorizer-arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/authorizers/${OriginVerifyAuthorizer}'
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt HandlerFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  AgentsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /agents'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  EvaluatorsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /evaluators'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  ResultsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /results'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  EvaluateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /evaluate'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  EvaluationsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /evaluations'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  RecordEvaluationRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /record-evaluation'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: Registry Proxy API endpoint URL
+    Value: !GetAtt HttpApi.ApiEndpoint

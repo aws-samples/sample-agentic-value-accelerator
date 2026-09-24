@@ -12,9 +12,12 @@ import EmptyState from './EmptyState';
 import Drawer from './Drawer';
 import AuditMetricsPanel from './metrics/AuditMetricsPanel';
 import LiveAiActivity from './LiveAiActivity';
+import LiveCtLakeActivity from './LiveCtLakeActivity';
+import CandidateIncidents from './CandidateIncidents';
 import PolicyObservability from './PolicyObservability';
 import MaskedIdentity from './MaskedIdentity';
 import CoreBadge from './CoreBadge';
+import { DataSourceInfo, getPageDataSources } from './DataSourceInfo';
 
 type AuditEvent = typeof AUDIT_EVENTS[0];
 
@@ -173,14 +176,14 @@ const sevBg: Record<string, string> = {
 type CatFilter = 'all' | keyof typeof catBg;
 type SevFilter = 'all' | keyof typeof sevBg;
 
-type AuditView = 'metrics' | 'trail' | 'evidence' | 'reports';
+type AuditView = 'metrics' | 'trail' | 'evidence';
 
 export default function AuditIncidents() {
   // Check URL for tab parameter
   const urlParams = new URLSearchParams(window.location.search);
   const tabFromUrl = urlParams.get('tab') as AuditView | null;
-  const [view, setView] = useState<AuditView>(tabFromUrl && ['metrics', 'trail', 'evidence', 'reports'].includes(tabFromUrl) ? tabFromUrl : 'metrics');
-  const [catFilter, setCatFilter] = useState<CatFilter>('all');
+  const [view, setView] = useState<AuditView>(tabFromUrl && ['metrics', 'trail', 'evidence'].includes(tabFromUrl) ? tabFromUrl : 'metrics');
+    const [catFilter, setCatFilter] = useState<CatFilter>('all');
   const [sevFilter, setSevFilter] = useState<SevFilter>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<AuditEvent | null>(null);
@@ -266,15 +269,21 @@ export default function AuditIncidents() {
         {/* Unified Guide: How to Use + Make Live in AWS */}
         <UnifiedGuide {...AUDIT_GUIDE} />
 
-        {/* Live AWS — real CloudTrail AI-service activity */}
+        {/* Live AWS — real CloudTrail AI-service activity (short window, last 24h) */}
         <LiveAiActivity />
+
+        {/* Live AWS — long-window AI-activity denominators from CloudTrail Lake (30d) */}
+        <LiveCtLakeActivity />
+
+        {/* Candidate Incidents — errored AI calls requiring review */}
+        <CandidateIncidents />
 
         {/* Cedar Policy Observability — enforcement decisions and audit trail */}
         <PolicyObservability hours={24} maxEvents={10} />
 
         {/* View switcher: Metrics | Audit Trail | Evidence | Reports */}
         <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-6 w-fit" role="tablist" aria-label="Audit & Incidents views">
-          {([['metrics', 'Metrics'], ['trail', 'Audit Trail'], ['evidence', 'Evidence'], ['reports', 'Reports']] as const).map(([id, label]) => (
+          {([['metrics', 'Metrics'], ['trail', 'Audit Trail'], ['evidence', 'Evidence']] as const).map(([id, label]) => (
             <button
               key={id}
               role="tab"
@@ -442,7 +451,7 @@ export default function AuditIncidents() {
           </div>
           {filtered.length === 0 && (
             <EmptyState
-              icon="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              icon="search"
               title="No events match your filter"
               description="Try adjusting your filters or search criteria. Events appear when guardrails trigger, policies evaluate, or incidents occur."
               tips={[
@@ -571,129 +580,6 @@ export default function AuditIncidents() {
           </div>
         )}
 
-        {/* ─────────── Reports view: framework-specific packages ─────────── */}
-        {view === 'reports' && (
-          <div role="tabpanel" className="space-y-6">
-            {/* Framework Report Cards */}
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                {
-                  framework: 'SR 26-2',
-                  title: 'OCC Model Risk Management',
-                  coverage: 82,
-                  description: 'Third-party AI model governance requirements for federally supervised banks',
-                  requirements: 12,
-                  evidenced: 10,
-                  lastGenerated: '2026-07-20',
-                },
-                {
-                  framework: 'NIST AI RMF',
-                  title: 'AI Risk Management Framework',
-                  coverage: 75,
-                  description: 'Voluntary framework for trustworthy AI development and deployment',
-                  requirements: 24,
-                  evidenced: 18,
-                  lastGenerated: '2026-07-18',
-                },
-                {
-                  framework: 'EU AI Act',
-                  title: 'European AI Regulation',
-                  coverage: 68,
-                  description: 'High-risk AI system requirements including Art. 73 incident reporting',
-                  requirements: 18,
-                  evidenced: 12,
-                  lastGenerated: '2026-07-15',
-                },
-                {
-                  framework: 'ISO 42001',
-                  title: 'AI Management System',
-                  coverage: 71,
-                  description: 'International standard for AI governance and quality management',
-                  requirements: 15,
-                  evidenced: 11,
-                  lastGenerated: '2026-07-19',
-                },
-              ].map(fw => (
-                <div key={fw.framework} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-slate-900">{fw.framework}</span>
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                          fw.coverage >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                          fw.coverage >= 60 ? 'bg-amber-100 text-amber-700' :
-                          'bg-rose-100 text-rose-700'
-                        }`}>{fw.coverage}% ready</span>
-                      </div>
-                      <div className="text-sm text-slate-600 mt-0.5">{fw.title}</div>
-                    </div>
-                    <Icon name="document-text" className="w-6 h-6 text-slate-400" />
-                  </div>
-                  <p className="text-[11px] text-slate-500 mb-4">{fw.description}</p>
-
-                  <div className="flex items-center gap-4 mb-4 text-[11px]">
-                    <div>
-                      <span className="text-slate-500">Requirements:</span>
-                      <span className="font-semibold text-slate-800 ml-1">{fw.evidenced}/{fw.requirements}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Last generated:</span>
-                      <span className="font-semibold text-slate-800 ml-1">{fw.lastGenerated}</span>
-                    </div>
-                  </div>
-
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-4">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${fw.coverage}%`,
-                        backgroundColor: fw.coverage >= 80 ? '#059669' : fw.coverage >= 60 ? '#d97706' : '#dc2626'
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition">
-                      <Icon name="document-arrow-down" className="w-4 h-4" />
-                      Generate Report
-                    </button>
-                    <button className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition">
-                      View Gaps
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Report History */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-6">
-              <h3 className="text-base font-semibold text-slate-900 mb-4">Recent Reports</h3>
-              <div className="space-y-2">
-                {[
-                  { name: 'SR 26-2 Q2 2026 Compliance Report', framework: 'SR 26-2', date: '2026-07-20', status: 'complete' },
-                  { name: 'NIST AI RMF Self-Assessment', framework: 'NIST AI RMF', date: '2026-07-18', status: 'complete' },
-                  { name: 'EU AI Act High-Risk Inventory', framework: 'EU AI Act', date: '2026-07-15', status: 'complete' },
-                  { name: 'Board AI Governance Summary', framework: 'Custom', date: '2026-07-10', status: 'complete' },
-                  { name: 'ISO 42001 Gap Analysis', framework: 'ISO 42001', date: '2026-07-05', status: 'complete' },
-                ].map((r, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <Icon name="document-text" className="w-5 h-5 text-slate-400" />
-                      <div>
-                        <div className="text-sm font-medium text-slate-800">{r.name}</div>
-                        <div className="text-[10px] text-slate-500">{r.framework} · Generated {r.date}</div>
-                      </div>
-                    </div>
-                    <button className="p-2 rounded-lg hover:bg-white transition">
-                      <Icon name="arrow-down-tray" className="w-4 h-4 text-slate-400" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Event detail drawer */}
         <Drawer
           open={selected != null}
@@ -772,6 +658,13 @@ export default function AuditIncidents() {
         {showTraceViewer && selected && (
           <TraceViewerModal event={selected} onClose={() => setShowTraceViewer(false)} />
         )}
+
+        {/* Data Source Info Panel */}
+        <DataSourceInfo
+          pageId="audit"
+          pageTitle="Audit & Incidents"
+          sources={getPageDataSources('audit')}
+        />
       </div>
     </div>
   );

@@ -14,8 +14,9 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError, ParamValidationError
 
+from core.cloudtrail_paging import lookup_events_paged
 from core.ttl_cache import get_or_load
 from models.govern_trail import AiCaller, AiCallersResponse, TrailEvent, TrailResponse
 
@@ -65,7 +66,12 @@ class GovernTrailService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def get_ai_callers(self, hours: int = 168, per_source: int = 200) -> AiCallersResponse:
@@ -76,7 +82,12 @@ class GovernTrailService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_ai_callers(self, hours: int = 168, per_source: int = 200) -> AiCallersResponse:
@@ -91,13 +102,21 @@ class GovernTrailService:
             client = self._client()
             start = datetime.now(timezone.utc) - timedelta(hours=hours)
             agg: dict[str, dict] = {}
+            # per_source defaults to 200, and MaxResults=200 was silently clamped to 50 by
+            # CloudTrail with a NextToken this code never followed. So a "distinct identities
+            # invoking AI services over the last 168 hours" rollup was built from at most 50
+            # events per source, and every event_count and top_actions below was a sample
+            # presented as a total under live=True with note=None. Paging fixes the read;
+            # `lookup.note` makes the remaining bound visible instead of implied.
+            lookup = lookup_events_paged(
+                client,
+                attribute_key="EventSource",
+                attribute_values=_AI_SOURCES,
+                start_time=start,
+                target_per_value=per_source,
+            )
             for src in _AI_SOURCES:
-                resp = client.lookup_events(
-                    LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": src}],
-                    StartTime=start,
-                    MaxResults=per_source,
-                )
-                for e in resp.get("Events", []):
+                for e in lookup.by_value.get(src, []):
                     ident = e.get("Username")
                     if not ident:
                         try:
@@ -129,11 +148,29 @@ class GovernTrailService:
                 for ident, b in agg.items()
             ]
             callers.sort(key=lambda c: c.event_count, reverse=True)
+            # An empty result is still a measurement, so it stays live=True - it just says
+            # so. Truncation caveats are appended rather than replacing that sentence,
+            # because "no callers found" and "found callers, but only read part of the
+            # window" are different claims and the reader needs whichever applies.
+            note_parts = [
+                None if callers else f"No AI-service callers in the last {hours}h.",
+                lookup.note,
+            ]
             return AiCallersResponse(
                 callers=callers, total_callers=len(callers), unrecognized=len(callers),
-                window_hours=hours, live=True, source="cloudtrail",
-                note=None if callers else f"No AI-service callers in the last {hours}h.",
+                window_hours=hours,
+                # A per-source lookup that FAILED leaves that source's callers out
+                # entirely. That is not a live answer about the account, so it degrades
+                # rather than reporting a smaller roster as fact.
+                live=not lookup.failed,
+                source="cloudtrail" if not lookup.failed else "cloudtrail-partial",
+                note="; ".join(p for p in note_parts if p) or None,
             )
+        except ParamValidationError:
+            # Subclasses BotoCoreError, so the handler below would have reported a
+            # malformed request this code built as an AWS-side outage - degrading
+            # honestly to a conclusion that is wrong for a reason nobody can see.
+            raise
         except (ClientError, BotoCoreError, KeyError, ValueError) as e:
             logger.warning("CloudTrail callers unavailable: %s", e)
             return AiCallersResponse(
@@ -149,13 +186,20 @@ class GovernTrailService:
             by_source: dict[str, int] = {}
             errors = 0
 
+            # per_source is 25 by default, which is under CloudTrail's clamp, so this site
+            # was reading a full page - but nothing stopped a caller passing 200, and then
+            # MaxResults was silently clamped to 50 with a NextToken never followed. Paging
+            # through the shared helper makes the requested limit mean what it says, and
+            # by_source below a real count rather than "however many arrived in one page".
+            lookup = lookup_events_paged(
+                client,
+                attribute_key="EventSource",
+                attribute_values=_AI_SOURCES,
+                start_time=start,
+                target_per_value=per_source,
+            )
             for src in _AI_SOURCES:
-                resp = client.lookup_events(
-                    LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": src}],
-                    StartTime=start,
-                    MaxResults=per_source,
-                )
-                raw = resp.get("Events", [])
+                raw = lookup.by_value.get(src, [])
                 by_source[src] = len(raw)
                 for e in raw:
                     err = None
@@ -182,11 +226,21 @@ class GovernTrailService:
 
             events.sort(key=lambda x: x.event_time or "", reverse=True)
             total = len(events)
+            note_parts = [
+                None if total else f"No AI-service (Bedrock/SageMaker) activity in the last {hours}h.",
+                lookup.note,
+            ]
             return TrailResponse(
                 events=events, total=total, by_source=by_source, errors=errors,
-                window_hours=hours, live=True, source="cloudtrail",
-                note=None if total else f"No AI-service (Bedrock/SageMaker) activity in the last {hours}h.",
+                window_hours=hours,
+                # See _fetch_ai_callers: a failed per-source lookup silently drops that
+                # source's events, and `errors` above would under-report with it.
+                live=not lookup.failed,
+                source="cloudtrail" if not lookup.failed else "cloudtrail-partial",
+                note="; ".join(p for p in note_parts if p) or None,
             )
+        except ParamValidationError:
+            raise
         except (ClientError, BotoCoreError, KeyError, ValueError) as e:
             logger.warning("CloudTrail unavailable, returning fallback: %s", e)
             return TrailResponse(

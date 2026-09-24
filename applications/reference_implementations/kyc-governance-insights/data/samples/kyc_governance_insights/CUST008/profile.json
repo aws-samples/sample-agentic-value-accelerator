@@ -1,0 +1,35 @@
+{
+  "customer_id": "CUST008",
+  "name": "Volkov Enterprises LLC",
+  "account_type": "corporate",
+  "industry": "Commodities Trading",
+  "incorporation": {
+    "country": "Cyprus",
+    "state": "Limassol",
+    "date": "2018-05-14"
+  },
+  "contact": {
+    "address": "Arch. Makariou III 155, Proteas House, Limassol 3026, Cyprus",
+    "phone": "+357-25-555-0111",
+    "email": "office@volkoventerprises.example.cy"
+  },
+  "directors": [
+    {
+      "name": "Dmitri Volkov",
+      "role": "Managing Director",
+      "pep_status": false
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "Dmitri Volkov",
+      "ownership_percentage": 100
+    }
+  ],
+  "kyc_status": "onboarded_2020",
+  "risk_flags": [
+    "ofac_sdn_match",
+    "re_screening_hit"
+  ],
+  "annual_revenue": "$60M-$90M"
+}

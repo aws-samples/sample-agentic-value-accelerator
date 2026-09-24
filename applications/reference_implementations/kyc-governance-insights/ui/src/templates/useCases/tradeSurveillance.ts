@@ -1,0 +1,81 @@
+import type { UseCase } from '../types';
+
+export const tradeSurveillanceUseCase: UseCase = {
+  id: 'trade-surveillance',
+  name: 'Trade Surveillance',
+  domain: 'Market Abuse / Compliance',
+  description: 'AI-driven trade surveillance with pattern detection, cross-referencing, and MAR breach escalation.',
+  agents: [
+    {
+      id: 'agt-alert-triage-001',
+      name: 'Alert Triage Agent',
+      role: 'Analyses trading alerts, classifies patterns, and determines if investigation is warranted',
+      tier: 2,
+      allowedTools: ['trades:GetHistory', 'market:GetPrices', 'alerts:Classify', 'patterns:Detect'],
+      prohibitedTools: ['trades:Execute', 'accounts:Modify'],
+      escalationPath: ['Senior Surveillance Analyst', 'Head of Compliance'],
+    },
+    {
+      id: 'agt-investigation-001',
+      name: 'Investigation Agent',
+      role: 'Deep-dive investigation: cross-references comms, builds timeline, prepares regulatory submission',
+      tier: 2,
+      allowedTools: ['comms:Search', 'trades:Timeline', 'market:CrossRef', 'report:Generate'],
+      prohibitedTools: ['trades:Execute', 'comms:Send', 'accounts:Close'],
+      escalationPath: ['Head of Surveillance', 'MLRO', 'FCA Reporting'],
+    },
+  ],
+  policies: [
+    { id: 'ORG-001', layer: 'ORG', description: 'Wash trading pattern detected → mandatory block', triggerCondition: 'wash_trade_confidence > 0.85', action: 'BLOCK' },
+    { id: 'ORG-002', layer: 'ORG', description: 'Insider trading signal → immediate escalation', triggerCondition: 'insider_signal_score > 0.70', action: 'ESCALATE' },
+    { id: 'APP-001', layer: 'APP', description: 'Cross-asset correlation > threshold', triggerCondition: 'cross_asset_corr > 0.90 && pre_announcement', action: 'ESCALATE' },
+    { id: 'APP-002', layer: 'APP', description: 'Volume spike > 5x average', triggerCondition: 'volume_ratio > 5.0', action: 'ESCALATE' },
+    { id: 'REQ-001', layer: 'REQ', description: 'Alert already under investigation', triggerCondition: 'existing_case_open = true', action: 'ESCALATE' },
+  ],
+  risks: [
+    { id: 'R1', category: 'False Negative', description: 'Missed wash trading pattern', likelihood: 'low', impact: 'critical', controls: ['Parallel Pattern Engine', 'Cross-Reference Lambda'], residualRisk: 'low' },
+    { id: 'R2', category: 'False Positive', description: 'Legitimate market-making flagged', likelihood: 'high', impact: 'medium', controls: ['Context Analysis', 'Historical Baseline'], residualRisk: 'medium' },
+    { id: 'R3', category: 'Data Latency', description: 'Stale trade data leads to missed real-time abuse', likelihood: 'medium', impact: 'high', controls: ['Real-time Kinesis Feed', 'Latency Monitoring'], residualRisk: 'low' },
+  ],
+  controls: [
+    { id: 'C1', name: 'Pattern Detection Engine', type: 'deterministic', awsService: 'AWS Lambda + Step Functions', description: 'Rule-based detection of wash trades, layering, spoofing' },
+    { id: 'C2', name: 'Cross-Reference Lambda', type: 'deterministic', awsService: 'AWS Lambda', description: 'Correlates trades with communications and market events' },
+    { id: 'C3', name: 'LLM Narrative Builder', type: 'probabilistic', awsService: 'Bedrock Claude', description: 'Generates investigation narrative for STR filing' },
+    { id: 'C4', name: 'Kinesis Real-time Feed', type: 'observability', awsService: 'Amazon Kinesis', description: 'Sub-second trade data ingestion for live surveillance' },
+  ],
+  scenarios: {
+    approve: {
+      id: 'approve',
+      label: 'Normal Trading Pattern',
+      customerName: 'Meridian Capital Partners',
+      customerId: 'TRADER-2847',
+      outcome: 'APPROVE',
+      steps: [
+        { icon: '📥', title: 'Alert Ingestion', type: 'Real-time (Kinesis)', blast: 'bf-low', log: [{ t: '14:02:01', a: 'Kinesis', m: 'Alert ALT-29471: Volume spike on FTSE100 futures.', c: '' }, { t: '14:02:02', a: 'Triage Agent', m: 'Classifying: volume spike during market open. Context: index rebalance day.', c: '' }], risks: ['Alert fatigue', 'Data latency'], ctrls: ['Kinesis (sub-second)', 'Alert dedup'], insight: 'High volume during rebalance is expected. The agent must distinguish normal market mechanics from manipulation.' },
+        { icon: '🔍', title: 'Pattern Detection', type: 'Deterministic (Lambda)', blast: 'bf-low', log: [{ t: '14:02:03', a: 'Pattern Engine', m: 'Wash trade check: NO MATCH. Orders from different beneficial owners.', c: 's-ok' }, { t: '14:02:04', a: 'Pattern Engine', m: 'Layering check: NO MATCH. Order fill rate 94% (normal).', c: 's-ok' }], risks: ['False negative', 'Pattern evolution'], ctrls: ['Rule engine', 'ML anomaly detection'], insight: 'Deterministic rules eliminate obvious false positives before AI analysis begins.' },
+        { icon: '🔗', title: 'Cross-Reference', type: 'Agentic AI (Investigation Agent)', blast: 'bf-med', log: [{ t: '14:02:05', a: 'Investigation Agent', m: 'Comms search: No relevant communications in ±24h window.', c: 's-ok' }, { t: '14:02:06', a: 'Market Events', m: 'Confirmed: FTSE100 quarterly rebalance (scheduled).', c: 's-ok' }], risks: ['Missed comms', 'Timing correlation'], ctrls: ['Comms surveillance', 'Market calendar'], insight: 'Cross-referencing trades with communications and public market events provides context AI alone cannot.' },
+        { icon: '📊', title: 'Risk Scoring', type: 'Agentic AI (Triage Agent)', blast: 'bf-low', log: [{ t: '14:02:07', a: 'Triage Agent', m: 'Risk Score: 12/100 (LOW). Factors: volume(+8), timing(+4). Context: rebalance(-15, floor 0).', c: 's-ok' }], risks: ['Score manipulation', 'Context misread'], ctrls: ['Independent scoring', 'Historical baseline'], insight: 'Context-aware scoring. Volume spike alone would score higher, but rebalance context reduces risk appropriately.' },
+        { icon: '⚖️', title: 'Compliance Gate', type: 'Policy Engine', blast: 'bf-low', log: [{ t: '14:02:08', a: 'Policy Engine', m: '✓ ALL PASS. Score 12 < thresholds. No pattern match. Bounded autonomy permitted.', c: 's-ok' }], risks: ['Policy config errors'], ctrls: ['3-layer Policy Engine'], insight: 'Low risk + no pattern match = agent can close alert autonomously.' },
+        { icon: '👤', title: 'Analyst Review', type: 'Spot Check (Earned Autonomy)', blast: 'bf-low', log: [{ t: '14:02:09', a: 'System', m: 'HITL NOT required. Tier 2 autonomy. 5% random QA sample.', c: 's-ok' }], risks: ['Complacency'], ctrls: ['Random QA sampling'], insight: 'Earned autonomy: agent closes routine alerts. Analysts focus on genuine investigations.' },
+        { icon: '✅', title: 'Alert Closed', type: 'Immutable Audit', blast: 'bf-low', log: [{ t: '14:02:10', a: 'Decision', m: 'ALT-29471 → CLOSED. Reason: Normal rebalance activity. No STR required.', c: 's-ok' }, { t: '14:02:11', a: 'Audit', m: '✓ Full trace preserved. Regulatory retention: 7 years.', c: 's-ok' }], risks: ['Audit gaps'], ctrls: ['CloudTrail', '7-year retention'], insight: 'Every closed alert has a full audit trail — regulator can reconstruct the decision at any time.' },
+      ],
+    },
+    block: {
+      id: 'block',
+      label: 'Wash Trading Detected',
+      customerName: 'Orion Derivatives Desk',
+      customerId: 'TRADER-1093',
+      outcome: 'BLOCK',
+      steps: [
+        { icon: '📥', title: 'Alert Ingestion', type: 'Real-time (Kinesis)', blast: 'bf-med', log: [{ t: '14:02:01', a: 'Kinesis', m: 'Alert ALT-30112: Circular trading pattern on EUR/USD options.', c: 's-warn' }, { t: '14:02:02', a: 'Triage Agent', m: 'Classifying: circular flow between 3 accounts under same beneficial owner.', c: 's-warn' }], risks: ['Alert fatigue'], ctrls: ['Kinesis', 'Pattern pre-filter'], insight: 'The alert already contains structural signals — circular flows between related accounts.' },
+        { icon: '🔍', title: 'Pattern Detection', type: 'Deterministic (Lambda)', blast: 'bf-high', log: [{ t: '14:02:03', a: 'Pattern Engine', m: '⚠ WASH TRADE MATCH: Confidence 91%. Accounts A→B→C→A within 4 minutes.', c: 's-warn' }, { t: '14:02:04', a: 'Pattern Engine', m: '⚠ LAYERING MATCH: 47 orders placed and cancelled within 200ms.', c: 's-warn' }], risks: ['Sophisticated evasion'], ctrls: ['Multi-pattern detection', 'Temporal analysis'], insight: 'Deterministic rules catch the structural pattern. 91% confidence exceeds the 85% threshold for mandatory block.' },
+        { icon: '🔗', title: 'Cross-Reference', type: 'Agentic AI (Investigation Agent)', blast: 'bf-high', log: [{ t: '14:02:05', a: 'Investigation Agent', m: '⚠ COMMS MATCH: Bloomberg chat between Trader A and Trader C — "do the usual swap" at 14:01.', c: 's-warn' }, { t: '14:02:06', a: 'Investigation Agent', m: '⚠ HISTORICAL: Same pattern detected 3x in past 30 days (ALT-29801, ALT-29923, ALT-30044).', c: 's-warn' }], risks: ['Comms manipulation'], ctrls: ['Full comms surveillance', 'Historical correlation'], insight: 'Communications corroborate the trading pattern. This is the evidence that turns a technical alert into a MAR breach.' },
+        { icon: '📊', title: 'Risk Scoring', type: 'Agentic AI (Triage Agent)', blast: 'bf-high', log: [{ t: '14:02:07', a: 'Triage Agent', m: 'Risk Score: 94/100 (CRITICAL). Factors: wash(+35), layering(+25), comms(+20), history(+14).', c: 's-warn' }], risks: ['Score accuracy'], ctrls: ['Multi-factor scoring'], insight: 'Multiple independent signals converge. Any single signal might be innocent — together they establish intent.' },
+        { icon: '⚖️', title: 'Compliance Gate', type: 'Policy Engine (BLOCK)', blast: 'bf-high', log: [{ t: '14:02:08', a: 'Gateway', m: '▶▶ INTERCEPTED. Evaluating 3 policy layers...', c: 's-warn' }, { t: '14:02:09', a: 'Org Policy', m: '❌ BLOCK: ORG-001 — Wash trade confidence 91% > 85% threshold.', c: 's-warn' }, { t: '14:02:10', a: 'Policy Engine', m: '❌ MANDATORY BLOCK. Trading desk access suspended pending investigation.', c: 's-warn' }, { t: '14:02:11', a: 'Alert', m: '🚨 INCIDENT: INC-2026-1247. Head of Surveillance + MLRO notified.', c: 's-warn' }], risks: ['Circumvention'], ctrls: ['External policy gate', 'Immediate access suspension'], insight: 'BLAST RADIUS CONTROL: Even if the AI were wrong, the policy engine independently enforces the block. Trading access is suspended in real-time.' },
+        { icon: '👤', title: 'Analyst Review', type: 'HITL (Mandatory — MAR Breach)', blast: 'bf-low', log: [{ t: '14:02:12', a: 'HITL System', m: 'MANDATORY ESCALATION: MAR breach suspected. Head of Surveillance assigned.', c: 's-warn' }, { t: '14:02:13', a: 'System', m: 'Investigation pack generated: trade timeline, comms, pattern analysis, historical context.', c: '' }, { t: '14:02:14', a: 'System', m: '⏳ AWAITING HUMAN DECISION. All trading suspended for accounts A, B, C.', c: 's-warn' }, { t: '14:02:15', a: 'Analyst', m: '[16:45:22] Decision: CONFIRMED MAR BREACH. STR filed. FCA notified within 24h.', c: 's-warn' }], risks: ['Investigation quality', 'Time pressure'], ctrls: ['Structured investigation pack', 'SLA enforcement', 'FCA timeline compliance'], insight: 'Human confirms the breach. The AI identified it, deterministic controls blocked it, but the human makes the regulatory decision.' },
+        { icon: '🚫', title: 'Escalation: FCA Notification', type: 'Immutable Audit + STR', blast: 'bf-low', log: [{ t: '14:02:16', a: 'Decision', m: '🚫 ALT-30112 → CONFIRMED MAR BREACH. Wash trading (Art 12 MAR).', c: 's-warn' }, { t: '14:02:17', a: 'System', m: 'STR filed: REF-STR-2026-0891. FCA notified within SLA.', c: 's-warn' }, { t: '14:02:18', a: 'CloudTrail', m: '✓ Immutable record. Full evidence chain preserved.', c: 's-ok' }, { t: '14:02:19', a: 'System', m: '✓ COMPLETE. Agent processing: 11s. Human investigation: 2h43m.', c: 's-ok' }], risks: ['Regulatory timeline', 'Evidence integrity'], ctrls: ['Automated STR template', 'FCA submission tracking', '7-year retention'], insight: 'GOVERNANCE WORKED: AI detected, rules blocked, human confirmed, regulator notified. Full audit trail from alert to STR.' },
+      ],
+    },
+  },
+  hitlStepIndex: 5,
+};

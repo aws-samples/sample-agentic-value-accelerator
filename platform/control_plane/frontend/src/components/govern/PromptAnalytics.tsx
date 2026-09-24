@@ -706,7 +706,30 @@ function LiveStatsPanel() {
     return () => { cancelled = true; };
   }, [pollKey]);
 
-  const live = guardrailData?.live || invocationData?.live;
+  // Per-feed, NOT `guardrailData?.live || invocationData?.live`. The `||` was a false-Live
+  // defect: this panel renders two independent measurements — four guardrail tiles from
+  // /guardrails/telemetry and four invocation tiles from /invocation-safety/telemetry — under a
+  // single badge. Widening with `||` meant one live feed put the OTHER feed's tiles under a Live
+  // badge, so with CloudWatch guardrail metrics flowing and Bedrock invocation logging disabled,
+  // "API Calls (7d) 0 / Input Tokens 0 / Blocked 0" read as a measured all-clear when nothing
+  // had been measured. Two feeds cannot share one liveness flag; each group now carries its own.
+  const guardrailsLive = !!guardrailData?.live;
+  const invocationsLive = !!invocationData?.live;
+
+  // The header badge is the conjunction over the groups actually RENDERED, so it can only claim
+  // Live when every number below it is measured. `every` over the rendered set rather than
+  // `guardrailsLive && invocationsLive`, because a feed that failed to load renders no tiles at
+  // all and must not drag the badge false for tiles that are genuinely live.
+  const renderedLive = [
+    guardrailData ? guardrailsLive : null,
+    invocationData ? invocationsLive : null,
+  ].filter((v): v is boolean => v !== null);
+  const allLive = renderedLive.length > 0 && renderedLive.every(Boolean);
+
+  const notLiveFeeds = [
+    guardrailData && !guardrailsLive ? 'Guardrail metrics (CloudWatch)' : null,
+    invocationData && !invocationsLive ? 'Invocation logging (Bedrock model-invocation logs)' : null,
+  ].filter(Boolean) as string[];
 
   if (loading) {
     return (
@@ -726,17 +749,34 @@ function LiveStatsPanel() {
         <div className="flex items-center gap-2">
           <Icon name="signal" className="w-5 h-5 text-emerald-500" />
           <span className="text-sm font-semibold text-slate-800">Live AWS Metrics</span>
-          {live ? <LiveDataBadge /> : <MockDataBadge />}
+          {allLive
+            ? <LiveDataBadge detail="Guardrail and invocation telemetry both measured" />
+            : <MockDataBadge integration={
+                notLiveFeeds.length
+                  ? `Not measured: ${notLiveFeeds.join('; ')}`
+                  : 'Awaiting AWS telemetry'
+              } />}
         </div>
         <div className="text-[10px] text-slate-400">
           Auto-refreshes every 60s
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        {/* Guardrail Metrics */}
-        {guardrailData && (
-          <>
+      {/* Two grids, not one row of eight. The single grid made two independent measurements look
+          like one reading, which is what let the `||` badge above cover for the weaker feed. Each
+          group now states its own provenance next to its own numbers. */}
+      {guardrailData && (
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[11px] font-semibold text-slate-700">Guardrails</span>
+            {guardrailsLive
+              ? <LiveDataBadge source="CloudWatch" detail={`Guardrail metrics · ${guardrailData.window_days}d`} />
+              : <MockDataBadge integration="Bedrock Guardrails → CloudWatch metrics" />}
+          </div>
+          {guardrailData.note && (
+            <div className="text-[10px] text-slate-500 mb-2">{guardrailData.note}</div>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-slate-50 rounded-lg p-3 text-center">
               <Icon name="shield-check" className="w-4 h-4 text-slate-400 mx-auto mb-1" />
               <div className="text-lg font-bold text-slate-800">{guardrailData.total_guardrails}</div>
@@ -761,12 +801,34 @@ function LiveStatsPanel() {
               </div>
               <div className="text-[10px] text-slate-500">Block Rate</div>
             </div>
-          </>
-        )}
+          </div>
+        </div>
+      )}
 
-        {/* Invocation Metrics */}
-        {invocationData && (
-          <>
+      {/* Invocation Metrics — its own group, its own badge, its own note. These four numbers come
+          from Bedrock model-invocation logs, a completely separate feed from the guardrail metrics
+          above: invocation logging can be switched off while guardrail metrics keep flowing. */}
+      {invocationData && (
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[11px] font-semibold text-slate-700">Invocations</span>
+            {invocationsLive
+              ? <LiveDataBadge source="Bedrock model-invocation logs" detail={`${invocationData.window_days}d window`} />
+              : <MockDataBadge integration="Bedrock model-invocation logging (CloudWatch Logs)" />}
+          </div>
+          {invocationData.note && (
+            <div className="text-[10px] text-slate-500 mb-2">{invocationData.note}</div>
+          )}
+          {/* A zero here has two very different causes and the flag is the only thing that tells
+              them apart: nobody called Bedrock, or invocation logging is disabled so nothing was
+              recorded. `logging_enabled` names the second one outright, so it is disclosed. */}
+          {!invocationData.logging_enabled && (
+            <div className="text-[10px] text-amber-700 mb-2">
+              Bedrock model-invocation logging is disabled, so these counts are not a measurement of
+              activity — a zero here means nothing was recorded, not that nothing happened.
+            </div>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-slate-50 rounded-lg p-3 text-center">
               <Icon name="cpu-chip" className="w-4 h-4 text-slate-400 mx-auto mb-1" />
               <div className="text-lg font-bold text-slate-800">{formatNum(invocationData.total_calls)}</div>
@@ -789,14 +851,19 @@ function LiveStatsPanel() {
               </div>
               <div className="text-[10px] text-slate-500">Blocked</div>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
-      {/* Policy breakdown from live data */}
+      {/* Policy breakdown. The heading said "Live Interventions by Policy Type" unconditionally —
+          the word was part of the string, so it asserted liveness even when the feed was not live.
+          It now follows the same flag the tiles above do. */}
       {guardrailData && guardrailData.by_policy.length > 0 && (
         <div className="mt-4 pt-4 border-t border-slate-100">
-          <div className="text-[11px] font-semibold text-slate-700 mb-2">Live Interventions by Policy Type</div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-semibold text-slate-700">Interventions by Policy Type</span>
+            {guardrailsLive ? <LiveDataBadge source="CloudWatch" /> : <MockDataBadge integration="Bedrock Guardrails → CloudWatch metrics" />}
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {guardrailData.by_policy.map(p => (
               <div key={p.policy_type} className="bg-slate-50 rounded-lg p-2.5">
@@ -809,10 +876,17 @@ function LiveStatsPanel() {
         </div>
       )}
 
-      {/* Daily trend from live data */}
+      {/* Daily trend. Same fix as the policy breakdown: "(Live)" was hardcoded into the heading. */}
       {invocationData && invocationData.trend.length > 0 && (
         <div className="mt-4 pt-4 border-t border-slate-100">
-          <div className="text-[11px] font-semibold text-slate-700 mb-2">7-Day Invocation Trend (Live)</div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-semibold text-slate-700">
+              {invocationData.window_days}-Day Invocation Trend
+            </span>
+            {invocationsLive
+              ? <LiveDataBadge source="Bedrock model-invocation logs" />
+              : <MockDataBadge integration="Bedrock model-invocation logging (CloudWatch Logs)" />}
+          </div>
           <div className="flex items-end gap-1 h-16">
             {invocationData.trend.map((d, i) => {
               const maxCalls = Math.max(...invocationData.trend.map(t => t.calls), 1);
@@ -862,6 +936,9 @@ export default function PromptAnalytics() {
       <ArchitectureDiagram />
 
       {/* Tab Navigation */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <MockDataBadge integration="Analytics tab charts show illustrative samples; live metrics are in the Live AWS Metrics panel above" />
+      </div>
       <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-lg w-fit">
         {[
           { key: 'overview', label: 'Overview', icon: 'squares-2x2' as IconName },

@@ -1,0 +1,696 @@
+{
+  "metadata": {
+    "title": "FSI Governance Demo - KYC Customer Portfolio",
+    "version": "1.0",
+    "created": "2026-07-06",
+    "purpose": "Simulation inputs for AgentCore-powered KYC assessment system",
+    "total_customers": 18,
+    "verdict_distribution": {
+      "APPROVE": 7,
+      "REJECT": 5,
+      "ESCALATE": 6
+    },
+    "risk_categories_covered": [
+      "Sanctions (OFAC SDN, EU restrictive measures)",
+      "PEP exposure (politically exposed persons)",
+      "Adverse media (fraud, regulatory investigations)",
+      "Complex beneficial ownership (shell companies, nominees)",
+      "High-risk jurisdictions (FATF grey/black list)",
+      "Crypto/virtual assets (exchange, DeFi, mixer)",
+      "Trade-based money laundering (over/under-invoicing)",
+      "Proliferation financing (dual-use goods)",
+      "Clean (well-established, regulated, transparent)",
+      "Borderline (flags but explainable)"
+    ]
+  },
+  "customers": [
+    {
+      "customer_id": "CUST-001",
+      "company_name": "Nordvik Shipping & Logistics AS",
+      "jurisdiction": "Norway",
+      "sector": "Maritime Logistics",
+      "incorporation_date": "2008-03-15",
+      "annual_revenue": "\u20ac42m",
+      "beneficial_owners": [
+        {
+          "name": "Erik Halvorsen",
+          "nationality": "Norwegian",
+          "pep": false,
+          "ownership_pct": 60
+        },
+        {
+          "name": "Dmitri Volkov",
+          "nationality": "Russian",
+          "pep": false,
+          "ownership_pct": 40
+        }
+      ],
+      "expected_verdict": "REJECT",
+      "risk_signals": [
+        "Minority owner is Russian national with frozen assets under EU 10th sanctions package",
+        "Company vessels identified in shadow fleet operations transporting Russian crude oil",
+        "Ownership restructured 3 weeks after EU sanctions announcement",
+        "Ship-to-ship transfers detected in Turkish waters"
+      ],
+      "sanctions_matches": [
+        "Dmitri Volkov \u2014 92% name match to EU Consolidated List (Council Regulation 269/2014)",
+        "Vessel 'MV Petrovsk' flagged in OFAC advisory on Russian oil price cap evasion"
+      ],
+      "adverse_media": [
+        "Lloyd's List investigation (2023): vessel linked to sanctions evasion network",
+        "Norwegian Maritime Authority inquiry into AIS transponder manipulation"
+      ],
+      "enforcement_inspiration": "Based on EU 10th sanctions package (Feb 2023) \u2014 EU designated 121 individuals/entities including Dubai-based firms suspected of helping Russia circumvent oil export sanctions. Shadow fleet vessels increasingly used AIS manipulation.",
+      "narrative": "Norwegian shipping company with a Russian minority owner who appears on the EU sanctions list. Vessels have been linked to shadow fleet operations circumventing the Russian oil price cap. The ownership was hurriedly restructured after sanctions were announced, suggesting awareness of exposure."
+    },
+    {
+      "customer_id": "CUST-002",
+      "company_name": "Greenfield Sustainable Agriculture Ltd",
+      "jurisdiction": "United Kingdom",
+      "sector": "Agriculture & Food Production",
+      "incorporation_date": "2015-06-22",
+      "annual_revenue": "\u00a318m",
+      "beneficial_owners": [
+        {
+          "name": "Sarah Mitchell",
+          "nationality": "British",
+          "pep": false,
+          "ownership_pct": 75
+        },
+        {
+          "name": "James Hargreaves",
+          "nationality": "British",
+          "pep": false,
+          "ownership_pct": 25
+        }
+      ],
+      "expected_verdict": "APPROVE",
+      "risk_signals": [],
+      "sanctions_matches": [],
+      "adverse_media": [],
+      "enforcement_inspiration": "N/A \u2014 clean scenario. Representative of low-risk UK agricultural businesses with transparent ownership and regulated operations.",
+      "narrative": "Well-established British agricultural company with two UK-national beneficial owners, clear corporate structure, and no adverse indicators. Company holds Soil Association certification and publishes annual sustainability reports. Straightforward approval."
+    },
+    {
+      "customer_id": "CUST-003",
+      "company_name": "Aurum Metals Trading FZE",
+      "jurisdiction": "United Arab Emirates (DMCC Free Zone)",
+      "sector": "Precious Metals Trading",
+      "incorporation_date": "2019-11-08",
+      "annual_revenue": "$95m",
+      "beneficial_owners": [
+        {
+          "name": "Harpreet Singh Fowler",
+          "nationality": "British-Indian",
+          "pep": false,
+          "ownership_pct": 100
+        }
+      ],
+      "expected_verdict": "REJECT",
+      "risk_signals": [
+        "Sole beneficial owner previously associated with \u00a3365m cash laundering through UK bank accounts",
+        "Precious metals sector \u2014 high inherent ML risk",
+        "UAE free zone incorporation \u2014 limited regulatory oversight",
+        "Transaction volumes inconsistent with declared business model",
+        "Cash-intensive business with deposits at multiple branches"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [
+        "UK Crown Court prosecution (2021): associated entity convicted of money laundering offences",
+        "BBC investigation: 'bin bags of cash' deposited across 50 bank branches",
+        "Former banking relationship terminated by NatWest following regulatory intervention"
+      ],
+      "enforcement_inspiration": "Based on NatWest \u00a3264.8m fine (Dec 2021) \u2014 Fowler Oldfield gold dealer deposited \u00a3365m through NatWest, including \u00a3264m in cash carried in bin bags across 50 branches. First criminal ML conviction of a UK bank under MLR 2007.",
+      "narrative": "Dubai-based precious metals trader whose sole owner has a history linked to a landmark UK money laundering prosecution. The original scheme involved depositing hundreds of millions in cash at bank branches. Now operating from a UAE free zone with limited oversight \u2014 extremely high risk."
+    },
+    {
+      "customer_id": "CUST-004",
+      "company_name": "TechBridge Digital Solutions GmbH",
+      "jurisdiction": "Germany",
+      "sector": "Enterprise Software",
+      "incorporation_date": "2012-01-10",
+      "annual_revenue": "\u20ac65m",
+      "beneficial_owners": [
+        {
+          "name": "Markus Weber",
+          "nationality": "German",
+          "pep": false,
+          "ownership_pct": 45
+        },
+        {
+          "name": "Claudia Hoffman",
+          "nationality": "German",
+          "pep": false,
+          "ownership_pct": 35
+        },
+        {
+          "name": "Berlin Ventures Fund II",
+          "nationality": "German (Fund)",
+          "pep": false,
+          "ownership_pct": 20
+        }
+      ],
+      "expected_verdict": "APPROVE",
+      "risk_signals": [],
+      "sanctions_matches": [],
+      "adverse_media": [],
+      "enforcement_inspiration": "N/A \u2014 clean scenario. Represents well-established German Mittelstand tech companies with transparent ownership.",
+      "narrative": "Mid-sized German enterprise software firm with clear ownership split between two founders and a regulated German VC fund. BaFin-registered fund investor, audited financials, and long operating history. No concerns identified."
+    },
+    {
+      "customer_id": "CUST-005",
+      "company_name": "Pacific Horizon Exchange Pty Ltd",
+      "jurisdiction": "Australia",
+      "sector": "Cryptocurrency Exchange",
+      "incorporation_date": "2020-08-14",
+      "annual_revenue": "AUD $230m",
+      "beneficial_owners": [
+        {
+          "name": "Kevin Tran",
+          "nationality": "Australian",
+          "pep": false,
+          "ownership_pct": 40
+        },
+        {
+          "name": "Ravi Kapoor",
+          "nationality": "Singaporean",
+          "pep": false,
+          "ownership_pct": 35
+        },
+        {
+          "name": "Unnamed BVI holding (Coral Reef Holdings Ltd)",
+          "nationality": "British Virgin Islands",
+          "pep": false,
+          "ownership_pct": 25
+        }
+      ],
+      "expected_verdict": "ESCALATE",
+      "risk_signals": [
+        "Cryptocurrency exchange \u2014 high inherent risk sector",
+        "25% ownership through opaque BVI holding company",
+        "BVI recently added to FATF grey list (June 2025)",
+        "Rapid revenue growth inconsistent with declared customer base",
+        "No evidence of robust AML/CTF program implementation",
+        "AUSTRAC registration only obtained 8 months after commencing operations"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [
+        "Australian Financial Review (2024): unnamed in AUSTRAC compliance review of crypto exchanges",
+        "Reddit threads alleging delayed withdrawal processing and possible commingling of funds"
+      ],
+      "enforcement_inspiration": "Based on Binance $4.3B settlement (Nov 2023) \u2014 pled guilty to BSA violations, failure to implement AML program, and IEEPA violations. Also inspired by AUSTRAC actions against Westpac ($1.3B) and Crown Resorts ($450m) for AML/CTF failures.",
+      "narrative": "Australian crypto exchange with opaque BVI ownership layer and rapid growth. While not directly sanctions-linked, the combination of high-risk sector, jurisdictional opacity, and delayed regulatory registration warrants human review. Could be legitimate rapid growth or could mask illicit flows."
+    },
+    {
+      "customer_id": "CUST-006",
+      "company_name": "Meridian Healthcare Group plc",
+      "jurisdiction": "United Kingdom",
+      "sector": "Healthcare & Pharmaceuticals",
+      "incorporation_date": "2001-04-03",
+      "annual_revenue": "\u00a3320m",
+      "beneficial_owners": [
+        {
+          "name": "Dr. Amara Okafor",
+          "nationality": "British-Nigerian",
+          "pep": false,
+          "ownership_pct": 15
+        },
+        {
+          "name": "Institutional investors (publicly listed)",
+          "nationality": "Various",
+          "pep": false,
+          "ownership_pct": 85
+        }
+      ],
+      "expected_verdict": "APPROVE",
+      "risk_signals": [],
+      "sanctions_matches": [],
+      "adverse_media": [],
+      "enforcement_inspiration": "N/A \u2014 clean scenario. Represents publicly listed, FCA-regulated healthcare companies with institutional ownership.",
+      "narrative": "FTSE 250-listed healthcare group with 25+ years of operating history. Majority institutional ownership, independent board, and Big 4 audited accounts. Transparent corporate governance and regulatory oversight. Clear approval."
+    },
+    {
+      "customer_id": "CUST-007",
+      "company_name": "Caspian Energy Resources LLC",
+      "jurisdiction": "Azerbaijan",
+      "sector": "Oil & Gas Exploration",
+      "incorporation_date": "2016-09-30",
+      "annual_revenue": "$78m",
+      "beneficial_owners": [
+        {
+          "name": "Ilham Mammadov",
+          "nationality": "Azerbaijani",
+          "pep": true,
+          "ownership_pct": 30
+        },
+        {
+          "name": "Elchin Aliyev",
+          "nationality": "Azerbaijani",
+          "pep": true,
+          "ownership_pct": 30
+        },
+        {
+          "name": "Caucasus Resource Fund (Cayman Islands)",
+          "nationality": "Cayman Islands",
+          "pep": false,
+          "ownership_pct": 40
+        }
+      ],
+      "expected_verdict": "ESCALATE",
+      "risk_signals": [
+        "Two beneficial owners classified as PEPs (senior government advisors)",
+        "Oil & gas sector in resource-rich autocratic state",
+        "40% ownership through Cayman Islands fund \u2014 UBO unclear",
+        "PEP family connections to ruling political party",
+        "Source of wealth documentation insufficient",
+        "Extractive industry in corruption-prone jurisdiction"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [
+        "OCCRP investigation (2022): 'Azerbaijani Laundromat' \u2014 billions moved through UK shell companies",
+        "Transparency International: Azerbaijan ranked 154/180 on CPI"
+      ],
+      "enforcement_inspiration": "Based on the 'Azerbaijani Laundromat' (OCCRP investigation) \u2014 $2.9 billion laundered through four UK-registered shell companies linked to ruling Azerbaijani elite. Also draws on EU Parliament bribery scandal (2022) involving Azerbaijani political influence.",
+      "narrative": "Azerbaijani oil company with two PEP beneficial owners and opaque Cayman Islands fund participation. The combination of PEP exposure, extractive industry, and jurisdictional risk requires enhanced due diligence. Not sanctions-listed but governance concerns are significant."
+    },
+    {
+      "customer_id": "CUST-008",
+      "company_name": "Stellar Chain Technologies Inc",
+      "jurisdiction": "United States (Delaware)",
+      "sector": "DeFi Protocol / Virtual Assets",
+      "incorporation_date": "2021-03-22",
+      "annual_revenue": "$12m",
+      "beneficial_owners": [
+        {
+          "name": "Alex Petrov",
+          "nationality": "Bulgarian-American",
+          "pep": false,
+          "ownership_pct": 55
+        },
+        {
+          "name": "Yuki Tanaka",
+          "nationality": "Japanese",
+          "pep": false,
+          "ownership_pct": 45
+        }
+      ],
+      "expected_verdict": "REJECT",
+      "risk_signals": [
+        "DeFi mixing protocol \u2014 facilitates anonymous transactions",
+        "Protocol identified in blockchain analytics as processing funds from DPRK-linked Lazarus Group wallets",
+        "No KYC/AML controls implemented on protocol users",
+        "Smart contracts match architecture of OFAC-designated mixing services",
+        "Founder previously employed by entity later added to SDN list"
+      ],
+      "sanctions_matches": [
+        "Protocol smart contract addresses share 3 common deposit addresses with Tornado Cash (OFAC-designated Aug 2022)",
+        "Blockchain analysis: $47m in transactions traced to Lazarus Group-attributed wallets"
+      ],
+      "adverse_media": [
+        "Chainalysis report (2024): protocol categorized as 'high-risk mixer' facilitating North Korean cyber theft proceeds",
+        "Wired investigation: links between development team and sanctioned Blender.io contributors"
+      ],
+      "enforcement_inspiration": "Based on OFAC designation of Tornado Cash (Aug 2022) and Blender.io (May 2022) \u2014 both designated for facilitating laundering of proceeds from North Korean Lazarus Group cyberattacks including $620m Axie Infinity hack. Tornado Cash processed $7B+ including $455m for Lazarus Group.",
+      "narrative": "Delaware-incorporated DeFi protocol whose mixing service has been identified processing funds from North Korean state-sponsored hackers. Architecture mirrors OFAC-designated services. Clear rejection \u2014 association with designated entities and proliferation financing."
+    },
+    {
+      "customer_id": "CUST-009",
+      "company_name": "Baltic Continental Bank AS",
+      "jurisdiction": "Estonia",
+      "sector": "Banking & Financial Services",
+      "incorporation_date": "2005-11-12",
+      "annual_revenue": "\u20ac145m",
+      "beneficial_owners": [
+        {
+          "name": "Andrei Kuznetsov",
+          "nationality": "Estonian (Russian-speaking minority)",
+          "pep": false,
+          "ownership_pct": 35
+        },
+        {
+          "name": "Viktor Sokolov",
+          "nationality": "Latvian",
+          "pep": false,
+          "ownership_pct": 25
+        },
+        {
+          "name": "Nordic Financial Holdings O\u00dc",
+          "nationality": "Estonia",
+          "pep": false,
+          "ownership_pct": 40
+        }
+      ],
+      "expected_verdict": "ESCALATE",
+      "risk_signals": [
+        "Baltic bank \u2014 jurisdiction historically associated with Russian non-resident banking (Danske Bank Estonia branch scandal)",
+        "High proportion of non-resident customer deposits (68%)",
+        "Correspondent banking relationships with CIS-country banks",
+        "Estonian FSA issued supervisory letter regarding transaction monitoring gaps (2023)",
+        "Significant volume of cross-border payments to/from high-risk jurisdictions"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [
+        "Estonian FSA public warning (2023): deficiencies in customer due diligence processes",
+        "Financial Times (2024): named in investigative piece on residual Russian money flows through Baltic states",
+        "OCCRP 'Laundromat' database: predecessor entity processed suspicious flows 2008-2015"
+      ],
+      "enforcement_inspiration": "Based on Danske Bank Estonia scandal \u2014 \u20ac200B in suspicious transactions flowed through branch 2007-2015. Also inspired by Deutsche Bank's $186m Fed penalty (July 2023) for insufficient progress remediating AML controls related to Danske Bank correspondent relationship.",
+      "narrative": "Estonian bank with historical ties to the Russian non-resident banking model that enabled the Danske Bank scandal. Current supervisory concerns and high non-resident deposits suggest ongoing risk. Not sanctioned, but the pattern matches known typologies \u2014 requires careful human assessment."
+    },
+    {
+      "customer_id": "CUST-010",
+      "company_name": "Westfield Property Developments Ltd",
+      "jurisdiction": "Ireland",
+      "sector": "Commercial Real Estate",
+      "incorporation_date": "2010-07-18",
+      "annual_revenue": "\u20ac55m",
+      "beneficial_owners": [
+        {
+          "name": "Patrick O'Sullivan",
+          "nationality": "Irish",
+          "pep": false,
+          "ownership_pct": 50
+        },
+        {
+          "name": "Siobhan Murphy",
+          "nationality": "Irish",
+          "pep": false,
+          "ownership_pct": 50
+        }
+      ],
+      "expected_verdict": "APPROVE",
+      "risk_signals": [],
+      "sanctions_matches": [],
+      "adverse_media": [],
+      "enforcement_inspiration": "N/A \u2014 clean scenario. Represents established Irish commercial real estate businesses with simple ownership structures.",
+      "narrative": "Irish property development company with straightforward 50/50 ownership between two Irish nationals. 15+ years of operation, Central Bank of Ireland regulated for relevant activities, clean media profile. No adverse indicators."
+    },
+    {
+      "customer_id": "CUST-011",
+      "company_name": "Guangzhou Prosperity Import-Export Co Ltd",
+      "jurisdiction": "China (Guangdong Province)",
+      "sector": "International Trade \u2014 Electronics Components",
+      "incorporation_date": "2017-04-25",
+      "annual_revenue": "$156m",
+      "beneficial_owners": [
+        {
+          "name": "Chen Wei",
+          "nationality": "Chinese",
+          "pep": false,
+          "ownership_pct": 60
+        },
+        {
+          "name": "Park Sung-ho",
+          "nationality": "South Korean",
+          "pep": false,
+          "ownership_pct": 25
+        },
+        {
+          "name": "Horizon Asia Holdings (Hong Kong)",
+          "nationality": "Hong Kong SAR",
+          "pep": false,
+          "ownership_pct": 15
+        }
+      ],
+      "expected_verdict": "REJECT",
+      "risk_signals": [
+        "Trading in dual-use electronic components (semiconductors, navigation systems)",
+        "Export records show shipments to Iran via transshipment points in Malaysia and UAE",
+        "Invoice values systematically 40-60% below market price \u2014 classic under-invoicing pattern",
+        "End-user certificates reference entities in Tehran with no verifiable business presence",
+        "South Korean minority owner previously investigated by Korean customs for illegal tech transfers to DPRK"
+      ],
+      "sanctions_matches": [
+        "End-user 'Pars Electronic Systems' \u2014 87% match to OFAC SDN entity linked to Iranian IRGC procurement",
+        "Component types match US Commerce Department Entity List controlled items"
+      ],
+      "adverse_media": [
+        "South Korean customs investigation (2022): Park Sung-ho questioned regarding dual-use goods transfers",
+        "US BIS advisory (2023): Guangdong-based traders named in diversion networks for sanctioned countries",
+        "Reuters investigation: electronics supply chains used to circumvent Iran/DPRK sanctions"
+      ],
+      "enforcement_inspiration": "Based on multiple OFAC designations of DPRK/Iran procurement networks (2023-2024) \u2014 Treasury targeted networks supplying prohibited components for missile development through Chinese and Malaysian intermediaries. Also inspired by HMRC TBML handbook cases involving over/under-invoicing schemes.",
+      "narrative": "Chinese trading company shipping dual-use electronics components with evidence of systematic under-invoicing and end-users linked to Iranian military procurement. One owner has prior investigation history for DPRK-related transfers. Classic proliferation financing and trade-based money laundering indicators \u2014 clear reject."
+    },
+    {
+      "customer_id": "CUST-012",
+      "company_name": "Lagos Continental Remittances Ltd",
+      "jurisdiction": "Nigeria (Lagos)",
+      "sector": "Money Services Business / Remittances",
+      "incorporation_date": "2018-02-14",
+      "annual_revenue": "\u00a38.5m",
+      "beneficial_owners": [
+        {
+          "name": "Adebayo Ogundimu",
+          "nationality": "Nigerian",
+          "pep": false,
+          "ownership_pct": 70
+        },
+        {
+          "name": "Blessing Nwankwo",
+          "nationality": "Nigerian-British",
+          "pep": false,
+          "ownership_pct": 30
+        }
+      ],
+      "expected_verdict": "ESCALATE",
+      "risk_signals": [
+        "Money services business \u2014 inherently high-risk sector",
+        "Nigerian jurisdiction \u2014 previously on FATF grey list (removed 2024)",
+        "Rapid transaction volume growth (300% in 18 months)",
+        "UK subsidiary bank account receiving high volumes of third-party payments",
+        "Correspondent banking relationship terminated by previous bank (de-risking)",
+        "Incomplete source of funds documentation for corporate beneficial owner"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [
+        "Nigerian EFCC investigation (2023): sector-wide review of remittance companies \u2014 no charges against this entity",
+        "De-risking: previous banking relationship with GT Bank UK terminated following FCA enforcement"
+      ],
+      "enforcement_inspiration": "Based on FCA fine of Guaranty Trust Bank UK (\u00a37.6m, Jan 2023) \u2014 serious AML weaknesses from 2014-2019 including inadequate enhanced due diligence on high-risk customers and failure to properly monitor transactions. Also reflects broader de-risking of Nigerian MSBs.",
+      "narrative": "Nigerian remittance business with rapid growth and a previous banking relationship that was terminated. Some red flags present (high volumes, incomplete documentation) but the company may simply be a legitimate high-growth fintech in an underserved corridor. Requires enhanced due diligence and human judgment."
+    },
+    {
+      "customer_id": "CUST-013",
+      "company_name": "Scandinavian Timber & Forestry AB",
+      "jurisdiction": "Sweden",
+      "sector": "Forestry & Sustainable Materials",
+      "incorporation_date": "1998-09-05",
+      "annual_revenue": "SEK 890m (~\u20ac78m)",
+      "beneficial_owners": [
+        {
+          "name": "Lars Andersson",
+          "nationality": "Swedish",
+          "pep": false,
+          "ownership_pct": 40
+        },
+        {
+          "name": "Ingrid Johansson",
+          "nationality": "Swedish",
+          "pep": false,
+          "ownership_pct": 30
+        },
+        {
+          "name": "Andersson Family Trust",
+          "nationality": "Swedish",
+          "pep": false,
+          "ownership_pct": 30
+        }
+      ],
+      "expected_verdict": "APPROVE",
+      "risk_signals": [],
+      "sanctions_matches": [],
+      "adverse_media": [],
+      "enforcement_inspiration": "N/A \u2014 clean scenario. Represents well-established Nordic family businesses with long track records and low-risk profiles.",
+      "narrative": "Second-generation Swedish forestry company with 25+ years of operations. Family trust ownership is fully transparent (Swedish trust registry), FSC-certified operations, and audited by Deloitte. Very low risk \u2014 straightforward approval."
+    },
+    {
+      "customer_id": "CUST-014",
+      "company_name": "Minsk Industrial Machinery OJSC",
+      "jurisdiction": "Belarus",
+      "sector": "Industrial Equipment Manufacturing",
+      "incorporation_date": "2003-12-01",
+      "annual_revenue": "$45m",
+      "beneficial_owners": [
+        {
+          "name": "Belarusian State Property Committee",
+          "nationality": "Belarus (State-owned)",
+          "pep": true,
+          "ownership_pct": 51
+        },
+        {
+          "name": "Nikolai Karpovich",
+          "nationality": "Belarusian",
+          "pep": true,
+          "ownership_pct": 49
+        }
+      ],
+      "expected_verdict": "REJECT",
+      "risk_signals": [
+        "Majority state-owned by Belarusian government \u2014 subject to EU/UK/US sanctions",
+        "Belarus designated under multiple sanctions regimes (EU Council Decision 2012/642)",
+        "Minority owner is senior official in Lukashenko administration",
+        "Products include dual-use industrial components",
+        "Country subject to EU arms embargo and trade restrictions"
+      ],
+      "sanctions_matches": [
+        "Belarusian State Property Committee \u2014 designated entity under EU Belarus sanctions (Council Regulation 765/2006)",
+        "Nikolai Karpovich \u2014 94% match to EU designated person (close associate of President Lukashenko)",
+        "Entity type matches EU sectoral sanctions on state-owned Belarusian entities"
+      ],
+      "adverse_media": [
+        "EU Council press release (2022): Belarus sanctions expanded to cover state-owned enterprises supporting regime",
+        "Bellingcat investigation: Belarusian state enterprises facilitating Russian military logistics"
+      ],
+      "enforcement_inspiration": "Based on EU sanctions packages against Belarus (2020-2024) \u2014 restrictive measures against 233 individuals and 37 entities including state-owned enterprises. Council Regulation 2022/355 expanded measures following Belarus complicity in Russia's invasion of Ukraine.",
+      "narrative": "Belarusian state-owned industrial manufacturer with majority government ownership and a PEP minority owner linked to the Lukashenko regime. Multiple sanctions matches across EU, UK, and US lists. Automatic rejection \u2014 clear sanctions exposure."
+    },
+    {
+      "customer_id": "CUST-015",
+      "company_name": "Lisbon Ventures Capital SGPS SA",
+      "jurisdiction": "Portugal",
+      "sector": "Private Equity & Investment",
+      "incorporation_date": "2019-05-20",
+      "annual_revenue": "\u20ac22m",
+      "beneficial_owners": [
+        {
+          "name": "Ricardo Ferreira",
+          "nationality": "Portuguese",
+          "pep": true,
+          "ownership_pct": 30
+        },
+        {
+          "name": "Maria Santos",
+          "nationality": "Portuguese",
+          "pep": false,
+          "ownership_pct": 35
+        },
+        {
+          "name": "Emerging Markets Partners (Luxembourg)",
+          "nationality": "Luxembourg",
+          "pep": false,
+          "ownership_pct": 35
+        }
+      ],
+      "expected_verdict": "ESCALATE",
+      "risk_signals": [
+        "PEP beneficial owner \u2014 former deputy minister of economy (left office 2021)",
+        "Investment fund targets Golden Visa real estate for non-EU nationals",
+        "Luxembourg fund structure \u2014 while legitimate, adds complexity to UBO identification",
+        "Source of wealth for PEP: declared consulting income but significant property holdings",
+        "Recent media coverage of Portuguese Golden Visa programme corruption investigations"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [
+        "P\u00fablico newspaper (2023): Ricardo Ferreira named (not charged) in investigation into Golden Visa programme irregularities",
+        "Portuguese MP inquiry (2024): testimony regarding influence of former officials in investment approvals",
+        "No criminal charges filed \u2014 investigation ongoing"
+      ],
+      "enforcement_inspiration": "Based on Portugal's Golden Visa corruption scandal (Operation Lex, 2023-2024) \u2014 multiple government officials investigated for granting residency permits in exchange for bribes. Programme suspended for real estate investment in Oct 2023. Former ministers and judges implicated.",
+      "narrative": "Portuguese PE fund with a former government minister as beneficial owner, investing in a programme currently under corruption investigation. While not charged, the PEP status combined with adverse media and the nature of the investment programme requires careful escalation for enhanced due diligence."
+    },
+    {
+      "customer_id": "CUST-016",
+      "company_name": "Maple Leaf Fintech Corp",
+      "jurisdiction": "Canada (Ontario)",
+      "sector": "Payment Processing",
+      "incorporation_date": "2016-11-30",
+      "annual_revenue": "CAD $45m",
+      "beneficial_owners": [
+        {
+          "name": "David Chen",
+          "nationality": "Canadian",
+          "pep": false,
+          "ownership_pct": 40
+        },
+        {
+          "name": "Priya Sharma",
+          "nationality": "Canadian",
+          "pep": false,
+          "ownership_pct": 35
+        },
+        {
+          "name": "Toronto Innovation Fund",
+          "nationality": "Canadian",
+          "pep": false,
+          "ownership_pct": 25
+        }
+      ],
+      "expected_verdict": "APPROVE",
+      "risk_signals": [],
+      "sanctions_matches": [],
+      "adverse_media": [],
+      "enforcement_inspiration": "N/A \u2014 clean scenario. Represents regulated Canadian fintech companies with transparent venture-backed ownership.",
+      "narrative": "Ontario-registered payment processor with FINTRAC MSB registration. Two Canadian co-founders plus a regulated Canadian VC fund. Clean regulatory history, annual OSFI compliance reviews, and no adverse media. Standard approval."
+    },
+    {
+      "customer_id": "CUST-017",
+      "company_name": "Silk Road Textiles FZCO",
+      "jurisdiction": "United Arab Emirates (Jebel Ali Free Zone)",
+      "sector": "Textile Import/Export",
+      "incorporation_date": "2020-01-15",
+      "annual_revenue": "$28m",
+      "beneficial_owners": [
+        {
+          "name": "Fatima Al-Rashidi",
+          "nationality": "Iraqi",
+          "pep": false,
+          "ownership_pct": 40
+        },
+        {
+          "name": "Amir Hassan Enterprises (nominee structure)",
+          "nationality": "UAE",
+          "pep": false,
+          "ownership_pct": 60
+        }
+      ],
+      "expected_verdict": "ESCALATE",
+      "risk_signals": [
+        "Nominee ownership structure \u2014 true UBO of 60% holding unclear",
+        "Free zone entity with limited regulatory oversight",
+        "Trade patterns show circular invoicing between related entities in Turkey, Iraq, and UAE",
+        "Invoice values for textile shipments 3x above market rates \u2014 over-invoicing pattern",
+        "Multiple cash deposits in dirham at UAE exchange houses",
+        "Company age inconsistent with claimed trading volume"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [
+        "FATF typology report (2023): UAE free zone textile traders identified as TBML conduit",
+        "UAE Central Bank circular (2024): enhanced reporting requirements for free zone MSBs"
+      ],
+      "enforcement_inspiration": "Based on HMRC TBML Handbook (Operation A) \u2014 organized crime group used fabricated trade documentation and over/under-invoicing to launder proceeds through corporate structures that existed only to facilitate money laundering. Also draws on FATF 2023 TBML indicators.",
+      "narrative": "UAE free zone textile trader with nominee ownership hiding the true beneficial owner. Circular invoicing patterns and systematic over-invoicing strongly suggest trade-based money laundering. The nominee structure prevents proper UBO identification \u2014 escalation required for deep-dive investigation."
+    },
+    {
+      "customer_id": "CUST-018",
+      "company_name": "Helvetia Wealth Management SA",
+      "jurisdiction": "Switzerland",
+      "sector": "Wealth Management & Private Banking",
+      "incorporation_date": "2007-08-20",
+      "annual_revenue": "CHF 35m",
+      "beneficial_owners": [
+        {
+          "name": "Dr. Thomas M\u00fcller",
+          "nationality": "Swiss",
+          "pep": false,
+          "ownership_pct": 50
+        },
+        {
+          "name": "Elena Konstantinidis",
+          "nationality": "Greek-Swiss",
+          "pep": false,
+          "ownership_pct": 50
+        }
+      ],
+      "expected_verdict": "APPROVE",
+      "risk_signals": [
+        "Wealth management sector carries inherent ML risk \u2014 but mitigated by FINMA regulation",
+        "Swiss jurisdiction \u2014 strong AML framework"
+      ],
+      "sanctions_matches": [],
+      "adverse_media": [],
+      "enforcement_inspiration": "N/A \u2014 clean scenario with minor inherent sector risk. Represents FINMA-regulated Swiss wealth managers with long operating history.",
+      "narrative": "FINMA-licensed Swiss wealth management firm with 18 years of clean operating history. Two Swiss-resident beneficial owners, annual FINMA audits, and membership of Swiss Bankers Association self-regulatory organization. Sector carries inherent risk but strong regulatory environment provides comfort. Approve."
+    }
+  ]
+}

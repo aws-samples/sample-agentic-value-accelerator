@@ -1,305 +1,142 @@
-# Govern Module Gap Analysis
+# Govern Branch — Gap Analysis (removed features / dead imports / broken links)
 
-**Date:** 2026-07-22  
-**Scope:** `src/components/govern/` (155 .tsx files, 58 .ts files)  
-**Analyst:** Gap Analysis Agent
+Read-only pre-merge review of UNCOMMITTED changes on the Govern branch.
+Scope: did any change REMOVE a feature/tab/route or leave a dead import / broken
+link? Verified with grep + an actual `tsc -p tsconfig.app.json --noEmit` run
+(tsc reports TS2307 for any broken import and TS6133 for any unused/dead import).
 
----
-
-## Executive Summary
-
-The Govern module is well-architected with strong foundations: all 9 Core modules are implemented with proper routing, CoreBadge integration, and the shared metric contract. The primary gaps are in cross-module linking consistency, empty/loading state coverage, and a few framework views lacking complete control mappings.
+Findings ordered most-severe first.
 
 ---
 
-## 1. Module Completeness
+# Pre-release gate (policy round) — 2026-09-02
 
-### 1.1 Core Module Status (9/9 Complete)
+Scope: NOT a full-module re-audit. Narrow check of REACHABILITY + COMPLETENESS of
+the surfaces that now show the newly-seeded A2A data (4 trust policies + 6 agent
+identities + per-policy Cedar export). Verified by tracing routes/nav and by
+grepping every consumer of `governA2AApi` against the backend contract
+(`api/routes/govern_a2a_trust.py`, `client.ts:2249-2258`). Most-severe first.
 
-| Module | Route | CoreBadge | Tabs | Status |
-|--------|-------|-----------|------|--------|
-| Command Center | `/govern/command-center` | see | N/A | Complete |
-| Agent Registry | `/govern/agents` | see | Multiple | Complete |
-| Agentic Fleet | `/govern/fleet` | see | Multiple | Complete |
-| Model Management | `/govern/models` | see | 8 tabs | Complete |
-| Cost & FinOps | `/govern/finops` | see | 9 tabs | Complete |
-| Compliance Center | `/govern/compliance` | govern | 5+ tabs | Complete |
-| Prompt Governance | `/govern/prompt-governance` | govern | Multiple | Complete |
-| Audit & Incidents | `/govern/audit` | show | 4 tabs | Complete |
-| Data Governance | `/govern/data` | show | 11 sub-routes | Complete |
+## MUST-FIX (broken / dangling surfaces): 0
+No dangling tab, no nav entry without a target, no surface that references the
+seeded policies but renders nothing. Everything that IS wired renders real content.
 
-### 1.2 TODO/Placeholder Content Found
+## Completeness gaps — 2 of 4 seeded artifact types have NO UI surface
 
-**Critical (blocking features):**
-- None identified
+### GAP 1 (highest) — Cedar export is unreachable from the UI
+The seed's per-policy Cedar export exists end-to-end on the backend
+(`GET /govern/a2a-trust/policies/{id}/cedar`) and in the client
+(`governA2AApi.exportCedar`, client.ts:2256-2257), but **grep finds ZERO callers
+of `exportCedar` anywhere in `src/`.** A2AGovernance's Trust Policies cards
+(A2AGovernance.tsx:675-771) render name/effect/actions/autonomy but expose no
+"Export Cedar" button or download. The route docstring calls this export "the
+bridge to AgentCore enforcement" — the differentiator is seeded but invisible.
+Fix: add an Export Cedar action to each live policy card (and/or the expanded
+detail) that calls `governA2AApi.exportCedar(policy.id)` and shows/downloads the
+returned `cedar` string. Only meaningful on the live path (`policiesLive`).
 
-**Important (user-facing "coming soon"):**
-| File | Content |
-|------|---------|
-| `A2AGovernance.tsx:590` | "Policy creation coming soon" |
-| `HumanOversight.tsx:466` | "Gate configuration coming soon" |
-| `ModelGovernance.tsx:680` | "Model card generation wizard coming soon" |
-| `ModelGovernance.tsx:759` | "Review scheduling wizard coming soon" |
-| `DevToolsGovernance.tsx:702` | "Policy configuration coming soon" |
-| `DevToolsGovernance.tsx:1158` | "Exclusion configuration coming soon" |
-| `data/BusinessGlossary.tsx:474` | "Add Term form opened - feature coming soon" |
-| `data/DataOntology.tsx:341` | "Object type creation wizard coming soon" |
-| `data/DataTaxonomy.tsx:389` | "Category creation wizard coming soon" |
-| `TrustStack3Layer.tsx` | Multiple "coming soon" status markers (by design) |
+### GAP 2 — The 6 seeded agent identities have NO UI surface at all
+Backend exposes `GET /govern/a2a-trust/identities` (govern_a2a_trust.py:96-98) and
+these identities carry the `scope_level` that drives the evaluator's autonomy
+ceiling. But **the frontend has no client method for it** — `governA2AApi`
+(client.ts:2249-2258) has `listPolicies` / `evaluate` / `exportCedar` only; no
+`listIdentities`, no `AgentIdentity` type, and no component references
+`a2a-trust/identities`. The 6 seeded identities are entirely invisible: no list,
+no scope table, and the Delegation Evaluator uses two free-text inputs rather than
+a picker populated from the registered identities.
+Fix: add `governA2AApi.listIdentities()` + an "Agent Identities" surface in
+A2AGovernance (a small table of agent_id → scope_level), and ideally back the
+evaluator's source/target inputs with that list so the demo shows real scopes.
 
-**Minor (placeholder text for forms):**
-- Various `placeholder=""` attributes in input fields (normal UX pattern)
-- `agentEvalData.ts:13` - placeholder ARNs (expected for mock data)
-- `useLiveKPIs.ts:112` - externalAgents placeholder value
+### Related NOTE — evaluator default IDs may floor to L1
+`A2ATrustEvaluator` defaults source/target to `agt-00001` / `agt-00002`
+(A2ATrustEvaluator.tsx:16-17). Those IDs match the *graduation* service's demo
+agents, a DIFFERENT table; whether the A2A identity table was seeded with the same
+IDs is unconfirmed. If not, `evaluate()` floors both scopes to L1
+(govern_a2a_trust_service.py:189-190) and returns a conservative-but-valid
+decision — non-breaking, but the demo may not show the intended high-scope
+ceiling. Surfacing identities (GAP 2) removes the guesswork.
 
----
+## PASS — reachability of the surfaces in scope
 
-## 2. Cross-Module Integration Gaps
+### A2A Governance Trust Policies view IS reachable and clearly labeled
+- `'a2a'` tab present in AgentRegistry `TABS` (AgentRegistry.tsx:67), label
+  **"A2A Governance"**; renders `<A2AGovernance />` (line 976) which shows the
+  live policies list, the live Delegation Evaluator, topology, protocols, audit,
+  and AWS-patterns sub-tabs. Real content, not a stub.
+- AgentRegistry is reachable every documented way: route `/govern/agents`
+  (App.tsx:218), GovernLanding card `id:'agents'` → `/govern/agents`
+  (GovernLanding.tsx:355-362), Sidebar entry + subLink (Sidebar.tsx:202, 396),
+  and the governProgram Inventory step (`{label:'Agent Registry', nav:'agents'}`,
+  governProgram.ts:94). Demo path: **Govern → Agent Registry → "A2A Governance" tab.**
+- Discoverability NOTE (not a gap): no deep-link to `?tab=a2a` exists, and a
+  separate `/a2a` route (`A2aLanding` = the Build "A2A Agents" registry) is a
+  DIFFERENT surface. A presenter hunting for "A2A" from the sidebar may land on
+  `/a2a` (registry) instead of the Govern trust-policy tab. Consider a direct
+  landing entry or cross-link if the A2A trust view is a headline demo beat.
 
-### 2.1 CoreBadge Coverage
-
-**Implemented (11 files using CoreBadge):**
-- CommandCenter.tsx
-- AgentRegistry.tsx
-- FleetOverview.tsx
-- ModelManagement.tsx
-- FinOps.tsx
-- ComplianceCenter.tsx
-- PromptGovernance.tsx
-- AuditIncidents.tsx
-- data/DataGovernanceLanding.tsx
-- CoreBadge.tsx (definition)
-- README.md (documentation)
-
-**Gap:** All 9 Core modules have CoreBadge - COMPLETE
-
-### 2.2 useGovernanceAggregator Adoption
-
-**Adopted (16 files):**
-- GovernanceCommandCenter.tsx, FleetOverview.tsx, ModelManagement.tsx
-- FinOps.tsx, RiskManagement.tsx, AgentRegistry.tsx
-- finops/Chargeback.tsx, finops/Optimization.tsx, finops/TaskAssessment.tsx
-- finops/BusinessMetrics.tsx, finops/AgentROI.tsx, finops/UnitEconomics.tsx, finops/TokenEconomics.tsx
-- risk/RiskRegister.tsx, risk/RiskDashboard.tsx, risk/RiskAssessments.tsx
-
-**Gap - Should use aggregator but don't:**
-| Module | Current State | Recommendation |
-|--------|---------------|----------------|
-| TrustStackPage.tsx | Uses useGovernModels only | Consider aggregator for trust score |
-| WorkflowsPage.tsx | Uses aggregator (ok) | - |
-| ModelDependencyGraph.tsx | Uses useGovernModels (ok) | - |
-| ProgramProgress.tsx | Uses useGovernanceAggregator (ok) | - |
-
-### 2.3 Missing Cross-Module Links
-
-**Critical Links Missing:**
-
-| From Module | Should Link To | Context |
-|-------------|----------------|---------|
-| BiasFairness.tsx | `/govern/safety/runtime` | AI Safety RAI dimensions |
-| EarnedAutonomyView.tsx | `/govern/risk` | Risk-based autonomy graduation |
-| ModelExplainability.tsx | `/govern/compliance` | Compliance evidence |
-| HumanOversight.tsx | `/govern/audit` | Audit trail for overrides |
-
-**Recommendation:** Add contextual "Related" sections to these views.
-
-### 2.4 Command Center Aggregation Completeness
-
-The Command Center via `useGovernanceAggregator` aggregates:
-- Guardrails (Secure) - Live
-- Deployments (Build) - Live
-- Use Cases (Plan) - Live
-- Business Cases (Plan) - Live
-- Operating Models (Plan) - Live
-- Service Approvals (Secure) - Live
-- Frontier Agents (Build) - Live
-- Policies (Secure) - Live
-
-**Gap:** The following are mock-only:
-- `COMPLIANCE_FRAMEWORKS` - needs backend API
-- `COST_BY_MODEL` - partial (Cost Explorer live, breakdown mock)
-- `BU_BUDGETS` - needs backend API
-- `ANOMALY_ALERTS` - needs backend API
+### Fleet "Policies" card → /secure/policy is complete and reachable
+- FleetOverview Security Controls card links "Policies →" to `/secure/policy`
+  (FleetOverview.tsx:1730); the card also shows the top-3 active policies with
+  rule counts (1762-1775), so it is obvious where the full list lives.
+- `/secure/policy` is a real routed view (App.tsx:297 → `<Policy initialTab="engines"/>`),
+  also reached from the AgentRegistry Permissions banner "Manage policies in
+  Secure →" (AgentRegistry.tsx:1581) and AgentDrawer (125/139). Not dangling.
 
 ---
 
-## 3. Framework Coverage Gaps
+## MUST-FIX
 
-### 3.1 Framework View Inventory
-
-All 10 framework views are implemented:
-- NistAiRmfView.tsx
-- EuAiActView.tsx
-- Iso42001View.tsx
-- OwaspLlmView.tsx
-- MitreAtlasView.tsx
-- OsfiE23View.tsx
-- NaicAiView.tsx
-- CriAiRmfView.tsx
-- FinosAirView.tsx
-- Sr26MappingView.tsx (SR 26-2)
-
-### 3.2 Control Mapping Completeness
-
-| Framework | Controls Defined | Module Links | Gap |
-|-----------|------------------|--------------|-----|
-| NIST AI RMF | GOVERN/MAP/MEASURE/MANAGE | Complete | None |
-| EU AI Act | Art 6-14 | Complete | None |
-| ISO 42001 | Clauses 4-10 | Complete | None |
-| OWASP LLM Top 10 | LLM01-LLM10 | Complete | None |
-| MITRE ATLAS | Tactics/Techniques | Complete | None |
-| OSFI E-23 | Model Risk sections | Partial | Missing: Validation frequency controls |
-| NAIC | Guidelines 1-7 | Complete | None |
-| CRI FS AI RMF | Domains | Complete | None |
-| FINOS AIR | Categories | Complete | None |
-| SR 26-2 | All articles | Complete | None |
-
-### 3.3 Unlinked Controls
-
-**OSFI E-23 Gap:**
-- Missing link to Model Evaluations for validation frequency tracking
-- Recommendation: Add `onNavigateTab` to Model Management evaluations tab
-
-**EU AI Act Gap:**
-- FRIA (Fundamental Rights Impact Assessment) wizard exists but not linked from all Article 29a contexts
-- Recommendation: Add FRIA CTA to Art 29a control rows
+### 1. Untracked module import (see Integration analysis, item 1)
+`src/App.tsx:2` imports `./components/ErrorBoundary`, which is UNTRACKED. Must be
+committed alongside App.tsx or the build/typecheck breaks. This is the only
+untracked-import risk in the branch — no other modified/committed file imports an
+untracked module (only `src/components/ErrorBoundary.tsx` is untracked under `src/`).
 
 ---
 
-## 4. Data Flow Gaps
+## PASS — no feature/tab/route dropped or duplicated
 
-### 4.1 Live Data Badge Adoption
+### Command Center — AI Quality moved, still rendered exactly once
+- `GovernanceCommandCenter.tsx`: the diff REMOVED the bare
+  `{/* AI Quality Monitor */} <AIQualityMonitor compact />` and RE-ADDED it inside
+  a `<ZoneHeader title="AI Quality">` section. Net result: `<AIQualityMonitor compact />`
+  is rendered EXACTLY ONCE (line 487). Not dropped, not duplicated.
+- `AIQualityMonitor` also renders in `ModelManagement.tsx:854` (its own `quality`
+  subtab) — a distinct view, not a duplicate within the Command Center.
 
-**Consistent usage (100 files):** LiveDataBadge/MockDataBadge properly used
+### ReportsLanding — all 6 tabs intact
+- Tab set unchanged: `assessments | inventory | attestation | trends | playbooks
+  | framework` (ReportsLanding.tsx:30). `TABS` array (lines 39-72) still defines
+  all 6; all 6 are rendered (lines 165-170). The diff only touched the HEADER
+  badge area — swapped a static `MockDataBadge` for a live/mock badge driven by
+  `useReportsDataSummary()` plus a live-stats strip. No tab logic changed.
+- New imports resolve: `LiveDataBadge` is exported from `./DataSourceIndicator`
+  with matching signature `{ source?, detail? }`; `useReportsDataSummary` is
+  exported from `./operations/useReportsLiveData` and returns
+  `{ summary, loading }` where `summary` exposes every field ReportsLanding reads
+  (`dataSources`, `liveAgents`, `liveGuardrails`, `avgCompliancePct`,
+  `totalFindings`, `criticalFindings`). No shape mismatch.
 
-**Gap - Missing data source indicators:**
-| File | Issue |
-|------|-------|
-| ConformanceView.tsx | No data badge (should show Mock) |
-| HRAISAssessment.tsx | No data badge (should show Mock for pre-filled data) |
-| ThreatModeling.tsx | No data badge |
+### No broken import links anywhere
+- The full `tsc` run produced ZERO TS2307 (cannot-find-module) errors across all
+  100+ touched files. Every import (including the ErrorBoundary and its
+  `./govern/icons` import) resolves.
 
-### 4.2 Hook Wiring Status
+### No NEW dead imports in touched Govern files
+- The only TS6133 (unused) error in a touched file is `App.tsx:112 RoleProvider`,
+  which is PRE-EXISTING on HEAD (the branch did not add it, nor remove its usage).
+- All other TS6133 findings are in untouched Plan/other-module files
+  (HarnessCreate, RoadmapReviewStep, PhaseRoadmapView, ValueCostReport) —
+  pre-existing, out of scope.
 
-| Hook | Purpose | Used By | Gap |
-|------|---------|---------|-----|
-| `useGovernModels` | Bedrock models | 9 files | None |
-| `useAwsCost` | Cost Explorer | 8 files | None |
-| `useAgentRegistry` | Agent inventory | 6 files | Some modules use local state instead |
-| `useControlEvaluation` | Config compliance | 4 files | Should be used by ComplianceCenter |
-| `useLiveKPIs` | Real-time KPIs | 1 file | Underutilized |
-
-**Critical Gap:** `useControlEvaluation` exists but ComplianceCenter.tsx does not fully integrate it for dynamic control status.
-
-### 4.3 API Client Gaps
-
-Missing from `client.ts` that components reference:
-- None identified - all referenced APIs exist
-
-Backend APIs that exist but aren't used:
-- `/api/v1/govern/audit/events` - used by auditLog.ts
-- `/api/v1/govern/trail/ai-callers` - used by data/useDataLineage.ts
-- `/api/v1/govern/invocation-safety/telemetry` - used by data/useDataReadiness.ts
-
----
-
-## 5. UI/UX Gaps
-
-### 5.1 Empty State Coverage
-
-**EmptyState component defined:** Yes (EmptyState.tsx with EMPTY_STATES catalog)
-
-**Modules using EmptyState (7):**
-- AuditIncidents.tsx
-- FleetOverview.tsx
-- risk/RiskDashboard.tsx
-- DataGovernance.tsx
-- data/DataAccessControl.tsx
-- data/AgentDataProfiles.tsx
-
-**Gap - Missing empty states:**
-| Module | Condition | Recommendation |
-|--------|-----------|----------------|
-| ComplianceCenter.tsx | No frameworks selected | Add guidance empty state |
-| ModelRegistry.tsx | No models | Add "Connect AWS" empty state |
-| safety/SafetyCases.tsx | No cases | Add "Create first case" empty state |
-| safety/IncidentManagement.tsx | No incidents | Add "All clear" success state |
-| risk/RiskControls.tsx | No controls | Add "Add first control" empty state |
-
-### 5.2 Loading State Coverage
-
-**Files with proper loading states (6):**
-- PolicyObservability.tsx
-- ConformanceView.tsx
-- RuntimeEnforcementView.tsx
-- EarnedAutonomyView.tsx
-- BiasFairness.tsx
-- Sr26MappingView.tsx
-
-**Gap - Missing loading states:**
-| Module | Issue |
-|--------|-------|
-| ModelComparison.tsx | No loading indicator during model fetch |
-| data/KnowledgeSources.tsx | No loading state for knowledge base list |
-| safety/RedTeamTestPipeline.tsx | No loading state for test execution |
-
-### 5.3 Pattern Inconsistencies
-
-**Card patterns:** Mostly consistent with `bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60`
-
-**Table patterns:** Mixed usage of inline tables vs. dedicated table components
-
-**Gap:** Create a shared `GovernTable` component for consistency (similar to GovernTabs).
+### GovernLanding shadow-AI banner
+- Change is a bug fix (flat → nested `shadow_ai?` access), not a feature removal.
+  Banner still computes critical/high/model counts. See Integration analysis.
 
 ---
 
-## 6. Recommendations Summary
-
-### Critical Gaps (Blocking Quality)
-
-1. **None identified** - Module is production-ready
-
-### Important Gaps (Should Fix)
-
-| Priority | Gap | Recommendation | Effort |
-|----------|-----|----------------|--------|
-| P1 | Empty states missing | Add to 5 modules listed | 2 hours |
-| P1 | Loading states missing | Add to 3 modules listed | 1 hour |
-| P2 | useControlEvaluation not integrated | Wire to ComplianceCenter | 3 hours |
-| P2 | OSFI E-23 validation link | Add to OsfiE23View | 30 min |
-| P2 | Cross-module links | Add to 4 modules listed | 2 hours |
-
-### Minor Gaps (Nice to Have)
-
-| Priority | Gap | Recommendation | Effort |
-|----------|-----|----------------|--------|
-| P3 | Data badges missing | Add to 3 views | 30 min |
-| P3 | "Coming soon" features | Track in backlog | N/A |
-| P3 | GovernTable component | Extract shared component | 4 hours |
-| P3 | Mock-only aggregator data | Backend APIs needed | 1 week+ |
-
----
-
-## 7. Strengths Identified
-
-1. **Comprehensive framework coverage** - All 10 major frameworks implemented
-2. **Consistent CoreBadge usage** - All 9 Core modules have proper badges
-3. **Strong aggregator pattern** - useGovernanceAggregator centralizes 8+ data sources
-4. **Shared metric contract** - metricContract.ts provides single source of truth
-5. **Good live data integration** - 100+ files use LiveDataBadge/MockDataBadge appropriately
-6. **Deep sub-module structure** - data/, risk/, safety/, finops/, compliance/, metrics/ well-organized
-7. **Accessibility** - GovernTabs has full ARIA support and keyboard navigation
-
----
-
-## Appendix: File Counts by Category
-
-| Category | Count |
-|----------|-------|
-| Total .tsx files | 155 |
-| Total .ts files | 58 |
-| Core module pages | 9 |
-| Framework views | 10 |
-| Sub-module components | 40+ |
-| Hooks | 15+ |
-| Data files | 20+ |
+## Summary
+No feature, tab, or route was removed or duplicated by this branch. The only
+gap-class MUST-FIX is committing the untracked `ErrorBoundary.tsx` alongside
+App.tsx. No broken import links; no new dead imports in Govern files.

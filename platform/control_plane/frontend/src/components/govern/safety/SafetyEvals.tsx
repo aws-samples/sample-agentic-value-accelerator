@@ -26,6 +26,7 @@ import {
   type BenchmarkDef, type ModelBenchmarks, type RedTeamCampaign,
   type CampaignStatus, type Severity, type SafetyGrade, type Polarity,
 } from './evalsData';
+import { MOCK_FINDINGS, MOCK_GENERATED_TESTS, openFindings } from './redTeamPipelineData';
 
 const tooltipStyle = {
   background: 'rgba(255,255,255,0.98)', border: '1px solid #e2e8f0',
@@ -96,6 +97,11 @@ export default function SafetyEvals() {
 
   const numericBenchmarks = BENCHMARKS.filter(b => b.id !== 'ailuminate');
 
+  // Pipeline pills below are derived from the same arrays the Red-Team → Test
+  // Pipeline surface renders, so they cannot drift from that page's counts.
+  const pipelineOpenFindings = useMemo(() => openFindings(MOCK_FINDINGS).length, []);
+  const pipelineTestCount = MOCK_GENERATED_TESTS.length;
+
   return (
     <GovernPageLayout
       title="Red-Team & Safety Evals"
@@ -118,7 +124,7 @@ export default function SafetyEvals() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
-              <span className="text-xl">🎯</span>
+              <Icon name="viewfinder-circle" className="w-5 h-5 text-rose-600" />
             </div>
             <div>
               <div className="text-sm font-semibold text-rose-800">Red-Team → Test Pipeline</div>
@@ -126,8 +132,10 @@ export default function SafetyEvals() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">2 open</span>
-            <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">4 tests</span>
+            <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">{pipelineOpenFindings} open</span>
+            <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+              {pipelineTestCount} {pipelineTestCount === 1 ? 'test' : 'tests'}
+            </span>
             <svg className="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>

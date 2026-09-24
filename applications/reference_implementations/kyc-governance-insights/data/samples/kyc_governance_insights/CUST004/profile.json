@@ -1,0 +1,36 @@
+{
+  "customer_id": "CUST004",
+  "name": "Kensington Holdings SA",
+  "account_type": "corporate",
+  "industry": "Investment Holding",
+  "incorporation": {
+    "country": "Switzerland",
+    "state": "Geneva",
+    "date": "2011-02-18"
+  },
+  "contact": {
+    "address": "Rue du Rh\u00f4ne 62, 1204 Geneva, Switzerland",
+    "phone": "+41-22-555-0170",
+    "email": "office@kensingtonholdings.example.ch"
+  },
+  "directors": [
+    {
+      "name": "Victoria Hartley-Morrison",
+      "role": "Director",
+      "pep_status": true,
+      "pep_detail": "Daughter of serving UK Cabinet Minister (Level 1)"
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "Victoria Hartley-Morrison",
+      "ownership_percentage": 100,
+      "pep_status": true
+    }
+  ],
+  "kyc_status": "verified",
+  "risk_flags": [
+    "pep_level_1"
+  ],
+  "annual_revenue": "$20M-$40M"
+}

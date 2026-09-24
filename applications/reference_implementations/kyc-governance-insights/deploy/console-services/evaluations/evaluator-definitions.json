@@ -1,0 +1,215 @@
+{
+  "evaluationConfig": {
+    "projectId": "kyc-banking-agent",
+    "version": "2.0.0",
+    "description": "KYC/AML-specific evaluators for UK-regulated banking agent. Aligned to MLR 2017, FCA Financial Crime Guide, JMLSG Parts I-III, and NCA SAR guidance.",
+    "regulatoryFramework": {
+      "primary": "Money Laundering Regulations 2017 (MLR 2017)",
+      "guidance": ["JMLSG Parts I-III", "FCA Financial Crime Guide", "PRA SS1/21"],
+      "reporting": "NCA SAR Regime (POCA 2002, Terrorism Act 2000)"
+    },
+    "evaluators": [
+      {
+        "id": "sanctions-screening-precision",
+        "name": "Sanctions Screening Precision",
+        "category": "screening",
+        "description": "Precision of sanctions matching against OFSI, UN, and EU consolidated lists. False negatives constitute potential regulatory breach under MLR 2017 Reg 86.",
+        "scoringMethod": "continuous",
+        "threshold": 0.95,
+        "metrics": ["false_negative_rate", "false_positive_rate", "f1_score", "ofsi_match_rate", "un_list_coverage"],
+        "schedule": "continuous",
+        "watchlists": ["OFSI Consolidated List", "UN Security Council", "EU Consolidated Financial Sanctions"],
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.99,
+          "action": "All sanctions matches require human review regardless of confidence score"
+        }
+      },
+      {
+        "id": "pep-identification-accuracy",
+        "name": "PEP Identification Accuracy",
+        "category": "screening",
+        "description": "Detection of Politically Exposed Persons, family members (MLR 2017 Reg 35(5)), and known close associates. Fuzzy matching via Levenshtein distance and phonetic algorithms (Soundex, Metaphone, Double Metaphone).",
+        "scoringMethod": "continuous",
+        "threshold": 0.92,
+        "metrics": ["pep_recall", "rca_detection_rate", "family_member_recall", "transliteration_accuracy", "levenshtein_threshold"],
+        "schedule": "continuous",
+        "matchingAlgorithms": ["Levenshtein", "Soundex", "Metaphone", "Jaro-Winkler"],
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.98,
+          "action": "Reduce fuzzy match confidence threshold from 0.85 to 0.75, expanding candidate pool for human review"
+        }
+      },
+      {
+        "id": "ubo-chain-completeness",
+        "name": "UBO Chain Completeness",
+        "category": "ownership",
+        "description": "Traces Ultimate Beneficial Ownership to required depth. UK PSC threshold: 25% (Companies Act 2006 s790C). Detects nominee structures, layered holdings, circular ownership, and bearer shares.",
+        "scoringMethod": "continuous",
+        "threshold": 0.90,
+        "metrics": ["ownership_depth_reached", "nominee_detection_rate", "circular_ownership_flagged", "bearer_share_identified", "psc_threshold_compliance"],
+        "schedule": "hourly",
+        "thresholds": {
+          "uk_psc": 0.25,
+          "eu_amld": 0.25,
+          "max_depth": 6
+        },
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.97,
+          "action": "Reduce max ownership layer depth before mandatory escalation from 4 to 3"
+        }
+      },
+      {
+        "id": "risk-score-calibration",
+        "name": "Risk Score Calibration",
+        "category": "risk",
+        "description": "Validates predicted risk scores against actual outcomes. A score of X should mean X% of those cases genuinely warranted the assigned action. Measured via Brier score over rolling 90-day window.",
+        "scoringMethod": "continuous",
+        "threshold": 0.88,
+        "metrics": ["brier_score", "calibration_error", "predicted_vs_actual_correlation", "score_bucket_accuracy"],
+        "schedule": "daily",
+        "calibrationWindow": "90d",
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.95,
+          "action": "Reduce auto-approval threshold from score <30 to score <20, expanding manual review pool"
+        }
+      },
+      {
+        "id": "regulatory-completeness-fca",
+        "name": "Regulatory Completeness (FCA/PRA)",
+        "category": "compliance",
+        "description": "Validates KYC assessment covers all required elements per MLR 2017, JMLSG Parts I-III, and FCA Financial Crime Guide Chapters 3-6. Checks CDD (Reg 28), EDD (Reg 33), source of wealth/funds, and ongoing monitoring triggers.",
+        "scoringMethod": "continuous",
+        "threshold": 0.93,
+        "metrics": ["cdd_elements_covered", "edd_triggers_checked", "sow_sof_documented", "ongoing_monitoring_scheduled", "jmlsg_checklist_score"],
+        "schedule": "continuous",
+        "regulatoryChecks": [
+          "MLR 2017 Reg 28 (CDD measures)",
+          "MLR 2017 Reg 33 (EDD - high risk)",
+          "MLR 2017 Reg 35 (PEP requirements)",
+          "JMLSG 5.3 (Customer identification)",
+          "JMLSG 5.4 (Verification of identity)",
+          "FCA FC Guide 3.2 (Systems and controls)"
+        ],
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.98,
+          "action": "Add mandatory EDD for all cases scoring above medium risk, regardless of jurisdiction"
+        }
+      },
+      {
+        "id": "source-document-grounding",
+        "name": "Source Document Grounding",
+        "category": "compliance",
+        "description": "Every assertion in KYC assessment must trace to a specific source document (Certificate of Incorporation, audited financials, UBO declaration, passport, utility bill). No ungrounded claims. Per MLR 2017 Reg 28(3).",
+        "scoringMethod": "continuous",
+        "threshold": 0.94,
+        "metrics": ["ungrounded_assertions_count", "citation_accuracy", "document_coverage_ratio", "source_freshness_check"],
+        "schedule": "continuous",
+        "acceptedSources": [
+          "Certificate of Incorporation",
+          "Audited Financial Statements",
+          "UBO Declaration Form",
+          "Passport / National ID",
+          "Utility Bill (< 3 months)",
+          "Bank Statement (< 3 months)",
+          "Companies House Filing",
+          "Trust Deed"
+        ],
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.99,
+          "action": "Reject any assessment containing more than 1 ungrounded assertion"
+        }
+      },
+      {
+        "id": "jurisdiction-risk-assessment",
+        "name": "Jurisdiction Risk Assessment",
+        "category": "risk",
+        "description": "Correct application of FATF grey/blacklist status, Transparency International CPI scores, and local risk factors. Covers BVI, Cayman Islands, Jersey, Guernsey, Isle of Man, and other offshore centres.",
+        "scoringMethod": "continuous",
+        "threshold": 0.91,
+        "metrics": ["fatf_list_accuracy", "cpi_score_delta", "local_risk_factor_coverage", "sanctions_regime_mapping"],
+        "schedule": "daily",
+        "jurisdictionSources": ["FATF Mutual Evaluations 2025", "Transparency International CPI 2025", "EU High-Risk Third Country List"],
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.03,
+          "maxThreshold": 0.97,
+          "action": "Flag all FATF grey-list jurisdictions for mandatory EDD regardless of other risk indicators"
+        }
+      },
+      {
+        "id": "transaction-pattern-analysis",
+        "name": "Transaction Pattern Analysis",
+        "category": "screening",
+        "description": "Detection of structuring (smurfing), rapid fund movement, round-tripping, layering, and integration signals in transaction history. Measured against known NCA SAR typologies and FATF red flags.",
+        "scoringMethod": "continuous",
+        "threshold": 0.87,
+        "metrics": ["structuring_detection_rate", "layering_identification", "round_trip_flagged", "typology_coverage", "false_alert_rate"],
+        "schedule": "continuous",
+        "typologies": [
+          "Structuring (below reporting threshold)",
+          "Rapid movement across jurisdictions",
+          "Round-tripping through intermediaries",
+          "Layering via shell companies",
+          "Integration through legitimate business",
+          "Trade-based money laundering"
+        ],
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.03,
+          "maxThreshold": 0.95,
+          "action": "Lower structuring detection threshold from £9,000 to £7,500 and extend lookback from 30 to 60 days"
+        }
+      },
+      {
+        "id": "sar-quality-score",
+        "name": "SAR Quality Score",
+        "category": "compliance",
+        "description": "When SAR is recommended, validates draft meets NCA standards. Checks narrative completeness, correct categorisation (DAML/consent/intelligence), supporting evidence attached, and timeline accuracy. Per POCA 2002 s330-332.",
+        "scoringMethod": "continuous",
+        "threshold": 0.90,
+        "metrics": ["narrative_completeness", "categorisation_accuracy", "evidence_attached", "timeline_accuracy", "nca_acceptance_rate"],
+        "schedule": "continuous",
+        "sarCategories": ["DAML (Defence Against Money Laundering)", "Consent SAR", "Intelligence SAR"],
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.97,
+          "action": "Route all SAR drafts to MLRO for manual review before submission"
+        }
+      },
+      {
+        "id": "decision-consistency",
+        "name": "Decision Consistency",
+        "category": "consistency",
+        "description": "Same input facts must produce same decision across repeated runs. Measures variance across 10 identical inputs — acceptable drift < 5%. Exceeding threshold triggers MLRO alert and pauses automated approvals.",
+        "scoringMethod": "continuous",
+        "threshold": 0.95,
+        "metrics": ["decision_variance_pct", "score_std_deviation", "category_flip_rate", "reproducibility_index"],
+        "schedule": "hourly",
+        "tolerances": {
+          "maxVariance": 0.05,
+          "maxScoreStdDev": 3.0,
+          "maxCategoryFlipRate": 0.02
+        },
+        "autoTighten": {
+          "enabled": true,
+          "increment": 0.02,
+          "maxThreshold": 0.99,
+          "action": "Alert MLRO immediately + pause all automated approvals pending variance investigation"
+        }
+      }
+    ]
+  }
+}

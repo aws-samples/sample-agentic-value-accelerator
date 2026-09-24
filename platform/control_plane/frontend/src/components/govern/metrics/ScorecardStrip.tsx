@@ -10,7 +10,10 @@
  *
  * LIVE DATA: Uses useLiveMetrics hook to wire actual values from AWS APIs
  * (CloudWatch, Guardrails, SecurityHub, Config, Cost Explorer) into the
- * scorecard. Metrics with live data show "[LIVE]" in their source field.
+ * scorecard. Metrics with live data show "[LIVE]" in their source field. The
+ * "Live" badge is gated on AWS telemetry actually backing a board tile — real
+ * but non-AWS platform sources (Plan business cases, Govern audit log) cannot
+ * turn it green on their own.
  */
 import { Link } from 'react-router-dom';
 import { useLiveMetrics, aggregateBoardMetrics, computeGoNoGo } from './useLiveMetrics';
@@ -42,14 +45,13 @@ interface ScorecardStripProps {
 
 export default function ScorecardStrip({ compact = false }: ScorecardStripProps) {
   // Use the live metrics hook to get AWS-backed actuals
-  const { loading, contributions, liveDataSources } = useLiveMetrics();
+  const { loading, contributions, liveDataSources, awsLiveDataSources } = useLiveMetrics();
 
   const boardMetrics = aggregateBoardMetrics(contributions);
 
   // Health summary across the board tiles.
   const onTrack = boardMetrics.filter(m => m.rag === 'green').length;
   const needAttention = boardMetrics.filter(m => m.rag === 'amber' || m.rag === 'red').length;
-  const critical = boardMetrics.filter(m => m.rag === 'red').length;
 
   // Go/No-Go verdict from the shared computation
   const { verdict: goNoGo, reason: verdictReason } = computeGoNoGo(boardMetrics);
@@ -61,6 +63,13 @@ export default function ScorecardStrip({ compact = false }: ScorecardStripProps)
 
   // Count live vs illustrative metrics
   const liveCount = boardMetrics.filter(m => m.source?.includes('[LIVE]')).length;
+
+  // Honesty gate: only claim "Live" when AWS telemetry is connected AND at least
+  // one board tile is actually backed by it. Non-AWS platform sources (Plan
+  // business cases, Govern audit log) are real but are not AWS telemetry, so on
+  // their own they can no longer turn the badge green — which is what allowed the
+  // self-contradictory "Live · 0/N live" header.
+  const awsLive = awsLiveDataSources.length > 0 && liveCount > 0;
 
   // Deliberate governance-first ordering (no vertical grouping — a single
   // compact fill-width strip that matches the rest of the Command Center).
@@ -120,8 +129,17 @@ export default function ScorecardStrip({ compact = false }: ScorecardStripProps)
           <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">board-tier</span>
           {liveDataSources.length > 0 && (
             <span className="flex items-center gap-1">
-              <LiveDataBadge />
-              <span className="text-[9px] text-slate-400">{liveCount}/{boardMetrics.length} live</span>
+              <LiveDataBadge
+                live={awsLive}
+                source={awsLive ? undefined : 'AWS telemetry (CloudWatch, Guardrails, Cost Explorer)'}
+                detail={awsLive ? `Live AWS telemetry: ${awsLiveDataSources.join(', ')}` : undefined}
+              />
+              <span
+                className="text-[9px] text-slate-400"
+                title={`Board tiles backed by real data: ${liveCount} of ${boardMetrics.length}. Sources: ${liveDataSources.join(', ')}`}
+              >
+                {liveCount}/{boardMetrics.length} live
+              </span>
             </span>
           )}
         </div>

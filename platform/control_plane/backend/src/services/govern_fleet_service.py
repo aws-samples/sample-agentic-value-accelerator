@@ -11,6 +11,12 @@ server-side with caching, so the client never fetches raw agent lists.
 
 Each source is independently graceful — one unavailable API never breaks the rest.
 TTL-cached results with honest live/source/note flags.
+
+Aggregated across the governed-region set (core.region_config), not a single region:
+Bedrock Agents and AgentCore runtimes are governed resources, so a fleet read from
+one region under-reports a fleet spread over several. Every response carries a
+RegionProvenance block naming the regions queried and any that were unreachable, so
+a smaller total can be told apart from a smaller fleet.
 """
 
 from __future__ import annotations
@@ -23,7 +29,10 @@ from typing import List, Optional
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from core.multiregion import provenance, run_over_regions
+from core.region_config import get_governed_regions
 from core.ttl_cache import get_or_load
+from models.govern_region_provenance import RegionProvenance
 from models.govern_fleet import (
     ExceptionAgent,
     FleetExceptionsResponse,
@@ -110,31 +119,39 @@ def _derive_risk_score(agent: dict) -> int:
 
 class GovernFleetService:
     def __init__(self, region: str = "us-east-1"):
+        #: Fallback region, used only when the governed-region set is empty. The
+        #: fleet is read per governed region (see _fetch_all_agents), so this is
+        #: NOT the region the data comes from.
         self.region = region
 
-    def _bedrock_agent(self):
-        return boto3.client("bedrock-agent", region_name=self.region)
+    def _bedrock_agent(self, region: str):
+        return boto3.client("bedrock-agent", region_name=region)
 
-    def _agentcore(self):
-        return boto3.client("bedrock-agentcore-control", region_name=self.region)
+    def _agentcore(self, region: str):
+        return boto3.client("bedrock-agentcore-control", region_name=region)
 
-    def _bedrock(self):
-        return boto3.client("bedrock", region_name=self.region)
+    def _bedrock(self, region: str):
+        return boto3.client("bedrock", region_name=region)
+
+    def _scope_key(self) -> str:
+        """Cache-key component covering the whole governed set, not one region.
+
+        Keying on self.region would serve a single-region aggregate after a region
+        is pulled into governance, until the TTL happened to expire.
+        """
+        return ",".join(get_governed_regions() or [self.region])
 
     # ─────────────────── Data fetching (raw agent lists) ───────────────────
 
-    def _fetch_all_agents(self) -> tuple[List[dict], bool, str]:
-        """Fetch agents from all sources, normalize to common shape.
-
-        Returns (agents, live, source_note).
-        """
+    def _fetch_region_agents(self, region: str) -> tuple[List[dict], bool, List[str]]:
+        """Agents in one region, normalized. Returns (agents, live, source_parts)."""
         agents: List[dict] = []
-        sources = []
+        sources: List[str] = []
         live = False
 
         # 1) Bedrock Agents (classic)
         try:
-            client = self._bedrock_agent()
+            client = self._bedrock_agent(region)
             paginator = client.get_paginator("list_agents")
             for page in paginator.paginate():
                 for a in page.get("agentSummaries", []):
@@ -150,16 +167,17 @@ class GovernFleetService:
                         "has_policy": False,  # Would need guardrail check
                         "open_incidents": 0,
                         "model": "Unknown",
+                        "region": region,
                     })
             sources.append(f"{len([a for a in agents if a['platform'] == 'bedrock-agent'])} Bedrock")
             live = True
         except (BotoCoreError, ClientError) as e:
-            logger.warning(f"Bedrock Agents unavailable: {e}")
-            sources.append("Bedrock unavailable")
+            logger.warning(f"Bedrock Agents unavailable in {region}: {e}")
+            sources.append(f"Bedrock unavailable ({region})")
 
         # 2) AgentCore runtimes
         try:
-            client = self._agentcore()
+            client = self._agentcore(region)
             paginator = client.get_paginator("list_agent_runtimes")
             for page in paginator.paginate():
                 for r in page.get("agentRuntimes", []):
@@ -175,13 +193,47 @@ class GovernFleetService:
                         "has_policy": True,  # AgentCore has policy engine
                         "open_incidents": 0,
                         "model": "Unknown",
+                        "region": region,
                     })
             ac_count = len([a for a in agents if a["platform"] == "agentcore-runtime"])
             sources.append(f"{ac_count} AgentCore")
             live = True
         except (BotoCoreError, ClientError) as e:
-            logger.warning(f"AgentCore unavailable: {e}")
-            sources.append("AgentCore unavailable")
+            logger.warning(f"AgentCore unavailable in {region}: {e}")
+            sources.append(f"AgentCore unavailable ({region})")
+
+        return agents, live, sources
+
+    def _fetch_all_agents(self) -> tuple[List[dict], bool, str, RegionProvenance]:
+        """Fetch agents across every governed region, normalized to a common shape.
+
+        The fan-out happens here rather than at the four endpoints because all four
+        aggregate the same raw list. Merging four already-aggregated responses would
+        mean averaging percentages and re-bucketing distributions per region; fanning
+        out at the source means the aggregation code is untouched and correct by
+        construction. Every agent carries the region it was read from.
+
+        Returns (agents, live, source_note, region_provenance).
+        """
+        results = run_over_regions(self._fetch_region_agents)
+        # _fetch_region_agents returns (agents, live, sources), not a response model, so
+        # liveness has to be read out of the tuple. Without live_of the default reads a
+        # `live` field off the result, finds none, and marks EVERY region degraded — the
+        # fleet reported "no live data from us-east-1" while serving 36 live agents.
+        prov = provenance(results, live_of=lambda res: bool(res[1]))
+
+        agents: List[dict] = []
+        source_parts: List[str] = []
+        live = False
+        for region, res in results:
+            if res is None:
+                source_parts.append(f"{region} unreachable")
+                continue
+            region_agents, region_live, region_sources = res
+            agents.extend(region_agents)
+            live = live or region_live
+            if region_sources:
+                source_parts.append(f"{region}: {' · '.join(region_sources)}")
 
         # Enrich with derived fields
         for agent in agents:
@@ -190,23 +242,28 @@ class GovernFleetService:
             if "risk_score" not in agent:
                 agent["risk_score"] = _derive_risk_score(agent)
 
-        source_note = " · ".join(sources) if sources else "No sources available"
-        return agents, live, source_note
+        source_note = " | ".join(source_parts) if source_parts else "No sources available"
+        return agents, live, source_note, prov
 
     # ─────────────────── Summary aggregation ───────────────────
 
     def get_summary(self) -> FleetSummaryResponse:
         result, cached_at = get_or_load(
-            f"fleet:summary:{self.region}", _TTL,
+            f"fleet:summary:{self._scope_key()}", _TTL,
             self._fetch_summary, should_cache=lambda r: r.live,
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_summary(self) -> FleetSummaryResponse:
-        agents, live, source_note = self._fetch_all_agents()
+        agents, live, source_note, prov = self._fetch_all_agents()
 
         summary = FleetSummary(
             total=len(agents),
@@ -268,22 +325,29 @@ class GovernFleetService:
             summary=summary,
             live=live,
             source=source_note,
+            note=prov.summary(),
+            regions=prov,
         )
 
     # ─────────────────── Segments (grouped aggregation) ───────────────────
 
     def get_segments(self, group_by: str = "businessUnit") -> FleetSegmentsResponse:
         result, cached_at = get_or_load(
-            f"fleet:segments:{self.region}:{group_by}", _TTL,
+            f"fleet:segments:{self._scope_key()}:{group_by}", _TTL,
             lambda: self._fetch_segments(group_by), should_cache=lambda r: r.live,
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_segments(self, group_by: str) -> FleetSegmentsResponse:
-        agents, live, source_note = self._fetch_all_agents()
+        agents, live, source_note, prov = self._fetch_all_agents()
 
         key_fn = {
             "businessUnit": lambda a: a.get("business_unit", "Unknown"),
@@ -334,22 +398,29 @@ class GovernFleetService:
             segments=segments,
             live=live,
             source=source_note,
+            note=prov.summary(),
+            regions=prov,
         )
 
     # ─────────────────── Exception queue ───────────────────
 
     def get_exceptions(self, limit: int = 100, filter_key: Optional[str] = None) -> FleetExceptionsResponse:
         result, cached_at = get_or_load(
-            f"fleet:exceptions:{self.region}:{limit}:{filter_key or 'all'}", _TTL,
+            f"fleet:exceptions:{self._scope_key()}:{limit}:{filter_key or 'all'}", _TTL,
             lambda: self._fetch_exceptions(limit, filter_key), should_cache=lambda r: r.live,
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_exceptions(self, limit: int, filter_key: Optional[str]) -> FleetExceptionsResponse:
-        agents, live, source_note = self._fetch_all_agents()
+        agents, live, source_note, prov = self._fetch_all_agents()
 
         if filter_key:
             agents = [a for a in agents if a.get("business_unit") == filter_key]
@@ -390,6 +461,7 @@ class GovernFleetService:
                 has_policy=a.get("has_policy", False),
                 attention_score=_attention_score(a),
                 reasons=reasons,
+                region=a.get("region"),
             ))
 
         return FleetExceptionsResponse(
@@ -400,22 +472,29 @@ class GovernFleetService:
             filter_key=filter_key,
             live=live,
             source=source_note,
+            note=prov.summary(),
+            regions=prov,
         )
 
     # ─────────────────── Inventory breakdown ───────────────────
 
     def get_inventory(self) -> FleetInventoryResponse:
         result, cached_at = get_or_load(
-            f"fleet:inventory:{self.region}", _TTL,
+            f"fleet:inventory:{self._scope_key()}", _TTL,
             self._fetch_inventory, should_cache=lambda r: r.live,
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_inventory(self) -> FleetInventoryResponse:
-        agents, live, source_note = self._fetch_all_agents()
+        agents, live, source_note, prov = self._fetch_all_agents()
         total = len(agents) or 1
 
         # By model
@@ -443,4 +522,6 @@ class GovernFleetService:
             by_provider=by_provider,
             live=live,
             source=source_note,
+            note=prov.summary(),
+            regions=prov,
         )

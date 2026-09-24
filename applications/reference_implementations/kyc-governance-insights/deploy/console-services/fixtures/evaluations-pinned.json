@@ -1,0 +1,113 @@
+{
+  "_comment": "Phase 3 narrative-locked fixture for the kyc-evaluation-results table (HASH evaluator_id, RANGE timestamp). Seeded by seed_phase3.py. These are the pinned Basic-Mode-demo values: Acme = APPROVE/grounding 0.98/Cedar ALLOW/AR PASS; Omega = REJECT/grounding 0.0/Cedar DENY/sanctions. Idempotent: re-seeding overwrites with identical values. tenant_id is fsi-demo to match the deployed runtime-config.",
+  "tenant_id": "fsi-demo",
+  "records": [
+    {
+      "evaluator_id": "run-summary",
+      "timestamp": "2026-07-14T09:14:41Z",
+      "evaluation_id": "fsi-demo#pinned-acme-corp",
+      "agent_id": "credit-analyst",
+      "scenario": "acme-corp",
+      "verdict": "APPROVE",
+      "confidence": 0.98,
+      "duration_ms": 40000,
+      "checks_passed": [
+        "debt_to_equity",
+        "current_ratio",
+        "payment_history_pct",
+        "sanctions_screen",
+        "pep_screen",
+        "grounding",
+        "automated_reasoning"
+      ],
+      "checks_failed": [],
+      "grounding_score": 0.98,
+      "ar_verdict": "PASS",
+      "cedar_decision": "ALLOW",
+      "risk_score": 22,
+      "model_id": "anthropic.claude-sonnet-4-5",
+      "pinned": true
+    },
+    {
+      "evaluator_id": "run-summary",
+      "timestamp": "2026-07-14T11:02:18Z",
+      "evaluation_id": "fsi-demo#pinned-omega-trading",
+      "agent_id": "credit-analyst",
+      "scenario": "omega-trading",
+      "verdict": "REJECT",
+      "confidence": 0.0,
+      "duration_ms": 43000,
+      "checks_passed": [
+        "automated_reasoning"
+      ],
+      "checks_failed": [
+        "debt_to_equity",
+        "current_ratio",
+        "payment_history_pct",
+        "sanctions_screen",
+        "pep_screen",
+        "grounding"
+      ],
+      "grounding_score": 0.0,
+      "ar_verdict": "PASS",
+      "cedar_decision": "DENY",
+      "risk_score": 81,
+      "sanctions_match_pct": 92,
+      "pep_level": 3,
+      "model_id": "anthropic.claude-sonnet-4-5",
+      "pinned": true
+    },
+    {
+      "evaluator_id": "run-summary",
+      "timestamp": "2026-07-13T10:20:05Z",
+      "evaluation_id": "fsi-demo#pinned-acme-corp-h1",
+      "agent_id": "credit-analyst",
+      "scenario": "acme-corp",
+      "verdict": "APPROVE",
+      "confidence": 0.97,
+      "duration_ms": 41000,
+      "checks_passed": [
+        "debt_to_equity",
+        "current_ratio",
+        "payment_history_pct",
+        "sanctions_screen",
+        "pep_screen",
+        "grounding",
+        "automated_reasoning"
+      ],
+      "checks_failed": [],
+      "grounding_score": 0.97,
+      "ar_verdict": "PASS",
+      "cedar_decision": "ALLOW",
+      "risk_score": 24,
+      "model_id": "anthropic.claude-sonnet-4-5",
+      "pinned": true
+    },
+    {
+      "evaluator_id": "run-summary",
+      "timestamp": "2026-07-12T14:47:33Z",
+      "evaluation_id": "fsi-demo#pinned-acme-corp-h2",
+      "agent_id": "credit-analyst",
+      "scenario": "acme-corp",
+      "verdict": "APPROVE",
+      "confidence": 0.98,
+      "duration_ms": 39000,
+      "checks_passed": [
+        "debt_to_equity",
+        "current_ratio",
+        "payment_history_pct",
+        "sanctions_screen",
+        "pep_screen",
+        "grounding",
+        "automated_reasoning"
+      ],
+      "checks_failed": [],
+      "grounding_score": 0.98,
+      "ar_verdict": "PASS",
+      "cedar_decision": "ALLOW",
+      "risk_score": 21,
+      "model_id": "anthropic.claude-sonnet-4-5",
+      "pinned": true
+    }
+  ]
+}

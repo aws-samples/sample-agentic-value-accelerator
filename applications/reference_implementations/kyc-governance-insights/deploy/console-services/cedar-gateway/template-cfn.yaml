@@ -1,0 +1,317 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AgentCore Gateway Native Cedar Policy Engine
+  Registers 19 Cedar policies with the AgentCore Gateway's built-in
+  authorization engine via Amazon Verified Permissions.
+  Primary engine (replaces Lambda interceptor as first-check).
+  Account: <deploy account> | Region: us-east-1
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [development, staging, production]
+  ProjectName:
+    Type: String
+    Default: agentcore-kyc-demo
+  InterceptorFallbackArn:
+    Type: String
+    Default: ''
+    Description: ARN of the Lambda interceptor to use as fallback
+
+Resources:
+
+  # ─── POLICY STORE (GATEWAY-NATIVE) ──────────────────────────
+  GatewayPolicyStore:
+    Type: AWS::VerifiedPermissions::PolicyStore
+    Properties:
+      Description: !Sub "AgentCore Gateway Cedar Engine - ${Environment}"
+      ValidationSettings:
+        Mode: STRICT
+      Schema:
+        CedarJson: |
+          {
+            "AgentCore::Governance": {
+              "entityTypes": {
+                "Agent": {
+                  "memberOfTypes": ["AgentGroup"],
+                  "shape": {
+                    "type": "Record",
+                    "attributes": {
+                      "agent_id": {"type": "String", "required": true},
+                      "agent_role": {"type": "String", "required": true},
+                      "current_tier": {"type": "Long", "required": true},
+                      "deployment_region": {"type": "String", "required": true},
+                      "model_id": {"type": "String", "required": true},
+                      "max_credit_amount": {"type": "Long", "required": true},
+                      "jurisdiction_allowlist": {"type": "Set", "element": {"type": "String"}, "required": true}
+                    }
+                  }
+                },
+                "AgentGroup": {
+                  "memberOfTypes": ["AgentGroup"],
+                  "shape": {
+                    "type": "Record",
+                    "attributes": {
+                      "description": {"type": "String", "required": false}
+                    }
+                  }
+                },
+                "HumanOperator": {
+                  "memberOfTypes": ["HumanGroup"],
+                  "shape": {
+                    "type": "Record",
+                    "attributes": {
+                      "alias": {"type": "String", "required": true},
+                      "clearance_level": {"type": "Long", "required": true}
+                    }
+                  }
+                },
+                "HumanGroup": {
+                  "memberOfTypes": ["HumanGroup"],
+                  "shape": {
+                    "type": "Record",
+                    "attributes": {
+                      "description": {"type": "String", "required": false}
+                    }
+                  }
+                },
+                "CustomerRecord": {
+                  "shape": {
+                    "type": "Record",
+                    "attributes": {
+                      "customer_id": {"type": "String", "required": true},
+                      "jurisdiction": {"type": "String", "required": true},
+                      "incorporation_country": {"type": "String", "required": true},
+                      "risk_tier": {"type": "String", "required": true},
+                      "risk_score": {"type": "Long", "required": true},
+                      "requested_facility_amount": {"type": "Long", "required": true},
+                      "currency": {"type": "String", "required": true},
+                      "pep_level": {"type": "Long", "required": true},
+                      "sanctions_fuzzy_match_score": {"type": "Long", "required": true},
+                      "matched_list": {"type": "String", "required": true},
+                      "credit_score": {"type": "Long", "required": true},
+                      "years_in_business": {"type": "Long", "required": true},
+                      "ubo_chain_depth": {"type": "Long", "required": true},
+                      "data_residency_region": {"type": "String", "required": true}
+                    }
+                  }
+                },
+                "ToolResource": {
+                  "shape": {
+                    "type": "Record",
+                    "attributes": {
+                      "tool_id": {"type": "String", "required": true},
+                      "tool_name": {"type": "String", "required": true},
+                      "tool_category": {"type": "String", "required": true},
+                      "sensitivity_level": {"type": "String", "required": true},
+                      "max_invocations_per_session": {"type": "Long", "required": true}
+                    }
+                  }
+                }
+              },
+              "actions": {
+                "ApproveApplication": {
+                  "appliesTo": {
+                    "principalTypes": ["Agent", "HumanOperator"],
+                    "resourceTypes": ["CustomerRecord"],
+                    "context": {
+                      "type": "Record",
+                      "attributes": {
+                        "request_hour": {"type": "Long", "required": true},
+                        "source_ip": {"type": "String", "required": false},
+                        "session_id": {"type": "String", "required": false}
+                      }
+                    }
+                  }
+                },
+                "ExecuteSanctionsQuery": {
+                  "appliesTo": {
+                    "principalTypes": ["Agent", "HumanOperator"],
+                    "resourceTypes": ["CustomerRecord"],
+                    "context": {
+                      "type": "Record",
+                      "attributes": {
+                        "request_hour": {"type": "Long", "required": true},
+                        "source_ip": {"type": "String", "required": false},
+                        "session_id": {"type": "String", "required": false}
+                      }
+                    }
+                  }
+                },
+                "AccessCustomerRecord": {
+                  "appliesTo": {
+                    "principalTypes": ["Agent", "HumanOperator"],
+                    "resourceTypes": ["CustomerRecord"],
+                    "context": {
+                      "type": "Record",
+                      "attributes": {
+                        "request_hour": {"type": "Long", "required": true},
+                        "source_ip": {"type": "String", "required": false},
+                        "session_id": {"type": "String", "required": false}
+                      }
+                    }
+                  }
+                },
+                "ExecuteToolCall": {
+                  "appliesTo": {
+                    "principalTypes": ["Agent"],
+                    "resourceTypes": ["ToolResource"],
+                    "context": {
+                      "type": "Record",
+                      "attributes": {
+                        "request_hour": {"type": "Long", "required": true},
+                        "source_ip": {"type": "String", "required": false},
+                        "session_id": {"type": "String", "required": false}
+                      }
+                    }
+                  }
+                },
+                "RecommendFacility": {
+                  "appliesTo": {
+                    "principalTypes": ["Agent", "HumanOperator"],
+                    "resourceTypes": ["CustomerRecord"],
+                    "context": {
+                      "type": "Record",
+                      "attributes": {
+                        "request_hour": {"type": "Long", "required": true},
+                        "source_ip": {"type": "String", "required": false},
+                        "session_id": {"type": "String", "required": false}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Component
+          Value: cedar-gateway-engine
+
+  # --- CEDAR POLICIES (policy-as-data) --------------------------
+  # The 19 Cedar policies (6 org / 6 app / 6 req / 1 default) are NO
+  # LONGER defined inline here. They live in ./policies/*.cedar and are
+  # loaded into the policy store above by load_policies.sh, invoked from
+  # console-services/deploy_all.sh immediately after this stack deploys.
+  # This makes the .cedar files the single source of truth. Do not
+  # re-add inline policies here without removing the loader step.
+
+  # ─── IAM ROLE FOR GATEWAY TO CALL AVP ──────────────────────
+  GatewayPolicyInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-gateway-cedar-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
+                - bedrock.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: VerifiedPermissionsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - verifiedpermissions:IsAuthorized
+                  - verifiedpermissions:IsAuthorizedWithToken
+                  - verifiedpermissions:BatchIsAuthorized
+                Resource: !Sub "arn:aws:verifiedpermissions:${AWS::Region}:${AWS::AccountId}:policy-store/${GatewayPolicyStore.PolicyStoreId}"
+              # Scoped to this stack's agentcore log-group namespace (invariant: least
+              # privilege). Covers the CedarDecisionLogGroup and any agentcore-managed
+              # gateway logs; the ':*' entry permits log-stream writes within them.
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/agentcore/${Environment}/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/agentcore/${Environment}/*:*"
+        - PolicyName: DynamoDBRegistryRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/kyc-agent-registry"
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: cedar-gateway-engine
+
+  # ─── CLOUDWATCH LOG GROUP FOR CEDAR DECISIONS ───────────────
+  CedarDecisionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/agentcore/${Environment}/cedar-gateway-decisions"
+      RetentionInDays: 90
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: cedar-gateway-engine
+
+  # ─── SSM PARAMETERS ─────────────────────────────────────────
+  GatewayPolicyStoreIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/agentcore/${Environment}/gateway-cedar-policy-store-id"
+      Type: String
+      Value: !GetAtt GatewayPolicyStore.PolicyStoreId
+      Description: "Gateway Cedar Policy Store ID for AgentCore native engine"
+
+  GatewayEngineConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/agentcore/${Environment}/gateway-cedar-config"
+      Type: String
+      Value: !Sub |
+        {
+          "engine": "cedar-gateway-native",
+          "policyStoreId": "${GatewayPolicyStore.PolicyStoreId}",
+          "fallbackInterceptorArn": "${InterceptorFallbackArn}",
+          "policyCount": 19,
+          "layers": ["org", "app", "request"],
+          "version": "2.0.0"
+        }
+      Description: "Gateway Cedar engine configuration"
+
+Outputs:
+  GatewayPolicyStoreId:
+    Description: Gateway Cedar Policy Store ID
+    Value: !GetAtt GatewayPolicyStore.PolicyStoreId
+    Export:
+      Name: !Sub "${ProjectName}-gateway-cedar-store-id-${Environment}"
+
+  GatewayPolicyStoreArn:
+    Description: Gateway Cedar Policy Store ARN
+    Value: !Sub "arn:aws:verifiedpermissions:${AWS::Region}:${AWS::AccountId}:policy-store/${GatewayPolicyStore.PolicyStoreId}"
+    Export:
+      Name: !Sub "${ProjectName}-gateway-cedar-store-arn-${Environment}"
+
+  GatewayInvokeRoleArn:
+    Description: IAM Role ARN for gateway Cedar invocations
+    Value: !GetAtt GatewayPolicyInvokeRole.Arn
+    Export:
+      Name: !Sub "${ProjectName}-gateway-cedar-role-arn-${Environment}"
+
+  PolicyCount:
+    Description: Total number of Cedar policies deployed
+    Value: "19"
+
+  EngineVersion:
+    Description: Cedar gateway engine version
+    Value: "2.0.0"

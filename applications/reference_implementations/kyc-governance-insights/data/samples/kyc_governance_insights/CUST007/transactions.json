@@ -1,0 +1,25 @@
+{
+  "customer_id": "CUST007",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 520000000,
+    "total_outflow": 515000000,
+    "average_monthly_volume": 43125000,
+    "transaction_count": 1533000
+  },
+  "top_counterparties": [
+    {
+      "name": "Correspondent Bank EU",
+      "country": "Germany",
+      "volume": 90000000,
+      "type": "inflow"
+    }
+  ],
+  "geographic_distribution": {
+    "domestic": 40,
+    "international": 60
+  },
+  "high_risk_jurisdictions": [],
+  "suspicious_patterns": [],
+  "large_transactions_over_100k": 30660
+}

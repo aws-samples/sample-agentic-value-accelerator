@@ -1,11 +1,12 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { UserProvider } from './contexts/UserContext';
 import SignIn from './components/SignIn';
 import Sidebar from './components/Sidebar';
 import Home from './components/Home';
 import PlanLanding from './components/PlanLanding';
-import Prioritization from './components/Prioritization';
+import UseCasesHub from './components/UseCasesHub';
 import MaturityAssessment from './components/MaturityAssessment';
 import OperatingModel from './components/OperatingModel';
 import BusinessCases from './components/BusinessCases';
@@ -74,6 +75,7 @@ import DataMetadata from './components/govern/data/DataMetadata';
 import DataMaturity from './components/govern/data/DataMaturity';
 import DataReadiness from './components/govern/data/DataReadiness';
 import DataLineage from './components/govern/data/DataLineage';
+import AiEstateInventory from './components/govern/data/AiEstateInventory';
 import AgentDataProfiles from './components/govern/data/AgentDataProfiles';
 import DataAccessControl from './components/govern/data/DataAccessControl';
 import DataOntology from './components/govern/data/DataOntology';
@@ -84,6 +86,11 @@ import WorkflowsPage from './components/govern/WorkflowsPage';
 import MyAgents from './components/MyAgents';
 import MyApps from './components/MyApps';
 import PromptOptimization from './components/PromptOptimization';
+import EvaluationLanding from './components/evaluation/EvaluationLanding';
+import EvaluationDetail from './components/evaluation/EvaluationDetail';
+import EvaluationRunDetail from './components/evaluation/RunDetail';
+import EvaluationRunCompare from './components/evaluation/RunCompare';
+import EvaluationPlayground from './components/evaluation/Playground';
 import MultiCloudGovernance from './components/govern/MultiCloudGovernance';
 import DevToolsGovernance from './components/govern/DevToolsGovernance';
 import AgenticGovernancePlaybook from './components/govern/AgenticGovernancePlaybook';
@@ -98,9 +105,22 @@ import RuntimeSafetyControls from './components/govern/safety/RuntimeSafetyContr
 import RedTeamTestPipeline from './components/govern/safety/RedTeamTestPipeline';
 import DeveloperAiUsageView from './components/govern/DeveloperAiUsageView';
 import PromptGovernance from './components/govern/PromptGovernance';
+import HarnessAuditViewer from './components/govern/HarnessAuditViewer';
+import PolicyDriftDashboard from './components/govern/PolicyDriftDashboard';
+import PathJailEditor from './components/govern/PathJailEditor';
+import GovernAgentCoreObservability from './components/govern/AgentCoreObservability';
+import GovernanceAssessment from './components/govern/assessment/GovernanceAssessment';
+import SecurityPolicyTemplates from './components/govern/SecurityPolicyTemplates';
+import AgentLifecyclePolicies from './components/govern/AgentLifecyclePolicies';
+import AgentTopologyMap from './components/govern/AgentTopologyMap';
+import AgentOnboardingWorkflow from './components/govern/AgentOnboardingWorkflow';
+import OperationsLanding from './components/govern/OperationsLanding';
+import ReportsLanding from './components/govern/ReportsLanding';
+import { MarketplaceLanding, MarketplaceAdmin } from './components/govern/marketplace';
 
 function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -123,10 +143,11 @@ function AuthGate() {
           animation: 'gradientDrift 20s ease-in-out infinite',
         }} />
         <div className="relative h-full">
+          <ErrorBoundary resetKey={location.pathname}>
           <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/plan" element={<PlanLanding />} />
-        <Route path="/use-cases" element={<Prioritization />} />
+        <Route path="/use-cases" element={<UseCasesHub />} />
         <Route path="/maturity-assessment" element={<MaturityAssessment />} />
         <Route path="/operating-model" element={<OperatingModel />} />
         <Route path="/business-cases" element={<BusinessCases />} />
@@ -192,6 +213,7 @@ function AuthGate() {
         <Route path="/govern/command-center" element={<GovernWrapper><CommandCenter /></GovernWrapper>} />
         <Route path="/govern/trust-stack" element={<GovernWrapper><TrustStackPage /></GovernWrapper>} />
         <Route path="/govern/fleet" element={<GovernWrapper><FleetOverview /></GovernWrapper>} />
+        <Route path="/govern/fleet/observability" element={<GovernWrapper><GovernAgentCoreObservability /></GovernWrapper>} />
         <Route path="/govern/models" element={<GovernWrapper><ModelManagement /></GovernWrapper>} />
         <Route path="/govern/agents" element={<GovernWrapper><AgentRegistry /></GovernWrapper>} />
         <Route path="/govern/shadow-ai" element={<GovernWrapper><ShadowAI /></GovernWrapper>} />
@@ -199,8 +221,13 @@ function AuthGate() {
         <Route path="/govern/developer-ai" element={<GovernWrapper><DeveloperAiUsageView /></GovernWrapper>} />
         <Route path="/govern/risk" element={<GovernWrapper><RiskManagement /></GovernWrapper>} />
         <Route path="/govern/compliance" element={<GovernWrapper><ComplianceCenter /></GovernWrapper>} />
+        <Route path="/govern/assessment" element={<GovernWrapper><GovernanceAssessment /></GovernWrapper>} />
         <Route path="/govern/finops" element={<GovernWrapper><FinOps /></GovernWrapper>} />
         <Route path="/govern/audit" element={<GovernWrapper><AuditIncidents /></GovernWrapper>} />
+        <Route path="/govern/reports" element={<GovernWrapper><ReportsLanding /></GovernWrapper>} />
+        <Route path="/govern/harness-audit" element={<GovernWrapper><HarnessAuditViewer /></GovernWrapper>} />
+        <Route path="/govern/policy-drift" element={<GovernWrapper><PolicyDriftDashboard /></GovernWrapper>} />
+        <Route path="/govern/path-jail" element={<GovernWrapper><PathJailEditor /></GovernWrapper>} />
         <Route path="/govern/hrais" element={<Navigate to="/govern/risk?tab=hrais" replace />} />
         <Route path="/govern/workflows" element={<GovernWrapper><WorkflowsPage /></GovernWrapper>} />
         <Route path="/govern/playbook" element={<GovernWrapper><AgenticGovernancePlaybook /></GovernWrapper>} />
@@ -217,6 +244,21 @@ function AuthGate() {
         <Route path="/govern/safety/runtime" element={<GovernWrapper><RuntimeSafetyControls /></GovernWrapper>} />
         <Route path="/govern/multi-cloud" element={<GovernWrapper><MultiCloudGovernance /></GovernWrapper>} />
         <Route path="/govern/dev-tools" element={<GovernWrapper><DevToolsGovernance /></GovernWrapper>} />
+        <Route path="/govern/security-policies" element={<GovernWrapper><SecurityPolicyTemplates /></GovernWrapper>} />
+        <Route path="/govern/lifecycle-policies" element={<GovernWrapper><AgentLifecyclePolicies /></GovernWrapper>} />
+        <Route path="/govern/topology" element={<GovernWrapper><AgentTopologyMap /></GovernWrapper>} />
+        <Route path="/govern/onboarding" element={<GovernWrapper><AgentOnboardingWorkflow /></GovernWrapper>} />
+        {/* Consolidated: standalone mock ops routes now redirect into the live
+            OperationsLanding hub tabs (Alerts/SLAs/On-Call/Runbooks/Metrics are
+            already live tabs there; Investigations is re-homed as a hub tab).
+            Old paths are kept as redirects so existing deep links don't 404. */}
+        <Route path="/govern/investigations" element={<Navigate to="/govern/operations?tab=investigations" replace />} />
+        <Route path="/govern/runbooks" element={<Navigate to="/govern/operations?tab=runbooks" replace />} />
+        <Route path="/govern/metrics" element={<Navigate to="/govern/operations?tab=metrics" replace />} />
+        <Route path="/govern/oncall" element={<Navigate to="/govern/operations?tab=oncall" replace />} />
+        <Route path="/govern/alerts" element={<Navigate to="/govern/operations?tab=alerts" replace />} />
+        <Route path="/govern/sla" element={<Navigate to="/govern/operations?tab=sla" replace />} />
+        <Route path="/govern/operations" element={<GovernWrapper><OperationsLanding /></GovernWrapper>} />
         <Route path="/govern/data" element={<GovernWrapper><DataGovernanceLanding /></GovernWrapper>} />
         {/* Consolidated: the card-grid Landing is the single Data Governance front door */}
         <Route path="/govern/data-hub" element={<Navigate to="/govern/data" replace />} />
@@ -225,6 +267,7 @@ function AuthGate() {
         <Route path="/govern/data/maturity" element={<GovernWrapper><DataMaturity /></GovernWrapper>} />
         <Route path="/govern/data/readiness" element={<GovernWrapper><DataReadiness /></GovernWrapper>} />
         <Route path="/govern/data/lineage" element={<GovernWrapper><DataLineage /></GovernWrapper>} />
+        <Route path="/govern/data/inventory" element={<GovernWrapper><AiEstateInventory /></GovernWrapper>} />
         <Route path="/govern/data/agents" element={<GovernWrapper><AgentDataProfiles /></GovernWrapper>} />
         <Route path="/govern/data/access" element={<GovernWrapper><DataAccessControl /></GovernWrapper>} />
         <Route path="/govern/data/ontology" element={<GovernWrapper><DataOntology /></GovernWrapper>} />
@@ -234,10 +277,24 @@ function AuthGate() {
         {/* Legacy redirects */}
         <Route path="/govern/dashboard" element={<Navigate to="/govern" replace />} />
         <Route path="/govern/cost-tracking" element={<Navigate to="/govern/finops" replace />} />
+        <Route path="/govern/marketplace-admin" element={<GovernWrapper><MarketplaceAdmin /></GovernWrapper>} />
+        {/* Marketplace - consumer catalog under Build (AaaS) */}
+        <Route path="/aaas/marketplace" element={<GovernWrapper><MarketplaceLanding /></GovernWrapper>} />
+        <Route path="/aaas/marketplace/*" element={<GovernWrapper><MarketplaceLanding /></GovernWrapper>} />
+        {/* Top-level alias and legacy redirect */}
+        <Route path="/marketplace" element={<GovernWrapper><MarketplaceLanding /></GovernWrapper>} />
+        <Route path="/marketplace/*" element={<GovernWrapper><MarketplaceLanding /></GovernWrapper>} />
+        <Route path="/govern/marketplace" element={<Navigate to="/aaas/marketplace" replace />} />
         <Route path="/applications/my-apps" element={<MyApps />} />
         <Route path="/templates" element={<TemplateCatalog />} />
         <Route path="/operate" element={<OperateLanding />} />
         <Route path="/operate/approvals" element={<ApprovalQueueLanding />} />
+        {/* Operate > Evaluation — LLM-as-judge scoring of deployed applications */}
+        <Route path="/operate/evaluation" element={<EvaluationLanding />} />
+        <Route path="/operate/evaluation/apps/:deploymentId" element={<EvaluationDetail />} />
+        <Route path="/operate/evaluation/runs/:runId" element={<EvaluationRunDetail />} />
+        <Route path="/operate/evaluation/compare" element={<EvaluationRunCompare />} />
+        <Route path="/operate/evaluation/playground" element={<EvaluationPlayground />} />
         <Route path="/secure/approval-policies" element={<ApprovalPoliciesLanding />} />
         <Route path="/observability" element={<ObservabilityLanding />} />
         <Route path="/observability/langfuse" element={<Observability />} />
@@ -280,7 +337,10 @@ function AuthGate() {
         <Route path="/deployments/:id" element={<DeploymentDetail />} />
         <Route path="/docs" element={<Documentation />} />
         <Route path="/docs/:section" element={<Documentation />} />
+        {/* Catch-all: unknown paths return to Home instead of rendering blank. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+          </ErrorBoundary>
         </div>
       </main>
     </div>

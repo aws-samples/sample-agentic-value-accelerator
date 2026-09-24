@@ -13,6 +13,8 @@ import {
   MATURITY_LEVELS,
 } from './types';
 import { computeMaturity, levelColor } from './scoring';
+import { buildMaturityReport } from './report';
+import ExportReportButton from '../ExportReportButton';
 
 interface Props {
   open: boolean;
@@ -105,11 +107,31 @@ export default function AssessmentDrawer({ open, initial, existingNames = [], on
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mt-0.5">{name || 'Untitled assessment'}</h3>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" aria-label="Close">
-            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportReportButton
+              variant="subtle"
+              title="Download this assessment as a PDF report (reflects current edits)"
+              getDefinition={() => buildMaturityReport({
+                assessment_id: initial?.assessment_id ?? 'draft',
+                name: name.trim() || 'Untitled assessment',
+                description,
+                organization,
+                assessor,
+                status: status ?? 'Draft',
+                created_at: initial?.created_at ?? new Date().toISOString(),
+                updated_at: initial?.updated_at ?? new Date().toISOString(),
+                created_by: initial?.created_by ?? null,
+                scores,
+                weights,
+                computed,
+              })}
+            />
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" aria-label="Close">
+              <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Step tabs + live verdict */}

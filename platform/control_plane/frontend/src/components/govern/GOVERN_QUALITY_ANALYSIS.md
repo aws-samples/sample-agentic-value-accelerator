@@ -1,262 +1,375 @@
-# Govern Module Code Quality Analysis
+# Govern Pre-Merge Quality Analysis
 
-**Date:** 2026-07-22  
-**Scope:** `src/components/govern/` (213 files, ~79,674 lines)  
-**Overall Quality Score:** 72/100
+Read-only review of the AVA Govern branch's **uncommitted** changes
+(`git diff --name-only HEAD` + new file `src/components/ErrorBoundary.tsx`).
+Scope = touched files only. Pre-existing errors in untouched files are the
+accepted baseline and do not block.
 
----
+**Verdict: ZERO must-fix findings in touched files.**
 
-## Summary
-
-The Govern module is a substantial codebase with solid TypeScript compilation (zero tsc errors) but exhibits patterns that should be addressed before merge. The primary concerns are ESLint violations (particularly React hooks rules), oversized components, and hardcoded color values that may cause accessibility issues.
-
----
-
-## Errors (Must Fix)
-
-### 1. Unused Variables/Imports (24 instances)
-
-ESLint reports multiple unused variables that indicate dead code or incomplete implementations:
-
-| File | Line | Issue |
-|------|------|-------|
-| `ComplianceCenter.tsx` | 1046 | `showWizard`, `setShowWizard` unused |
-| `ComplianceCenter.tsx` | 1798 | `apiLoading` unused |
-| `ComplianceCenter.tsx` | 1822 | `controlEvalsLoading` unused |
-| `ConfigGuardrailsSideBySide.tsx` | 48 | `guardrails` unused |
-| `CriAiRmfView.tsx` | 32 | `CriCategory` type unused |
-| `FleetOverview.tsx` | 77 | `isLiveData` unused |
-| `LivePromptTelemetry.tsx` | 21 | `MockDataBadge` unused |
-| `MitreAtlasView.tsx` | 445 | `controls` unused |
-| `ModelManagement.tsx` | 33 | `LiveDataBadge` unused |
-| `OutcomeMonitoring.tsx` | 20 | `BarChart`, `Bar` unused |
-| `OutcomeMonitoring.tsx` | 31 | `OutcomeType` unused |
-| `OutcomeMonitoring.tsx` | 272 | `useCase` unused |
-| `OutcomeMonitoring.tsx` | 283 | `useCaseAlerts` unused |
-| `OutcomeMonitoring.tsx` | 596, 750 | `i` unused in loops |
-| `PolicyObservability.tsx` | 73 | `e` unused |
-| `PromptGovernance.tsx` | 165 | `MOCK_GUARDRAIL_CONFIG` unused |
-| `PromptGovernance.tsx` | 929 | `invocations` unused |
-| `ShadowAI.tsx` | 144 | `loading` unused |
-| `agentThreatProfile.ts` | 10 | `AGENTIC_RISK_CATEGORIES` unused |
-| `compliance/ComplianceGapGuidance.tsx` | 25 | `GapStatus` unused |
-| `compliance/GpaiModelCard.tsx` | 30 | `RiskLevel` unused |
-| `compliance/GpaiModelCard.tsx` | 334-338 | Multiple unused props/state |
-| `data/DataGovernanceLanding.tsx` | 566 | `SetupTab` unused |
-
-### 2. React Hooks Violations (13 instances)
-
-Critical violations that can cause cascading renders or stale closures:
-
-**setState in useEffect (10 files):**
-Setting loading state synchronously in effects causes unnecessary re-renders:
-- `ConfigGuardrailsSideBySide.tsx:29,39`
-- `DevToolsGovernance.tsx:97`
-- `DeveloperAiUsageView.tsx:142`
-- `FailingConfigRules.tsx:21`
-- `FinOps.tsx:421`
-- `HallucinationDetection.tsx:308`
-- `LiveGuardrailValidation.tsx:30`
-- `ModelManagement.tsx:322`
-- `ShadowAI.tsx:149`
-- `data/DataGovernanceLanding.tsx:103`
-
-**Missing Dependencies (2 files):**
-- `ComplianceCenter.tsx:1910` - useMemo missing `framework` dependency
-- `ModelManagement.tsx:95` - useEffect missing `activeTab` dependency
-
-### 3. Components Created During Render (1 file)
-
-`DeveloperAiUsageView.tsx:174-178` - `SortIcon` component defined inside render, causing React to recreate it on every render. Move outside the component.
-
-### 4. Impure Function in Render (1 file)
-
-`DataSourceStatus.tsx:35` - Calls `Date.now()` during render, which is impure and can cause hydration mismatches. Use `useMemo` or move to an effect.
-
-### 5. Explicit `any` Types (17 instances)
-
-Violates `@typescript-eslint/no-explicit-any`:
-
-| File | Line(s) |
-|------|---------|
-| `data/KnowledgeSources.tsx` | 66 |
-| `data/useDataLineage.ts` | 64, 117, 133 |
-| `data/useDataQuality.ts` | 64, 66, 82, 96, 191, 234 |
-| `data/useDataReadiness.ts` | 96, 98, 99, 139 |
-| `metrics/useLiveMetrics.ts` | 288 |
-| `safety/RuntimeSafetyControls.tsx` | 222 |
-
-### 6. prefer-const Violations (6 instances)
-
-Variables declared with `let` but never reassigned in `data/useDataReadiness.ts`:
-- Line 92: `guardrails`
-- Line 105: `invocationLogs`
-- Line 112: `cloudTrail`
-- Line 119: `configCompliance`
-- Line 127: `security`
-- Line 136: `serviceApprovals`
+- `npx tsc -p tsconfig.app.json --noEmit`: 14 errors total, **all in non-Govern
+  files** (`api/client.ts`, `App.tsx`, `components/a2a`, `DeploymentDetail.tsx`,
+  `harness`, `Observability.tsx`, `organization_design`, `policies`,
+  `prioritization`). **Zero errors in `components/govern/**` or `ErrorBoundary.tsx`.**
+  Matches the expected baseline exactly — no Govern regression.
+- `npm run lint`: 394 errors / 44 warnings project-wide. After filtering to Govern
+  files, **no lint error was introduced by this branch** (details below).
 
 ---
 
-## Warnings (Should Fix)
+# Pre-release gate (policy round) — 2026-09-02
 
-### 1. Fast Refresh Incompatibility (7 files)
+Reviewer: QUALITY gate. Branch `gsorrels/feature/govern-audit-backend`, tip `2f7c3da7`.
+This round's changes are **backend/config only** — `backend/src/services/policy_service.py`
+(`agentcore_region` param), `backend/src/api/routes/policies.py` (AgentCore client +
+policy-engine ARNs + observability now on `settings.GOVERN_AWS_REGION`),
+`docker-compose.yaml` (`POLICY_ENGINE_ID` default). Plus seeded account data
+(4 A2A trust policies + 6 identities; 3 AgentCore Cedar policies). **No frontend
+source (`.tsx`/`.ts`) changed this round** — confirmed via `git show --stat HEAD` and
+`git status` (only `.md` + test/screenshot artifacts are dirty).
 
-Exporting non-components from component files breaks React Fast Refresh:
-- `CoreBadge.tsx` (lines 90, 102, 106)
-- `DataSourceContext.tsx` (lines 65, 229, 238)
-- `EmptyState.tsx` (line 88)
-- `GoLiveGuide.tsx` (line 22)
-- `MaskedIdentity.tsx` (line 106)
+**Verdict: 0 must-fix. Gate PASS.**
 
-**Fix:** Extract constants/functions to separate utility files.
+## tsc — clean (VERIFIED TWICE, note on baseline)
+`npx tsc -p tsconfig.app.json --noEmit` → **0 errors, exit 0.** Run twice: once with
+the existing `.tsbuildinfo`, once after deleting `node_modules/.tmp/tsconfig.app.tsbuildinfo`
+and re-running fresh (config has no `incremental`/`composite`, so the stale June-22
+buildinfo was not consumed anyway). Both full runs took multiple minutes (real
+type-check, not a no-op cache hit) and emitted zero diagnostics.
 
-### 2. Oversized Components (Top 10)
+> **Finding — baseline no longer reproduces.** The expected ~30-error baseline
+> (AgentRegistry / DevToolsGovernance / MultiCloudGovernance / RagEvaluations —
+> recharts formatter + `IconName`) does **not** appear. tsc is fully clean. The
+> recharts/@types baseline errors documented in prior rounds appear to have been
+> resolved earlier on this branch. **New errors: 0** (trivially — total is 0).
+> No frontend was touched this round, so no regression was possible regardless.
 
-Components exceeding 1000 lines violate single-responsibility principle:
+## lint — baseline only (no new problems possible this round)
+`npm run lint` (`eslint .`) → **455 problems (414 errors, 41 warnings), exit 1.**
+Dominant categories, all matching the known baseline classes:
 
-| File | Lines | Recommendation |
-|------|-------|----------------|
-| `ComplianceCenter.tsx` | 2,940 | Split into ComplianceOverview, ComplianceDetails, ComplianceWizard |
-| `PromptGovernance.tsx` | 2,290 | Extract PromptTemplates, PromptAnalytics, GuardrailConfig |
-| `DataGovernance.tsx` | 2,143 | Split into CatalogView, LineageView, QualityDashboard |
-| `FleetOverview.tsx` | 2,003 | Extract AgentList, FleetStats, FleetFilters |
-| `MultiCloudGovernance.tsx` | 1,889 | Split by cloud provider sections |
-| `TrustStack3Layer.tsx` | 1,474 | Extract each layer into separate component |
-| `risk/PolicyAsCode.tsx` | 1,427 | Split PolicyEditor, PolicyPreview, PolicyHistory |
-| `DevToolsGovernance.tsx` | 1,418 | Extract UsageTable, ShadowAIPanel, CompliancePanel |
-| `ModelOperations.tsx` | 1,334 | Split by tab content |
-| `AgentRegistry.tsx` | 1,215 | Extract AgentTable, AgentFilters, AgentCharts |
+| Rule | Count | Baseline category |
+|---|---|---|
+| `@typescript-eslint/no-explicit-any` | 231 | `Icon name={… as any}` pattern + misc `any` |
+| `react-hooks/set-state-in-effect` | ~65 | set-state-in-effect (standard fetch effects) |
+| `@typescript-eslint/no-unused-vars` | 48 | baseline |
+| `react-refresh/only-export-components` | 40 | baseline |
+| `react-hooks/exhaustive-deps` | ~41 | baseline (warnings) |
+| `rules/components-and-hooks-must-be-pure` + `react-hooks/purity` | ~22 | impure-date / purity |
 
-### 3. Hardcoded Colors (100+ instances)
+**New vs baseline: 0 new.** Because no frontend source changed this round, every
+lint problem is pre-existing. Top offenders are non-touched hooks
+(`operations/useOpsLiveData.ts` 35, `UnifiedGuide.tsx` 21, `useAwsCost.ts` 12).
+(Count drift vs the 2026-08-31 section's 445 is baseline churn in untouched files,
+not this round.)
 
-Colors like `#10b981`, `#ef4444`, `#f59e0b` are hardcoded throughout. This creates:
-- Maintenance burden when updating theme
-- Potential accessibility issues (no dark mode support)
-- Inconsistent color usage
+## Spot-check — seed-lit surfaces (React best-practices / a11y)
 
-**Files with most hardcoded colors:**
-- `ComplianceCenter.tsx` (20+ instances)
-- `AgenticGovernancePlaybook.tsx` (18 instances)
-- `AgentRegistry.tsx` (15 instances)
-- `AuditIncidents.tsx` (12 instances)
-- `BiasFairness.tsx` (8 instances)
+**`FleetOverview.tsx` Policies card (L1762-1775) — CLEAN.**
+- `policies.filter(p => p.status === 'active').slice(0,3).map(...)` with `key={p.policy_id}`
+  — key present, unique. `policies` is destructured from the aggregator hook (L1520)
+  and used as an array throughout (`.length`, `.filter`); the hook defaults it to `[]`,
+  so no unguarded access. `{p.rules_count}r` is a typed field. Empty-state guarded at
+  L1734 (`guardrails.length === 0 && policies.length === 0`). **0 lint findings on this file.**
 
-**Recommendation:** Use Tailwind classes or extract to a `governColors.ts` theme file.
+**`A2AGovernance.tsx` Trust Policies tab (L637-774) — CLEAN.**
+- `displayPolicies.map(policy => …)` uses `key={policy.id}` (unique). Empty-state guarded
+  at L664 (`displayPolicies.length === 0`). Nested `.map`s (`allowedActions`, `dataClassifications`)
+  use index keys — acceptable for static, non-reordered lists.
+- Live/mock normalization is sound: `livePolicyToDisplay` maps `TrustPolicy` (typed
+  `allowed_actions: string[]`, non-optional) → `DisplayPolicy.allowedActions`, so
+  `policy.allowedActions.join(', ')` (L701) and `.map` (L716) cannot hit `undefined`
+  under the declared contract. Provider-specific fields (`maxChainDepth`, `rateLimit`,
+  `dataClassifications`) are `!= null`-guarded before render — no fabricated values
+  under a Live badge.
+- a11y: tablist uses `role="tab"` + `aria-selected` (L621-622); policy rows use
+  `aria-pressed` + `rowButtonProps` (keyboard-activatable). **0 lint findings on this file.**
 
-### 4. Console Statements in Production Code (14 instances)
+### Advisory (non-blocking, not introduced this round)
+- `A2AGovernance.livePolicyToDisplay` trusts the API shape — `governA2AApi.listPolicies()`
+  returns `response.data` with no runtime validation. A malformed payload missing
+  `allowed_actions` would throw on `.join()`/`.map()`. This matches the app-wide
+  "trust the typed API contract" pattern (not unique to this surface); low risk given
+  the backend controls the schema. Nice-to-harden later with a defensive `?? []`.
 
-Found `console.log`, `console.warn`, `console.error` calls:
-
-| File | Line | Type |
-|------|------|------|
-| `ConnectionWizard.tsx` | 168, 185 | error |
-| `data/DataGovernanceLanding.tsx` | 106 | warn |
-| `risk/ConcentrationRiskCard.tsx` | 131 | error |
-| `useAgentRegistry.ts` | 317 | error |
-| `useComplianceAttestations.ts` | 103, 168, 196, 212 | warn/error |
-| `useControlEvaluation.ts` | 139 | warn |
-| `useGuardrailMetrics.ts` | 185 | error |
-| `useGovernanceAggregator.ts` | 413 | error |
-| `safety/RedTeamTestPipeline.tsx` | 584, 589 | log |
-
-**Recommendation:** Replace with a proper logging utility or remove before production.
-
-### 5. Missing useEffect Dependencies (86 effects without deps or with empty deps)
-
-Many `useEffect(() => { ... })` calls have empty dependency arrays or missing dependencies. This pattern is common in the codebase for data fetching but should be audited for correctness.
-
----
-
-## Suggestions (Nice to Have)
-
-### 1. Limited Context API Usage
-
-Only 1 file (`DataSourceContext.tsx`) uses React Context. With 116 components using `useState`, there's likely prop drilling that could benefit from context or state management:
-- Consider context for: filter state, selected items, theme preferences
-- Files with high onClick counts suggest deep prop passing: `ModelOperations.tsx` (39), `ComplianceCenter.tsx` (37)
-
-### 2. Low useMemo/useCallback Adoption
-
-- **Total `.map()` calls:** 1,350
-- **Total `useMemo`/`useCallback` usage:** 439
-
-Ratio suggests potential for optimization in components with expensive computations or frequent re-renders.
-
-### 3. Accessibility Improvements Needed
-
-**Current state:**
-- 164 aria-label/role usages across 45 files
-- Only 10 `tabIndex`/`onKeyDown` handlers across 7 files
-- 493 onClick handlers across 106 files
-
-**Gaps:**
-- Many clickable `<div>` and `<tr>` elements lack keyboard handlers
-- The `a11y.ts` helper exists but is underutilized
-- No ARIA live regions for dynamic content updates
-
-**Recommendations:**
-1. Audit all `onClick` handlers on non-button elements
-2. Use `rowButtonProps()` from `a11y.ts` consistently
-3. Add `aria-live` regions for loading states and data updates
-
-### 4. Inconsistent Prop Type Definitions
-
-Only 21 files define explicit `Props` interfaces. Most components use inline type annotations or implicit typing.
-
-**Recommendation:** Standardize on `interface Props { ... }` pattern for all components.
-
-### 5. Utility File Organization
-
-36 `.ts` utility files in the root govern directory. Consider organizing into subdirectories:
-- `data/` - data hooks and types
-- `utils/` - exportUtils, postureColor, a11y
-- `constants/` - mock data, evaluation data
-- `types/` - shared type definitions
+## MUST-FIX COUNT: 0
 
 ---
 
-## Metrics Summary
+# Branch-Delta Composition + Quality Review (2026-08-31)
 
-| Metric | Value | Status |
-|--------|-------|--------|
-| TypeScript Compilation | 0 errors | PASS |
-| ESLint Errors | 68 | FAIL |
-| ESLint Warnings | 3 | WARN |
-| Files > 1000 lines | 18 | WARN |
-| `any` type usage | 17 | FAIL |
-| Console statements | 14 | WARN |
-| Hardcoded colors | 100+ | WARN |
-| ARIA coverage | ~30% | WARN |
+Scope = `git diff --name-only origin/gsorrels/feature/govern-audit-backend...HEAD`
+(51 Govern files, +2946 / -659). `tsc` baseline (0 Govern errors) trusted, not re-run.
+Focus: rendered composition of ComplianceCenter (embedded framework views) and the
+Operations / Reports landings, plus React correctness in changed hooks/components.
+
+**Verdict: 0 must-fix. All findings ACCEPTED-WARNING (repo-wide lint baseline or
+pre-existing cosmetic redundancy — none introduced by this branch).**
+
+> Task-premise correction for the caller: `AgentResourceInventory` and
+> `FrameworkReportsModule` are NOT rendered by `OperationsLanding`. Their parent is
+> **`ReportsLanding.tsx`** (L172 / L176). `OperationsLanding.tsx` renders
+> `OpsOverview` (L222), `AlertCenter` (L227), `CapacityPlanning` (L230) and 9 others.
+
+## Composition
+
+Traced each changed surface from its parent to what actually renders on the tab.
+
+### ComplianceCenter → embedded framework deep-dive views — CLEAN (verified)
+- **No double page header / CoreBadge / page-level data badge.** All 9 deep-dive
+  views gate their `GovernPageLayout` + `CoreBadge` + page-level Live/Mock badge
+  behind `if (embedded) return body;` — verified the header markup sits *after* that
+  line in every case: `NistAiRmfView` L813, `EuAiActView` L702, `FinosAirView` L631,
+  `OwaspLlmView` L775, `CriAiRmfView` L586, `OsfiE23View` L519, `Iso42001View` L906,
+  `NaicAiView` L627, `Sr26MappingView` L154. ComplianceCenter renders them inside a
+  bare card (`ComplianceCenter.tsx` L2309-2337), so only the page's single
+  "Compliance Center" header (GovernPageLayout L1985-1990) shows. Any Live/Mock badge
+  still inside `body` (e.g. `FinosAirView` L566, `Iso42001View` L776) is a
+  *section-scoped* framework badge, not a duplicate of the page badge. **ACCEPTED.**
+- **No duplicate `POST /govern/controls/evaluate` on the same tab.** ComplianceCenter's
+  own `useControlEvaluation` (`ComplianceCenter.tsx` L1836-1845) is
+  `skip`-gated: `skip: activeTab !== 'frameworks' || frameworkViewMode !== 'checklist'`.
+  The framework views own their `useControlEvaluation` and only mount in `deep-dive`
+  mode (L2307-2337). Checklist and deep-dive are mutually exclusive, so exactly one
+  hook instance is active per tab → single POST. The hook is also cache-keyed by
+  control-id set (`useControlEvaluation.ts` L102-114) and cancel-guarded. **ACCEPTED.**
+
+### Operations / Reports landings → embedded children — pre-existing only
+- **`FrameworkReportsModule.tsx:2120`** renders `<CoreBadge pillar="show" compact />`
+  while its parent `ReportsLanding.tsx:114` already renders `<CoreBadge pillar="show" />`
+  on the same tab → two identical "Show" pillar chips visible on the Framework Reports
+  tab. **Not introduced by this branch** (badge line unchanged in the diff). Cosmetic.
+  *Fix:* drop the child's `CoreBadge`; the landing header already supplies the pillar.
+  **ACCEPTED-WARNING.**
+- **`AgentResourceInventory.tsx:1806`** renders `<CoreBadge pillar="govern" compact />`
+  under `ReportsLanding` (a "show" surface) → a second, differently-pillared chip on
+  the Resource Inventory tab. Pre-existing (unchanged in diff). *Fix:* remove child
+  badge or align pillar to "show". **ACCEPTED-WARNING.**
+- **`OpsOverview.tsx:990`** renders `<h1>Operations Overview</h1>` while
+  `OperationsLanding.tsx:127` renders `<h1>Operations</h1>` → nested `<h1>` on one page
+  (a11y nit; titles differ so not a visual duplicate). Pre-existing (unchanged in diff).
+  *Fix:* demote the tab heading to `<h2>`. **ACCEPTED-WARNING.**
+- `AlertCenter.tsx` (rendered by OperationsLanding) has no page `<h1>/<h2>` or
+  `CoreBadge` — only inline section `MockDataBadge`s → no duplicate header. **CLEAN.**
+- `CapacityPlanning.tsx` (rendered by OperationsLanding) has no page header/CoreBadge —
+  inline Live/Mock badges only (L675, L1215) → no duplicate header. **CLEAN.**
+
+### React correctness in changed hooks/components — CLEAN
+- `AgentResourceInventory.tsx:1772-1775` reset-selection effect (`setSelectedAgentIds`
+  keyed on `[inventoryAgents]`) does **not** clobber user selection: `inventoryAgents`
+  is a `useMemo` on `[useLive, liveAgents]` and `useAgentResourceData` does **not** poll
+  (`useReportsLiveData.ts` — no `setInterval`), so it fires at most twice (mock→live),
+  matching its own comment. **ACCEPTED.**
+- `useAlerts.ts` — `useActiveAlerts` polls (30s) via a properly-deped effect
+  (`[awsLoading, awsConnected, refreshKey, pollIntervalMs]`) with `cancelled` guard +
+  `clearInterval` cleanup; mutations are stable `useCallback`s. No loop. **CLEAN.**
+- `useFleetScale.ts` — `useFleetScaleServer` effect deps `[enabled, groupBy, filterKey,
+  nonce]` are all primitives, cancel-guarded; refresh via `nonce`. No refetch loop.
+  **CLEAN.**
+- `useGovernanceAggregator.ts` — single fetch effect keyed on `[refreshKey]` (L369/L496);
+  all other blocks are `useMemo` with explicit deps. No loop. **CLEAN.**
+
+## Lint
+
+`npm run lint` (eslint .) — **445 problems (404 errors, 41 warnings) project-wide**,
+exit 1. Filtered to the 51 changed files, hits land on 6 files, all in the
+already-accepted repo-wide baseline rule categories (React-Compiler-style
+`react-hooks/set-state-in-effect`, `components-must-be-pure`, and the codebase's
+standing `Icon name as any` pattern). No new defect-class error:
+
+| File:line | Rule | Verdict |
+|---|---|---|
+| `operations/AgentResourceInventory.tsx:1123,1598` | `@typescript-eslint/no-explicit-any` (`Icon name={… as any}`) | ACCEPTED-WARNING — matches repo pattern (`OperationsLanding` L184/207). *Fix:* type to Icon name union. |
+| `operations/AgentResourceInventory.tsx:1774` | `react-hooks/set-state-in-effect` | ACCEPTED-WARNING — reset-selection effect (see above). |
+| `operations/CapacityPlanning.tsx:538` | `react-hooks/set-state-in-effect` (`setIsLoading(true)`) | ACCEPTED-WARNING — standard fetch effect. |
+| `useFleetScale.ts:268` | `react-hooks/set-state-in-effect` | ACCEPTED-WARNING — standard fetch/reset effect. |
+| `FinOps.tsx:1173` | `react-hooks/set-state-in-effect` | ACCEPTED-WARNING — standard fetch effect. |
+| `HallucinationDetection.tsx:312` | `react-hooks/set-state-in-effect` | ACCEPTED-WARNING — standard fetch effect. |
+| `DataSourceStatus.tsx:37` | impure `Date.now()` in `useMemo` | ACCEPTED-WARNING — cosmetic age display. |
+
+These rules fire on 400+ locations repo-wide (DatasetList, CatalogView, ui/badge,
+types/index, etc.) — a strict rule set flagging a pervasive pre-existing pattern, not
+a regression from this branch.
+
+## MUST-FIX COUNT: 0
 
 ---
 
-## Recommended Fix Priority
+## 1. Types / Lint
 
-### P0 - Before Merge
-1. Fix all unused variable errors (remove or implement)
-2. Fix components created during render (`DeveloperAiUsageView.tsx`)
-3. Fix impure render in `DataSourceStatus.tsx`
-4. Add proper types to replace `any` in data hooks
+### tsc — clean for Govern
+All 14 tsc errors are in untouched non-Govern files (see list above). Strict null
+checks are on (baseline includes `TS18048 possibly undefined` in non-Govern files),
+so the fact that every touched Govern file compiles is strong evidence there are no
+type-level unguarded-undefined defects in the changed Govern code.
 
-### P1 - Sprint After Merge
-1. Refactor setState-in-effect patterns to use loading state initialization
-2. Fix missing useEffect dependencies
-3. Extract non-component exports to separate files
-4. Remove console statements or use logging utility
+### Govern lint errors — all baseline or in unchanged regions
+14 lint "errors" and 2 warnings land on files under `components/govern/`. Triage
+against the diff:
 
-### P2 - Technical Debt
-1. Split oversized components (start with `ComplianceCenter.tsx`)
-2. Extract hardcoded colors to theme constants
-3. Improve accessibility coverage
-4. Standardize prop type definitions
+| File | Touched by branch? | Flagged line changed? | Verdict |
+|---|---|---|---|
+| `finops/useAwsCost.ts` (1) | No (not in diff) | — | Baseline |
+| `finops/useCacheWarming.ts` (3, unused `_`-vars) | No | — | Baseline |
+| `useGovernModels.ts` (1) | No | — | Baseline |
+| `ModelLineageViewer`→`useModelLineage.ts` (5) | No | — | Baseline |
+| `useFleetHealth.ts` (3 "impure fn during render" @476-478) | Yes | **No** — diff hunks are import-only (`@@ -12` / `@@ -21`); L476-478 unchanged | Pre-existing pattern |
+| `useGuardDutyAIFindings.ts` (1 "setState in effect" @182) | Yes | **No** — diff hunk is import-only (`@@ -17`); effect body unchanged | Pre-existing pattern |
+| `useFleetHealth.ts` (warning, useMemo dep @424) | Yes | No | Pre-existing (warning) |
+| `useLiveKPIs.ts` (warning, missing dep `updateSource` @266) | Yes | No | Pre-existing (warning) |
+
+The `react-hooks/set-state-in-effect` and "Cannot call impure function during
+render" rules fire on ~394 errors across the whole repo (DatasetList, CatalogView,
+useAwsCost, useGovernModels, etc.) — a newly-strict rule set flagging a pervasive
+pre-existing pattern, not defects this branch introduced. The two touched-file
+errors sit in code the branch did not modify. **No Govern lint error introduced.**
 
 ---
 
-## Testing Recommendations
+## 2. React best practices / a11y (touched files)
 
-Before merge, verify:
-1. No runtime errors in browser console
-2. All tabs/views render without blank screens
-3. Data loading states appear correctly
-4. Interactive elements respond to keyboard navigation
+No blocking issues. Minor, non-blocking observations:
+
+- **AIQualityMonitor.tsx (L282-299)** — the trend-refresh `useEffect` has `[]` deps
+  but its `setInterval` callback reads `kpiValues`, so it captures the initial value
+  (stale closure). Impact is nil: the trend series is explicitly illustrative/mock
+  ("Illustrative trend — historical KPI series not wired"), so the stale values are
+  decorative only. Pre-existing; lint did not flag it. Nice-to-fix later.
+- **GovernanceCommandCenter.tsx (L396)** — "↻ Refresh All" uses a Unicode glyph
+  rather than a Heroicon (`arrow-path` exists in `icons.tsx`). Minor deviation from
+  the Heroicons-only UI convention.
+- **GovernanceCommandCenter.tsx** — several `.map()` use array-index `key` (compliance
+  L519, cost L861, budgets L896, platform map L1046/L1053). Lists are static/stable
+  order, so low risk.
+- **GovernanceCommandCenter.tsx** — "Refresh All" calls `refreshAggregator` +
+  `refreshGuardrails` but does not bump `pollKey`, so the command-center aggregator
+  tiles (`governCommandCenterApi.getData`) refresh only on the 60s poll, not on the
+  manual click. Minor UX gap, not a defect.
+
+---
+
+## Composition (step 3)
+
+### AI Quality section — no double title, no new double-fetch (verified)
+Command Center ZONE 1b renders:
+```
+<ZoneHeader title="AI Quality" .../>
+<div className="...card..."><AIQualityMonitor compact /></div>
+```
+- **Double title: NO.** `AIQualityMonitor` compact mode (L359-419) renders no
+  `<h3>`/title — only the status-count chips + KPI grid + data-source badge. The
+  code comment at L362 confirms the internal title was intentionally removed so the
+  ZoneHeader supplies the single "AI Quality" title. Verified.
+- **New double-fetch: NO.** The diff for `GovernanceCommandCenter.tsx` shows
+  `<AIQualityMonitor compact />` was **already embedded at HEAD**; this branch only
+  wrapped it with the ZoneHeader + card and removed the compact's internal title.
+  No new data hook was added by the change.
+- Pre-existing observation (baseline, not introduced here): the Command Center runs
+  `useLiveKPIs(60s)` itself (L172) and `AIQualityMonitor` runs `useLiveKPIs(30s)`
+  (L275), so two independent instances poll the same 9 AWS endpoints on this page.
+  Redundant AWS-call load; candidate for a shared context/dedup later. Not a
+  regression from these uncommitted changes.
+
+### ReportsLanding + useReportsDataSummary — clean, no double fetch
+- `useReportsDataSummary()` is used **only** in `ReportsLanding` (L96). Its internal
+  sub-hooks `useAgentResourceData` / `useFrameworkCompliance` are not consumed by any
+  other component (exported in `operations/index.ts` but unreferenced elsewhere), so
+  there is no duplicate instance at the landing level.
+- The `inventory` tab (`AgentResourceInventory.tsx`) renders from `MOCK_AGENT_PROFILES`
+  and does **not** call `useAgentResourceData`, so no duplicate agent fetch when the
+  tab mounts. (Minor data-consistency note: the header shows live counts while the
+  inventory tab is mock-badged — expected, not a defect.)
+
+### Embedded vs standalone AIQualityMonitor — both correct
+- `GovernanceCommandCenter` L487: `<AIQualityMonitor compact />` (no title — correct).
+- `ModelManagement` L854: `<AIQualityMonitor />` (full view with its own header —
+  correct standalone). No duplicated title/KPIs across the two render sites.
+
+### ErrorBoundary (new file) — correct and wired
+- `src/components/ErrorBoundary.tsx` (note: at `components/`, not `components/govern/`).
+- Wired in `App.tsx`: imported L2, used L147 `<ErrorBoundary resetKey={location.pathname}>`,
+  closed L333 — resets on navigation as documented. Uses the `exclamation-triangle`
+  Heroicon (present in `icons.tsx`). Type-checks clean.
+
+---
+
+## MUST-FIX summary
+
+**0 must-fix findings in touched files.**
+
+---
+
+<!-- COMPOSITION PASS -->
+# Composition — pre-release gate (policy round) (2026-09-02)
+
+Separate section owned by the COMPOSITION reviewer (merge with the quality pass
+above). Read-only. Traced ACTUAL render paths from parent → child, not isolated
+files. **Verdict: 0 MUST-FIX composition defects.**
+
+## A2A Governance — embedded via `AgentRegistry` `a2a` tab (`/govern/agents?tab=a2a`)
+
+Render path: `App.tsx` L218 `/govern/agents` → `<GovernWrapper><AgentRegistry /></GovernWrapper>`
+→ tab `a2a` (L976 `{tab === 'a2a' && <A2AGovernance />}`) → `A2AGovernance` L581 `<A2ATrustEvaluator />`.
+
+- **Parent suppresses page-level guide + KPIs for `a2a` — CONFIRMED.** `AgentRegistry.tsx`
+  L510 gates `<UnifiedGuide {...AGENT_REGISTRY_GUIDE} />` behind
+  `!['human-oversight','a2a','evaluations','fleet-scale'].includes(tab)`, and L515 gates the
+  provider bar + 7-KPI grid behind the same list. `a2a` IS in both exclusion lists. No double
+  page-level guide, no double KPI grid on the embedded path.
+- **Child renders its OWN single guide — no stacking.** `A2AGovernance` L578 renders one
+  `<UnifiedGuide {...A2A_GUIDE} />`. Since the parent guide is suppressed for `a2a`, exactly ONE
+  guide shows (the A2A-specific one). There is no separate `GoLiveGuide` component — `UnifiedGuide`
+  is the combined How-to-Use + Go-Live, rendered once.
+- **No double header.** Parent `GovernPageLayout` shows page title "Agent Registry" (+ CoreBadge +
+  data badge). `A2AGovernance` L585 renders a small section `<h2>A2A Governance</h2>` above its own
+  5-stat block — a subhead, not a competing page header. On the `a2a` tab exactly one KPI row shows
+  (A2A's own), since the parent's is suppressed.
+- **Trust Policies fetched ONCE — no double-fetch.** Only `A2AGovernance` calls
+  `governA2AApi.listPolicies()` (L551, on mount). `A2ATrustEvaluator` does NOT fetch on mount; it
+  calls a different endpoint (`governA2AApi.evaluate()`) only on button click. The parent
+  `AgentRegistry` never fetches A2A trust policies. No duplicate fetch across parent+child.
+- **A2ATrustEvaluator + Trust Policies coexist correctly on the same tab.** Evaluator (L581)
+  renders unconditionally above the stat block; the Trust Policies list renders on the child's own
+  default `activeTab === 'trust-policies'`. `A2ATrustEvaluator` takes NO props and owns all its
+  state — no prop double-wiring with the Trust Policies tab.
+- **Seeded/empty-state honesty — CLEAN.** `listPolicies()` → `[]` renders the "store connected but
+  empty" empty state (L664) under a Live badge; on throw it falls back to 6 mock
+  `A2A_TRUST_POLICIES` under a Mock badge. Correct.
+
+## Fleet Policies — `/govern/fleet` → `FleetOverview`
+
+Render path: `App.tsx` L215 `/govern/fleet` → `<GovernWrapper><FleetOverview /></GovernWrapper>`.
+
+> **Task-premise correction:** there is NO standalone "Policies card". The policy list is the
+> RIGHT column of a shared **"Security Controls"** card (`FleetOverview.tsx` L1715-1778); the LEFT
+> column is Guardrails. Links to `/secure/policy` at L1730.
+
+- **No duplicate list section — CLEAN.** The policy LIST renders exactly once (L1763-1775). The
+  policy COUNT is echoed as summary metrics elsewhere (trust-stack `policiesEnforced` L1695,
+  `GovernanceDimensionsCard policiesActive` L1707, header badge L1724) — legitimate metric echoes,
+  not a duplicated list.
+- **`+N more` logic (L1772) — CORRECT.** `policies.filter(p => p.status === 'active').length > 3`
+  → `+{active-3} more`; `slice(0,3)` shows the first 3. `policy_id`/`name`/`status`/`rules_count`
+  all exist on `PolicySummary` (`useGovernanceAggregator.ts` L197-209); `{p.rules_count}r` renders
+  type-correctly. List of 3 renders correctly.
+- **Empty-state — CORRECT with two accepted-warning edge cases** (below).
+
+## Routes (`App.tsx`) — CORRECT
+- L215 `/govern/fleet` → `FleetOverview`. L218 `/govern/agents` → `AgentRegistry`.
+- `A2AGovernance` has no standalone route (App.tsx does not import it) — reached only via the
+  `a2a` tab. Consistent with the task description.
+
+## Accepted warnings (composition pass, non-blocking, pre-existing)
+1. **A2A stat block badge precision.** The 5-KPI block (`A2A Trust Network` = 7,
+   `Success Rate`, `Denied`, `Avg Latency` = hardcoded 185ms) is always from mock
+   `AGENT_NODES`/`A2A_EVENTS` under one `<MockDataBadge />` (L586), yet the "Trust Policies" KPI in
+   the same block can be LIVE. Minor honesty nit; not a composition break.
+2. **Fleet Security Controls combined empty-state.** L1734 fires only when
+   `guardrails.length === 0 && policies.length === 0`. In the MIXED case (guardrails present, 0
+   policies) the grid renders and the Policies column shows a bare "POLICIES" header with no rows /
+   no per-column empty text. Cosmetic; shared-card design.
+3. **Fleet policy count vs list mismatch.** Header badge (L1724) counts `policies.length` (all
+   statuses); the list (L1765) shows only `status === 'active'`. If policies exist but none active,
+   the badge reads "N policies" while the column is empty. Precision nit; not a break.
+
+**Composition MUST-FIX: none.**

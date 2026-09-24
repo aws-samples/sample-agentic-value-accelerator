@@ -12,9 +12,25 @@
  */
 import { useState, useMemo } from 'react';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
-import { COMPLIANCE_CENTER_FRAMEWORKS, type ComplianceFramework } from './mockData';
+import { Icon } from './icons';
+import { useControlEvaluation } from './useControlEvaluation';
+import { COMPLIANCE_CENTER_FRAMEWORKS, type ComplianceFramework, type ComplianceControl } from './mockData';
+
+/**
+ * A control's autoDetectSource is "live" when the control-evaluation backend
+ * returned live AWS data for that source. The evaluator tracks `config-rules`
+ * under the `config` key, so normalize that alias before the lookup.
+ */
+function isEvalSourceLive(
+  sources: Record<string, { live: boolean; latency_ms: number }>,
+  autoDetectSource?: string,
+): boolean {
+  if (!autoDetectSource) return false;
+  const key = autoDetectSource.toLowerCase() === 'config-rules' ? 'config' : autoDetectSource.toLowerCase();
+  return sources[key]?.live === true;
+}
 
 // ─────────────────────────── OWASP LLM Risk Metadata ───────────────────────────
 // Extended metadata for each OWASP LLM Top 10 risk (2025 edition)
@@ -328,12 +344,41 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
     return COMPLIANCE_CENTER_FRAMEWORKS.find(fw => fw.id === 'owasp-llm-top10') as ComplianceFramework | undefined;
   }, []);
 
-  // Compute status for each OWASP risk based on control data
+  // Live control evaluation — overlay real AWS pass/fail onto controls whose
+  // autoDetectSource the backend evaluated live (bedrock-guardrails, bedrock-agents,
+  // iam). Controls with an uncovered source (secrets-manager, api-gateway,
+  // cost-explorer) or when the eval isn't live keep their static status.
+  const frameworkControls = useMemo(
+    () => (owaspFramework ? owaspFramework.categories.flatMap(c => c.controls) : []),
+    [owaspFramework],
+  );
+  const { sources: evalSources, mergeControl } = useControlEvaluation({ controls: frameworkControls });
+
+  const resolvedCategories = useMemo(
+    () =>
+      (owaspFramework?.categories ?? []).map(cat => ({
+        ...cat,
+        controls: cat.controls.map(c =>
+          isEvalSourceLive(evalSources, c.autoDetectSource) ? mergeControl(c) : c,
+        ),
+      })),
+    [owaspFramework, evalSources, mergeControl],
+  );
+
+  // Show the live badge only when at least one control's source returned live data.
+  const anyControlLive = useMemo(
+    () =>
+      (owaspFramework?.categories ?? []).some(cat =>
+        cat.controls.some(c => isEvalSourceLive(evalSources, c.autoDetectSource)),
+      ),
+    [owaspFramework, evalSources],
+  );
+
+  // Compute status for each OWASP risk based on (live-overlaid) control data
   const riskStatuses = useMemo(() => {
-    if (!owaspFramework) return {};
     const statuses: Record<string, { status: string; controls: number; passed: number }> = {};
 
-    owaspFramework.categories.forEach(cat => {
+    resolvedCategories.forEach(cat => {
       // Extract LLM ID from category name (e.g., "LLM01:2025 Prompt Injection" -> "LLM01")
       const match = cat.name.match(/^(LLM\d{2})/);
       if (match) {
@@ -351,24 +396,24 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
       }
     });
     return statuses;
-  }, [owaspFramework]);
+  }, [resolvedCategories]);
 
   // Compute overall security posture
   const posture = useMemo(() => {
-    if (!owaspFramework) return { score: 0, passed: 0, inProgress: 0, gaps: 0, total: 0 };
-    const controls = owaspFramework.categories.flatMap(c => c.controls);
+    const controls = resolvedCategories.flatMap(c => c.controls);
     const total = controls.length;
     const passed = controls.filter(c => c.status === 'pass').length;
     const inProgress = controls.filter(c => c.status === 'in-progress').length;
     const gaps = controls.filter(c => c.status === 'fail').length;
-    const score = total > 0 ? Math.round((passed / total) * 100) : 0;
+    // Match the Compliance Center hub denominator: applicable = total − not-started.
+    const applicable = controls.filter(c => c.status !== 'not-started').length;
+    const score = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
     return { score, passed, inProgress, gaps, total };
-  }, [owaspFramework]);
+  }, [resolvedCategories]);
 
   // Get controls for a specific risk
-  const getControlsForRisk = (riskId: string) => {
-    if (!owaspFramework) return [];
-    const category = owaspFramework.categories.find(c => c.name.startsWith(riskId));
+  const getControlsForRisk = (riskId: string): ComplianceControl[] => {
+    const category = resolvedCategories.find(c => c.name.startsWith(riskId));
     return category?.controls || [];
   };
 
@@ -397,7 +442,7 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
       {onNavigateToProgram && (
         <div className="flex items-center justify-between bg-violet-50 rounded-xl border border-violet-200 px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-violet-600 text-sm">📋</span>
+            <Icon name="clipboard-document-list" className="w-4 h-4 text-violet-600" />
             <span className="text-sm text-violet-800">Track OWASP LLM Top 10 controls in your governance program</span>
           </div>
           <button
@@ -465,6 +510,7 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
                         className={`px-2 py-1 rounded border ${
                           rs?.status === 'pass' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
                           rs?.status === 'in-progress' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                          rs?.status === 'not-started' ? 'bg-slate-100 border-slate-200 text-slate-500' :
                           'bg-rose-50 border-rose-200 text-rose-700'
                         }`}
                       >
@@ -487,6 +533,7 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Covered</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> In Progress</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Gap</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" /> Not started</span>
           </div>
         </div>
         <div className="divide-y divide-slate-100">
@@ -538,16 +585,16 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
                     <span className={`text-[9px] px-2 py-1 rounded ${
                       rs?.status === 'pass' ? 'bg-emerald-100 text-emerald-700' :
                       rs?.status === 'in-progress' ? 'bg-amber-100 text-amber-700' :
+                      rs?.status === 'not-started' ? 'bg-slate-100 text-slate-500' :
                       'bg-rose-100 text-rose-700'
                     }`}>
                       {rs?.passed || 0}/{rs?.controls || 0} controls
                     </span>
-                    <svg
+                    <Icon
+                      name="chevron-down"
                       className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                      strokeWidth={2}
+                    />
                   </div>
                 </button>
 
@@ -603,6 +650,7 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
                               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                                 ctrl.status === 'pass' ? 'bg-emerald-500' :
                                 ctrl.status === 'in-progress' ? 'bg-amber-500' :
+                                ctrl.status === 'not-started' ? 'bg-slate-300' :
                                 'bg-rose-500'
                               }`} />
                               <span className="text-slate-600">{ctrl.label}</span>
@@ -706,6 +754,7 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
                       <span className={`w-2 h-2 rounded-full ${
                         rs?.status === 'pass' ? 'bg-emerald-500' :
                         rs?.status === 'in-progress' ? 'bg-amber-500' :
+                        rs?.status === 'not-started' ? 'bg-slate-300' :
                         'bg-rose-500'
                       }`} />
                     </div>
@@ -722,12 +771,25 @@ export default function OwaspLlmView({ embedded = false, onNavigateToProgram }: 
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a framework whose controls are seeded would inherit a Live header.
+  const badge = anyControlLive
+    ? <LiveDataBadge source="AWS control evaluation" detail="Controls with an auto-detect source (Bedrock Guardrails, Bedrock Agents, IAM) evaluated live against AWS; other controls remain illustrative." />
+    : <MockDataBadge integration="OWASP LLM mapping — control-plane backend" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
+
   return (
     <GovernPageLayout
       title="OWASP LLM Top 10"
       description="The 2025 OWASP Top 10 security risks for LLM applications (LLM01-LLM10:2025) with attack surface mapping, Bedrock Guardrails coverage, and control status."
-      badge={<MockDataBadge integration="OWASP LLM mapping — control-plane backend" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

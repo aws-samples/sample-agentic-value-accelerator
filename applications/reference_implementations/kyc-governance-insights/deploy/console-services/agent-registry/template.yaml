@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Agent Registry - DynamoDB table storing agent metadata,
+  tier permissions, tool allowlists, and jurisdiction restrictions.
+
+Resources:
+  AgentRegistryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: kyc-agent-registry
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: agentId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: agentId
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: agentcore-kyc-demo
+        - Key: Component
+          Value: agent-registry
+
+Outputs:
+  TableName:
+    Description: Agent Registry table name
+    Value: !Ref AgentRegistryTable
+    Export:
+      Name: kyc-agent-registry-table-name
+
+  TableArn:
+    Description: Agent Registry table ARN
+    Value: !GetAtt AgentRegistryTable.Arn
+    Export:
+      Name: kyc-agent-registry-table-arn

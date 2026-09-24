@@ -1,0 +1,34 @@
+{
+  "use_case_id": "kyc_governance_insights",
+  "use_case_name": "KYC - Controlled Quality Output",
+  "description": "Governed KYC assessment for corporate banking: specialist agents produce credit and compliance findings, then a non-bypassable governance layer applies deterministic financial checks, sanctions/PEP screening, a three-layer policy cascade, and an LLM-as-Judge quality score to reach the final decision.",
+  "domain": "FSI",
+  "agents": [
+    { "id": "credit_analyst", "name": "Credit Analyst", "description": "Specialized AI agent: Credit Analyst" },
+    { "id": "compliance_officer", "name": "Compliance Officer", "description": "Specialized AI agent: Compliance Officer" }
+  ],
+  "api_endpoint": "/api/invoke",
+    "_comment": "Same-origin relative paths — all API traffic routes through CloudFront /svc/* to the consolidated kyc-console-gateway, which injects the x-api-key origin-side. No account-specific URLs, no api key in the browser. Portable across accounts.",
+  "console_services": {
+    "metrics_api_url": "/svc/metrics",
+    "cedar_api_url": "/svc/cedar",
+    "registry_api_url": "/svc/registry",
+    "eval_write_api_url": "/svc/registry",
+    "hitl_api_url": "/svc/hitl",
+    "grounding_api_url": "/svc/grounding",
+    "validator_api_url": "/svc/validator",
+    "tenant_id": "fsi-demo"
+  },
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. CUST001",
+    "type_field": "assessment_type",
+    "type_options": [
+      { "value": "full", "label": "Full" },
+      { "value": "credit_only", "label": "Credit Only" },
+      { "value": "compliance_only", "label": "Compliance Only" }
+    ],
+    "test_entities": ["CUST001", "CUST002", "CUST003", "CUST004", "CUST005", "CUST006", "CUST007", "CUST008", "CUST009", "CUST047"]
+  }
+}

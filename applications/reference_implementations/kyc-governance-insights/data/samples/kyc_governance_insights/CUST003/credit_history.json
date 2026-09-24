@@ -1,0 +1,34 @@
+{
+  "customer_id": "CUST003",
+  "credit_score": 800,
+  "credit_rating": "AAA",
+  "existing_facilities": [],
+  "payment_history": {
+    "payments_on_time": 72,
+    "payments_total": 72,
+    "on_time_payments": 72,
+    "late_payments": 0,
+    "defaults": 0,
+    "average_days_to_pay": 15
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 2800000000,
+    "total_liabilities": 200000000,
+    "current_assets": 400000000,
+    "current_liabilities": 80000000,
+    "revenue": 180000000,
+    "net_income": 150000000,
+    "debt_to_equity": 0.08,
+    "current_ratio": 5.0,
+    "net_margin": 0.8333
+  },
+  "agent_claims": {
+    "de_ratio": 0.08,
+    "current_ratio": 5.0,
+    "net_margin": 0.8333,
+    "payment_pct": 100.0
+  },
+  "credit_inquiries_last_12_months": 0
+}

@@ -19,19 +19,38 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from models.govern_region_provenance import RegionProvenance
+
 
 class GuardrailSummary(BaseModel):
     """One configured guardrail, from ListGuardrails."""
 
     guardrail_id: str
     name: str
+    region: Optional[str] = Field(
+        default=None,
+        description=(
+            "Governed region this guardrail is defined in. Guardrails are region-scoped, "
+            "so the merged fleet can hold same-named guardrails from different regions."
+        ),
+    )
     status: str = Field("", description="e.g. READY | FAILED | …")
     version: str = ""
     description: Optional[str] = None
     created_at: Optional[str] = Field(default=None, description="createdAt ISO8601, if present")
     # Per-guardrail CloudWatch rollup over the window (0 when no metrics emitted).
     invocations: int = 0
-    interventions: int = 0
+    interventions: int = Field(
+        0,
+        description=(
+            "InvocationsIntervened: any guardrail action, including PII masking that "
+            "still returned a response. NOT a refusal count - use `blocked` for that."
+        ),
+    )
+    blocked: int = Field(
+        0,
+        description="InvocationsBlocked: refusals only. Always <= interventions.",
+    )
     intervention_rate_pct: float = 0.0
     has_metrics: bool = Field(False, description="True when CloudWatch returned data for this guardrail")
 
@@ -53,9 +72,17 @@ class GuardrailTelemetryResponse(BaseModel):
     total_guardrails: int = 0
     total_invocations: int = 0
     total_interventions: int = 0
+    total_blocked: int = Field(0, description="Sum of InvocationsBlocked; refusals only")
     intervention_rate_pct: float = Field(0.0, description="interventions / invocations * 100 over the window")
     guardrails_with_metrics: int = 0
     window_days: int = 30
     live: bool
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )

@@ -13,6 +13,7 @@ import {
   governSecurityApi,
   type AwsRiskPostureResponse,
   type AwsSecurityPostureResponse,
+  type AwsSecuritySourceSummary,
   type AwsSecurityFinding,
 } from '../../../api/client';
 import { usePollingKey } from '../usePollingKey';
@@ -57,6 +58,23 @@ const SOURCE_CATEGORY_MAP: Record<string, RiskCategory> = {
   inspector: 'security',
   'access-analyzer': 'compliance',
 };
+
+// Map a Security Hub ProductName back to the posture source that produced it.
+// Security Hub ingests findings from these services, so when it reports a
+// product we know that posture source's counts overlap the Hub's counts.
+const PRODUCT_TO_POSTURE_SOURCE: Record<string, string> = {
+  'GuardDuty': 'guardduty',
+  'Macie': 'macie',
+  'Inspector': 'inspector',
+  'Inspector2': 'inspector',
+  'Access Analyzer': 'access-analyzer',
+  'IAM Access Analyzer': 'access-analyzer',
+};
+
+/** Read one severity bucket out of a posture source's by_severity rollup. */
+function severityCount(source: AwsSecuritySourceSummary, severity: string): number {
+  return source.by_severity?.find(s => s.severity === severity)?.count ?? 0;
+}
 
 /**
  * Convert an AWS Security Hub finding to a Risk register entry
@@ -120,14 +138,16 @@ export interface LiveSecurityRiskData {
   // Converted risks for the register
   liveRisks: LiveSecurityRisk[];
 
-  // Summary stats
+  // Summary stats — union of Security Hub and the posture sources, source-level
+  // deduped (see the stats memo). A floor on the account's findings: both feeds
+  // are scan-capped server-side.
   totalFindings: number;
   criticalCount: number;
   highCount: number;
   mediumCount: number;
   lowCount: number;
 
-  // Source breakdown
+  // Source breakdown — per-feed totals as reported, NOT deduped
   bySource: {
     securityHub: number;
     guardDuty: number;
@@ -241,13 +261,32 @@ export function useLiveSecurityRisk(pollIntervalMs = 60_000): LiveSecurityRiskDa
   }, [securityHub, securityPosture]);
 
   // Calculate stats
+  //
+  // The aggregates are a UNION across two independent feeds: Security Hub
+  // (governRiskPostureApi) and the per-service posture rollup for GuardDuty /
+  // Macie / Inspector / Access Analyzer (governSecurityApi). Security Hub does
+  // NOT necessarily aggregate the posture sources — its integrations are opt-in
+  // per service, so counting the Hub alone silently drops real criticals (e.g.
+  // Inspector criticals go missing entirely whenever Security Hub is not
+  // enabled or securityhub:GetFindings is denied).
+  //
+  // Overlap is genuine where an integration IS on: the same finding is then
+  // reported by both feeds. We cannot dedupe per finding — the posture rollup
+  // returns counts only (no finding ids at all), and Security Hub returns ids
+  // for just its top 10 findings, masked server-side, so there is nothing to
+  // join on. Instead we dedupe at SOURCE granularity, using the ProductName
+  // values Security Hub actually returned as evidence of which integrations are
+  // live: a posture source the Hub reports is max-merged with the Hub (the
+  // larger of the two is the best available lower bound on distinct findings),
+  // and a posture source the Hub does not report is added.
+  //
+  // Known limits, stated rather than assumed away:
+  //  - The product evidence comes from the Hub's top-10 findings, so a source
+  //    the Hub ingests but that does not surface in that sample is treated as
+  //    additive and may be double-counted (bounded by that source's own count).
+  //  - Both feeds are scan-capped server-side (200 per source), so these counts
+  //    are a floor on the account's findings, not an exhaustive total.
   const stats = useMemo(() => {
-    let totalFindings = 0;
-    let criticalCount = 0;
-    let highCount = 0;
-    let mediumCount = 0;
-    let lowCount = 0;
-
     const bySource = {
       securityHub: 0,
       guardDuty: 0,
@@ -256,19 +295,29 @@ export function useLiveSecurityRisk(pollIntervalMs = 60_000): LiveSecurityRiskDa
       accessAnalyzer: 0,
     };
 
-    // Count from Security Hub
+    // Security Hub side of the merge.
+    const hub = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+    const ingestedByHub = new Set<string>();
+
     if (securityHub?.live) {
-      totalFindings += securityHub.total;
-      criticalCount += securityHub.critical;
-      highCount += securityHub.high;
-      securityHub.by_severity.forEach(s => {
-        if (s.severity === 'MEDIUM') mediumCount += s.count;
-        if (s.severity === 'LOW') lowCount += s.count;
+      hub.total = securityHub.total;
+      hub.critical = securityHub.critical;
+      hub.high = securityHub.high;
+      securityHub.by_severity?.forEach(s => {
+        if (s.severity === 'MEDIUM') hub.medium += s.count;
+        if (s.severity === 'LOW') hub.low += s.count;
       });
       bySource.securityHub = securityHub.total;
+      securityHub.top_findings?.forEach(f => {
+        const key = PRODUCT_TO_POSTURE_SOURCE[f.product];
+        if (key) ingestedByHub.add(key);
+      });
     }
 
-    // Count from security posture sources
+    // Posture sources, split by whether Security Hub already reports them.
+    const overlapping = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+    const additive = { total: 0, critical: 0, high: 0, medium: 0, low: 0 };
+
     if (securityPosture?.live && securityPosture.sources) {
       securityPosture.sources.forEach(source => {
         if (!source.live) return;
@@ -284,16 +333,24 @@ export function useLiveSecurityRisk(pollIntervalMs = 60_000): LiveSecurityRiskDa
           bySource.accessAnalyzer = source.total;
         }
 
-        // Note: We don't double-count totals as Security Hub aggregates these
+        const bucket = ingestedByHub.has(sourceKey) ? overlapping : additive;
+        bucket.total += source.total;
+        bucket.critical += source.critical;
+        bucket.high += source.high;
+        bucket.medium += severityCount(source, 'MEDIUM');
+        bucket.low += severityCount(source, 'LOW');
       });
     }
 
+    const merge = (bucket: keyof typeof hub) =>
+      Math.max(hub[bucket], overlapping[bucket]) + additive[bucket];
+
     return {
-      totalFindings,
-      criticalCount,
-      highCount,
-      mediumCount,
-      lowCount,
+      totalFindings: merge('total'),
+      criticalCount: merge('critical'),
+      highCount: merge('high'),
+      mediumCount: merge('medium'),
+      lowCount: merge('low'),
       bySource,
     };
   }, [securityHub, securityPosture]);

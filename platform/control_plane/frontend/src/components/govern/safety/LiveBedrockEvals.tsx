@@ -10,9 +10,11 @@
 import { useEffect, useState } from 'react';
 import { governEvalsApi, type AwsEvaluationJobsResponse, type AwsEvalScoresResponse } from '../../../api/client';
 import { LiveDataBadge } from '../DataSourceIndicator';
+import { RegionCoverageBadge } from '../RegionCoverageBadge';
 import StatCard from '../StatCard';
 import { usePollingKey } from '../usePollingKey';
 import LiveHeader from '../LiveHeader';
+import { useDataSources } from '../DataSourceContext';
 
 const statusBadge: Record<string, string> = {
   completed: 'bg-emerald-100 text-emerald-700',
@@ -82,15 +84,29 @@ export default function LiveBedrockEvals() {
   const [data, setData] = useState<AwsEvaluationJobsResponse | null>(null);
   const [openJob, setOpenJob] = useState<string | null>(null);
   const pollKey = usePollingKey(60_000);
+  const { updateSource } = useDataSources();
+
   useEffect(() => {
     let cancelled = false;
     // Silent refetch on poll (don't reset to spinner) so the list updates in place.
     governEvalsApi.jobs(100)
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .then(d => {
+        if (!cancelled) {
+          setData(d);
+          if (d?.live) {
+            updateSource('aws-bedrock', { status: 'live', lastFetch: Date.now() });
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setData(null);
+          updateSource('aws-bedrock', { status: 'error', error: 'Evaluation jobs API unavailable' });
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [pollKey]);
+  }, [pollKey, updateSource]);
 
   const jobs = data?.jobs ?? [];
   const live = !!data?.live;
@@ -102,6 +118,7 @@ export default function LiveBedrockEvals() {
         label="Live · Bedrock model evaluations"
         caption="real evaluation jobs run in your account (bedrock:ListEvaluationJobs)"
         autoRefresh
+        right={live ? <RegionCoverageBadge regions={data!.regions} noun="Job counts" /> : undefined}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">

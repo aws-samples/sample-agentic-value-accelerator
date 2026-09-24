@@ -7,12 +7,15 @@ import {
   Sparkles,
   Settings,
   ChevronRight,
+  Users,
   X,
 } from "lucide-react";
 import { savedReports } from "@/lib/mockData";
 import { SavedReport } from "@/lib/types";
+import { useUser } from "@/components/UserProvider";
+import { initialsFromEmail } from "@/lib/userIdentity";
 
-type View = "chat" | "matrix" | "report";
+type View = "chat" | "matrix" | "report" | "visitors";
 
 const statusStyles: Record<SavedReport["status"], string> = {
   draft: "bg-slate-500/15 text-slate-400",
@@ -29,6 +32,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeView, onNavigate, onNewChat, open, onClose }: SidebarProps) {
+  const { displayEmail } = useUser();
+  const initials = initialsFromEmail(displayEmail);
   return (
     <>
       {/* Mobile overlay */}
@@ -90,6 +95,12 @@ export function Sidebar({ activeView, onNavigate, onNewChat, open, onClose }: Si
             active={activeView === "matrix"}
             onClick={() => onNavigate("matrix")}
           />
+          <NavItem
+            icon={<Users className="h-[18px] w-[18px]" />}
+            label="Visitors"
+            active={activeView === "visitors"}
+            onClick={() => onNavigate("visitors")}
+          />
         </nav>
 
         {/* Saved reports list */}
@@ -125,11 +136,13 @@ export function Sidebar({ activeView, onNavigate, onNewChat, open, onClose }: Si
         <div className="border-t border-ink-700/60 p-3">
           <button className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 transition-colors hover:bg-ink-700/50">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-electric to-electric-soft text-sm font-semibold text-white">
-              JR
+              {initials}
             </div>
             <div className="min-w-0 flex-1 text-left">
-              <p className="truncate text-sm font-medium text-white">Jordan Reyes</p>
-              <p className="truncate text-xs text-slate-500">Sales Engineer</p>
+              <p className="truncate text-sm font-medium text-white" title={displayEmail}>
+                {displayEmail}
+              </p>
+              <p className="truncate text-xs text-slate-500">Demo account</p>
             </div>
             <Settings className="h-4 w-4 text-slate-500" />
           </button>

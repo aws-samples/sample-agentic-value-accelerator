@@ -1,0 +1,41 @@
+flowchart TD
+    IN(["Inbound call"]) --> ROUTER{"Router<br/>branches on assessment_type"}
+
+    ROUTER -->|"full"| CAF["CreditAnalyst"]
+    ROUTER -->|"full"| COF["ComplianceOfficer"]
+    ROUTER -->|"credit_only"| CAF
+    ROUTER -->|"compliance_only"| COF
+
+    CAF -->|"prompt ①"| CABEDROCK[["🧠 Bedrock LLM"]]
+    COF -->|"prompt ②"| COBEDROCK[["🧠 Bedrock LLM"]]
+
+    CABEDROCK <-->|"tool_call ⇄ result"| S3[/"s3_retriever_tool<br/>profile · credit_history ·<br/>compliance · transactions"/]
+    COBEDROCK <-->|"tool_call ⇄ result"| S3
+    S3 --> S3BUCKET[("S3<br/>customer data")]
+
+    CABEDROCK --> SYNTH["Synthesize"]
+    COBEDROCK --> SYNTH
+
+    SYNTH -->|"prompt ③"| SYNBEDROCK[["🧠 Bedrock LLM"]]
+    SYNBEDROCK --> GOV["Governance"]
+
+    GOV -.->|"independent re-read<br/>profile.json · credit_history.json"| S3BUCKET
+
+    subgraph GOVSUB["Governance — DETERMINISTIC"]
+        GOV --> G1["deterministic_check<br/>recompute D/E, current ratio,<br/>net margin, payment % from raw S3<br/>financials; compare to agent claims<br/>within tolerance → PASS / FAIL"]
+        G1 --> G2["sanctions / PEP screen<br/>fuzzy-match company name vs lists<br/>sanctions ≥ 0.70 = hit, PEP ≥ 0.60 = flag"]
+        G2 --> G3["3-layer policy cascade<br/>ORG hard gates (sanctions/prohibited juris/PEP/FATF)<br/>APP risk gates (≥80 BLOCK, ≥60 ESCALATE)<br/>REQ default ALLOW · most-restrictive-wins"]
+        G3 --> G4["LLM-as-Judge score<br/>correctness / faithfulness / completeness /<br/>helpfulness / tone<br/>⚠️ NOT EXECUTED — returns all-zero<br/>'unscored' in current runtime"]
+    end
+
+    G4 -.->|"prompt ④ · ONLY if LLM_JUDGE_URL set<br/>(currently NOT set → this call never happens)"| JUDGEBEDROCK[["🧠 Bedrock LLM<br/>Claude Haiku 4.5 · llm-judge Lambda<br/>⚠️ NOT DEPLOYED / NOT CALLED"]]
+    JUDGEBEDROCK -.-> GOVOUT
+
+    G4 --> GOVOUT["governance dict"]
+    GOVOUT --> FINAL["Finalize"]
+    FINAL --> RESP(["AssessmentResponse<br/>decision + incident_id"])
+
+    RESP --> HITL{"decision?"}
+    HITL -->|"APPROVE (cascade ALLOW)"| AUTO["Auto-proceed<br/>no human review"]
+    HITL -->|"ESCALATE → ESC-xxxx"| REVIEW["Human review queue<br/>analyst confirms / overrides<br/>(UI: Pending Decisions)"]
+    HITL -->|"BLOCK → INC-xxxx"| MLRO["blocked=true<br/>MLRO escalation<br/>(deciding_layer / rule / reason)"]

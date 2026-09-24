@@ -22,6 +22,7 @@ import EarnedAutonomyView from './EarnedAutonomyView';
 import HandoffWorkspace from './HandoffWorkspace';
 import RuntimeEnforcementView from './RuntimeEnforcementView';
 import MaskedIdentity from './MaskedIdentity';
+import { MockDataBadge } from './DataSourceIndicator';
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -383,14 +384,20 @@ export default function HumanOversight() {
   const confidenceGatedCount = gates.filter(g => g.triggerCondition.includes('model.confidence')).length;
 
   const pendingCount = approvalRecords.filter(r => r.decision === 'pending').length;
-  const todayApprovals = approvalRecords.filter(r => r.decidedAt?.startsWith('2026-06-22') || r.decidedAt?.startsWith(new Date().toISOString().slice(0, 10))).length;
+  const todayApprovals = approvalRecords.filter(r => r.decidedAt?.startsWith(new Date().toISOString().slice(0, 10))).length;
 
   return (
     <div className="space-y-6">
       {/* How to Use Guide */}
       <UnifiedGuide {...HUMAN_OVERSIGHT_GUIDE} />
 
-      {/* Header Stats */}
+      {/* Header Stats — all four tiles are derived from the illustrative HITL_GATES /
+          APPROVAL_RECORDS fixtures (no HITL store is wired yet), so the section is
+          badged as Demo rather than presenting a live oversight posture. */}
+      <div className="flex items-center gap-2 mb-2">
+        <h2 className="text-sm font-semibold text-slate-900">Oversight Summary</h2>
+        <MockDataBadge integration="HITL gate / approval store" />
+      </div>
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="text-xs text-slate-500 mb-1">Active Gates</div>
@@ -408,9 +415,12 @@ export default function HumanOversight() {
           <div className="text-[10px] text-slate-400 mt-1">Approved/denied today</div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="text-xs text-slate-500 mb-1">Avg Response Time</div>
+          <div className="text-xs text-slate-500 mb-1 flex items-center gap-1.5">
+            <span>Avg Response Time</span>
+            <MockDataBadge integration="HITL approval latency metrics" />
+          </div>
           <div className="text-2xl font-bold text-blue-600">12m</div>
-          <div className="text-[10px] text-slate-400 mt-1">Median approval time</div>
+          <div className="text-[10px] text-slate-400 mt-1">Illustrative, not computed from the approval log</div>
         </div>
       </div>
 

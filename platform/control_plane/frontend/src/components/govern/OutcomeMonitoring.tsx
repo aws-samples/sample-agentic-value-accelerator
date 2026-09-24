@@ -17,7 +17,7 @@
 
 import { useState, useMemo } from 'react';
 import {
-  LineChart, Line, BarChart, Bar, AreaChart, Area,
+  LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   ReferenceLine,
 } from 'recharts';
@@ -28,7 +28,6 @@ import StatCard from './StatCard';
 
 /* ───────── Types ───────── */
 
-type OutcomeType = 'approve' | 'deny' | 'refer';
 type TimeRange = '30d' | '60d' | '90d';
 type AlertSeverity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -132,7 +131,7 @@ const generateMetrics = (useCaseId: string, idx: number): OutcomeMetrics => {
   };
 };
 
-const generateTrend = (useCaseId: string, days: number, idx: number): TrendPoint[] => {
+const generateTrend = (days: number, idx: number): TrendPoint[] => {
   const today = new Date();
   return Array.from({ length: days }, (_, i) => {
     const date = new Date(today);
@@ -156,7 +155,7 @@ const METRICS_BY_USE_CASE = Object.fromEntries(
 );
 
 const TRENDS_BY_USE_CASE = Object.fromEntries(
-  USE_CASES.map((uc, idx) => [uc.id, generateTrend(uc.id, 90, idx)])
+  USE_CASES.map((uc, idx) => [uc.id, generateTrend(90, idx)])
 );
 
 const DEMOGRAPHIC_GROUPS: Record<string, DemographicGroup[]> = {
@@ -269,7 +268,6 @@ export default function OutcomeMonitoring() {
   const [thresholds, setThresholds] = useState<AlertThreshold[]>(DEFAULT_THRESHOLDS);
 
   const metrics = METRICS_BY_USE_CASE[selectedUseCase];
-  const useCase = USE_CASES.find(uc => uc.id === selectedUseCase)!;
   const demographics = DEMOGRAPHIC_GROUPS[selectedUseCase] || DEMOGRAPHIC_GROUPS['claims-processing'];
 
   // Slice trend data based on selected time range
@@ -279,11 +277,6 @@ export default function OutcomeMonitoring() {
     return fullTrend.slice(-days);
   }, [selectedUseCase, timeRange]);
 
-  // Alerts for selected use case
-  const useCaseAlerts = useMemo(() =>
-    ALERTS.filter(a => a.useCaseId === selectedUseCase || selectedUseCase === 'all'),
-    [selectedUseCase]
-  );
 
   // Baseline comparison (average of first 7 days vs last 7 days)
   const baseline = useMemo(() => {
@@ -593,7 +586,7 @@ export default function OutcomeMonitoring() {
             <span className="text-[10px] text-slate-400">approval rates by group</span>
           </div>
           <div className="space-y-2">
-            {demographics.map((d, i) => {
+            {demographics.map((d) => {
               const maxRate = Math.max(...demographics.map(g => g.approvalRate));
               const parityStatus = d.parityRatio >= 0.80 ? 'pass' : d.parityRatio >= 0.70 ? 'warning' : 'fail';
               return (
@@ -747,7 +740,7 @@ export default function OutcomeMonitoring() {
               </tr>
             </thead>
             <tbody>
-              {USE_CASES.map((uc, i) => {
+              {USE_CASES.map((uc) => {
                 const m = METRICS_BY_USE_CASE[uc.id];
                 const alerts = ALERTS.filter(a => a.useCaseId === uc.id);
                 const hasCritical = alerts.some(a => a.severity === 'critical');

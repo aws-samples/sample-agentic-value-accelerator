@@ -14,11 +14,12 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   generateFleet, summarize, segmentBy, exceptionQueue, inventoryBy, riskTier, type ScaleAgent,
 } from './fleetScaleData';
-import { useFleetScale } from './useFleetScale';
+import { useFleetScale, useFleetScaleServer } from './useFleetScale';
 import { AGENT_SCOPE_META, type AgentScopeLevel } from './autonomyLadder';
 import StatCard from './StatCard';
 import { rowButtonProps } from './a11y';
 import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
+import { RegionCoverageBadge } from './RegionCoverageBadge';
 
 const card = 'bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5 shadow-sm';
 
@@ -70,19 +71,30 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
   const [filterBU, setFilterBU] = useState<string | null>(null);
 
   const realData = useFleetScale();
+  // Purpose-built server-side rollups (built for 10k+ agents). Each block is gated
+  // on its response `.live`; anything not live falls back to client-side aggregation.
+  const server = useFleetScaleServer({ enabled: useRealData, groupBy, filterKey: filterBU });
 
   const syntheticFleet = useMemo(() => generateFleet(syntheticSize), [syntheticSize]);
   const syntheticSummary = useMemo(() => summarize(syntheticFleet), [syntheticFleet]);
 
-  const fleet = useRealData ? realData.fleet : syntheticFleet;
-  const summary = useRealData ? realData.summary : syntheticSummary;
-  const isLive = useRealData && realData.source !== 'demo';
+  const isLive = useRealData && (server.live || realData.source !== 'demo');
+  // Honesty gate: whenever this view badges itself Live, every client-side rollup on
+  // the page (heatmap, % compliant, queue, inventory) must come from the live-only
+  // fleet. The registry blends demo agents into `fleet` as a reference set, and
+  // blending them into a live-badged rollup misreports the real fleet — the KPI strip
+  // is already server/live-only, so the two would also disagree.
+  const fleet = !useRealData ? syntheticFleet : (isLive ? realData.liveFleet : realData.fleet);
+  const summary = !useRealData
+    ? syntheticSummary
+    : (server.summary ?? (isLive ? realData.liveSummary : realData.summary));
 
   const keyOf = useCallback(
     (a: ScaleAgent) => (groupBy === 'businessUnit' ? a.businessUnit : groupBy === 'provider' ? a.provider : a.environment),
     [groupBy],
   );
-  const segments = useMemo(() => segmentBy(fleet, keyOf), [fleet, keyOf]);
+  const clientSegments = useMemo(() => segmentBy(fleet, keyOf), [fleet, keyOf]);
+  const segments = clientSegments;
 
   // Heatmap: segment (rows) × scope level (cols), cell = % compliant.
   const scopeHeatmap = useMemo(() => {
@@ -97,16 +109,19 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
     });
   }, [segments, fleet, keyOf]);
 
-  const queue = useMemo(() => {
+  const clientQueue = useMemo(() => {
     const pool = filterBU ? fleet.filter(a => a.businessUnit === filterBU) : fleet;
     return exceptionQueue(pool, 100);
   }, [fleet, filterBU]);
+  const queue = useRealData && server.queue ? server.queue : clientQueue;
 
   // Registry lens: inventory breakdowns ("what exists").
-  const byModel = useMemo(() => (isRegistry ? inventoryBy(fleet, a => a.model) : []), [isRegistry, fleet]);
-  const byProvider = useMemo(() => (isRegistry ? inventoryBy(fleet, a => a.provider) : []), [isRegistry, fleet]);
+  const clientByModel = useMemo(() => (isRegistry ? inventoryBy(fleet, a => a.model) : []), [isRegistry, fleet]);
+  const clientByProvider = useMemo(() => (isRegistry ? inventoryBy(fleet, a => a.provider) : []), [isRegistry, fleet]);
+  const byModel = useRealData && server.byModel ? server.byModel : clientByModel;
+  const byProvider = useRealData && server.byProvider ? server.byProvider : clientByProvider;
 
-  if (useRealData && realData.loading) {
+  if (useRealData && (realData.loading || server.loading)) {
     return (
       <div className="flex items-center justify-center py-12 text-slate-500">
         <span className="animate-pulse">Loading fleet data...</span>
@@ -123,12 +138,22 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
             <h2 className="text-sm font-semibold text-slate-900">{isRegistry ? 'Registry at Scale' : 'Fleet at Scale'}</h2>
             {useRealData ? (
               isLive ? (
-                <LiveDataBadge integration="Agent Registry" />
+                /* Live means live: the registry's demo agents are excluded from every
+                   rollup on this page (see `fleet`/`summary` above), so the badge can
+                   stand alone without a "includes demo agents" disclosure. */
+                <LiveDataBadge source={server.live ? 'Fleet Aggregator' : 'Agent Registry'} />
               ) : (
                 <MockDataBadge integration="Demo agent registry data" />
               )
             ) : (
               <MockDataBadge integration="Synthetic fleet data for scale demonstration" />
+            )}
+            {/* Region coverage describes the SERVER rollup's fan-out, so it only
+                belongs here when the server rollup is what `summary` is built from.
+                Over a client-side fallback it would claim coverage for numbers the
+                fan-out never produced. */}
+            {useRealData && server.summary && (
+              <RegionCoverageBadge regions={server.regions} noun="Agent counts" />
             )}
           </div>
           <p className="text-[11px] text-slate-500">
@@ -151,7 +176,7 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
         )}
         {useRealData && (
           <button
-            onClick={realData.refresh}
+            onClick={() => { realData.refresh(); server.refresh(); }}
             className="px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
           >
             Refresh
@@ -166,15 +191,15 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
             <StatCard label="Registered Agents" value={fmt(summary.total)} />
             <StatCard label="Models in Use" value={fmt(byModel.length)} sub="distinct" />
             <StatCard label="Providers" value={fmt(byProvider.length)} variant="info" />
-            <StatCard label="At L3+ Autonomy" value={`${Math.round(((summary.scope[3] + summary.scope[4]) / summary.total) * 100)}%`} sub="supervised or full" />
-            <StatCard label="Policy Coverage" value={`${Math.round(((summary.total - summary.unprotected) / summary.total) * 100)}%`} variant={summary.unprotected > 0 ? 'warning' : 'success'} sub="have active policy" />
+            <StatCard label="At L3+ Autonomy" value={`${summary.total > 0 ? Math.round(((summary.scope[3] + summary.scope[4]) / summary.total) * 100) : 0}%`} sub="supervised or full" />
+            <StatCard label="Policy Coverage" value={`${summary.total > 0 ? Math.round(((summary.total - summary.unprotected) / summary.total) * 100) : 0}%`} variant={summary.unprotected > 0 ? 'warning' : 'success'} sub="have active policy" />
             <StatCard label="Tool-Using Agents" value={fmt(summary.total - summary.scope[1])} sub="L2+ (non-static)" />
           </>
         ) : (
           <>
             <StatCard label="Total Agents" value={fmt(summary.total)} />
             <StatCard label="% Compliant" value={`${summary.pctCompliant}%`} variant={summary.pctCompliant >= 80 ? 'success' : summary.pctCompliant >= 60 ? 'warning' : 'danger'} />
-            <StatCard label="Needs Attention" value={fmt(summary.needsAttention)} variant="warning" sub={`${Math.round((summary.needsAttention / summary.total) * 100)}% of fleet`} />
+            <StatCard label="Needs Attention" value={fmt(summary.needsAttention)} variant="warning" sub={`${summary.total > 0 ? Math.round((summary.needsAttention / summary.total) * 100) : 0}% of fleet`} />
             <StatCard label="Blocked" value={fmt(summary.governance.blocked)} variant="danger" />
             <StatCard label="Prod · Full Agency" value={fmt(summary.prodFullAgency)} variant="info" sub="highest blast radius" />
             <StatCard label="Open Incidents" value={fmt(summary.openIncidents)} variant={summary.openIncidents > 0 ? 'danger' : 'success'} />
@@ -187,7 +212,14 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {([['Agents by Model', byModel], ['Agents by Provider', byProvider]] as const).map(([title, rows]) => (
             <div key={title} className={card}>
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">{title}</h3>
+              <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-1.5">
+                {title}
+                {/* Gated on server.byModel so the badge never sits over the client-derived
+                    breakdown, which has nothing to do with the inventory fan-out. */}
+                {useRealData && server.byModel && (
+                  <RegionCoverageBadge regions={server.inventoryRegions} noun="This breakdown" />
+                )}
+              </h3>
               <div className="space-y-1.5">
                 {rows.map(r => (
                   <div key={r.key} className="flex items-center gap-2 text-[11px]">
@@ -213,7 +245,7 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
           <div className="space-y-2">
             {(['compliant', 'review_needed', 'blocked'] as const).map(g => {
               const n = summary.governance[g];
-              const pct = Math.round((n / summary.total) * 100);
+              const pct = summary.total > 0 ? Math.round((n / summary.total) * 100) : 0;
               return (
                 <div key={g}>
                   <div className="flex items-center justify-between text-[11px] mb-0.5">
@@ -250,7 +282,7 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
           <div className="space-y-1.5">
             {([4, 3, 2, 1] as AgentScopeLevel[]).map(scope => {
               const n = summary.scope[scope];
-              const pct = Math.round((n / summary.total) * 100);
+              const pct = summary.total > 0 ? Math.round((n / summary.total) * 100) : 0;
               const meta = AGENT_SCOPE_META[scope];
               return (
                 <div key={scope} className="flex items-center gap-2 text-[11px]">
@@ -318,6 +350,13 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
                   </tr>
                 );
               })}
+              {scopeHeatmap.length === 0 && (
+                <tr className="border-t border-slate-100">
+                  <td colSpan={7} className="py-3 text-center text-[11px] text-slate-400">
+                    No per-agent detail available for this fleet — the segment × scope breakdown needs the agent registry.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -327,7 +366,14 @@ export default function FleetScaleView({ variant = 'fleet', useRealData = false 
       <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900">{isRegistry ? 'Coverage Gaps' : 'Attention Queue'}</h3>
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              {isRegistry ? 'Coverage Gaps' : 'Attention Queue'}
+              {/* Gated on server.queue, not on isLive: over clientQueue the rows are derived
+                  locally and the exceptions fan-out never produced them. */}
+              {useRealData && server.queue && (
+                <RegionCoverageBadge regions={server.queueRegions} noun="This queue" />
+              )}
+            </h3>
             <p className="text-[10px] text-slate-400">
               {isRegistry ? 'Registered agents with governance gaps' : 'Top'} {queue.length} of {fmt(summary.needsAttention)} agents {isRegistry ? 'to remediate' : 'needing action'}{filterBU ? `, filtered to ${filterBU}` : ''}, ranked by risk × scope × incidents × policy gaps.
             </p>

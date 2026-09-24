@@ -80,22 +80,23 @@ export default function GovernPageLayout({
         </Link>
 
         {/* Header section */}
-        <div className="flex items-end justify-between mt-3 mb-6">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">
-                {title}
-              </h1>
-              {badge}
+        <div className="mt-3 mb-6">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">
+              {title}
+            </h1>
+            {badge}
+          </div>
+          {description && (
+            <p className="text-slate-500 mt-1 max-w-2xl">{description}</p>
+          )}
+          {actions && (
+            <div className="flex items-center gap-4 mt-3">
+              <DataSourceStatus compact />
+              {actions}
             </div>
-            {description && (
-              <p className="text-slate-500 mt-1 max-w-2xl">{description}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            <DataSourceStatus compact />
-            {actions}
-          </div>
+          )}
+          {!actions && <div className="mt-3"><DataSourceStatus compact /></div>}
         </div>
 
         {/* Page content */}

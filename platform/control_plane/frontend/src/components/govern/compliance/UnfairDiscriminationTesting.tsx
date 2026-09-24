@@ -20,6 +20,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Icon, type IconName } from '../icons';
 import { MockDataBadge } from '../DataSourceIndicator';
+import { sampleExportBanner, sampleExportFooter, sampleFilename } from './exportProvenance';
 import StatCard from '../StatCard';
 
 // ─────────────────────────── Types ───────────────────────────
@@ -637,8 +638,12 @@ export default function UnfairDiscriminationTesting({
   }), [currentTests]);
 
   const handleExport = useCallback(() => {
-    // Create export content
-    let report = `NAIC UNFAIR DISCRIMINATION TESTING REPORT\n`;
+    // Every figure in this report - disparate impact ratios, sample sizes, confidence
+    // intervals, proxy correlations - comes from a module-level constant in this file. The
+    // report titles itself a NAIC compliance document and lands on the user's disk, where
+    // the on-screen Demo badge cannot follow it, so the marking has to be inside the file.
+    let report = sampleExportBanner('NAIC unfair discrimination testing report');
+    report += `NAIC UNFAIR DISCRIMINATION TESTING REPORT\n`;
     report += `${'='.repeat(60)}\n\n`;
     report += `Use Case: ${USE_CASE_LABELS[selectedUseCase]}\n`;
     report += `Generated: ${new Date().toISOString()}\n`;
@@ -689,14 +694,18 @@ export default function UnfairDiscriminationTesting({
     });
 
     report += `\n${'='.repeat(60)}\n`;
-    report += `Report generated for NAIC Model Bulletin compliance.\n`;
+    report += `Sample of the report format used for NAIC Model Bulletin compliance.\n`;
+    report += sampleExportFooter();
 
     // Download
     const blob = new Blob([report], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `NAIC_Discrimination_Testing_${selectedUseCase}_${new Date().toISOString().split('T')[0]}.txt`;
+    a.download = sampleFilename(
+      `NAIC_Discrimination_Testing_${selectedUseCase}_${new Date().toISOString().split('T')[0]}`,
+      'txt',
+    );
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -739,7 +748,10 @@ export default function UnfairDiscriminationTesting({
               className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-medium hover:bg-rose-700 transition-colors"
             >
               <Icon name="document-arrow-down" className="w-4 h-4" />
-              Export for Filing
+              {/* "Export for Filing" told the user the output was fit to submit, on a panel
+                  whose every ratio is a constant in this file. The downloaded document and
+                  its filename are marked as a sample; the button says so too. */}
+              Export Sample Report
             </button>
           </div>
         </div>
@@ -1147,7 +1159,18 @@ export default function UnfairDiscriminationTesting({
     </div>
   );
 
-  if (embedded) return body;
+  // This badge used to live only in the standalone header below, and NaicAiView renders this
+  // view `embedded` - so the only call site in the app dropped it. The ratios here are
+  // illustrative, and they are the input to a NAIC-facing export, which made an inherited
+  // Live header the worst version of this bug in the module. Rendered in both modes now.
+  const badge = <MockDataBadge integration="Statistical fairness testing — control-plane backend (illustrative)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -1156,7 +1179,7 @@ export default function UnfairDiscriminationTesting({
           <h1 className="text-xl font-semibold text-slate-900">NAIC Unfair Discrimination Testing</h1>
           <p className="text-sm text-slate-500">Statistical fairness analysis for insurance AI systems</p>
         </div>
-        <MockDataBadge integration="Statistical fairness testing — control-plane backend (illustrative)" />
+        {badge}
       </div>
       {body}
     </div>

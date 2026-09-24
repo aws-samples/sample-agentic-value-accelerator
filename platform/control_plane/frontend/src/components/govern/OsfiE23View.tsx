@@ -4,7 +4,7 @@
  * Comprehensive view of Canada's OSFI Guideline E-23 (Enterprise-wide Model
  * Risk Management) implementation status. E-23 applies to all Federally
  * Regulated Financial Institutions (FRFIs) in Canada and covers ALL models,
- * not just AI/ML. Final guideline issued September 2025, effective January 1, 2025.
+ * not just AI/ML. Final guideline issued September 2024, effective January 1, 2025.
  *
  * Key features:
  * - Hero section explaining OSFI E-23 scope and applicability
@@ -16,9 +16,21 @@
  */
 import { useState, useMemo } from 'react';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
 import { COMPLIANCE_CENTER_FRAMEWORKS } from './mockData';
+import { useControlEvaluation } from './useControlEvaluation';
+import type { ControlEvaluation } from '../../api/client';
+import { Icon } from './icons';
+
+// Maps a live control-evaluation status onto the framework's status union.
+// 'not-evaluated' surfaces as 'not-started' so it flows through the existing
+// applicable = total - notStarted denominator convention.
+function liveControlStatus(
+  status: ControlEvaluation['status'],
+): 'pass' | 'fail' | 'in-progress' | 'not-started' {
+  return status === 'not-evaluated' ? 'not-started' : status;
+}
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -64,7 +76,9 @@ function computeCategoryStats(category: OsfiE23Category) {
   const passed = category.controls.filter(c => c.status === 'pass').length;
   const inProgress = category.controls.filter(c => c.status === 'in-progress').length;
   const failed = category.controls.filter(c => c.status === 'fail').length;
-  const compliancePct = total > 0 ? Math.round((passed / total) * 100) : 0;
+  // Match the hub denominator: % is pass over applicable (total minus not-started), not raw total.
+  const applicable = total - category.controls.filter(c => c.status === 'not-started').length;
+  const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
   return { total, passed, inProgress, failed, compliancePct };
 }
 
@@ -74,7 +88,9 @@ function computeOverallStats(categories: OsfiE23Category[]) {
   const passed = allControls.filter(c => c.status === 'pass').length;
   const inProgress = allControls.filter(c => c.status === 'in-progress').length;
   const failed = allControls.filter(c => c.status === 'fail').length;
-  const compliancePct = total > 0 ? Math.round((passed / total) * 100) : 0;
+  // Match the hub denominator: % is pass over applicable (total minus not-started), not raw total.
+  const applicable = total - allControls.filter(c => c.status === 'not-started').length;
+  const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
   return { total, passed, inProgress, failed, compliancePct };
 }
 
@@ -106,10 +122,39 @@ export default function OsfiE23View({ embedded = false, onNavigateToProgram }: O
     return fw as OsfiE23Framework | undefined;
   }, []);
 
+  // All controls flattened for live evaluation — only those with an
+  // autoDetectSource are actually sent to the backend by the hook.
+  const frameworkControls = useMemo(
+    () => frameworkData?.categories.flatMap(c => c.controls) ?? [],
+    [frameworkData],
+  );
+
+  // Live control evaluation against CloudTrail/CloudWatch/Bedrock/Config/
+  // SageMaker/IAM/Glue. Degrades gracefully to static data when unavailable.
+  const { evaluations: liveEvaluations, live: controlsLive } = useControlEvaluation({
+    controls: frameworkControls,
+    skip: !frameworkData,
+  });
+
+  // Categories with live status overlaid onto controls that returned a live
+  // evaluation. When the eval isn't live we keep the static framework data.
+  const liveCategories = useMemo((): OsfiE23Category[] => {
+    const cats = frameworkData?.categories ?? [];
+    if (!controlsLive) return cats;
+    return cats.map(cat => ({
+      ...cat,
+      controls: cat.controls.map(c => {
+        const ev = liveEvaluations.get(c.id);
+        if (!ev) return c;
+        return { ...c, status: liveControlStatus(ev.status), evidence: ev.evidence || c.evidence };
+      }),
+    }));
+  }, [frameworkData, controlsLive, liveEvaluations]);
+
   const overallStats = useMemo(() => {
     if (!frameworkData) return { total: 0, passed: 0, inProgress: 0, failed: 0, compliancePct: 0 };
-    return computeOverallStats(frameworkData.categories);
-  }, [frameworkData]);
+    return computeOverallStats(liveCategories);
+  }, [frameworkData, liveCategories]);
 
   const toggleCategory = (name: string) => {
     const next = new Set(expandedCategories);
@@ -120,12 +165,12 @@ export default function OsfiE23View({ embedded = false, onNavigateToProgram }: O
 
   const filteredCategories = useMemo(() => {
     if (!frameworkData) return [];
-    if (filterStatus === 'all') return frameworkData.categories;
-    return frameworkData.categories.map(cat => ({
+    if (filterStatus === 'all') return liveCategories;
+    return liveCategories.map(cat => ({
       ...cat,
       controls: cat.controls.filter(c => c.status === filterStatus),
     })).filter(cat => cat.controls.length > 0);
-  }, [frameworkData, filterStatus]);
+  }, [frameworkData, liveCategories, filterStatus]);
 
   if (!frameworkData) {
     return (
@@ -167,7 +212,7 @@ export default function OsfiE23View({ embedded = false, onNavigateToProgram }: O
         <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-200/60">
           <div className="text-[10px]">
             <span className="text-slate-500">Final guideline:</span>
-            <span className="font-semibold text-slate-700 ml-1">September 2025</span>
+            <span className="font-semibold text-slate-700 ml-1">September 2024</span>
           </div>
           <div className="text-[10px]">
             <span className="text-slate-500">Effective date:</span>
@@ -326,15 +371,11 @@ export default function OsfiE23View({ embedded = false, onNavigateToProgram }: O
                   }`}>{stats.compliancePct}%</div>
                   <div className="text-[9px] text-slate-500">{stats.passed}/{stats.total} compliant</div>
                 </div>
-                <svg
+                <Icon
+                  name="chevron-down"
                   className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
                   strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
+                />
               </div>
             </button>
 
@@ -466,19 +507,31 @@ export default function OsfiE23View({ embedded = false, onNavigateToProgram }: O
 
       {/* Footer note */}
       <div className="text-[10px] text-slate-400 text-center">
-        OSFI Guideline E-23 (Enterprise-wide Model Risk Management) — Final September 2025, effective January 1, 2025.
+        OSFI Guideline E-23 (Enterprise-wide Model Risk Management) — Final September 2024, effective January 1, 2025.
         Applies to all Federally Regulated Financial Institutions (FRFIs) in Canada.
       </div>
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a framework whose controls are seeded would inherit a Live header.
+  const badge = controlsLive
+    ? <LiveDataBadge source="AWS control evaluation" detail="Controls with an AWS auto-detect source evaluated live against CloudTrail, CloudWatch, Bedrock, Config, SageMaker, IAM, and Glue" />
+    : <MockDataBadge integration="OSFI E-23 controls — control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
 
   return (
     <GovernPageLayout
       title="OSFI E-23"
       description="OSFI Guideline E-23 — Canada's enterprise-wide Model Risk Management framework for FRFIs, covering all models including AI/ML."
-      badge={<MockDataBadge integration="OSFI E-23 controls — control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

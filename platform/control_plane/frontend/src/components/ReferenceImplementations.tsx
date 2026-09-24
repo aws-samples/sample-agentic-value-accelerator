@@ -98,6 +98,39 @@ const IMPLEMENTATIONS: RefImplConfig[] = [
     tags: ['fraud', 'case-management', 'dynamodb', 'bedrock', 'cloudfront', 'agentcore'],
   },
   {
+    // `id` is an identifier, not a label: it selects the source directory, the template
+    // metadata and every derived AWS resource name. Renaming the app is a display change only.
+    id: 'kyc-governance-insights',
+    name: 'KYC - Controlled Quality Output',
+    domain: 'Risk & Compliance',
+    description: 'Governed KYC assessment for corporate banking onboarding. Two specialist agents produce credit and compliance findings, then a non-bypassable governance layer applies deterministic financial checks, sanctions/PEP screening, a three-layer policy cascade (ORG/APP/REQUEST) and an LLM-as-Judge quality score to reach the final APPROVE / ESCALATE / DECLINE / BLOCK decision. Ships a two-mode console: a guided walkthrough for presenters and a full governance console (fleet, evaluations, earned autonomy).',
+    status: 'Available',
+    color: 'emerald',
+    features: ['Non-bypassable governance layer', 'Deterministic ratio recomputation', 'Sanctions / PEP screening', 'Three-layer policy cascade', 'LLM-as-Judge scoring', 'Basic + Advanced console'],
+    agents: ['Credit Analyst', 'Compliance Officer', 'Supervisor / Orchestrator'],
+    // LangGraph only. The Strands implementation was removed from this reference
+    // implementation, so offering it here would build an image whose use-case source path
+    // does not exist. The deploy form hides the picker when there is a single framework.
+    frameworks: [
+      { id: 'langchain_langgraph', name: 'LangGraph' },
+    ],
+    deployment_patterns: [{ id: 'terraform', name: 'Terraform + CloudFormation', description: 'Self-contained AgentCore runtime (Terraform infra/runtime/ui) plus CloudFormation stacks for the governance microservices and console services' }],
+    parameters: [
+      { name: 'project_name', type: 'string', description: 'Project name prefix for all resources', required: false, default: 'kyc-governance-insights' },
+      { name: 'aws_region', type: 'string', description: 'AWS region to deploy into', required: false, default: 'us-east-1' },
+      { name: 'governance_mode', type: 'string', description: 'external = deployed governance services are authoritative and failures fail closed; local = in-process equivalents for dev', required: false, default: 'external' },
+      { name: 'governance_ssm_prefix', type: 'string', description: 'SSM prefix the governance stacks publish their Lambda function names to. The runtime resolves the 5 function names from here and invokes them directly with IAM auth, so there is no public endpoint and no account-specific value is committed.', required: false, default: '/kyc-gov/demo' },
+    ],
+    tags: ['kyc', 'aml', 'governance', 'sanctions', 'pep', 'cedar', 'verified-permissions', 'bedrock-guardrails', 'agentcore', 'terraform'],
+    prerequisites: [
+      {
+        title: 'Deploy the governance services before the agent runtime',
+        reason: 'The agent runtime resolves the five governance Lambda function names from SSM under governance_ssm_prefix. With governance_mode=external (the default) a runtime holding blank names fails CLOSED — every assessment returns ESCALATE instead of APPROVE. The bundled deploy.sh enforces this order and aborts if fewer than five function names are published; run it rather than deploying the runtime on its own.',
+        command: 'cd applications/reference_implementations/kyc-governance-insights && ./deploy.sh --region us-east-1',
+      },
+    ],
+  },
+  {
     id: 'merchant-onboarding',
     name: 'Merchant Onboarding',
     domain: 'Payments',
