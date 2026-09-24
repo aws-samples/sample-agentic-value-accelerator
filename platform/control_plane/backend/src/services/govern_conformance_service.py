@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 import boto3
 from boto3.dynamodb.conditions import Attr
 
+from core.ttl_cache import get_or_load, invalidate
 from models.govern_conformance import (
     ConformanceRecord,
     ConformanceRecordCreate,
@@ -54,6 +55,10 @@ def _from_ddb(value):
 class GovernConformanceService:
     PK_PREFIX = "CONFORMANCE#"
     SK_LATEST = "LATEST"
+
+    # TTLs for cached data (in seconds)
+    _TTL_LIST = 300  # Conformance records change infrequently (compliance posture)
+    _TTL_GET = 300  # Individual record lookups
 
     # Ephemeral in-memory store used when the conformance table isn't provisioned
     # (e.g. running locally without the DynamoDB backend). ISO 42001 records are
@@ -93,6 +98,12 @@ class GovernConformanceService:
             self.table.put_item(Item=self._to_item(r))
         except Exception:
             type(self)._mem[r.conformance_id] = r
+        self._invalidate_caches(r.conformance_id)
+
+    def _invalidate_caches(self, conformance_id: str) -> None:
+        """Invalidate conformance-related caches after a write operation."""
+        invalidate(f"conformance:list:{self.table_name}")
+        invalidate(f"conformance:get:{self.table_name}:{conformance_id}")
 
     # --- CRUD --------------------------------------------------------------
 
@@ -105,6 +116,23 @@ class GovernConformanceService:
         return r
 
     def get(self, conformance_id: str) -> Optional[ConformanceRecord]:
+        cache_key = f"conformance:get:{self.table_name}:{conformance_id}"
+        # A ConformanceRecord carries no provenance field, so the returned value alone
+        # cannot say whether it came from DynamoDB or from the in-memory fallback below.
+        # This holder is set by _get_impl on the failure path only, and the predicate
+        # reads it immediately after the loader returns — so a read that degraded is
+        # never stored. Truthiness would be wrong here: a measured "no such record"
+        # (None from a table that answered) is real data and must stay cacheable.
+        degraded = {"v": False}
+        result, _ = get_or_load(
+            cache_key, self._TTL_GET, lambda: self._get_impl(conformance_id, degraded),
+            should_cache=lambda _r: not degraded["v"],
+        )
+        return result
+
+    def _get_impl(
+        self, conformance_id: str, degraded: Optional[dict] = None
+    ) -> Optional[ConformanceRecord]:
         try:
             resp = self.table.get_item(Key={
                 "pk": f"{self.PK_PREFIX}{conformance_id}",
@@ -114,14 +142,34 @@ class GovernConformanceService:
             if item:
                 return self._from_item(item)
         except Exception:
-            pass
+            # The table did not answer (absent, throttled, denied), so whatever we
+            # return below is the ephemeral store and not a measured miss. Tell the
+            # caller so it declines to cache: without this, one transient failure
+            # pinned this id to the in-memory answer (usually None) for the full TTL
+            # and no request could refresh it once DynamoDB recovered.
+            if degraded is not None:
+                degraded["v"] = True
         return type(self)._mem.get(conformance_id)
 
     def list(self) -> List[ConformanceRecord]:
+        cache_key = f"conformance:list:{self.table_name}"
+        # See get(): the list has no provenance field either, and an empty list from a
+        # reachable table is a real answer that should still be cached — so the
+        # predicate tests how the read went, never what it returned.
+        degraded = {"v": False}
+        result, _ = get_or_load(
+            cache_key, self._TTL_LIST, lambda: self._list_impl(degraded),
+            should_cache=lambda _r: not degraded["v"],
+        )
+        return result
+
+    def _list_impl(self, degraded: Optional[dict] = None) -> List[ConformanceRecord]:
         try:
             resp = self.table.scan(FilterExpression=Attr("pk").begins_with(self.PK_PREFIX))
             out = [self._from_item(i) for i in resp.get("Items", [])]
         except Exception:
+            if degraded is not None:
+                degraded["v"] = True
             out = list(type(self)._mem.values())
         out.sort(key=lambda x: x.updated_at, reverse=True)
         return out
@@ -139,7 +187,7 @@ class GovernConformanceService:
         return existing
 
     def delete(self, conformance_id: str) -> Optional[ConformanceRecord]:
-        existing = self.get(conformance_id)
+        existing = self._get_impl(conformance_id)  # bypass cache for delete check
         if not existing:
             return None
         try:
@@ -150,4 +198,5 @@ class GovernConformanceService:
         except Exception:
             pass
         type(self)._mem.pop(conformance_id, None)
+        self._invalidate_caches(conformance_id)
         return existing

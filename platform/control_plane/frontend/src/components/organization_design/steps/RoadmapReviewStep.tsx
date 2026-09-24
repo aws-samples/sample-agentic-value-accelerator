@@ -1,6 +1,6 @@
 import type { ODOrgProfile, ComputedOrganizationDesign } from '../types';
 import { PHASE_ATTRIBUTES, PHASES } from '../types';
-import { archetypeColor, gateColor, phaseColor, fmtMoney, scenarioColor } from '../scoring';
+import { archetypeColor, gateColor, fmtMoney, scenarioColor } from '../scoring';
 
 interface Props {
   profile: ODOrgProfile;

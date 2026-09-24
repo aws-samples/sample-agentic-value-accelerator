@@ -13,8 +13,6 @@
  * 3. Reliability Metrics — multi-run consistency tracking
  */
 
-import type { AgentRegistryEntry } from '../mockData';
-
 // ─────────────────────────── Forbidden Targets ───────────────────────────
 
 export type ForbiddenTargetType = 'system' | 'api' | 'data' | 'network' | 'action';
@@ -406,10 +404,21 @@ export function computeFleetReliability(): {
   avgGoalAdherence: number;
   agentsBelowThreshold: number;
 } {
-  const n = AGENT_RELIABILITY.length || 1;
-  const avgSuccessRate = AGENT_RELIABILITY.reduce((s, r) => s + r.successRate, 0) / n;
-  const avgConsistency = AGENT_RELIABILITY.reduce((s, r) => s + r.consistencyScore, 0) / n;
-  const avgGoalAdherence = AGENT_RELIABILITY.reduce((s, r) => s + r.goalAdherenceRate, 0) / n;
+  // Pooled success rate: Σ(successfulRuns) / Σ(totalRuns). Averaging per-agent rates
+  // would weight a 6k-run agent the same as a 45k-run one; pooling weights by volume
+  // so the fleet figure reflects what actually happened across all runs. Consistency
+  // and goal-adherence are volume-weighted by totalRuns the same way (raw numerators
+  // aren't available, so run count is the correct weight) — otherwise these roll-ups
+  // are internally inconsistent with the pooled success rate on the same card.
+  const totalRuns = AGENT_RELIABILITY.reduce((s, r) => s + r.totalRuns, 0);
+  const totalSuccessfulRuns = AGENT_RELIABILITY.reduce((s, r) => s + r.successfulRuns, 0);
+  const avgSuccessRate = totalRuns ? (totalSuccessfulRuns / totalRuns) * 100 : 0;
+  const avgConsistency = totalRuns
+    ? AGENT_RELIABILITY.reduce((s, r) => s + r.consistencyScore * r.totalRuns, 0) / totalRuns
+    : 0;
+  const avgGoalAdherence = totalRuns
+    ? AGENT_RELIABILITY.reduce((s, r) => s + r.goalAdherenceRate * r.totalRuns, 0) / totalRuns
+    : 0;
   const agentsBelowThreshold = AGENT_RELIABILITY.filter(r => r.successRate < 95 || r.goalAdherenceRate < 95).length;
   return { avgSuccessRate, avgConsistency, avgGoalAdherence, agentsBelowThreshold };
 }

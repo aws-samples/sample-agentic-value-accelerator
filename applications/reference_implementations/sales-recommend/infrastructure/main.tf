@@ -129,6 +129,11 @@ module "ssm" {
   auth_password = var.basic_auth_password
 }
 
+module "leads" {
+  source  = "./modules/leads"
+  project = local.project
+}
+
 module "agentcore" {
   source             = "./modules/agentcore"
   project            = local.project
@@ -156,6 +161,7 @@ module "ecs" {
   alb_security_group_id   = module.networking.alb_security_group_id
   ecs_security_group_id   = module.networking.ecs_security_group_id
   origin_secret           = random_password.origin_secret.result
+  leads_table_name        = module.leads.table_name
 }
 
 module "cloudfront" {

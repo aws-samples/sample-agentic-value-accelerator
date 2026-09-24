@@ -1,0 +1,88 @@
+# Example tfvars for the `environments/dev` root.
+#
+#   cp terraform.tfvars.example terraform.tfvars   # then edit
+#
+# This root is a DIFFERENT root module from infrastructure/ one level up, and it has a
+# different variable set. infrastructure/terraform.tfvars.example belongs to that one
+# (app_name, vpc_cidr, cognito_*, codecommit_* ...); none of those variables are declared
+# here, so passing that file to this root fails with "Value for undeclared variable".
+# This root had no example at all, which is how the two region variables below came to be
+# hardcoded literals inside main.tf in the first place.
+#
+# Every variable here has a default EXCEPT govern_aws_region, which is deliberately
+# undefaulted so that an interactive `terraform plan/apply` prompts for it and a
+# non-interactive one fails naming it. Everything else defaults, so an apply that answers
+# that one prompt succeeds with no tfvars at all. This file exists because the defaults that
+# are *safe* are not the ones the demo account needs, and the difference is invisible at
+# apply time - a wrong region does not fail, it returns the wrong region's inventory.
+
+
+# ── Regions ──────────────────────────────────────────────────────────────────────
+#
+# Two independent regions. They answer different questions and getting them backwards
+# fails SILENTLY, which is the whole reason they are separate variables: an AWS API call
+# issued against the wrong region does not raise. It succeeds and returns that region's
+# smaller or empty inventory. The Operations Hub reported a 1-agent fleet against a real
+# fleet of 36 that way, under a Live badge, with no exception to catch and nothing in the
+# logs. See backend/src/core/region_config.py for the three-tier model.
+
+# Tier 1, control plane. Everything this root CREATES lives here: the DynamoDB tables, the
+# ECS cluster and task definitions, both ALBs, the VPC. Read-write, so single-region by
+# construction - a table has exactly one home.
+aws_region = "us-east-2"
+
+# Tier 2, governed fleet. Where the CUSTOMER's Bedrock agents, AgentCore runtimes,
+# guardrails and the CloudWatch metrics they emit live. Read-only, so this may legitimately
+# differ from aws_region.
+#
+# THIS VARIABLE HAS NO DEFAULT. Omit the line and Terraform PROMPTS for it; the prompt text
+# is variables.tf's description. `-input=false` (CI) fails instead, naming the variable.
+#
+# That is on purpose. Empty-meaning-"same as aws_region" is still the resolution rule and
+# config.py still implements it - but as a *default* it was answered silently, so a deployer
+# never learned a second region existed and the first symptom was an AI estate of zero under
+# a Live badge. Terraform cannot discover this (it creates nothing in the governed region),
+# so it is genuinely the deployer's to state.
+#
+# Empty is still a valid answer, at the prompt or here: `govern_aws_region = ""` means the
+# estate is in aws_region, which is right for most single-region deployments. The difference
+# is that saying so is now a decision rather than an omission.
+#
+# THE DEMO ACCOUNT MUST SET US-EAST-1. Its control plane is in us-east-2 while its Bedrock
+# estate is in us-east-1, so answering the prompt with Enter moves every governed read to
+# us-east-2 and the AI estate renders as zero rather than erroring.
+govern_aws_region = "us-east-1"
+
+# Per-table region override for the guardrails table, mirroring the backend's
+# <TABLE_KEY>_TABLE_REGION escape hatch.
+#
+# Leave EMPTY for a fresh deploy: aws_dynamodb_table.guardrails is created by this root's
+# provider, so the table is in aws_region by construction and an override can only be wrong.
+#
+# THE DEMO ACCOUNT MUST SET THIS TOO - its guardrails table was provisioned in us-east-1
+# before the control plane moved to us-east-2, and it holds real templates. Without it the
+# backend Scans a us-east-2 table that does not exist.
+guardrails_table_region = "us-east-1"
+
+
+# ── Credentials and images ───────────────────────────────────────────────────────
+
+# Named AWS profile. Empty uses the default credential chain.
+aws_profile = ""
+
+# Prebuilt ECR image URIs. This root references them; it does not create the ECR repo or
+# build the images. Run scripts/deploy-backend.sh / scripts/deploy-frontend.sh first, then
+# set these to the resulting URIs in your own account.
+backend_image  = "<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/ava-control-plane-backend:latest"
+frontend_image = "<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/ava-control-plane-frontend:latest"
+
+
+# ── Misc ─────────────────────────────────────────────────────────────────────────
+
+environment = "dev"
+
+# Bedrock Mantle API key for the GPT-5.x models. Marked sensitive, so Terraform will not
+# print it - but it still lands in state, so do not commit a real value to a tfvars file.
+# Leave empty to disable those models. Prefer supplying it out-of-band:
+#   TF_VAR_bedrock_mantle_api_key=... terraform apply
+bedrock_mantle_api_key = ""

@@ -1,0 +1,36 @@
+{
+  "customer_id": "CUST009",
+  "name": "Syria Relief Foundation",
+  "account_type": "charity",
+  "industry": "Humanitarian / Non-Profit",
+  "incorporation": {
+    "country": "United Kingdom",
+    "state": "England",
+    "date": "2014-06-01"
+  },
+  "contact": {
+    "address": "Charity House, 12 Relief Way, Manchester, M1 2AB, UK",
+    "phone": "+44-161-555-0133",
+    "email": "finance@syriarelief.example.org"
+  },
+  "directors": [
+    {
+      "name": "Board of Trustees (7 members)",
+      "role": "Trustees",
+      "pep_status": false
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "Charitable trust \u2014 no beneficial owners",
+      "ownership_percentage": 0
+    }
+  ],
+  "kyc_status": "verified",
+  "risk_flags": [
+    "conflict_zone_operations",
+    "fatf_high_risk_jurisdiction"
+  ],
+  "annual_revenue": "\u00a38M donations/year",
+  "regulatory_status": "UK Charity Commission registered"
+}

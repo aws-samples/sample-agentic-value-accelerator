@@ -319,7 +319,7 @@ function QuadrantStat({ label, hint, value, tone }: { label: string; hint: strin
 }
 
 function renderPointLabel(props: any) {
-  const { x, y, value, viewBox } = props;
+  const { x, y, value } = props;
   const raw =
     typeof value === 'string' ? value
     : Array.isArray(value) ? String(value[0] ?? '')

@@ -19,12 +19,13 @@ import {
   governCostApi,
   governTrailApi,
   governPostureApi,
+  governSageMakerApi,
   businessCasesApi,
   governAuditApi,
   type BusinessCase,
   type GovernAuditEvent,
 } from '../../../api/client';
-import { modelMetricRows, type ModelMetricRow } from './modelMetrics';
+import { modelMetricRows } from './modelMetrics';
 import { finopsRows } from './finopsMetrics';
 import { auditMetricRows } from './auditMetrics';
 import { dataQualityRows, dataQualityComposite } from './dataMetrics';
@@ -40,15 +41,32 @@ interface LiveMetricsState {
   loading: boolean;
   error: string | null;
   contributions: MetricContribution[];
+  /** Every real (non-illustrative) source backing the scorecard — AWS + platform. */
   liveDataSources: string[];
+  /**
+   * The AWS-telemetry subset of `liveDataSources`. Only these justify a
+   * "Live AWS data" claim: each is populated exclusively when the upstream
+   * response reported `live: true`. Platform REST sources (Plan business cases,
+   * Govern audit log) are real data but are NOT AWS telemetry, so they are
+   * deliberately excluded.
+   */
+  awsLiveDataSources: string[];
 }
 
 interface LiveData {
   modelRuntime?: { invocations: number; errors: number; latencyP50: number };
-  guardrails?: { total: number; interventions: number; groundingFailures: number };
+  /**
+   * `groundingFailures` is `null` when contextual grounding cannot be observed in the
+   * policy breakdown at all — in that case the grounding/hallucination rates are left
+   * illustrative instead of asserting a fabricated 0%. See the honesty guard below.
+   */
+  guardrails?: { total: number; interventions: number; groundingFailures: number | null };
   securityHub?: { critical: number; high: number; total: number };
   configCompliance?: { passing: number; failing: number; pct: number };
   evalJobs?: { completed: number; total: number };
+  // SageMaker Model Monitor drift — only populated when the monitor is configured
+  // AND the response is live (no fabricated rate when there's no baseline).
+  modelMonitor?: { driftDetectionRate: number; violationsCount: number; baselineFeatures: number };
   cost?: { total: number; byModel: Record<string, number> };
   aiCallers?: { recognized: number; unrecognized: number };
   businessCases?: {
@@ -78,10 +96,11 @@ export function useLiveMetrics(): LiveMetricsState {
       governRiskPostureApi.securityHub(200),
       governPostureApi.configCompliance(),
       governEvalsApi.jobs(100),
-      governCostApi.byModel(30),
+      governCostApi.byModel(12),
       governTrailApi.aiCallers(168),
       businessCasesApi.list(),
       governAuditApi.list(),
+      governSageMakerApi.modelMonitor(),
     ]).then(results => {
       if (cancelled) return;
 
@@ -91,9 +110,11 @@ export function useLiveMetrics(): LiveMetricsState {
       const [runtimeResult] = results;
       if (runtimeResult.status === 'fulfilled' && runtimeResult.value.live) {
         const r = runtimeResult.value;
+        // AwsModelMetricsResponse exposes fleet_error_rate_pct (not an absolute
+        // total_errors); derive the count from the rate.
         data.modelRuntime = {
           invocations: r.total_invocations,
-          errors: r.total_errors,
+          errors: Math.round(r.total_invocations * (r.fleet_error_rate_pct || 0) / 100),
           latencyP50: r.avg_latency_ms,
         };
       }
@@ -102,10 +123,47 @@ export function useLiveMetrics(): LiveMetricsState {
       const [, guardrailsResult] = results;
       if (guardrailsResult.status === 'fulfilled' && guardrailsResult.value.live) {
         const g = guardrailsResult.value;
+        // ── Why the denominator is ACCOUNT-WIDE (and why that is the correct pairing) ──
+        // `groundingFailures` is the contextual-grounding (CG) intervention count from
+        // `by_policy`. The backend builds `by_policy` from CloudWatch
+        // `InvocationsIntervened` with dimensions GuardrailPolicyType + Operation=
+        // ApplyGuardrail and NO GuardrailArn dimension (govern_guardrails_service.
+        // _per_policy_metrics), so the CG numerator is inherently account-wide and
+        // CANNOT be attributed to an individual guardrail. Per-guardrail invocations
+        // come from a separate query keyed on GuardrailArn+Version
+        // (_per_guardrail_metrics). Pairing this account-wide numerator with the
+        // account-wide `total_invocations` denominator keeps both sides on the same
+        // dimension; narrowing the denominator to a subset of guardrails would make the
+        // ratio dimensionally MISMATCHED, not more precise. Do not "fix" it that way.
+        //
+        // ── Honesty guard ──
+        // The ratio is only meaningful while contextual grounding is actually in force
+        // across the guardrails producing those invocations. This telemetry payload
+        // carries no policy configuration at all (AwsGuardrailSummary has no
+        // contextual_grounding field, because /guardrails/telemetry only calls
+        // bedrock:list_guardrails), so per-guardrail CG config cannot be verified here
+        // without a second, slower round trip to /govern/guardrails/list (which does
+        // expose it, at the cost of an extra get_guardrail call per guardrail on a page
+        // -load path). Conservative stand-in using data already fetched: require that
+        // contextual grounding appears in the policy breakdown at all. When it is
+        // absent we cannot distinguish "CG enabled, never intervened" (a true 0%) from
+        // "CG not configured anywhere" (no signal), so `groundingFailures` is left null
+        // and the grounding/hallucination metrics keep their illustrative values rather
+        // than publishing a fabricated 0% under a [LIVE] source label.
+        // TRADEOFF: this does NOT catch a MIXED fleet (some guardrails with CG, some
+        // without), which would understate the rate by inflating the denominator with
+        // invocations that could never produce a CG intervention. Detecting that needs
+        // the policy config from governGuardrailsApi.list(). Verified 2026-09-04:
+        // 7/7 live guardrails report contextual_grounding.enabled === true, so the
+        // numerator and denominator cover the same population today.
+        const cgPolicies = g.by_policy.filter(p => p.policy_type === 'ContextualGroundingPolicy');
+        const groundingFailures = cgPolicies.length > 0
+          ? cgPolicies.reduce((s, p) => s + p.interventions, 0)
+          : null;
         data.guardrails = {
-          total: g.total,
+          total: g.total_invocations,
           interventions: g.total_interventions,
-          groundingFailures: g.grounding_failures,
+          groundingFailures,
         };
       }
 
@@ -127,7 +185,7 @@ export function useLiveMetrics(): LiveMetricsState {
         data.configCompliance = {
           passing: c.compliant,
           failing: c.non_compliant,
-          pct: c.pct,
+          pct: c.pct_compliant,
         };
       }
 
@@ -145,9 +203,12 @@ export function useLiveMetrics(): LiveMetricsState {
       const [,,,,, costResult] = results;
       if (costResult.status === 'fulfilled' && costResult.value.live) {
         const c = costResult.value;
+        // Cost API returns { by_model: [{ model, amount }], total }. The old code read
+        // c.models / m.cost (wrong shape) which threw and was swallowed by the outer
+        // .catch(), silently zeroing the live scorecard exactly when cost data WAS live.
         data.cost = {
-          total: c.models.reduce((s: number, m: { cost: number }) => s + m.cost, 0),
-          byModel: Object.fromEntries(c.models.map((m: { model: string; cost: number }) => [m.model, m.cost])),
+          total: c.total,
+          byModel: Object.fromEntries(c.by_model.map((m) => [m.model, m.amount])),
         };
       }
 
@@ -161,7 +222,11 @@ export function useLiveMetrics(): LiveMetricsState {
         };
       }
 
-      // Business cases from Plan (ROI/NPV/BCR - the financial metrics)
+      // Business cases from Plan (ROI/NPV/BCR - the financial metrics).
+      // NOTE: unlike the AWS calls above there is no `.live` flag to check — this
+      // is the platform's own REST API, so "real" means "returned cases with
+      // computed financials". It is therefore NOT counted as AWS telemetry when
+      // the scorecard decides whether it may claim live AWS data.
       const [,,,,,,, bcResult] = results;
       if (bcResult.status === 'fulfilled') {
         const cases = bcResult.value as BusinessCase[];
@@ -183,7 +248,31 @@ export function useLiveMetrics(): LiveMetricsState {
         }
       }
 
-      // Audit events from Govern audit API
+      // SageMaker Model Monitor — data-quality drift (baseline constraints vs captured).
+      // Only claim live when the monitor is configured AND the response is live; the
+      // detection rate = share of monitored features passing constraint checks. Leave
+      // undefined (illustrative fallback) when there's no baseline to measure against.
+      const monitorResult = results[9];
+      if (monitorResult.status === 'fulfilled' && monitorResult.value.live && monitorResult.value.monitor_configured) {
+        const mm = monitorResult.value;
+        let driftDetectionRate: number | null = null;
+        if (mm.baseline_features > 0) {
+          const clean = Math.max(0, mm.baseline_features - mm.violations_count);
+          driftDetectionRate = clean / mm.baseline_features;
+        } else if (mm.violations_count === 0) {
+          driftDetectionRate = 1.0;
+        }
+        if (driftDetectionRate !== null) {
+          data.modelMonitor = {
+            driftDetectionRate,
+            violationsCount: mm.violations_count,
+            baselineFeatures: mm.baseline_features,
+          };
+        }
+      }
+
+      // Audit events from Govern audit API (platform REST, no `.live` flag —
+      // same non-AWS classification as the business cases above).
       const [,,,,,,,, auditResult] = results;
       if (auditResult.status === 'fulfilled') {
         const events = auditResult.value as GovernAuditEvent[];
@@ -212,7 +301,9 @@ export function useLiveMetrics(): LiveMetricsState {
     const modelRows = modelMetricRows().map(m => {
       if (m.id === 'model.grounding' && liveData.guardrails) {
         const { total, groundingFailures } = liveData.guardrails;
-        const actual = total > 0 ? (total - groundingFailures) / total : null;
+        // groundingFailures === null → contextual grounding is not observable in the
+        // policy breakdown, so leave the illustrative value rather than claim 100%.
+        const actual = total > 0 && groundingFailures !== null ? (total - groundingFailures) / total : null;
         if (actual !== null) {
           sources.push('Bedrock Guardrails');
           const { variance, variancePct } = computeVariance(m.expected, actual);
@@ -228,7 +319,11 @@ export function useLiveMetrics(): LiveMetricsState {
       }
       if (m.id === 'model.hallucination' && liveData.guardrails) {
         const { total, groundingFailures } = liveData.guardrails;
-        const actual = total > 0 ? groundingFailures / total : null;
+        // Account-wide CG interventions ÷ account-wide guardrail invocations — the
+        // dimensionally matched pairing explained at the fetch site above. Suppressed
+        // (illustrative fallback) when CG is not observable, so a missing signal never
+        // renders as a 0% hallucination rate under [LIVE].
+        const actual = total > 0 && groundingFailures !== null ? groundingFailures / total : null;
         if (actual !== null) {
           const { variance, variancePct } = computeVariance(m.expected, actual);
           return {
@@ -241,6 +336,21 @@ export function useLiveMetrics(): LiveMetricsState {
           };
         }
       }
+      // Model drift — real SageMaker Model Monitor detection rate (replaces the
+      // hardcoded illustrative 1.0). Only patched when the monitor is live/configured.
+      if (m.id === 'model.drift' && liveData.modelMonitor) {
+        const actual = liveData.modelMonitor.driftDetectionRate;
+        sources.push('SageMaker Model Monitor');
+        const { variance, variancePct } = computeVariance(m.expected, actual);
+        return {
+          ...m,
+          actual,
+          variance,
+          variancePct,
+          rag: ragForVariance(variancePct, m.polarity),
+          source: `${m.source} [LIVE]`,
+        };
+      }
       return m;
     });
 
@@ -251,7 +361,12 @@ export function useLiveMetrics(): LiveMetricsState {
         const invocations = liveData.modelRuntime.invocations;
         const totalCost = liveData.cost.total;
         if (invocations > 0 && totalCost > 0) {
-          const actual = totalCost / invocations;
+          // Match windows: totalCost spans ~12 months (byModel(12)) while invocations
+          // are a 7-day count (runtimeMetrics(7)). Normalize both to a daily rate so
+          // cost-per-task divides over a matched window (was ~47x overstated).
+          const COST_WINDOW_DAYS = 365;   // byModel(12) — trailing 12 months
+          const RUNTIME_WINDOW_DAYS = 7;  // runtimeMetrics(7)
+          const actual = (totalCost / COST_WINDOW_DAYS) / (invocations / RUNTIME_WINDOW_DAYS);
           sources.push('Cost Explorer + CloudWatch');
           const { variance, variancePct } = computeVariance(m.expected, actual);
           return {
@@ -306,21 +421,35 @@ export function useLiveMetrics(): LiveMetricsState {
     ];
   }, [liveData]);
 
-  const liveDataSources = useMemo(() => {
-    const sources: string[] = [];
-    if (liveData.modelRuntime) sources.push('CloudWatch AWS/Bedrock');
-    if (liveData.guardrails) sources.push('Bedrock Guardrails');
-    if (liveData.securityHub) sources.push('SecurityHub');
-    if (liveData.configCompliance) sources.push('AWS Config');
-    if (liveData.evalJobs) sources.push('Bedrock Evaluations');
-    if (liveData.cost) sources.push('Cost Explorer');
-    if (liveData.aiCallers) sources.push('CloudTrail');
-    if (liveData.businessCases) sources.push('Plan Business Cases');
-    if (liveData.auditEvents) sources.push('Govern Audit API');
-    return sources;
+  const { liveDataSources, awsLiveDataSources } = useMemo(() => {
+    // AWS telemetry. Every block that populates these fields checks the
+    // response's own `live` flag first, so presence here == real AWS data.
+    const aws: string[] = [];
+    if (liveData.modelRuntime) aws.push('CloudWatch AWS/Bedrock');
+    if (liveData.guardrails) aws.push('Bedrock Guardrails');
+    if (liveData.securityHub) aws.push('SecurityHub');
+    if (liveData.configCompliance) aws.push('AWS Config');
+    if (liveData.evalJobs) aws.push('Bedrock Evaluations');
+    if (liveData.modelMonitor) aws.push('SageMaker Model Monitor');
+    if (liveData.cost) aws.push('Cost Explorer');
+    if (liveData.aiCallers) aws.push('CloudTrail');
+
+    // Platform REST sources. These endpoints return plain arrays with no `live`
+    // flag, so the only honest gate is "did they return records that actually
+    // back a rendered metric" — they are listed only when they do, and never as
+    // AWS telemetry (otherwise the scorecard could show "Live · 0/N live").
+    const platform: string[] = [];
+    if (liveData.businessCases && liveData.businessCases.portfolioRoi > 0) {
+      platform.push('Plan Business Cases');
+    }
+    if (liveData.auditEvents && liveData.auditEvents.length > 0) {
+      platform.push('Govern Audit API');
+    }
+
+    return { liveDataSources: [...aws, ...platform], awsLiveDataSources: aws };
   }, [liveData]);
 
-  return { loading, error, contributions, liveDataSources };
+  return { loading, error, contributions, liveDataSources, awsLiveDataSources };
 }
 
 /**

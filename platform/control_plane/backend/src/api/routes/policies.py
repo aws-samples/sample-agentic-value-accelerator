@@ -1,6 +1,6 @@
 """AgentCore Policy CRUD + evaluation API routes"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 import logging
@@ -19,6 +19,7 @@ from models.policy import (
     AuditActionTaken,
 )
 from services.policy_service import PolicyService, PolicyConflictError, PolicyValidationError
+from core import region_config
 from core.config import settings
 from core.rbac import Role, require_role
 
@@ -33,9 +34,19 @@ def get_service() -> PolicyService:
     if _svc is None:
         _svc = PolicyService(
             table_name=settings.POLICIES_TABLE_NAME,
-            region=settings.AWS_REGION,
+            # table_region("POLICIES"), not settings.AWS_REGION. Both resolve to us-east-2 in
+            # this deployment, so this is not a behaviour change today - it is what makes
+            # POLICIES_TABLE_REGION / CONTROL_PLANE_TABLE_REGION actually work on this one
+            # remaining path. Reading AWS_REGION raw meant relocating this table was the only
+            # table override in the backend that silently did nothing.
+            region=region_config.table_region("POLICIES"),
             policy_engine_id=settings.POLICY_ENGINE_ID,
             gateway_arn=settings.GATEWAY_ARN,
+            # AgentCore (policy engines, gateways, Cedar policies) live in the Bedrock/AgentCore
+            # region, which differs from the DynamoDB control-plane region in split-region setups.
+            # This is tier 2 (governed fleet) while the table above is tier 1 (control plane):
+            # us-east-1 and us-east-2 respectively here, and they must not be collapsed.
+            agentcore_region=settings.GOVERN_AWS_REGION,
         )
     return _svc
 
@@ -51,7 +62,7 @@ class CreateEngineRequest(BaseModel):
 async def list_policy_engines(_=Depends(require_role(Role.VIEWER))):
     """List all policy engines in the account."""
     import boto3
-    client = boto3.client("bedrock-agentcore-control", region_name=settings.AWS_REGION)
+    client = boto3.client("bedrock-agentcore-control", region_name=settings.GOVERN_AWS_REGION)
     try:
         response = client.list_policy_engines()
         engines = []
@@ -125,7 +136,7 @@ async def list_policy_engines(_=Depends(require_role(Role.VIEWER))):
 async def create_policy_engine(req: CreateEngineRequest, _=Depends(require_role(Role.OPERATOR))):
     """Create a new policy engine and optionally attach to a gateway."""
     import boto3
-    client = boto3.client("bedrock-agentcore-control", region_name=settings.AWS_REGION)
+    client = boto3.client("bedrock-agentcore-control", region_name=settings.GOVERN_AWS_REGION)
 
     try:
         response = client.create_policy_engine(name=req.name)
@@ -165,7 +176,7 @@ async def create_policy_engine(req: CreateEngineRequest, _=Depends(require_role(
 async def delete_policy_engine(engine_id: str, _=Depends(require_role(Role.ADMIN))):
     """Delete a policy engine."""
     import boto3
-    client = boto3.client("bedrock-agentcore-control", region_name=settings.AWS_REGION)
+    client = boto3.client("bedrock-agentcore-control", region_name=settings.GOVERN_AWS_REGION)
     try:
         client.delete_policy_engine(policyEngineId=engine_id)
         return {"status": "deleted", "engine_id": engine_id}
@@ -188,7 +199,7 @@ async def detach_gateway_from_engine(engine_id: str, req: AttachGatewayRequest, 
     engine, so a stale success is never reported.
     """
     import boto3
-    client = boto3.client("bedrock-agentcore-control", region_name=settings.AWS_REGION)
+    client = boto3.client("bedrock-agentcore-control", region_name=settings.GOVERN_AWS_REGION)
     try:
         gw_detail = client.get_gateway(gatewayIdentifier=req.gateway_id)
         base = dict(
@@ -240,14 +251,14 @@ async def detach_gateway_from_engine(engine_id: str, req: AttachGatewayRequest, 
 async def attach_gateway_to_engine(engine_id: str, req: AttachGatewayRequest, _=Depends(require_role(Role.OPERATOR))):
     """Attach a policy engine to a gateway."""
     import boto3
-    client = boto3.client("bedrock-agentcore-control", region_name=settings.AWS_REGION)
+    client = boto3.client("bedrock-agentcore-control", region_name=settings.GOVERN_AWS_REGION)
     try:
         # Get gateway details (need all required fields for update)
         gw_detail = client.get_gateway(gatewayIdentifier=req.gateway_id)
 
         # Construct the policy engine ARN
         account_id = boto3.client("sts").get_caller_identity()["Account"]
-        pe_arn = f"arn:aws:bedrock-agentcore:{settings.AWS_REGION}:{account_id}:policy-engine/{engine_id}"
+        pe_arn = f"arn:aws:bedrock-agentcore:{settings.GOVERN_AWS_REGION}:{account_id}:policy-engine/{engine_id}"
 
         # update_gateway requires all mandatory fields plus policyEngineConfiguration
         client.update_gateway(
@@ -281,7 +292,7 @@ async def set_gateway_mode(engine_id: str, req: SetModeRequest, _=Depends(requir
     if mode not in ("ENFORCE", "LOG_ONLY"):
         raise HTTPException(status_code=400, detail="mode must be ENFORCE or LOG_ONLY")
 
-    client = boto3.client("bedrock-agentcore-control", region_name=settings.AWS_REGION)
+    client = boto3.client("bedrock-agentcore-control", region_name=settings.GOVERN_AWS_REGION)
     try:
         gw_detail = client.get_gateway(gatewayIdentifier=req.gateway_id)
         pe_config = gw_detail.get("policyEngineConfiguration") or {}
@@ -289,7 +300,7 @@ async def set_gateway_mode(engine_id: str, req: SetModeRequest, _=Depends(requir
         if not pe_arn:
             # Engine not yet attached — build the ARN from the engine id
             account_id = boto3.client("sts").get_caller_identity()["Account"]
-            pe_arn = f"arn:aws:bedrock-agentcore:{settings.AWS_REGION}:{account_id}:policy-engine/{engine_id}"
+            pe_arn = f"arn:aws:bedrock-agentcore:{settings.GOVERN_AWS_REGION}:{account_id}:policy-engine/{engine_id}"
 
         client.update_gateway(
             gatewayIdentifier=req.gateway_id,
@@ -312,7 +323,7 @@ async def set_gateway_mode(engine_id: str, req: SetModeRequest, _=Depends(requir
 async def list_gateways(_=Depends(require_role(Role.VIEWER))):
     """List all gateways available for policy engine attachment."""
     import boto3
-    client = boto3.client("bedrock-agentcore-control", region_name=settings.AWS_REGION)
+    client = boto3.client("bedrock-agentcore-control", region_name=settings.GOVERN_AWS_REGION)
     try:
         response = client.list_gateways()
         gateways = []
@@ -348,11 +359,20 @@ async def list_presets(_=Depends(require_role(Role.VIEWER))):
 # --- CRUD ---
 
 @router.post("", response_model=Policy, status_code=201)
-async def create_policy(req: PolicyCreate, _=Depends(require_role(Role.OPERATOR))):
-    """Create a new resource-level policy"""
+async def create_policy(
+    req: PolicyCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    """Create a new resource-level policy
+
+    `created_by` comes from the `x-user-email` header, or `"unknown"` when absent -
+    `require_role` returns only a Role, never a principal. The literal "user" read
+    like a real principal, so a policy with no captured author looked attributed.
+    """
     svc = get_service()
     try:
-        return svc.create_policy(req, created_by="user")
+        return svc.create_policy(req, created_by=x_user_email or "unknown")
     except PolicyConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except PolicyValidationError as e:
@@ -376,8 +396,18 @@ async def list_policies(
     to a specific policy engine (engine_id). Without engine_id, uses the
     default engine."""
     svc = get_service()
-    status_filter = PolicyStatus(status) if status else None
-    rt_filter = ResourceType(resource_type) if resource_type else None
+    # Tolerate unrecognized filter values: an unknown status/resource_type matches no
+    # policy, so return an honest empty list (200) rather than raising a 500. The frontend
+    # declares resource_type as "agent"|"gateway"|"tool", but the AgentCore engine only has
+    # "gateway" — so ?resource_type=agent (useAgentPolicies) must degrade to [] not error.
+    try:
+        status_filter = PolicyStatus(status) if status else None
+    except ValueError:
+        return []
+    try:
+        rt_filter = ResourceType(resource_type) if resource_type else None
+    except ValueError:
+        return []
     return svc.list_policies(status=status_filter, resource_type=rt_filter, engine_id=engine_id)
 
 
@@ -507,9 +537,17 @@ async def get_observability_events(
     """
     import boto3
 
-    region = settings.AWS_REGION
+    # AgentCore observability (AWS/Bedrock-AgentCore metrics + aws/spans) is emitted in the
+    # Bedrock/AgentCore region, not the DynamoDB control-plane region.
+    region = settings.GOVERN_AWS_REGION
     gateway_arn = settings.GATEWAY_ARN
     policy_engine_id = settings.POLICY_ENGINE_ID
+    # Gateway identity used to scope the fallback span query below. GATEWAY_ID is the bare
+    # id; GATEWAY_ARN carries the same id as its final path segment, so either setting is
+    # sufficient (deployment_service.py derives a gateway id from the ARN the same way).
+    # gateway_arn was previously read into a local and then never used at all, which is why
+    # the fallback query below went out unscoped.
+    gateway_id = (settings.GATEWAY_ID or "").strip() or gateway_arn.strip().split("/")[-1]
 
     logs_client = boto3.client("logs", region_name=region)
     cw_client = boto3.client("cloudwatch", region_name=region)
@@ -573,8 +611,31 @@ async def get_observability_events(
                     "source": "spans",
                 })
 
-        # If no policy spans found, fall back to tool execution spans (shows gateway-routed calls)
-        if not events:
+        # If no policy spans found, fall back to tool execution spans (shows gateway-routed calls).
+        #
+        # `aws/spans` is an ACCOUNT-WIDE, shared log group, not a per-gateway one. Measured in
+        # this account (us-east-1, 3-day window): 203,045 records, whose top span names are
+        # `GET /`, `GET /health`, `HealthController.status` and
+        # `SimpleSystemsManagement.GetParameter` - ordinary HTTP/SDK spans from unrelated
+        # instrumented services. So `filter name like /execute_tool/` on its own selects from a
+        # pool this gateway does not own, and every row it returned was then stamped with
+        # THIS gateway's id and a hardcoded DENY below. Nothing in the query established that
+        # the span came from our gateway, or that a policy was evaluated at all.
+        #
+        # Scoped to the configured gateway, and skipped entirely when no gateway is configured -
+        # returning another workload's tool spans labelled as our policy denials is worse than
+        # returning nothing. Caveat, stated because it is not verified: no span in this account
+        # currently carries `aws.agentcore.gateway.id` (0 matches over the same window), so the
+        # attribute name is taken from the policy-span query above rather than confirmed against
+        # live gateway data. If AgentCore names it differently this filter yields empty, which is
+        # the honest failure direction.
+        if not events and not gateway_id:
+            logger.info(
+                "Skipping aws/spans tool-span fallback: neither GATEWAY_ID nor GATEWAY_ARN is "
+                "configured, so tool spans in the shared aws/spans log group cannot be "
+                "attributed to this gateway."
+            )
+        elif not events:
             tool_query = logs_client.start_query(
                 logGroupName="aws/spans",
                 startTime=int(start.timestamp()),
@@ -583,6 +644,7 @@ async def get_observability_events(
                     fields @timestamp, name as span_name, traceId,
                            attributes.`gen_ai.task.status` as status
                     | filter name like /execute_tool/
+                    | filter attributes.`aws.agentcore.gateway.id` = "{gateway_id}"
                     | sort @timestamp desc
                     | limit {limit}
                 """,
@@ -599,15 +661,28 @@ async def get_observability_events(
                 for row in tool_result.get("results", []):
                     record = {f["field"]: f["value"] for f in row if not f["field"].startswith("@ptr")}
                     tool_name = record.get("span_name", "").replace("execute_tool ", "")
+                    # An execute_tool span records that a tool RAN. It carries no
+                    # authorization decision, no reason and no determining policy - those
+                    # live only on the policy spans queried above. These three fields were
+                    # hardcoded to "DENY" / "Policy evaluated DENY (LOG_ONLY mode - tool
+                    # still executed)" / "RequireGuardrail", so every tool execution was
+                    # rendered in the Policy Observability table as a denial by a named
+                    # policy that may not exist, with a confidence the data never had.
+                    # UNKNOWN is a value the UI already handles (PolicyObservability.tsx
+                    # falls back to decisionMeta.UNKNOWN for unrecognized decisions).
                     events.append({
                         "id": record.get("traceId", "")[:12],
                         "timestamp": record.get("@timestamp", ""),
-                        "decision": "DENY",
-                        "reason": "Policy evaluated DENY (LOG_ONLY mode — tool still executed)",
-                        "determining_policies": "RequireGuardrail",
+                        "decision": "UNKNOWN",
+                        "reason": (
+                            "Tool execution span from this gateway. No policy decision is "
+                            "recorded on this span - enable policy spans to see allow/deny."
+                        ),
+                        "determining_policies": "",
                         "allowed_tools": "",
-                        "denied_tools": tool_name,
-                        "gateway_id": settings.GATEWAY_ID,
+                        "denied_tools": "",
+                        "tool_name": tool_name,
+                        "gateway_id": gateway_id,
                         "span_name": record.get("span_name", ""),
                         "source": "tool_spans",
                     })

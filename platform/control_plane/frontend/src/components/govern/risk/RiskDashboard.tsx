@@ -173,7 +173,7 @@ export default function RiskDashboard() {
         {hasLiveSecurityData && (
           <div className="flex items-center gap-2 text-[10px] text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Security Hub: {securityRisk.totalFindings} findings ({securityRisk.criticalCount} critical, {securityRisk.highCount} high)
+            AWS Security: {securityRisk.totalFindings} findings ({securityRisk.criticalCount} critical, {securityRisk.highCount} high)
           </div>
         )}
       </div>

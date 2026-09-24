@@ -18,17 +18,28 @@ import { governGraduationApi } from '../../api/client';
 import StatCard from './StatCard';
 import { rowButtonProps } from './a11y';
 import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
+import ScoreDisclosure, { ScoreValue } from './ScoreDisclosure';
+import { Icon } from './icons';
 
 const verdictMeta: Record<GraduationVerdict, { label: string; badge: string; dot: string; ring: string }> = {
   ready:       { label: 'Ready to graduate', badge: 'bg-emerald-100 text-emerald-700', dot: '#10b981', ring: 'border-emerald-300' },
   conditional: { label: 'Conditional',       badge: 'bg-amber-100 text-amber-700',     dot: '#f59e0b', ring: 'border-amber-300' },
   not_ready:   { label: 'Not yet',           badge: 'bg-slate-100 text-slate-600',     dot: '#94a3b8', ring: 'border-slate-300' },
+  // Distinct from "Not yet", which is a judgement that the agent fell short. This
+  // is an absence of evidence, so it is deliberately neutral-toned rather than
+  // negative — and it is dimmer than the others because it says nothing about the
+  // agent at all.
+  insufficient_evidence: { label: 'Not enough evidence', badge: 'bg-slate-100 text-slate-500', dot: '#cbd5e1', ring: 'border-slate-200' },
 };
 
 const statusMeta = {
-  pass:    { icon: '✓', badge: 'bg-emerald-100 text-emerald-700' },
-  warning: { icon: '!', badge: 'bg-amber-100 text-amber-700' },
-  fail:    { icon: '✕', badge: 'bg-rose-100 text-rose-700' },
+  pass:    { icon: 'check', badge: 'bg-emerald-100 text-emerald-700', label: 'Met' },
+  warning: { icon: 'exclamation-triangle', badge: 'bg-amber-100 text-amber-700', label: 'Advisory breach' },
+  fail:    { icon: 'x-mark', badge: 'bg-rose-100 text-rose-700', label: 'Not met' },
+  // UNKNOWN, not failed. A hollow circle rather than a cross, and slate rather than
+  // rose: this criterion could not be evaluated, so it is excluded from the score
+  // instead of counting against the agent.
+  insufficient: { icon: 'circle', badge: 'bg-slate-100 text-slate-400', label: 'Not measured' },
 } as const;
 
 function LevelChip({ level }: { level: AgentScopeLevel }) {
@@ -85,7 +96,14 @@ export default function EarnedAutonomyView() {
   }
 
   const summary = useMemo(() => summarizeGraduations(agents), [agents]);
-  const stepDowns = useMemo(() => agents.filter(a => a.stepDown?.triggered).sort((a, b) => b.readiness - a.readiness), [agents]);
+  // Unscored agents sort LAST, not as 0: they are unmeasured, not the least ready.
+  const byReadiness = (a: AgentGraduation, b: AgentGraduation) => {
+    if (a.readiness === null && b.readiness === null) return 0;
+    if (a.readiness === null) return 1;
+    if (b.readiness === null) return -1;
+    return b.readiness - a.readiness;
+  };
+  const stepDowns = useMemo(() => agents.filter(a => a.stepDown?.triggered).sort(byReadiness), [agents]);
   const ready = useMemo(() => agents.filter(a => a.verdict === 'ready' && !a.stepDown?.triggered).sort((a, b) => b.reviewerHoursPerMonth - a.reviewerHoursPerMonth), [agents]);
   const selected = selectedId ? agents.find(a => a.agentId === selectedId) ?? null : null;
 
@@ -114,10 +132,33 @@ export default function EarnedAutonomyView() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard label="Ready to Graduate" value={summary.ready} variant="success" />
         <StatCard label="Conditional" value={summary.conditional} variant="warning" sub="with monitoring" />
-        <StatCard label="Not Yet" value={summary.notReady} variant="muted" sub="more evidence needed" />
+        <StatCard label="Not Yet" value={summary.notReady} variant="muted" sub="criteria unmet" />
+        {/* Separated from "Not Yet" deliberately. These agents were not judged and
+            found wanting — nothing is known about them. Folding them into "Not Yet"
+            made an instrumentation gap look like a fleet of underperforming agents. */}
+        <StatCard label="Not Enough Evidence" value={summary.insufficientEvidence} variant="muted" sub="never assessed" />
         <StatCard label="Step-Down Advised" value={summary.stepDownRecommended} variant="danger" />
         <StatCard label="Reviewer Hrs / mo" value={summary.reclaimableHoursPerMonth.toLocaleString()} variant="info" sub="reclaimable if graduated" />
-        <StatCard label="At L1–L2" value={`${summary.pctAtLowAutonomy}%`} sub="still gated by HITL" />
+      </div>
+
+      {/* What the strip above is and is not claiming. Without this line a reader
+          cannot tell whether "N ready of 240" was measured across the whole fleet
+          or across the fraction of it that could be scored at all. */}
+      <div className="text-[10px] text-slate-500 bg-slate-50/60 rounded-lg px-3 py-2 border border-slate-100 flex flex-wrap gap-x-4 gap-y-1">
+        <span>
+          <span className="font-semibold text-slate-600">Mean readiness</span>{' '}
+          {summary.meanReadinessScored === null
+            ? 'not available — no agent could be scored'
+            : `${summary.meanReadinessScored}/100`}
+        </span>
+        <span>
+          <span className="font-semibold text-slate-600">Scored</span>{' '}
+          {summary.total - summary.unscored} of {summary.total} agents
+          {summary.unscored > 0 && ` (${summary.unscored} unscored, excluded from the mean rather than counted as 0)`}
+        </span>
+        <span>
+          <span className="font-semibold text-slate-600">At L1–L2</span> {summary.pctAtLowAutonomy}% still gated by HITL
+        </span>
       </div>
 
       {/* Human-Agreement as a Responsible-AI ALIGNMENT metric — fleet roll-up.
@@ -204,7 +245,11 @@ export default function EarnedAutonomyView() {
                 <td className="py-2 px-5 font-medium text-slate-800">{a.name}<div className="text-[10px] text-slate-400">{a.businessUnit}</div></td>
                 <td className="py-2 px-2"><span className="inline-flex items-center gap-1"><LevelChip level={a.currentLevel} /><span className="text-slate-300">→</span>{a.targetLevel && <LevelChip level={a.targetLevel} />}</span></td>
                 <td className="py-2 px-2 text-center"><span className="font-semibold text-emerald-700">{a.agreementRate}%{a.agreementTrend === 'rising' ? ' ▲' : ''}</span></td>
-                <td className="py-2 px-2 text-center tabular-nums font-semibold text-slate-700">{a.readiness}</td>
+                <td className="py-2 px-2 text-center">
+                  {a.scoreProvenance
+                    ? <ScoreValue value={a.readiness} provenance={a.scoreProvenance} />
+                    : <span className="text-slate-400">&mdash;</span>}
+                </td>
                 <td className="py-2 px-3 text-right tabular-nums text-slate-600">{a.reviewerHoursPerMonth}</td>
               </tr>
             ))}
@@ -230,12 +275,24 @@ export default function EarnedAutonomyView() {
               </div>
             </div>
             <div className="text-right">
-              <span className={`text-xs font-bold px-3 py-1 rounded-lg ${verdictMeta[selected.verdict].badge}`}>
-                {selected.verdict === 'ready' ? '✓ ' : selected.verdict === 'conditional' ? '! ' : ''}{verdictMeta[selected.verdict].label}
+              <span className={`text-xs font-bold px-3 py-1 rounded-lg inline-flex items-center gap-1 ${verdictMeta[selected.verdict].badge}`}>
+                {selected.verdict === 'ready' ? <Icon name="check" className="w-3.5 h-3.5" strokeWidth={2.5} /> : selected.verdict === 'conditional' ? <Icon name="exclamation-triangle" className="w-3.5 h-3.5" strokeWidth={2} /> : null}{verdictMeta[selected.verdict].label}
               </span>
-              <div className="text-[9px] text-slate-400 mt-1">Readiness {selected.readiness}/100</div>
             </div>
           </div>
+
+          {/* The score, with what it means and what it is made of. This replaced a
+              bare "Readiness 86/100", which was ambiguous against the platform's
+              riskScore - same 0-100 space, opposite polarity. */}
+          {selected.scoreProvenance && (
+            <div className="mb-4 pb-4 border-b border-slate-100">
+              <ScoreDisclosure
+                value={selected.readiness}
+                provenance={selected.scoreProvenance}
+                blockingFailures={selected.blockingFailures ?? []}
+              />
+            </div>
+          )}
 
           {/* How oversight shifts on promotion — it transforms, it does not vanish.
               Grounded in AWS Agentic Scoping Matrix + EU AI Act Art. 14(3). */}
@@ -260,17 +317,35 @@ export default function EarnedAutonomyView() {
 
           <div className="space-y-2">
             {selected.criteria.map((c) => {
-              const sm = statusMeta[c.status];
+              const sm = statusMeta[c.status] ?? statusMeta.insufficient;
               return (
-                <div key={c.label} className="flex items-start gap-3 bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <span className={`text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${sm.badge}`}>{sm.icon}</span>
+                <div key={c.label} className={`flex items-start gap-3 rounded-lg p-3 border ${c.unknown ? 'bg-white border-dashed border-slate-200' : 'bg-slate-50 border-slate-100'}`}>
+                  <span
+                    className={`text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${sm.badge}`}
+                    title={sm.label}
+                  >
+                    <Icon name={sm.icon} className="w-3 h-3" strokeWidth={2.5} />
+                  </span>
                   <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-slate-800">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[11px] font-semibold ${c.unknown ? 'text-slate-500' : 'text-slate-800'}`}>
                         {c.label}
                         {c.blocking && c.status === 'fail' && <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">blocking</span>}
+                        {/* An unknown criterion is labelled as excluded from the score,
+                            not just greyed out. Grey alone reads as "less important". */}
+                        {c.unknown && <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">not scored</span>}
+                        {/* Weight makes it explicit why one unmet criterion moved the
+                            score more than another. */}
+                        {c.weight > 0 && (
+                          <span className="ml-1.5 text-[9px] font-normal text-slate-400" title={`Carries ${Math.round(c.weight * 100)}% of the readiness score`}>
+                            {Math.round(c.weight * 100)}% of score
+                          </span>
+                        )}
                       </span>
-                      <span className="text-[11px] text-slate-600"><span className="text-slate-400">{c.requirement}</span> · <span className="font-semibold">{c.value}</span></span>
+                      <span className="text-[11px] text-slate-600 text-right flex-shrink-0">
+                        <span className="text-slate-400">{c.requirement}</span> ·{' '}
+                        <span className={c.unknown ? 'italic text-slate-400' : 'font-semibold'}>{c.value}</span>
+                      </span>
                     </div>
                     {c.detail && <div className="text-[10px] text-slate-500 mt-0.5">{c.detail}</div>}
                   </div>
@@ -288,7 +363,15 @@ export default function EarnedAutonomyView() {
           )}
           {selected.verdict === 'not_ready' && (
             <div className="mt-4 text-[10px] text-slate-500 bg-slate-50 rounded-lg p-3 border border-slate-100">
-              Not yet ready — this agent may be performing well, it just hasn't accumulated enough evidence. Resolve the blocking criteria above to graduate. Oversight reduction is earned, not granted.
+              Not yet ready — one or more blocking criteria are unmet. Resolve them above to graduate. Oversight reduction is earned, not granted.
+            </div>
+          )}
+          {/* Separate copy from not_ready. Telling an operator to "resolve the
+              blocking criteria" is useless when the real problem is that no
+              criteria could be evaluated — the action is to instrument the agent. */}
+          {selected.verdict === 'insufficient_evidence' && (
+            <div className="mt-4 text-[10px] text-slate-500 bg-slate-50 rounded-lg p-3 border border-slate-100">
+              Not enough evidence — this says nothing about how the agent is performing. Its decisions are not being recorded in sufficient volume for any judgement to rest on. Route this agent's approvals through the Human Oversight workspace so its decisions land in the audit log, then readiness will begin to score.
             </div>
           )}
           <button onClick={() => setSelectedId(null)} className="mt-3 text-[10px] text-slate-400 hover:text-slate-600">Close</button>

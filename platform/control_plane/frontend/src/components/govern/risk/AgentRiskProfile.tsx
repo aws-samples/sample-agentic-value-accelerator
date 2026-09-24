@@ -10,8 +10,10 @@
  */
 
 import { useState, useMemo } from 'react';
+import { Icon } from '../icons';
 import { getRiskScoreBadge, getRiskScoreTextColor } from '../riskScoring';
 import { scopeColor, scopeName, type AgentScopeLevel } from '../autonomyLadder';
+import { MockDataBadge } from '../DataSourceIndicator';
 
 interface AgentProfile {
   id: string;
@@ -183,22 +185,22 @@ export default function AgentRiskProfile() {
     if (tools.length === 0) return 0;
     const weights = { read: 1, write: 2, execute: 3, admin: 4 };
     const blastWeights = { low: 1, medium: 2, high: 3, critical: 4 };
-    return Math.round(
+    return Math.max(0, Math.min(100, Math.round(
       tools.reduce((sum, t) => sum + (t.criticalityScore * weights[t.category] * blastWeights[t.blastRadius]) / 16, 0) / tools.length
-    );
+    )));
   };
 
   const calculateDataRisk = (data: DataAccess[]) => {
     if (data.length === 0) return 0;
     const classWeights = { public: 1, internal: 2, confidential: 3, restricted: 4 };
-    return Math.round(
+    return Math.max(0, Math.min(100, Math.round(
       data.reduce((sum, d) => {
         let score = classWeights[d.classification] * 20;
         if (d.containsPII) score *= 1.5;
         if (d.accessType === 'read-write') score *= 1.3;
         return sum + score;
       }, 0) / data.length
-    );
+    )));
   };
 
   const toggleSection = (section: string) => {
@@ -207,6 +209,13 @@ export default function AgentRiskProfile() {
 
   return (
     <div className="space-y-6">
+      {/* Data-source disclosure: this tab renders illustrative mock agent profiles,
+          not live Bedrock Agents / IAM data. Surface a Demo badge so the mock
+          risk scores and stats below are never read as live. */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-slate-500">Agent risk profiles are illustrative sample data.</span>
+        <MockDataBadge integration="Bedrock Agents + IAM" />
+      </div>
       {/* Header Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4">
@@ -336,7 +345,7 @@ export default function AgentRiskProfile() {
                 className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🔧</span>
+                  <Icon name="wrench-screwdriver" className="w-5 h-5 text-slate-500" />
                   <span className="font-medium text-slate-900">Tool Access</span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                     {selectedAgent.toolAccess.length} tools
@@ -385,7 +394,7 @@ export default function AgentRiskProfile() {
                 className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🗄️</span>
+                  <Icon name="circle-stack" className="w-5 h-5 text-slate-500" />
                   <span className="font-medium text-slate-900">Data Access</span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                     {selectedAgent.dataAccess.length} sources
@@ -438,7 +447,7 @@ export default function AgentRiskProfile() {
                 className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🛡️</span>
+                  <Icon name="shield-check" className="w-5 h-5 text-slate-500" />
                   <span className="font-medium text-slate-900">Scope Boundaries</span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                     {selectedAgent.scopeBoundaries.filter(b => b.enforced).length}/{selectedAgent.scopeBoundaries.length} enforced
@@ -489,7 +498,7 @@ export default function AgentRiskProfile() {
                 className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🔗</span>
+                  <Icon name="link" className="w-5 h-5 text-slate-500" />
                   <span className="font-medium text-slate-900">Multi-Agent Chains</span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                     {selectedAgent.chainParticipation.length} chains

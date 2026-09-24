@@ -9,21 +9,21 @@ DDB schema (single-table): pk `provider_id` (uuid).
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from urllib.parse import urljoin
+from urllib.parse import urlsplit, urlunsplit
 
 import boto3
-import urllib.request
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException, Depends as RBACDepends, Header
 from pydantic import BaseModel, Field
 
+from core import safe_fetch
 from core.config import settings
 from core.rbac import Role, require_role
+from core.safe_fetch import SafeFetchError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/identity-providers", tags=["identity-providers"])
@@ -80,6 +80,77 @@ class ProviderUpdate(BaseModel):
 
 class DiscoveryTestRequest(BaseModel):
     discovery_url: str
+
+
+# A real discovery document is a couple of KB (the keys live behind jwks_uri, not
+# inline), so this is a 100x margin. The cap matters because /test-discovery
+# reflects the fetched body back to the caller: without it, a caller-named host
+# can stream as much as it likes through this response.
+_DISCOVERY_MAX_BYTES = 256 * 1024
+
+# The suffix the wizard appends when an operator pastes a bare issuer URL.
+_WELL_KNOWN_PATH = "/.well-known/openid-configuration"
+
+# Tested for separately, and looser on purpose: an issuer that publishes discovery
+# at some other path ending in /openid-configuration was left alone before, and
+# tightening this to _WELL_KNOWN_PATH would start rewriting - and so breaking - a
+# URL that works today.
+_DISCOVERY_SUFFIX = "/openid-configuration"
+
+# urlopen sent `User-Agent: Python-urllib/<ver>` for free; the pinned-IP client
+# sends no UA at all. WAF-fronted discovery endpoints (Front Door in front of
+# login.microsoftonline.com, Akamai in front of Okta) commonly 403 an empty UA,
+# which would surface here as an unexplained http_status_error.
+_DISCOVERY_HEADERS = {"User-Agent": "AVA-control-plane/1.0"}
+
+# Whether an operator can clear a refusal by listing the issuer's CIDR in
+# SAFE_FETCH_ALLOWED_PRIVATE_CIDRS is `safe_fetch.is_allowlistable_refusal`'s answer,
+# not this module's. There was a local frozenset here naming the three address classes
+# the allowlist can relax; it was correct when written and would not have failed if
+# safe_fetch added a fourth - the refusal would just quietly stop being explained. The
+# rule now has one owner.
+#
+# What that owner refuses to call allowlistable, and why the wizard must not offer the
+# setting for it: loopback, link-local and multicast can never be overridden
+# (safe_fetch._ALLOWLIST_CANNOT_OVERRIDE - IMDS and the ECS credential endpoint are the
+# assets being defended), so naming the setting there is advice that cannot work.
+
+# Refusals that are the submitted URL's fault, not the IdP's. Reporting a typo'd
+# scheme or hostname as 502 tells the operator to go debug a server that was never
+# contacted.
+_CLIENT_ERROR_REASONS = frozenset(
+    {"invalid_url", "blocked_scheme", "blocked_url_credentials", "unresolvable_host"}
+)
+
+
+def _discovery_failure(e: SafeFetchError) -> HTTPException:
+    """Turn a refusal into an HTTP error that names the reason and nothing else.
+
+    Never the target, its resolved address or `str(e)`: this route hands the
+    fetched document back to the caller, so echoing where the fetch went (or did
+    not go) would turn a refusal into the port scan the refusal just prevented.
+    `e.detail` carries the specifics and stays in the log.
+    """
+    detail = f"Discovery fetch failed: {e.reason}"
+
+    if safe_fetch.is_allowlistable_refusal(e.reason):
+        detail += (
+            ". The issuer does not resolve to a publicly routable address. If this is an"
+            " on-prem or VPC-internal IdP, add its CIDR to SAFE_FETCH_ALLOWED_PRIVATE_CIDRS"
+            " on the backend and retry."
+        )
+    elif e.reason == "http_status_error":
+        # The numeric status only, under a strict guard, so nothing but three digits
+        # from `status=NNN` can ever reach the body. It is worth surfacing because
+        # without it a typo'd tenant (404) is indistinguishable from an IdP outage
+        # (503), and it leaks nothing: the status comes from a host that already
+        # passed the address check, which the caller can reach directly anyway.
+        status = e.detail.removeprefix("status=")
+        if len(status) == 3 and status.isdigit():
+            detail += f" (HTTP {status})"
+
+    code = 400 if e.reason in _CLIENT_ERROR_REASONS else 502
+    return HTTPException(status_code=code, detail=detail)
 
 
 # ─── Routes ─────────────────────────────────────────────────────────────────
@@ -234,15 +305,44 @@ async def test_discovery(req: DiscoveryTestRequest, _=RBACDepends(require_role(R
     jwks_uri, supported claims) or an error the UI can surface.
     """
     url = req.discovery_url.strip()
-    # Auto-append the well-known path if the issuer alone was given.
-    if not url.endswith("/openid-configuration"):
-        url = urljoin(url.rstrip("/") + "/", ".well-known/openid-configuration")
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            body = resp.read().decode("utf-8")
-        return {"ok": True, "discovery": json.loads(body), "resolved_url": url}
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Discovery fetch failed from {url}: {e}")
+        # Auto-append the well-known path if the issuer alone was given, matching on
+        # the parsed path rather than the whole string. Microsoft documents
+        # `.../.well-known/openid-configuration?appid=<client-id>`, which an
+        # endswith() test on the raw URL misses: it would append the suffix a second
+        # time and drop the query. The rewrite happens before the fetch, so the URL
+        # safe_fetch validates is the one that is actually requested.
+        parts = urlsplit(url)
+        base_path = parts.path.rstrip("/")
+        if not base_path.endswith(_DISCOVERY_SUFFIX):
+            url = urlunsplit(parts._replace(path=base_path + _WELL_KNOWN_PATH))
+    except ValueError as e:
+        # urlsplit rejects a malformed URL (an unclosed IPv6 literal, say) before
+        # safe_fetch ever sees it. %r on the exception, not the URL, and repr either
+        # way: the message can quote the host the caller sent.
+        logger.warning("test-discovery got an unparseable url: %r", e)
+        raise HTTPException(status_code=400, detail="invalid_url")
+
+    try:
+        discovery = safe_fetch.fetch_json(
+            url, timeout=10, max_bytes=_DISCOVERY_MAX_BYTES, headers=_DISCOVERY_HEADERS
+        )
+    except SafeFetchError as e:
+        # %r, not an f-string: discovery_url is caller-controlled and can carry
+        # CR/LF, which interpolated raw would let a VIEWER forge whole log records
+        # in CloudWatch. The slice bounds what one request can write.
+        logger.warning("test-discovery refused url=%r: %s (%s)", url[:256], e.reason, e.detail)
+        raise _discovery_failure(e)
+    except Exception:
+        # Not every failure arrives as a SafeFetchError, and the ones that do not are
+        # caller-reachable: `a..example.com` makes getaddrinfo raise UnicodeError
+        # from its IDNA step, and a remote `Location: http://[::1` makes safe_fetch's
+        # redirect urljoin raise ValueError. Without this arm both are unhandled
+        # 500s with a traceback, where the wizard needs a refusal it can show.
+        logger.warning("test-discovery failed url=%r", url[:256], exc_info=True)
+        raise HTTPException(status_code=502, detail="Discovery fetch failed: fetch_failed")
+
+    return {"ok": True, "discovery": discovery, "resolved_url": url}
 
 
 @router.get("/list")

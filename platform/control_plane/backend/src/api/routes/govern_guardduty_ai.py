@@ -12,6 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_guardduty_ai import GuardDutyAIFindingsResponse
@@ -20,6 +21,9 @@ from services.govern_guardduty_ai_service import GovernGuardDutyAIService
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/guardduty-ai", tags=["govern-guardduty-ai"])
 
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_guardduty_ai", region_scope.SINGLE_REGION, prefix="/govern/guardduty-ai")
+
 _svc: Optional[GovernGuardDutyAIService] = None
 
 
@@ -27,7 +31,7 @@ def get_service() -> GovernGuardDutyAIService:
     """Lazy-init the service singleton with config from settings."""
     global _svc
     if _svc is None:
-        _svc = GovernGuardDutyAIService(region=settings.AWS_REGION)
+        _svc = GovernGuardDutyAIService(region=settings.GOVERN_AWS_REGION)
     return _svc
 
 

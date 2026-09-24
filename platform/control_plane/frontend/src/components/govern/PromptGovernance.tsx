@@ -22,13 +22,12 @@ import { Icon } from './icons';
 import { LiveGuardrailTelemetry, LiveInvocationSafety, LiveAgentMetrics } from './LivePromptTelemetry';
 import { LiveGuardrailValidation } from './LiveGuardrailValidation';
 import PromptAnalytics from './PromptAnalytics';
-import { guardrailsApi } from '../../api/client';
+import { governGuardrailsApi, governInvocationSafetyApi, type AwsInvocationSafetyResponse, type AwsGuardrailTelemetryResponse } from '../../api/client';
 import type { GuardrailTemplate } from '../../types';
 import CoreBadge from './CoreBadge';
 
 // ─────────────────────────── Types ───────────────────────────
 
-type FilterStrength = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
 type GuardrailAction = 'BLOCKED' | 'ANONYMIZED' | 'WARNED' | 'PASSED';
 type InvocationStatus = 'passed' | 'flagged' | 'blocked' | 'review_required';
 
@@ -39,41 +38,6 @@ type ContentFilterType = 'HATE' | 'INSULTS' | 'SEXUAL' | 'VIOLENCE' | 'MISCONDUC
 type PIIEntityType = 'ADDRESS' | 'AGE' | 'AWS_ACCESS_KEY' | 'AWS_SECRET_KEY' | 'CREDIT_DEBIT_CARD_NUMBER' |
   'DRIVER_ID' | 'EMAIL' | 'IP_ADDRESS' | 'LICENSE_PLATE' | 'NAME' | 'PASSWORD' | 'PHONE' |
   'PIN' | 'SSN' | 'URL' | 'USERNAME';
-
-interface BedrockGuardrailConfig {
-  guardrailId: string;
-  guardrailArn: string;
-  version: string;
-  name: string;
-  description: string;
-
-  // Content policy (hate, sexual, violence, etc.)
-  contentPolicy: {
-    filters: { type: ContentFilterType; inputStrength: FilterStrength; outputStrength: FilterStrength }[];
-  };
-
-  // Denied topics (custom topic policies)
-  topicPolicy: {
-    topics: { name: string; definition: string; examples: string[]; type: 'DENY' }[];
-  };
-
-  // Word filters
-  wordPolicy: {
-    managedWordLists: { type: 'PROFANITY' }[];
-    wordsConfig: { text: string }[];
-  };
-
-  // PII detection
-  sensitiveInformationPolicy: {
-    piiEntities: { type: PIIEntityType; action: 'BLOCK' | 'ANONYMIZE' }[];
-    regexes: { name: string; pattern: string; action: 'BLOCK' | 'ANONYMIZE' }[];
-  };
-
-  // Contextual grounding
-  contextualGroundingPolicy: {
-    filters: { type: 'GROUNDING' | 'RELEVANCE'; threshold: number }[];
-  };
-}
 
 interface GuardrailIntervention {
   guardrailId: string;
@@ -126,14 +90,14 @@ interface PromptInvocation {
   inputAssessment: {
     contentFilters: { type: ContentFilterType; confidence: number; action: GuardrailAction }[];
     topicPolicy: { name: string; action: GuardrailAction; confidence: number }[];
-    wordPolicy: { matches: string[]; action: GuardrailAction }[];
+    wordPolicy: { matches: string[]; action: GuardrailAction };
     sensitiveInfo: { type: PIIEntityType; count: number; action: GuardrailAction }[];
   };
 
   outputAssessment: {
     contentFilters: { type: ContentFilterType; confidence: number; action: GuardrailAction }[];
     topicPolicy: { name: string; action: GuardrailAction; confidence: number }[];
-    wordPolicy: { matches: string[]; action: GuardrailAction }[];
+    wordPolicy: { matches: string[]; action: GuardrailAction };
     sensitiveInfo: { type: PIIEntityType; count: number; action: GuardrailAction }[];
   };
 
@@ -162,54 +126,6 @@ interface PromptInvocation {
 
 // ─────────────────────────── Mock Data ───────────────────────────
 
-const MOCK_GUARDRAIL_CONFIG: BedrockGuardrailConfig = {
-  guardrailId: 'gr-fsi-compliance-v2',
-  guardrailArn: 'arn:aws:bedrock:us-east-1:123456789012:guardrail/gr-fsi-compliance-v2',
-  version: '2',
-  name: 'FSI Compliance Guardrail',
-  description: 'Production guardrail for financial services applications',
-  contentPolicy: {
-    filters: [
-      { type: 'HATE', inputStrength: 'HIGH', outputStrength: 'HIGH' },
-      { type: 'INSULTS', inputStrength: 'MEDIUM', outputStrength: 'HIGH' },
-      { type: 'SEXUAL', inputStrength: 'HIGH', outputStrength: 'HIGH' },
-      { type: 'VIOLENCE', inputStrength: 'HIGH', outputStrength: 'HIGH' },
-      { type: 'MISCONDUCT', inputStrength: 'HIGH', outputStrength: 'HIGH' },
-      { type: 'PROMPT_ATTACK', inputStrength: 'HIGH', outputStrength: 'NONE' },
-    ],
-  },
-  topicPolicy: {
-    topics: [
-      { name: 'investment-advice', definition: 'Specific investment recommendations or stock picks', examples: ['Buy AAPL', 'Sell your bonds'], type: 'DENY' },
-      { name: 'competitor-disparagement', definition: 'Negative statements about competitors', examples: ['Bank X is terrible'], type: 'DENY' },
-    ],
-  },
-  wordPolicy: {
-    managedWordLists: [{ type: 'PROFANITY' }],
-    wordsConfig: [{ text: 'guaranteed returns' }, { text: 'risk-free investment' }],
-  },
-  sensitiveInformationPolicy: {
-    piiEntities: [
-      { type: 'SSN', action: 'BLOCK' },
-      { type: 'CREDIT_DEBIT_CARD_NUMBER', action: 'ANONYMIZE' },
-      { type: 'AWS_ACCESS_KEY', action: 'BLOCK' },
-      { type: 'AWS_SECRET_KEY', action: 'BLOCK' },
-      { type: 'EMAIL', action: 'ANONYMIZE' },
-      { type: 'PHONE', action: 'ANONYMIZE' },
-      { type: 'NAME', action: 'ANONYMIZE' },
-    ],
-    regexes: [
-      { name: 'account-number', pattern: '\\b\\d{10,12}\\b', action: 'ANONYMIZE' },
-    ],
-  },
-  contextualGroundingPolicy: {
-    filters: [
-      { type: 'GROUNDING', threshold: 0.7 },
-      { type: 'RELEVANCE', threshold: 0.5 },
-    ],
-  },
-};
-
 const MOCK_INVOCATIONS: PromptInvocation[] = [
   {
     id: 'inv-001',
@@ -222,7 +138,17 @@ const MOCK_INVOCATIONS: PromptInvocation[] = [
     sessionId: 'sess-abc123',
     region: 'us-east-1',
     inputTokens: 2340,
-    promptPreview: 'Customer John Smith (SSN: 123-45-6789) is asking about their account balance...',
+    // Masked, deliberately. This record demonstrates an SSN being detected and BLOCKED, and
+    // the preview is rendered verbatim in the invocation log (:1660, :2143). Two reasons not
+    // to put digits here:
+    //  1. A compliance log that retained the raw SSN would itself be the privacy incident the
+    //     guardrail exists to prevent — Bedrock Guardrails masks PII, so the masked form is
+    //     what a correctly governed system actually records. This is more accurate, not less.
+    //  2. A literal nnn-nn-nnnn in the bundle trips DLP and secret scanners, and reads as real
+    //     customer data in a screenshot or demo.
+    // The filter result below still shows type SSN / action BLOCKED, so the detection is just
+    // as legible.
+    promptPreview: 'Customer John Smith (SSN: ***-**-****) is asking about their account balance...',
     systemPromptHash: 'sha256:a1b2c3d4',
     inputAssessment: {
       contentFilters: [
@@ -682,7 +608,7 @@ function LiveGuardrailsPanel() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    guardrailsApi.list()
+    governGuardrailsApi.list()
       .then(data => setGuardrails(data))
       .catch(() => setGuardrails([]))
       .finally(() => setLoading(false));
@@ -926,7 +852,7 @@ function LiveGuardrailsPanel() {
 
 // ─────────────────────────── Violation Heat Map ───────────────────────────
 
-function ViolationHeatMap({ invocations }: { invocations: PromptInvocation[] }) {
+function ViolationHeatMap() {
   const categories = ['PROMPT_ATTACK', 'PII', 'TOPIC_POLICY', 'GROUNDING', 'CREDENTIALS'];
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -1004,7 +930,7 @@ function ComplianceScorecard({ invocations }: { invocations: PromptInvocation[] 
       blocked,
       injectionScore: 100 - (appInvs.filter(i => i.inputAssessment.contentFilters.some(f => f.type === 'PROMPT_ATTACK' && f.action === 'BLOCKED')).length / total) * 100,
       piiScore: 100 - (appInvs.filter(i => i.inputAssessment.sensitiveInfo.some(s => s.action === 'BLOCKED')).length / total) * 100,
-      groundingScore: Math.round(appInvs.reduce((sum, i) => sum + i.grounding.groundingScore, 0) / total * 100),
+      groundingScore: (() => { const grounded = appInvs.filter(i => !i.blocked); return grounded.length ? Math.round(grounded.reduce((sum, i) => sum + i.grounding.groundingScore, 0) / grounded.length * 100) : 0; })(),
     };
   });
 
@@ -1970,7 +1896,7 @@ function InvocationDetailModal({ inv, onClose }: { inv: PromptInvocation; onClos
 
                   <div className="p-4 bg-violet-50 rounded-lg border border-violet-200">
                     <div className="flex items-start gap-2">
-                      <span className="text-lg">🧠</span>
+                      <Icon name="cpu-chip" className="w-5 h-5 text-violet-600 flex-shrink-0" />
                       <div className="text-xs text-violet-700">
                         <span className="font-semibold">Bedrock Automated Reasoning</span> uses SAT solvers to formally verify claims in model outputs against defined policies. This provides mathematical proofs of compliance, not just probabilistic scoring.
                       </div>
@@ -2020,6 +1946,23 @@ export default function PromptGovernance() {
   const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d'>('24h');
   const [view, setView] = useState<'live' | 'invocations' | 'heatmap' | 'scorecard' | 'agentcore' | 'analytics'>('live');
 
+  // Live telemetry for the aggregate stat strip: real call volume + interventions
+  // from Bedrock invocation logs, plus per-policy guardrail interventions.
+  const [invSafety, setInvSafety] = useState<AwsInvocationSafetyResponse | null>(null);
+  const [guardrailTel, setGuardrailTel] = useState<AwsGuardrailTelemetryResponse | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      governInvocationSafetyApi.telemetry(7).catch(() => null),
+      governGuardrailsApi.telemetry(30).catch(() => null),
+    ]).then(([inv, gr]) => {
+      if (cancelled) return;
+      setInvSafety(inv);
+      setGuardrailTel(gr);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   const invocations = MOCK_INVOCATIONS;
 
   const filtered = useMemo(() =>
@@ -2031,11 +1974,24 @@ export default function PromptGovernance() {
     passed: invocations.filter(i => i.status === 'passed').length,
     flagged: invocations.filter(i => i.status === 'flagged').length,
     blocked: invocations.filter(i => i.blocked).length,
-    promptAttacks: invocations.filter(i => i.inputAssessment.contentFilters.some(f => f.type === 'PROMPT_ATTACK' && f.action === 'BLOCKED')).length,
+    contentFiltered: invocations.filter(i => i.inputAssessment.contentFilters.some(f => f.action === 'BLOCKED')).length,
     piiBlocked: invocations.filter(i => i.inputAssessment.sensitiveInfo.some(s => s.action === 'BLOCKED')).length,
     groundingFailed: invocations.filter(i => !i.grounding.groundingPassed && i.grounding.groundingScore > 0).length,
     totalCost: invocations.reduce((sum, i) => sum + i.estimatedCost, 0),
   }), [invocations]);
+
+  // Per-policy guardrail intervention counts (keyword match on policy_type/label).
+  // Sums EVERY matching policy row — a keyword set can match more than one Bedrock
+  // policy dimension, so taking only the first match would undercount.
+  const policyCount = (keywords: string[]) => {
+    const byPolicy = guardrailTel?.by_policy ?? [];
+    return byPolicy
+      .filter(p => keywords.some(k => p.policy_type?.toLowerCase().includes(k) || p.label?.toLowerCase().includes(k)))
+      .reduce((sum, p) => sum + (p.interventions ?? 0), 0);
+  };
+  const invLive = !!invSafety?.live;
+  const guardrailLive = !!guardrailTel?.live;
+  const stripLive = invLive || guardrailLive;
 
   const statusConfig: Record<InvocationStatus, { label: string; color: string; iconName: 'check-circle' | 'exclamation-triangle' | 'x-circle' | 'information-circle' }> = {
     passed: { label: 'Passed', color: 'bg-emerald-100 text-emerald-700', iconName: 'check-circle' },
@@ -2051,40 +2007,32 @@ export default function PromptGovernance() {
           ← Govern
         </Link>
 
-        {/* Hero Card */}
-        <div className="mt-3 mb-6 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                </svg>
-              </div>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Prompt Governance</h1>
-                  <CoreBadge pillar="govern" />
-                  <MockDataBadge integration="Bedrock Guardrails + Model Invocation Logging" />
-                </div>
-                <p className="text-slate-500 mt-1 max-w-2xl text-sm">
-                  AWS-native 4-layer defense: Real-time guardrails, contextual grounding, async observability, and formal verification with automated reasoning.
-                </p>
-              </div>
+        <div className="flex items-end justify-between mt-3 mb-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Prompt Governance</h1>
+              <CoreBadge pillar="govern" />
+              {stripLive
+                ? <LiveDataBadge source="Bedrock invocation logs + guardrail telemetry" detail="Total / passed / blocked from CloudWatch model-invocation logs; content, PII, and grounding from Bedrock guardrail telemetry. Flagged and cost remain illustrative." />
+                : <MockDataBadge integration="Bedrock Guardrails + Model Invocation Logging" />}
             </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={timeRange}
-                onChange={e => setTimeRange(e.target.value as typeof timeRange)}
-                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-600"
-              >
-                <option value="1h">Last 1 hour</option>
-                <option value="24h">Last 24 hours</option>
-                <option value="7d">Last 7 days</option>
-              </select>
-              <Link to="/secure/guardrails" className="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 bg-blue-50 rounded-lg">
-                Configure Guardrails →
-              </Link>
-            </div>
+            <p className="text-slate-500 mt-1 max-w-2xl">
+              Govern every prompt and response — Bedrock guardrails, grounding checks, per-invocation telemetry, and formal verification.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={timeRange}
+              onChange={e => setTimeRange(e.target.value as typeof timeRange)}
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-600"
+            >
+              <option value="1h">Last 1 hour</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+            </select>
+            <Link to="/secure/guardrails" className="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 bg-blue-50 rounded-lg">
+              Configure Guardrails →
+            </Link>
           </div>
         </div>
 
@@ -2097,19 +2045,23 @@ export default function PromptGovernance() {
         {/* Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
           {[
-            { label: 'Total', value: stats.total, color: 'text-slate-800', iconName: 'chart-bar' as const },
-            { label: 'Passed', value: stats.passed, color: 'text-emerald-600', iconName: 'check-circle' as const },
-            { label: 'Blocked', value: stats.blocked, color: 'text-rose-600', iconName: 'shield-check' as const },
-            { label: 'Flagged', value: stats.flagged, color: 'text-amber-600', iconName: 'exclamation-triangle' as const },
-            { label: 'Injection', value: stats.promptAttacks, color: 'text-rose-600', iconName: 'syringe' as const },
-            { label: 'PII Block', value: stats.piiBlocked, color: 'text-purple-600', iconName: 'user' as const },
-            { label: 'Grounding', value: stats.groundingFailed, color: 'text-amber-600', iconName: 'map-pin' as const },
-            { label: 'Cost', value: `$${stats.totalCost.toFixed(2)}`, color: 'text-slate-600', iconName: 'currency-dollar' as const },
+            { label: 'Total', value: (invLive && invSafety ? invSafety.total_calls.toLocaleString() : stats.total), color: 'text-slate-800', iconName: 'chart-bar' as const, note: undefined as string | undefined },
+            { label: 'Passed', value: (invLive && invSafety ? Math.max(0, invSafety.total_calls - invSafety.guardrail_intervened).toLocaleString() : stats.passed), color: 'text-emerald-600', iconName: 'check-circle' as const, note: undefined as string | undefined },
+            { label: 'Blocked', value: (invLive && invSafety ? invSafety.guardrail_intervened.toLocaleString() : stats.blocked), color: 'text-rose-600', iconName: 'shield-check' as const, note: undefined as string | undefined },
+            { label: 'Flagged', value: stats.flagged, color: 'text-amber-600', iconName: 'exclamation-triangle' as const, note: stripLive ? 'illustrative' : undefined },
+            // Bedrock's per-policy CloudWatch metrics have no PROMPT_ATTACK breakout — the
+            // ContentPolicy dimension bundles prompt attack with hate/violence/insults/etc.
+            // Label the tile for what it measures rather than implying an injection-only count.
+            { label: 'Content Filters', value: (guardrailLive ? policyCount(['content']).toLocaleString() : stats.contentFiltered), color: 'text-rose-600', iconName: 'funnel' as const, note: 'incl. prompt attack' as string | undefined },
+            { label: 'PII Block', value: (guardrailLive ? policyCount(['pii', 'sensitive']).toLocaleString() : stats.piiBlocked), color: 'text-purple-600', iconName: 'user' as const, note: undefined as string | undefined },
+            { label: 'Grounding', value: (guardrailLive ? policyCount(['grounding']).toLocaleString() : stats.groundingFailed), color: 'text-amber-600', iconName: 'map-pin' as const, note: undefined as string | undefined },
+            { label: 'Cost', value: `$${stats.totalCost.toFixed(2)}`, color: 'text-slate-600', iconName: 'currency-dollar' as const, note: stripLive ? 'illustrative' : undefined },
           ].map(s => (
             <div key={s.label} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-3 shadow-sm text-center">
               <div className="flex justify-center mb-0.5"><Icon name={s.iconName} className="w-5 h-5 text-slate-500" /></div>
               <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
               <div className="text-[10px] text-slate-500 uppercase tracking-wide">{s.label}</div>
+              {s.note && <div className="text-[8px] text-slate-400 tracking-wide">{s.note}</div>}
             </div>
           ))}
         </div>
@@ -2254,7 +2206,7 @@ export default function PromptGovernance() {
         )}
         {view === 'agentcore' && <AgentCoreGovernance />}
         {view === 'analytics' && <PromptAnalytics />}
-        {view === 'heatmap' && <ViolationHeatMap invocations={invocations} />}
+        {view === 'heatmap' && <ViolationHeatMap />}
         {view === 'scorecard' && <ComplianceScorecard invocations={invocations} />}
 
         {/* AWS Integration Note */}

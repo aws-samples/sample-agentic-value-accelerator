@@ -54,18 +54,32 @@ if [ "$DEPLOY_RC" = "0" ] && [ -w /tmp ]; then
       DASHBOARD_URL="https://$DOMAIN"
     fi
   fi
-  # Write valid JSON regardless — empty URL is fine, the UI just won't show
-  # the button until a re-deploy publishes one.
+  # The sample agent's runtime ARN must reach the deployment record too —
+  # without it, the control plane (Operate → Evaluation above all) cannot
+  # know this deployment has an invocable agent.
+  AGENT_ARN=""
+  if command -v aws >/dev/null 2>&1; then
+    AGENT_STACK="agent-$(echo "${AGENT_NAME:-safety_demo_agent}" | tr '_' '-')"
+    AGENT_ARN=$(aws cloudformation describe-stacks \
+        --stack-name "$AGENT_STACK" \
+        --region "$REGION" \
+        --query 'Stacks[0].Outputs[?OutputKey==`AgentRuntimeArn`].OutputValue' \
+        --output text 2>/dev/null || true)
+    [ "$AGENT_ARN" = "None" ] && AGENT_ARN=""
+  fi
+  # Write valid JSON regardless — empty URL/ARN is fine, the UI just won't
+  # show the button (or offer live evaluation) until a re-deploy publishes one.
   cat > /tmp/outputs.json <<JSON
 {
   "deployment_id": "${DEPLOYMENT_ID:-agent-safety}",
   "status": "success",
   "iac_type": "bash",
   "dashboard_url": "$DASHBOARD_URL",
-  "ui_url": "$DASHBOARD_URL"
+  "ui_url": "$DASHBOARD_URL",
+  "agent_runtime_arn": "$AGENT_ARN"
 }
 JSON
-  echo "Wrote /tmp/outputs.json with dashboard_url=$DASHBOARD_URL"
+  echo "Wrote /tmp/outputs.json with dashboard_url=$DASHBOARD_URL agent_runtime_arn=$AGENT_ARN"
 fi
 
 exit $DEPLOY_RC

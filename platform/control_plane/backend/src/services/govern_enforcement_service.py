@@ -23,6 +23,7 @@ from typing import List, Optional
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
+from botocore.exceptions import ClientError
 
 from models.govern_audit import AuditCategory, AuditEventCreate, AuditSeverity
 from models.govern_enforcement import (
@@ -215,7 +216,15 @@ class GovernEnforcementService:
         return [EnforcementPolicy.model_validate(_from_ddb(json.loads(i["data"]))) for i in resp.get("Items", [])]
 
     def get_policy(self, policy_id: str) -> Optional[EnforcementPolicy]:
-        resp = self.table.get_item(Key={"pk": f"{self.POL_PREFIX}{policy_id}", "sk": self.SK_LATEST})
+        try:
+            resp = self.table.get_item(Key={"pk": f"{self.POL_PREFIX}{policy_id}", "sk": self.SK_LATEST})
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Enforcement policy table not provisioned; returning None for policy lookup"
+                )
+                return None
+            raise
         item = resp.get("Item")
         return EnforcementPolicy.model_validate(_from_ddb(json.loads(item["data"]))) if item else None
 

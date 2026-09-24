@@ -51,3 +51,11 @@ variable "extra_distribution_arns" {
   type        = list(string)
   default     = []
 }
+
+# Optional: WAFv2 Web ACL ARN to associate with the distribution. Must be
+# CLOUDFRONT-scope and in us-east-1. When empty, no WAF is attached.
+variable "web_acl_arn" {
+  description = "WAFv2 Web ACL ARN (CLOUDFRONT scope) to associate with the distribution."
+  type        = string
+  default     = ""
+}

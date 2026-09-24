@@ -1,0 +1,28 @@
+{
+  "customer_id": "CUST009",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 8200000,
+    "total_outflow": 7900000,
+    "average_monthly_volume": 670833,
+    "transaction_count": 500
+  },
+  "top_counterparties": [
+    {
+      "name": "Field Operations Aleppo",
+      "country": "Syria",
+      "volume": 2000000,
+      "type": "outflow"
+    }
+  ],
+  "geographic_distribution": {
+    "domestic": 20,
+    "international": 80
+  },
+  "high_risk_jurisdictions": [
+    "Syria",
+    "Turkey"
+  ],
+  "suspicious_patterns": [],
+  "large_transactions_over_100k": 10
+}

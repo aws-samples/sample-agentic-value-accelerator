@@ -643,10 +643,12 @@ export default function RiskScoringCalculator({ isOpen, onClose }: Props) {
               {selectedBedrockModel && (
                 <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                       selectedBedrockModel.provider === 'Anthropic' ? 'bg-orange-100' : 'bg-amber-100'
                     }`}>
-                      {selectedBedrockModel.provider === 'Anthropic' ? '🧠' : '☁️'}
+                      {selectedBedrockModel.provider === 'Anthropic'
+                        ? <Icon name="brain" className="w-6 h-6" />
+                        : <Icon name="cloud" className="w-6 h-6" />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">

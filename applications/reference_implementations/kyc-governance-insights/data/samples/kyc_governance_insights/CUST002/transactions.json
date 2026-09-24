@@ -1,0 +1,27 @@
+{
+  "customer_id": "CUST002",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 110000000,
+    "total_outflow": 98000000,
+    "average_monthly_volume": 8666667,
+    "transaction_count": 1800
+  },
+  "top_counterparties": [
+    {
+      "name": "Gulf Metals LLC",
+      "country": "UAE",
+      "volume": 30000000,
+      "type": "inflow"
+    }
+  ],
+  "geographic_distribution": {
+    "domestic": 25,
+    "international": 75
+  },
+  "high_risk_jurisdictions": [
+    "UAE"
+  ],
+  "suspicious_patterns": [],
+  "large_transactions_over_100k": 36
+}

@@ -1,0 +1,42 @@
+{
+  "customer_id": "CUST007",
+  "credit_score": 740,
+  "credit_rating": "A",
+  "existing_facilities": [
+    {
+      "type": "Intraday FX Facility",
+      "limit": 50000000,
+      "utilized": 20000000,
+      "status": "current",
+      "bank": "JPMorgan"
+    }
+  ],
+  "payment_history": {
+    "payments_on_time": 120,
+    "payments_total": 120,
+    "on_time_payments": 120,
+    "late_payments": 0,
+    "defaults": 0,
+    "average_days_to_pay": 12
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 220000000,
+    "total_liabilities": 76000000,
+    "current_assets": 150000000,
+    "current_liabilities": 90000000,
+    "revenue": 520000000,
+    "net_income": 41000000,
+    "debt_to_equity": 0.53,
+    "current_ratio": 1.67,
+    "net_margin": 0.0788
+  },
+  "agent_claims": {
+    "de_ratio": 0.53,
+    "current_ratio": 1.67,
+    "net_margin": 0.0788,
+    "payment_pct": 100.0
+  },
+  "credit_inquiries_last_12_months": 2
+}

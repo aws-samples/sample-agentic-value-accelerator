@@ -120,10 +120,18 @@ class OrganizationDesignService:
         return m
 
     def get(self, organization_design_id: str) -> Optional[OrganizationDesign]:
-        resp = self.table.get_item(Key={
-            "pk": f"{self.PK_PREFIX}{organization_design_id}",
-            "sk": self.SK_LATEST,
-        })
+        try:
+            resp = self.table.get_item(Key={
+                "pk": f"{self.PK_PREFIX}{organization_design_id}",
+                "sk": self.SK_LATEST,
+            })
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Organization design table not provisioned; returning None"
+                )
+                return None
+            raise
         item = resp.get("Item")
         if not item:
             return None
@@ -133,7 +141,15 @@ class OrganizationDesignService:
         scan_kwargs = {"FilterExpression": Attr("pk").begins_with(self.PK_PREFIX)}
         if status:
             scan_kwargs["FilterExpression"] = scan_kwargs["FilterExpression"] & Attr("status").eq(status.value)
-        resp = self.table.scan(**scan_kwargs)
+        try:
+            resp = self.table.scan(**scan_kwargs)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Organization design table not provisioned; returning empty list"
+                )
+                return []
+            raise
         items = resp.get("Items", [])
         out = [self._from_item(i) for i in items]
         out.sort(key=lambda x: x.updated_at, reverse=True)

@@ -41,7 +41,12 @@ class GovernPostureService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_config_compliance(self) -> ConfigCompliance:
@@ -67,6 +72,13 @@ class GovernPostureService:
                 if not token:
                     break
 
+            # `evaluated` is the rules AWS Config returned a pass/fail verdict for — it is
+            # NOT the account's Config rule count. DescribeComplianceByConfigRule omits
+            # rules it has no evaluation for (e.g. Security Hub service-linked rules), so
+            # this denominator is normally much smaller than DescribeConfigRules. Callers
+            # rendering total_rules must label it as the evaluated subset; for the full
+            # rule set use govern_controls_service.get_config_rules() (`total`), which is
+            # what the Compliance surface renders.
             evaluated = compliant + non_compliant
             return ConfigCompliance(
                 compliant=compliant,
@@ -93,7 +105,12 @@ class GovernPostureService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_rule_detail(self) -> ConfigRuleDetail:

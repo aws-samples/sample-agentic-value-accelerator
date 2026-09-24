@@ -62,7 +62,7 @@ export default function ThreatModeling() {
   return (
     <GovernPageLayout
       title="Threat Modeling"
-      description="Threat-first modeling of autonomous capabilities — decompose by MAESTRO's 7 layers or by capability, map to OWASP Agentic threats (T1–T17), and see the platform controls that mitigate each with residual exposure and coverage gaps."
+      description="See how agents can be attacked — decompose by MAESTRO layer or capability, map to OWASP Agentic threats, and track control coverage and gaps."
       badge={<MockDataBadge integration="MAESTRO (CSA) · OWASP Agentic AI Threats v1.1" />}
       backPath="/govern/safety"
       backLabel="AI Safety"

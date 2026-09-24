@@ -75,8 +75,8 @@ locals {
   # (e.g., "commercial-loan-application-review" vs "commercial-loan-underwriting").
   # Trim a trailing "-" off the 8-char prefix so names whose 8th char is a hyphen
   # (e.g., "agentic-internal-audit-platform") don't produce an invalid "agentic--<hash>".
-  _use_case_prefix    = trimsuffix(substr(local._use_case_raw, 0, 8), "-")
-  _use_case_truncated = length(local._use_case_raw) <= 15 ? local._use_case_raw : "${local._use_case_prefix}-${substr(md5(local._use_case_raw), 0, 6)}"
+  _use_case_prefix      = trimsuffix(substr(local._use_case_raw, 0, 8), "-")
+  _use_case_truncated   = length(local._use_case_raw) <= 15 ? local._use_case_raw : "${local._use_case_prefix}-${substr(md5(local._use_case_raw), 0, 6)}"
   use_case_id_lower     = trimprefix(trimsuffix(local._use_case_truncated, "-"), "-")
   framework_short_lower = lower(replace(local.framework_short, "_", "-"))
 

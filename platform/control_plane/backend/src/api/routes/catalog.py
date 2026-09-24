@@ -36,6 +36,12 @@ router = APIRouter(prefix="/catalog", tags=["catalog"])
 class CatalogItem(BaseModel):
     """UI-friendly shape. Any field may be empty — the frontend renders '—'."""
 
+    # `model_id` is an AI model identifier (a Bedrock modelId) - meaningful domain
+    # vocabulary, not a pydantic internal. Pydantic reserves the `model_` prefix, so
+    # the namespace guard is disabled deliberately; renaming the field would break
+    # the API contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
+
     id: str
     name: str
     type: str  # "harness" | "memory" | "agentcore-runtime" | "frontier-agent" | "custom-agent" | "app" | "template" | "mcp-server" | "agent" | "a2a-agent"

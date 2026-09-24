@@ -1,0 +1,33 @@
+{
+  "customer_id": "CUST003",
+  "name": "Meridian Pension Trust",
+  "account_type": "institutional",
+  "industry": "Pension Fund",
+  "incorporation": {
+    "country": "United Kingdom",
+    "state": "England",
+    "date": "1998-04-06"
+  },
+  "contact": {
+    "address": "8 Finsbury Circus, London, EC2M 7EA, UK",
+    "phone": "+44-20-7555-0188",
+    "email": "trustees@meridianpension.example.co.uk"
+  },
+  "directors": [
+    {
+      "name": "Trustee Board (9 members)",
+      "role": "Board of Trustees",
+      "pep_status": false
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "47,000 scheme beneficiaries (trust)",
+      "ownership_percentage": 100
+    }
+  ],
+  "kyc_status": "verified",
+  "risk_flags": [],
+  "annual_revenue": "$2.8B AUM",
+  "regulatory_status": "FCA authorised"
+}

@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Console Gateway - a single consolidated HTTP API that fronts all governance
+  console backends behind one CloudFront /svc/* behavior. The browser calls same-origin
+  /svc/<service>/... ; CloudFront injects x-api-key as an Origin Custom Header; this
+  gateway HTTP-proxies each /svc/<service>/{proxy+} to the corresponding backend API,
+  forwarding the injected key. No API key or account-specific URL ever reaches the browser.
+  See docs/DESIGN_DECISION_API_CONSOLIDATION.md. Deployed live via CLI (API id 46md2r9izf);
+  this template is the durable, portable IaC — backend API ids are parameters so it
+  redeploys cleanly in any account.
+
+Parameters:
+  # No defaults on purpose. These were hardcoded API ids from one account, so a deploy
+  # elsewhere silently produced a gateway whose routes pointed at APIs in a different
+  # account or at APIs that no longer existed. deploy_all.sh resolves every id from the
+  # corresponding stack output; a missing value now fails the deploy instead.
+  CedarApiId:     { Type: String }
+  RegistryApiId:  { Type: String }
+  HitlApiId:      { Type: String }
+  GroundingApiId: { Type: String }
+  ValidatorApiId: { Type: String }
+  MetricsApiId:   { Type: String }
+  # In-account metrics-proxy API (this repo's metrics-proxy stack). It serves
+  # /metrics-history (+ /metrics, /traces, /waf-stats) from THIS account. The
+  # MetricsApiId above is a shared, cross-account control-plane metrics API that
+  # does NOT have /metrics-history. Pass this from the metrics-proxy stack's
+  # ApiEndpoint output (deploy_all resolves it); no account-specific default.
+  MetricsProxyApiId: { Type: String, Default: '' }
+  # policy-config proxy (Decision-Rules sliders -> DDB). Exact route below.
+  PolicyConfigApiId: { Type: String }
+
+Resources:
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: kyc-console-gateway
+      ProtocolType: HTTP
+      # No CORS config needed: browser reaches this only same-origin via CloudFront /svc/*.
+
+  # One HTTP_PROXY integration + route per backend service. {proxy} greedily maps the
+  # path after /svc/<service>/ onto the backend's real path.
+  CedarIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${CedarApiId}.execute-api.${AWS::Region}.amazonaws.com/{proxy}' }
+  CedarRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/cedar/{proxy+}', Target: !Sub 'integrations/${CedarIntegration}' }
+
+  RegistryIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${RegistryApiId}.execute-api.${AWS::Region}.amazonaws.com/{proxy}' }
+  RegistryRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/registry/{proxy+}', Target: !Sub 'integrations/${RegistryIntegration}' }
+
+  HitlIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${HitlApiId}.execute-api.${AWS::Region}.amazonaws.com/{proxy}' }
+  HitlRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/hitl/{proxy+}', Target: !Sub 'integrations/${HitlIntegration}' }
+
+  GroundingIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${GroundingApiId}.execute-api.${AWS::Region}.amazonaws.com/{proxy}' }
+  GroundingRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/grounding/{proxy+}', Target: !Sub 'integrations/${GroundingIntegration}' }
+
+  ValidatorIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${ValidatorApiId}.execute-api.${AWS::Region}.amazonaws.com/{proxy}' }
+  ValidatorRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/validator/{proxy+}', Target: !Sub 'integrations/${ValidatorIntegration}' }
+
+  MetricsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${MetricsApiId}.execute-api.${AWS::Region}.amazonaws.com/{proxy}' }
+  MetricsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/metrics/{proxy+}', Target: !Sub 'integrations/${MetricsIntegration}' }
+
+  # More-specific exact route: only /svc/metrics/metrics-history goes to the
+  # in-account metrics-proxy (HTTP API prefers exact over greedy {proxy+}), so the
+  # shared metrics path above is untouched. Backend path is hardcoded to
+  # /metrics-history because {proxy} is not populated on a non-{proxy+} route.
+  MetricsHistoryIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${MetricsProxyApiId}.execute-api.${AWS::Region}.amazonaws.com/metrics-history' }
+  MetricsHistoryRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/metrics/metrics-history', Target: !Sub 'integrations/${MetricsHistoryIntegration}' }
+
+  # Policy-config: exact route (UI calls same-origin /svc/policy-config with GET/PUT).
+  # {proxy} is not populated on a non-{proxy+} route, so the backend path is
+  # hardcoded to /policy-config (same pattern as MetricsHistory above).
+  PolicyConfigIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: ANY, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${PolicyConfigApiId}.execute-api.${AWS::Region}.amazonaws.com/policy-config' }
+  PolicyConfigRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'ANY /svc/policy-config', Target: !Sub 'integrations/${PolicyConfigIntegration}' }
+
+  HealthIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref Api, IntegrationType: HTTP_PROXY, IntegrationMethod: GET, PayloadFormatVersion: '1.0', IntegrationUri: !Sub 'https://${GroundingApiId}.execute-api.${AWS::Region}.amazonaws.com/health' }
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref Api, RouteKey: 'GET /svc/health', Target: !Sub 'integrations/${HealthIntegration}' }
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties: { ApiId: !Ref Api, StageName: $default, AutoDeploy: true }
+
+Outputs:
+  GatewayApiId:
+    Value: !Ref Api
+  GatewayEndpoint:
+    Description: Set as a CloudFront origin; add a /svc/* behavior with Origin Custom Header x-api-key.
+    Value: !GetAtt Api.ApiEndpoint

@@ -1,0 +1,62 @@
+{
+  "customer_id": "CUST047",
+  "kyc_verification": {
+    "status": "in_review",
+    "date": "2026-06-24",
+    "documents_verified": [
+      "Certificate of Incorporation",
+      "PSC Register",
+      "UBO Declaration"
+    ]
+  },
+  "sanctions_screening": {
+    "status": "potential_match",
+    "last_check": "2026-06-24",
+    "databases_checked": [
+      "OFAC",
+      "UN",
+      "EU",
+      "UK HMT",
+      "OFSI"
+    ],
+    "matches": [
+      {
+        "name": "James R. Thorntoun (UBO match)",
+        "list": "OFSI Consolidated List",
+        "listing_reference": "OFSI/2024/1892",
+        "match_score": 0.78,
+        "listing_reason": "Financial sanctions \u2014 proliferation financing network"
+      }
+    ]
+  },
+  "pep_screening": {
+    "status": "match",
+    "matches": [
+      {
+        "name": "James Richard Thornton",
+        "level": 2,
+        "detail": "Business associate of OFSI-designated Alexei Petrov"
+      }
+    ]
+  },
+  "adverse_media": {
+    "status": "findings",
+    "last_check": "2026-06-24",
+    "findings": [
+      {
+        "date": "2025",
+        "summary": "Adverse media (3 findings) \u2014 associate network",
+        "severity": "high"
+      }
+    ]
+  },
+  "aml_risk_rating": "critical",
+  "enhanced_due_diligence_required": true,
+  "next_review_date": "immediate",
+  "regulatory_notes": [
+    "Sanctions potential match 78% on UBO exceeds 70% threshold \u2014 ORG-001 BLOCK",
+    "BVI holding + dissolved Cyprus intermediate + nominee directors = layered opacity",
+    "PEP L2 with designated-person association",
+    "MLRO escalation required"
+  ]
+}

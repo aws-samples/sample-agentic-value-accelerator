@@ -1,0 +1,308 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Controlled Quality Output — Sanctions & PEP screening service.
+  DynamoDB-backed watch lists + fuzzy-match Lambda, invoked directly by the agent
+  runtime with IAM auth — there is no HTTP endpoint. One function performs both
+  screenings against separate lists and thresholds; the caller selects which with
+  the payload's "check" field ("sanctions" | "pep").
+
+Parameters:
+  ResourcePrefix:
+    Type: String
+    Default: kyc-gov
+    Description: Prefix for resource names (keeps this stack isolated from other use cases)
+  PolicyConfigTable:
+    Type: String
+    Default: kyc-gov-policy-config
+    Description: >
+      Name of the policy-config DynamoDB table (created by the policy-config
+      stack). Sanctions/PEP fuzzy-match thresholds are read from here at request
+      time (config, not code — invariant #3).
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS allowed origin (e.g. https://<dist>.cloudfront.net). Default '*' for local dev; override in prod.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  SanctionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ResourcePrefix}-sanctions-list'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: name
+          KeyType: HASH
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: sanctions-pep}
+        - {Key: ManagedBy, Value: cloudformation}
+
+  PEPTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ResourcePrefix}-pep-list'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: name
+          KeyType: HASH
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: sanctions-pep}
+        - {Key: ManagedBy, Value: cloudformation}
+
+  SanctionsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-sanctions-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBScan
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt SanctionsTable.Arn
+                  - !GetAtt PEPTable.Arn
+        - PolicyName: PolicyConfigRead
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Read-only on the shared policy-config table (thresholds live here).
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PolicyConfigTable}'
+
+  SanctionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-sanctions-check'
+      RetentionInDays: 30
+
+  SanctionsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: SanctionsLogGroup
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-sanctions-check'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt SanctionsLambdaRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          SANCTIONS_TABLE: !Ref SanctionsTable
+          PEP_TABLE: !Ref PEPTable
+          POLICY_CONFIG_TABLE: !Ref PolicyConfigTable
+          CONFIG_CACHE_TTL_SECONDS: '5'
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: sanctions-pep}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, os, time, logging, boto3
+          from difflib import SequenceMatcher
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          # No hardcoded thresholds (invariant #3): the sanctions/PEP fuzzy-match
+          # boundaries are read at request time from the policy-config DynamoDB
+          # table. A config-load failure fails loud with HTTP 503 (invariant #5) —
+          # there is no in-code default that could silently screen at the wrong bar.
+          ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+          POLICY_CONFIG_TABLE = os.environ.get('POLICY_CONFIG_TABLE', '')
+          CONFIG_CACHE_TTL_SECONDS = float(os.environ.get('CONFIG_CACHE_TTL_SECONDS', '5'))
+          _dynamodb = None
+          _config_cache = {}
+
+          class ConfigUnavailable(Exception):
+              pass
+
+          def _ddb():
+              global _dynamodb
+              if _dynamodb is None:
+                  _dynamodb = boto3.resource('dynamodb')
+              return _dynamodb
+
+          def _load_thresholds(tenant_id):
+              now = time.time()
+              cached = _config_cache.get(tenant_id)
+              if cached and (now - cached['ts'] < CONFIG_CACHE_TTL_SECONDS):
+                  return cached['cfg']
+              if not POLICY_CONFIG_TABLE:
+                  raise ConfigUnavailable('POLICY_CONFIG_TABLE not configured')
+              table = _ddb().Table(POLICY_CONFIG_TABLE)
+              item = table.get_item(Key={'tenant_id': tenant_id}, ConsistentRead=True).get('Item')
+              if item is None and tenant_id != 'default':
+                  item = table.get_item(Key={'tenant_id': 'default'}, ConsistentRead=True).get('Item')
+              if item is None:
+                  raise ConfigUnavailable('no policy config for tenant %r (and no default)' % tenant_id)
+              try:
+                  cfg = {'sanctions': float(item['sanctions_threshold']),
+                         'pep': float(item['pep_threshold'])}
+              except (KeyError, ValueError, TypeError) as e:
+                  raise ConfigUnavailable('malformed policy config row (sanctions/pep threshold): %s' % e)
+              _config_cache[tenant_id] = {'ts': now, 'cfg': cfg}
+              return cfg
+
+          def fuzzy_score(a, b):
+              return round(SequenceMatcher(None, (a or '').lower(), (b or '').lower()).ratio(), 2)
+
+          def screen(name, items, threshold, kind):
+              # Pure fuzzy-match against a watch list at a caller-supplied threshold.
+              # Threshold is always injected (never hardcoded) so this is exercised
+              # directly by the contract test without AWS.
+              if kind == 'pep':
+                  best = {'matched': False, 'score': 0.0, 'matched_name': None, 'level': None,
+                          'jurisdiction': None, 'source': None, 'threshold': threshold}
+                  for item in items:
+                      score = fuzzy_score(name, item['name'])
+                      if score > best['score']:
+                          best = {'matched': score >= threshold, 'score': score,
+                                  'matched_name': item['name'], 'level': int(item.get('level', 0)),
+                                  'jurisdiction': item.get('jurisdiction', ''), 'source': item.get('source', ''),
+                                  'threshold': threshold}
+                  return best
+              best = {'matched': False, 'score': 0.0, 'matched_name': None, 'list': None,
+                      'entry_id': None, 'threshold': threshold}
+              for item in items:
+                  score = fuzzy_score(name, item['name'])
+                  if score > best['score']:
+                      best = {'matched': score >= threshold, 'score': score,
+                              'matched_name': item['name'], 'list': item.get('list_name', 'OFAC SDN'),
+                              'entry_id': item.get('entry_id', ''), 'threshold': threshold}
+              return best
+
+          def handler(event, context):
+              rid = getattr(context, 'aws_request_id', None)
+              t0 = time.time()
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', 'POST')
+              path = event.get('path') or event.get('rawPath', '')
+              if method == 'OPTIONS':
+                  return resp(200, {})
+              try:
+                  # Direct invoke (the AgentCore runtime calls this function with IAM auth) delivers
+                  # the payload at the top level; an API Gateway proxy event nests it under "body".
+                  # Accept both so `aws lambda invoke` and any legacy HTTP caller keep working.
+                  _raw = event.get('body') if isinstance(event, dict) and 'body' in event else event
+                  body = json.loads(_raw) if isinstance(_raw, str) else (_raw or {})
+              except Exception:
+                  body = {}
+              name = body.get('name', '')
+              if not name:
+                  return resp(400, {'error': 'name is required'})
+              tenant_id = str(body.get('tenantId') or body.get('tenant_id') or 'default')
+              try:
+                  cfg = _load_thresholds(tenant_id)
+              except ConfigUnavailable as e:
+                  logger.error(json.dumps({'svc': 'sanctions-pep', 'request_id': rid, 'tenant': tenant_id,
+                                           'event': 'config_unavailable', 'detail': str(e),
+                                           'latency_ms': int((time.time() - t0) * 1000)}))
+                  return resp(503, {'error': 'policy_config_unavailable', 'detail': str(e)})
+              # This function serves BOTH screenings. Under API Gateway the caller's URL path
+              # carried that choice; a direct invoke has no path, so the payload must say which
+              # check it wants ("check": "sanctions" | "pep"). Falling back to the path keeps any
+              # legacy proxy-shaped caller working. An unrecognised value is rejected rather than
+              # defaulted: silently screening a PEP request against the sanctions list returns a
+              # confident answer from the wrong list, which is worse than an error.
+              requested = str(body.get('check') or body.get('check_type') or '').strip().lower()
+              if requested and requested not in ('sanctions', 'pep'):
+                  logger.error(json.dumps({'svc': 'sanctions-pep', 'request_id': rid, 'tenant': tenant_id,
+                                           'event': 'unknown_check', 'check': requested}))
+                  return resp(400, {'error': 'check must be "sanctions" or "pep"', 'received': requested})
+              is_pep = requested == 'pep' if requested else '/pep-check' in path
+              try:
+                  if is_pep:
+                      check = 'pep'
+                      items = _ddb().Table(os.environ['PEP_TABLE']).scan().get('Items', [])
+                      best = screen(name, items, cfg['pep'], 'pep')
+                  else:
+                      check = 'sanctions'
+                      items = _ddb().Table(os.environ['SANCTIONS_TABLE']).scan().get('Items', [])
+                      best = screen(name, items, cfg['sanctions'], 'sanctions')
+                  logger.info(json.dumps({'svc': 'sanctions-pep', 'request_id': rid, 'tenant': tenant_id,
+                                          'check': check, 'event': 'screening', 'matched': best['matched'],
+                                          'score': best['score'], 'threshold': best['threshold'],
+                                          'latency_ms': int((time.time() - t0) * 1000)}))
+                  return resp(200, best)
+              except Exception as e:
+                  logger.exception(json.dumps({'svc': 'sanctions-pep', 'request_id': rid, 'path': path,
+                                               'event': 'error', 'detail': str(e)}))
+                  return resp(500, {'error': str(e)})
+
+          def resp(code, body):
+              return {'statusCode': code,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': ORIGIN,
+                                  'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type'},
+                      'body': json.dumps(body, default=str)}
+
+  SanctionsCheckUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/sanctions-check-function'
+      Type: String
+      Value: !Ref SanctionsFunction
+      Description: Lambda function name for kyc-gov sanctions-check, invoked directly by the AgentCore runtime with IAM auth (no public endpoint).
+      Tags:
+        Project: !Ref ProjectTag
+        Environment: !Ref EnvironmentTag
+        Component: sanctions-pep
+
+  PepCheckUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/pep-check-function'
+      Type: String
+      Value: !Ref SanctionsFunction
+      Description: Lambda function name for kyc-gov pep-check, invoked directly by the AgentCore runtime with IAM auth (no public endpoint).
+      Tags:
+        Project: !Ref ProjectTag
+        Environment: !Ref EnvironmentTag
+        Component: sanctions-pep
+
+Outputs:
+  SanctionsCheckFunctionName:
+    Description: Function name for the SANCTIONS_CHECK_FUNCTION env var
+    Value: !Ref SanctionsFunction
+  PepCheckFunctionName:
+    Description: Function name for the PEP_CHECK_FUNCTION env var
+    Value: !Ref SanctionsFunction
+  SanctionsTableName:
+    Value: !Ref SanctionsTable
+  PEPTableName:
+    Value: !Ref PEPTable

@@ -8,9 +8,11 @@ approvals) POST here; the Audit & Incidents view GETs the merged stream.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from core import region_scope
+from core import region_config
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_audit import AuditCategory, AuditEvent, AuditEventCreate
@@ -24,6 +26,9 @@ from services.guardrail_service import GuardrailService
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/audit", tags=["govern-audit"])
 
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_audit", region_scope.CONTROL_PLANE, prefix="/govern/audit")
+
 _svc: Optional[GovernAuditService] = None
 _check_svc: Optional[GovernGuardrailCheckService] = None
 
@@ -32,8 +37,9 @@ def get_service() -> GovernAuditService:
     global _svc
     if _svc is None:
         _svc = GovernAuditService(
+            # Control-plane table: one home region, resolved by tier-1 rules.
             table_name=settings.GOVERN_AUDIT_TABLE_NAME,
-            region=settings.AWS_REGION,
+            region=region_config.table_region("GOVERN_AUDIT"),
         )
     return _svc
 
@@ -44,18 +50,33 @@ def get_check_service() -> GovernGuardrailCheckService:
         _check_svc = GovernGuardrailCheckService(
             audit_service=get_service(),
             guardrail_service=GuardrailService(
+                # Regions resolve per tier inside the service: the template table in
+                # the control region, Bedrock/CloudWatch in the governed region.
                 table_name=settings.GUARDRAILS_TABLE_NAME,
-                region=settings.AWS_REGION,
             ),
-            region=settings.AWS_REGION,
+            # bedrock-runtime ApplyGuardrail is a governed-resource call, so it
+            # belongs in the governed region, not the control-plane region.
+            region=settings.GOVERN_AWS_REGION,
         )
     return _check_svc
 
 
 @router.post("/events", response_model=AuditEvent, status_code=201)
-async def append_event(req: AuditEventCreate, _=Depends(require_role(Role.OPERATOR))):
+async def append_event(
+    req: AuditEventCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    """Append an audit event. Records the caller from the `x-user-email` header, or
+    `"unknown"` when absent - `require_role` returns only a Role, never a principal.
+
+    created_by="user" was worse than no attribution on an examiner-facing
+    system-of-record: it reads like a real principal, so nobody goes looking for the
+    identity that was never captured. x-user-email is the same header core/rbac.py:88
+    reads to decide the role.
+    """
     svc = get_service()
-    return svc.append(req, created_by="user")
+    return svc.append(req, created_by=x_user_email or "unknown")
 
 
 @router.get("/events", response_model=List[AuditEvent])
@@ -95,12 +116,18 @@ class GuardrailCheckRequest(BaseModel):
 
 
 @router.post("/check-guardrail")
-async def check_guardrail(req: GuardrailCheckRequest, _=Depends(require_role(Role.OPERATOR))):
+async def check_guardrail(
+    req: GuardrailCheckRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
     """Run a REAL Bedrock guardrail check; on intervention, write an audit event.
 
     This is a live AWS signal — it calls bedrock-runtime ApplyGuardrail. Returns
     503 if the guardrail isn't published, 502 if the Bedrock call fails (e.g. no
     credentials locally), so failures are surfaced honestly rather than mocked.
+
+    The audit event's `actor` comes from the `x-user-email` header, or `"unknown"`.
     """
     svc = get_check_service()
     try:
@@ -109,7 +136,7 @@ async def check_guardrail(req: GuardrailCheckRequest, _=Depends(require_role(Rol
             text=req.text,
             source=req.source,
             agent=req.agent,
-            actor="user",
+            actor=x_user_email or "unknown",
         )
     except GuardrailNotReadyError as e:
         raise HTTPException(status_code=503, detail=str(e))

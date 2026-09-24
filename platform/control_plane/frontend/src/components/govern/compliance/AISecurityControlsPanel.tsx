@@ -10,14 +10,14 @@
  *
  * Part of the Govern module's compliance posture surface, integrated with Security Hub tab.
  */
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../icons';
 import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
+import { governKmsApi, type AwsKmsInventoryResponse } from '../../../api/client';
 import {
   useSecurityHubCompliance,
   type AISecurityFinding,
-  type SeverityLevel,
 } from './useSecurityHubCompliance';
 
 // ─────────────────────────── Types ───────────────────────────
@@ -349,13 +349,15 @@ const AI_SECURITY_CONTROLS: AISecurityControl[] = [
 /**
  * AI-specific compliance standards mapping
  */
-const AI_COMPLIANCE_FRAMEWORKS: Omit<FrameworkComplianceMapping, 'compliantControls'>[] = [
+// `mappedControls` and `compliantControls` are DERIVED at runtime (see frameworkCompliance)
+// from the enumerated controls that carry a linkedSecurityControl — never hardcoded, so the
+// "% compliant" denominator matches the controls that can actually reach compliant.
+const AI_COMPLIANCE_FRAMEWORKS: Omit<FrameworkComplianceMapping, 'compliantControls' | 'mappedControls'>[] = [
   {
     framework: 'NIST AI RMF',
     shortName: 'NIST AI RMF',
     color: '#3b82f6',
     totalControls: 62,
-    mappedControls: 12,
     categories: [
       {
         name: 'GOVERN - AI Risk Management',
@@ -389,7 +391,6 @@ const AI_COMPLIANCE_FRAMEWORKS: Omit<FrameworkComplianceMapping, 'compliantContr
     shortName: 'EU AI Act',
     color: '#f59e0b',
     totalControls: 65,
-    mappedControls: 8,
     categories: [
       {
         name: 'Art. 10 - Data Governance',
@@ -424,7 +425,6 @@ const AI_COMPLIANCE_FRAMEWORKS: Omit<FrameworkComplianceMapping, 'compliantContr
     shortName: 'SR 26-2',
     color: '#8b5cf6',
     totalControls: 36,
-    mappedControls: 6,
     categories: [
       {
         name: 'V - Model Inventory',
@@ -455,6 +455,157 @@ const AI_COMPLIANCE_FRAMEWORKS: Omit<FrameworkComplianceMapping, 'compliantContr
   },
 ];
 
+// ─────────────────────────── KMS Encryption-at-Rest Evidence ───────────────────────────
+
+/** Shorten a KMS key id / masked ARN for display (never a raw account-bearing ARN). */
+function shortKeyLabel(k: { alias?: string | null; key_id: string }): string {
+  if (k.alias) return k.alias;
+  return k.key_id.length > 12 ? `${k.key_id.slice(0, 8)}…` : k.key_id;
+}
+
+/**
+ * Real KMS encryption-at-rest evidence from governKmsApi.inventory().
+ *
+ * Complements the Security-Hub-inferred "Encryption at Rest" best-practice control
+ * (ai-sec-004) with the account's actual KMS key inventory: customer- vs AWS-managed
+ * keys, automatic rotation coverage, and total aliases. LiveDataBadge is gated on
+ * `.live`; when KMS is unreachable / not granted it degrades honestly with no numbers.
+ */
+function KmsEncryptionEvidenceCard() {
+  const [data, setData] = useState<AwsKmsInventoryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    governKmsApi.inventory()
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const isLive = !!data?.live;
+  const keys = data?.keys ?? [];
+  const shownKeys = keys.slice(0, 8);
+
+  return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon name="lock-closed" className="w-4 h-4 text-blue-600" strokeWidth={2} />
+          <span className="text-sm font-semibold text-slate-900">Encryption at Rest (KMS)</span>
+          {isLive
+            ? <LiveDataBadge source="KMS" detail={data?.source ?? undefined} />
+            : (
+              <span
+                className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 cursor-help"
+                title={data?.note ?? 'KMS not connected'}
+              >
+                Unavailable
+              </span>
+            )}
+        </div>
+        <span className="text-[10px] text-slate-400">Real key inventory · complements control ai-sec-004</span>
+      </div>
+
+      {loading ? (
+        <div className="p-4 flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+          <span className="text-sm text-slate-500">Loading KMS inventory…</span>
+        </div>
+      ) : !isLive ? (
+        <div className="p-4">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <Icon name="information-circle" className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" strokeWidth={2} />
+            <div className="text-xs text-slate-500">
+              {data?.note ?? 'KMS is unreachable or kms:ListKeys is not granted. Connect KMS to surface real encryption-at-rest evidence.'}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 space-y-3">
+          {/* Stat tiles — no fabricated numbers; all from the live inventory */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-violet-50 rounded-lg p-3 border border-violet-200">
+              <div className="text-[10px] text-violet-600 uppercase tracking-wide">Customer-Managed</div>
+              <div className="text-2xl font-bold text-violet-700 tabular-nums">{data!.customer_managed}</div>
+              <div className="text-[9px] text-violet-500">CMKs (of {data!.total} total)</div>
+            </div>
+            <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+              <div className="text-[10px] text-emerald-600 uppercase tracking-wide">Auto Rotation</div>
+              <div className="text-2xl font-bold text-emerald-700 tabular-nums">{data!.with_rotation}</div>
+              <div className="text-[9px] text-emerald-500">CMKs with rotation on</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">AWS-Managed</div>
+              <div className="text-2xl font-bold text-slate-700 tabular-nums">{data!.aws_managed}</div>
+              <div className="text-[9px] text-slate-400">AWS service keys</div>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+              <div className="text-[10px] text-blue-600 uppercase tracking-wide">Total Aliases</div>
+              <div className="text-2xl font-bold text-blue-700 tabular-nums">{data!.aliases_total}</div>
+              <div className="text-[9px] text-blue-500">key aliases in region</div>
+            </div>
+          </div>
+
+          {/* Short key / alias list */}
+          {shownKeys.length > 0 ? (
+            <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+              {shownKeys.map(k => {
+                const isCustomer = k.manager === 'CUSTOMER';
+                return (
+                  <div key={k.key_id} className="flex items-center gap-2 px-3 py-2">
+                    <Icon
+                      name="key"
+                      className={`w-3.5 h-3.5 flex-shrink-0 ${isCustomer ? 'text-violet-500' : 'text-slate-400'}`}
+                      strokeWidth={2}
+                    />
+                    <span className="text-xs font-medium text-slate-700 truncate flex-1" title={k.alias ?? k.key_id}>
+                      {shortKeyLabel(k)}
+                    </span>
+                    {k.key_spec && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-mono hidden sm:inline">
+                        {k.key_spec}
+                      </span>
+                    )}
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                      isCustomer ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {isCustomer ? 'Customer' : 'AWS'}
+                    </span>
+                    {isCustomer && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded font-medium inline-flex items-center gap-1 ${
+                          k.rotation_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}
+                        title={k.rotation_enabled ? 'Automatic rotation enabled' : 'Automatic rotation not enabled'}
+                      >
+                        <Icon name="arrow-path" className="w-3 h-3" strokeWidth={2} />
+                        {k.rotation_enabled ? 'Rotating' : 'No rotation'}
+                      </span>
+                    )}
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${k.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                      title={k.enabled ? 'Enabled' : 'Disabled'} />
+                  </div>
+                );
+              })}
+              {keys.length > shownKeys.length && (
+                <div className="px-3 py-2 text-[10px] text-slate-400 bg-slate-50">
+                  +{keys.length - shownKeys.length} more keys
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-500 p-3 rounded-lg bg-slate-50 border border-slate-200">
+              {data?.note ?? 'No KMS keys found in this region.'}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─────────────────────────── Component ───────────────────────────
 
 interface AISecurityControlsPanelProps {
@@ -467,7 +618,6 @@ interface AISecurityControlsPanelProps {
 }
 
 export default function AISecurityControlsPanel({
-  compact = false,
   findings: externalFindings,
   isLive: externalIsLive,
 }: AISecurityControlsPanelProps) {
@@ -526,13 +676,21 @@ export default function AISecurityControlsPanel({
   const frameworkCompliance = useMemo((): FrameworkComplianceMapping[] => {
     return AI_COMPLIANCE_FRAMEWORKS.map(fw => {
       let compliantCount = 0;
+      // Denominator = controls actually mapped to an AWS security control. A framework
+      // control with no linkedSecurityControl (e.g. EU-DATA-1, "Data quality measures",
+      // which has no matching AI security control) can never become compliant, so it is
+      // excluded from the mapped count — otherwise % could never reach 100.
+      let mappedCount = 0;
       const updatedCategories = fw.categories.map(cat => ({
         ...cat,
         controls: cat.controls.map(ctrl => {
           let status: ControlStatus = 'not-evaluated';
-          if (ctrl.linkedSecurityControl && controlStatuses[ctrl.linkedSecurityControl]) {
-            status = controlStatuses[ctrl.linkedSecurityControl].status;
-            if (status === 'compliant') compliantCount++;
+          if (ctrl.linkedSecurityControl) {
+            mappedCount++;
+            if (controlStatuses[ctrl.linkedSecurityControl]) {
+              status = controlStatuses[ctrl.linkedSecurityControl].status;
+              if (status === 'compliant') compliantCount++;
+            }
           }
           return { ...ctrl, status };
         }),
@@ -540,6 +698,7 @@ export default function AISecurityControlsPanel({
 
       return {
         ...fw,
+        mappedControls: mappedCount,
         compliantControls: compliantCount,
         categories: updatedCategories,
       };
@@ -657,6 +816,9 @@ export default function AISecurityControlsPanel({
           </div>
         </div>
       </div>
+
+      {/* Real KMS encryption-at-rest evidence (complements Security-Hub-inferred ai-sec-004) */}
+      <KmsEncryptionEvidenceCard />
 
       {viewMode === 'controls' ? (
         /* AWS AI Security Best Practices Checklist */

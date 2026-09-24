@@ -141,7 +141,7 @@ interface LayerReadiness {
  * - If a layer has NO live signal to grade (empty estate), it falls back to the
  *   documented baseline and is marked live:false so the UI can say so.
  */
-function computeLayerReadiness(agg: GovernanceAggregatorResult): Record<number, LayerReadiness> {
+export function computeLayerReadiness(agg: GovernanceAggregatorResult): Record<number, LayerReadiness> {
   const s = agg.summary;
   const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
   const pct = (n: number) => Math.round(clamp01(n) * 100);
@@ -645,18 +645,7 @@ const GENAI_SCOPES: GenAiScope[] = [
   },
 ];
 
-// The 5 security disciplines from the matrix, mapped to the Govern surface that
-// carries each. Shown as the "responsibility rows" that apply across all scopes.
-const SCOPE_DISCIPLINES: { name: string; to: { label: string; href: string } }[] = [
-  { name: 'Governance & Compliance', to: { label: 'Compliance', href: '/govern/compliance' } },
-  { name: 'Legal & Privacy', to: { label: 'Data Governance', href: '/govern/data' } },
-  { name: 'Risk Management', to: { label: 'Risk', href: '/govern/risk' } },
-  { name: 'Controls', to: { label: 'AI Safety', href: '/govern/safety' } },
-  { name: 'Resilience', to: { label: 'Fleet & Incidents', href: '/govern/fleet' } },
-];
-
 const GENAI_SCOPE_BY_ID: Record<number, GenAiScope> = Object.fromEntries(GENAI_SCOPES.map(s => [s.id, s]));
-const BUY_SCOPES = GENAI_SCOPES.filter(s => s.side === 'buy');
 
 // Agentic agency scope → the Govern surface that governs at that agency level.
 const AGENCY_LINK: Record<number, { label: string; href: string }> = {
@@ -791,8 +780,8 @@ export default function TrustStack3Layer() {
           <div className="text-center">
             <div className={`text-2xl font-bold ${scoreColor(overallScore)}`}>{overallScore}%</div>
             <div className="text-[9px] text-slate-400 uppercase tracking-wide">Trust Readiness</div>
-            <div className={`text-[8px] font-medium ${anyLive ? 'text-emerald-600' : 'text-slate-400'}`}>
-              {anyLive ? '● live' : 'baseline'}
+            <div className={`text-[8px] font-medium ${anyLive ? 'text-slate-500' : 'text-slate-400'}`}>
+              {anyLive ? 'derived' : 'baseline'}
             </div>
           </div>
         </div>
@@ -1113,7 +1102,7 @@ export default function TrustStack3Layer() {
                   </div>
                   <div className="text-right">
                     <div className={`text-2xl font-bold ${scoreColor(readiness[1].score)}`}>{readiness[1].score}%</div>
-                    <div className={`text-[8px] ${readiness[1].live ? 'text-emerald-600' : 'text-slate-400'}`}>{readiness[1].live ? '● live' : 'baseline'}</div>
+                    <div className={`text-[8px] ${readiness[1].live ? 'text-slate-500' : 'text-slate-400'}`}>{readiness[1].live ? 'derived' : 'baseline'}</div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-3">
@@ -1165,7 +1154,7 @@ export default function TrustStack3Layer() {
                   </div>
                   <div className="text-right">
                     <div className={`text-2xl font-bold ${scoreColor(readiness[2].score)}`}>{readiness[2].score}%</div>
-                    <div className={`text-[8px] ${readiness[2].live ? 'text-emerald-600' : 'text-slate-400'}`}>{readiness[2].live ? '● live' : 'baseline'}</div>
+                    <div className={`text-[8px] ${readiness[2].live ? 'text-slate-500' : 'text-slate-400'}`}>{readiness[2].live ? 'derived' : 'baseline'}</div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-3">
@@ -1208,7 +1197,7 @@ export default function TrustStack3Layer() {
                   </div>
                   <div className="text-right">
                     <div className={`text-2xl font-bold ${scoreColor(readiness[3].score)}`}>{readiness[3].score}%</div>
-                    <div className={`text-[8px] ${readiness[3].live ? 'text-emerald-600' : 'text-slate-400'}`}>{readiness[3].live ? '● live' : 'baseline'}</div>
+                    <div className={`text-[8px] ${readiness[3].live ? 'text-slate-500' : 'text-slate-400'}`}>{readiness[3].live ? 'derived' : 'baseline'}</div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-3">
@@ -1439,8 +1428,8 @@ export default function TrustStack3Layer() {
                       style={{ width: `${readiness[layer.id].score}%`, background: layer.color }}
                     />
                   </div>
-                  <div className={`text-[8px] font-medium mt-0.5 ${readiness[layer.id].live ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {readiness[layer.id].live ? '● live' : 'baseline'}
+                  <div className={`text-[8px] font-medium mt-0.5 ${readiness[layer.id].live ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {readiness[layer.id].live ? 'derived' : 'baseline'}
                   </div>
                 </div>
               </div>
@@ -1695,7 +1684,7 @@ export default function TrustStack3Layer() {
                 </div>
                 <div className="flex items-center justify-between text-[10px]">
                   <span className="text-slate-600">Last refresh</span>
-                  <span className="font-medium text-emerald-600">Live</span>
+                  <LiveDataBadge />
                 </div>
               </div>
               <div className="h-1.5 bg-emerald-100 rounded-full overflow-hidden">

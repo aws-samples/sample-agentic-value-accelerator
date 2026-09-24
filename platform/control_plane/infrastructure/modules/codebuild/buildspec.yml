@@ -13,6 +13,30 @@ phases:
           unzip -o tf.zip -d /usr/local/bin && rm tf.zip
         fi
       - terraform --version
+      - |
+        # Node 22 — the repo standard (Node >= 22) and the floor for the frontends:
+        # Vite 8 requires ^20.19.0 || >=22.12.0 and Tailwind 4's oxide needs >= 20.
+        # The amazonlinux2-aarch64-standard:3.0 image ships Node 18, so a UI build
+        # fails with "Vite requires Node.js version 20.19+ or 22.12+". Pinned by
+        # direct download for the same reason Terraform is above: the image's
+        # runtime-versions do not offer a Node new enough.
+        NODE_VERSION=22.23.1
+        if ! node --version 2>/dev/null | grep -qE '^v(2[2-9]|[3-9][0-9])\.'; then
+          case "$(uname -m)" in
+            aarch64|arm64) NODE_ARCH=arm64 ;;
+            x86_64|amd64)  NODE_ARCH=x64 ;;
+            *) echo "ERROR: unsupported architecture $(uname -m) for the Node install" >&2; exit 1 ;;
+          esac
+          NODE_DIR="node-v${NODE_VERSION}-linux-${NODE_ARCH}"
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_DIR}.tar.xz" -o /tmp/node.tar.xz \
+            || { echo "ERROR: failed to download Node ${NODE_VERSION} (${NODE_ARCH})" >&2; exit 1; }
+          mkdir -p /usr/local/lib/nodejs
+          tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs && rm -f /tmp/node.tar.xz
+          for b in node npm npx; do
+            ln -sf "/usr/local/lib/nodejs/${NODE_DIR}/bin/${b}" "/usr/local/bin/${b}"
+          done
+        fi
+      - node --version
       - npm i -g aws-cdk typescript ts-node
       - cdk --version 2>/dev/null || true
   pre_build:
@@ -95,11 +119,19 @@ phases:
         if [ "${ACTION:-deploy}" = "destroy" ] && [ -f "/tmp/workspace/destroy.sh" ]; then
           echo "Running destroy.sh"
           chmod +x /tmp/workspace/destroy.sh
-          /tmp/workspace/destroy.sh
-          if [ -f /tmp/outputs.json ]; then
-            echo "Outputs collected from destroy.sh"
+          # The exit code must be honoured. Reporting "destroyed" for a teardown that
+          # actually failed tells the operator resources are gone while they are still
+          # running and billing, and stops anyone looking for them.
+          if /tmp/workspace/destroy.sh; then
+            if [ -f /tmp/outputs.json ]; then
+              echo "Outputs collected from destroy.sh"
+            else
+              echo '{"deployment_id":"'$DEPLOYMENT_ID'","status":"destroyed"}' > /tmp/outputs.json
+            fi
           else
-            echo '{"deployment_id":"'$DEPLOYMENT_ID'","status":"destroyed"}' > /tmp/outputs.json
+            echo "ERROR: destroy.sh failed with exit code $? — NOT marking as destroyed"
+            echo '{"deployment_id":"'$DEPLOYMENT_ID'","status":"failed","error":"destroy.sh exited with non-zero status"}' > /tmp/outputs.json
+            exit 1
           fi
         elif [ -f "/tmp/workspace/deploy.sh" ]; then
           echo "Running deploy.sh"

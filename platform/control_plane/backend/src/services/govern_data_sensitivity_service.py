@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -23,6 +23,46 @@ from core.ttl_cache import get_or_load
 logger = logging.getLogger(__name__)
 
 _SENSITIVITY_TTL = 300  # 5 min cache
+
+# Macie ListFindings REJECTS maxResults above 50. This code asked for 100 and got
+# `ValidationException: Value '100' at 'maxResults' failed to satisfy constraint:
+# Member must have value less than or equal to 50` on EVERY call (captured from the
+# live demo account's backend logs).
+#
+# WHY IT SURVIVED SO LONG: the cap is enforced service-side ONLY. It is not in the
+# botocore service model (macie2/2020-01-01/service-2.json.gz types maxResults as a
+# bare `__integer` with no min/max) and the Macie API reference publishes no valid
+# range for it either, so nothing validates the value client-side and boto3
+# transmits 100 happily. The 50 below is confirmed from the service's own rejection,
+# which is the only authoritative source; do not "verify" it against the SDK model,
+# the model does not encode it.
+#
+# WHAT THE BREAKAGE LOOKED LIKE FROM OUTSIDE: list_findings raised, the generic
+# ClientError handler at the bottom returned live=False + "Macie error:
+# ValidationException", and because get_sensitivity_summary only caches live
+# results, the failure was never cached — so every single dashboard request re-made
+# the same doomed call. The sensitivity panel showed setup guidance permanently,
+# in an account that may hold real classification findings.
+_FINDINGS_PAGE_SIZE = 50
+
+# One page is NOT enough. The aggregate below sums detection counts and distinct
+# bucket names ACROSS findings, so a truncated sample understates every total it
+# reports. Page instead — but bounded: Macie retains findings for 90 days and both
+# list_findings and get_findings are billable, so an unbounded loop against a paid
+# API is not an option. Reaching the bound is disclosed through `note` rather than
+# reported as if it were a complete count.
+_FINDINGS_MAX_PAGES = 5        # <= 250 findings per refresh
+
+# DescribeBuckets is paged for the same reason. It is only used for a COUNT of
+# monitored buckets, and a single 50-item page silently made that count "50" for
+# any account with more than 50 monitored buckets, which then rendered as a total.
+_BUCKETS_PAGE_SIZE = 50        # also the API's documented default
+_BUCKETS_MAX_PAGES = 5         # <= 250 buckets per refresh
+
+# get_findings takes "as many as 50 unique identifiers" per call (botocore macie2
+# GetFindingsRequest.findingIds documentation). Batching at 20 spent 60% more
+# round-trips than necessary; at 50 a full 250-finding sweep costs 5 calls, not 13.
+_FINDINGS_DETAIL_BATCH = 50
 
 
 @dataclass
@@ -101,6 +141,41 @@ def _categorize_detection(detection_type: str) -> str:
     return "Other"
 
 
+def _collect_paged(
+    call: Callable[..., dict],
+    result_key: str,
+    page_size: int,
+    max_pages: int,
+    **params,
+) -> tuple[list, bool]:
+    """Collect up to `max_pages` pages from a Macie list/describe call.
+
+    Returns (items, hit_bound). `hit_bound` is True only when every allowed page was
+    consumed AND Macie still handed back a nextToken — i.e. the caller is holding a
+    floor, not a total, and is obliged to say so. Callers must not report a
+    hit_bound result as a complete count.
+
+    A measured empty result returns ([], False). An account where Macie found
+    nothing is DATA, not a failure, and must never be degraded to live=False.
+    """
+    items: list = []
+    token: Optional[str] = None
+    for _ in range(max_pages):
+        kwargs = dict(params)
+        kwargs["maxResults"] = page_size
+        if token:
+            kwargs["nextToken"] = token
+        page = call(**kwargs)
+        items.extend(page.get(result_key, []))
+        token = page.get("nextToken")
+        # No token means Macie has nothing further, so this is a complete sweep even
+        # if we stopped early. Note an empty page CAN still carry a token, hence the
+        # token check rather than a check on whether the page was empty.
+        if not token:
+            return items, False
+    return items, bool(token)
+
+
 class GovernDataSensitivityService:
     """Service for Amazon Macie data sensitivity integration."""
 
@@ -110,7 +185,17 @@ class GovernDataSensitivityService:
     def get_sensitivity_summary(self) -> DataSensitivityResponse:
         """Get summary of data sensitivity from Macie."""
         cache_key = f"govern_data_sensitivity:{self.region}"
-        return get_or_load(cache_key, self._fetch_sensitivity, ttl=_SENSITIVITY_TTL)
+        # Only a measured answer is cached. _fetch_sensitivity returns live=False for
+        # the not-enabled / access-denied / error paths, and caching those pinned the
+        # panel to "Macie not enabled" for the whole TTL after a single throttle or a
+        # freshly granted permission. The measured-zero paths ("no buckets monitored",
+        # "no sensitive data detected") are live=True, so they still cache and don't
+        # re-list findings on every request.
+        result, _ = get_or_load(
+            cache_key, _SENSITIVITY_TTL, self._fetch_sensitivity,
+            should_cache=lambda r: r.live,
+        )
+        return result
 
     def _fetch_sensitivity(self) -> DataSensitivityResponse:
         """Fetch data sensitivity info from Macie."""
@@ -137,21 +222,32 @@ class GovernDataSensitivityService:
                     )
                 raise
 
-            # Get findings for sensitivity classification
-            findings_resp = macie.list_findings(
+            # Get findings for sensitivity classification (bounded sweep — see the
+            # _FINDINGS_PAGE_SIZE block for why 50 is a hard service-side ceiling)
+            finding_ids, findings_capped = _collect_paged(
+                macie.list_findings,
+                "findingIds",
+                _FINDINGS_PAGE_SIZE,
+                _FINDINGS_MAX_PAGES,
                 findingCriteria={
                     "criterion": {
                         "category": {"eq": ["CLASSIFICATION"]}
                     }
                 },
-                maxResults=100,
             )
-            finding_ids = findings_resp.get("findingIds", [])
 
             if not finding_ids:
-                # No classification findings - check if any buckets are monitored
-                buckets_resp = macie.describe_buckets(maxResults=50)
-                bucket_count = len(buckets_resp.get("buckets", []))
+                # No classification findings - check if any buckets are monitored.
+                # Reaching here is a MEASURED ZERO from a reachable Macie session, so
+                # both branches below stay live=True. "Macie found nothing" is a real
+                # answer and must not be presented as "the Macie call failed".
+                buckets, buckets_capped = _collect_paged(
+                    macie.describe_buckets,
+                    "buckets",
+                    _BUCKETS_PAGE_SIZE,
+                    _BUCKETS_MAX_PAGES,
+                )
+                bucket_count = len(buckets)
 
                 if bucket_count == 0:
                     return DataSensitivityResponse(
@@ -162,10 +258,16 @@ class GovernDataSensitivityService:
                         setup_guidance=self._get_setup_guidance("no_buckets"),
                     )
 
+                bucket_label = (
+                    f"{bucket_count}+ buckets monitored (bucket sweep capped at "
+                    f"{_BUCKETS_MAX_PAGES} pages of {_BUCKETS_PAGE_SIZE}, more exist)"
+                    if buckets_capped
+                    else f"{bucket_count} buckets monitored"
+                )
                 return DataSensitivityResponse(
                     live=True,
                     source="macie",
-                    note=f"{bucket_count} buckets monitored, no sensitive data detected",
+                    note=f"{bucket_label}, no sensitive data detected",
                     buckets_analyzed=bucket_count,
                     sensitivity_breakdown=[
                         SensitivityBucket(category="Public", count=bucket_count, color=SENSITIVITY_COLORS["Public"])
@@ -174,8 +276,8 @@ class GovernDataSensitivityService:
 
             # Get finding details
             findings = []
-            for i in range(0, len(finding_ids), 20):
-                batch = finding_ids[i:i + 20]
+            for i in range(0, len(finding_ids), _FINDINGS_DETAIL_BATCH):
+                batch = finding_ids[i:i + _FINDINGS_DETAIL_BATCH]
                 details = macie.get_findings(findingIds=batch)
                 findings.extend(details.get("findings", []))
 
@@ -234,10 +336,24 @@ class GovernDataSensitivityService:
                     top_detections=detections[:5],
                 ))
 
+            # A bounded sweep MUST disclose its bound. Every number below is an
+            # aggregate over the findings we actually read — detection counts,
+            # distinct bucket names, top types — so if Macie had more findings than
+            # the bound allowed, these are floors. An undisclosed "N findings
+            # analyzed" reads as a total, which is the dishonest version of this.
+            if findings_capped:
+                note = (
+                    f"{len(findings)} classification findings analyzed; sweep capped at "
+                    f"{_FINDINGS_MAX_PAGES} pages of {_FINDINGS_PAGE_SIZE} and Macie holds more, "
+                    f"so these counts are a floor, not a total."
+                )
+            else:
+                note = f"{len(findings)} classification findings analyzed (all findings in scope)"
+
             return DataSensitivityResponse(
                 live=True,
                 source="macie",
-                note=f"{len(findings)} classification findings analyzed",
+                note=note,
                 buckets_analyzed=len(bucket_detections),
                 buckets_with_sensitive=len(bucket_detections),
                 sensitivity_breakdown=sensitivity_breakdown,

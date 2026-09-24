@@ -1,0 +1,34 @@
+{
+  "customer_id": "CUST006",
+  "credit_score": 0,
+  "credit_rating": "NR",
+  "existing_facilities": [],
+  "payment_history": {
+    "payments_on_time": 6,
+    "payments_total": 6,
+    "on_time_payments": 6,
+    "late_payments": 0,
+    "defaults": 0,
+    "average_days_to_pay": 20
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 500000,
+    "total_liabilities": 100000,
+    "current_assets": 450000,
+    "current_liabilities": 50000,
+    "revenue": 800000,
+    "net_income": 120000,
+    "debt_to_equity": 0.25,
+    "current_ratio": 9.0,
+    "net_margin": 0.15
+  },
+  "agent_claims": {
+    "de_ratio": 0.25,
+    "current_ratio": 9.0,
+    "net_margin": 0.15,
+    "payment_pct": 100.0
+  },
+  "credit_inquiries_last_12_months": 1
+}

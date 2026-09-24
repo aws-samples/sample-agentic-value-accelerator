@@ -13,15 +13,20 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getPostureColor } from './postureColor';
+import { Icon } from './icons';
+import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
 // Canonical autonomy ladder — names/colors come from one source of truth.
 import { SCOPE_TAILWIND as SCOPE_COLORS, scopeName } from './autonomyLadder';
 
 interface Props {
   fleetSize: number;
   scopeCounts: { 1: number; 2: number; 3: number; 4: number };
+  /** Overall fleet score (0-100). Omit when no real posture score is available. */
   overallScore?: number;
   statusCounts?: { healthy: number; watch: number; gap: number };
   controlGaps?: { dimension: string; gap: number; agentName?: string }[];
+  /** True only when overallScore is sourced from live posture data. Gates the Live badge. */
+  live?: boolean;
 }
 
 const scoreColor = (score: number): string => getPostureColor(score);
@@ -37,11 +42,20 @@ function scoreGrade(score: number): string {
 export default function FleetRiskPosture({
   fleetSize,
   scopeCounts,
-  overallScore = 72,
+  overallScore,
   statusCounts = { healthy: 0, watch: 0, gap: 0 },
   controlGaps = [],
+  live = false,
 }: Props) {
   const maxScopeCount = useMemo(() => Math.max(1, ...Object.values(scopeCounts)), [scopeCounts]);
+
+  // Only present a score (and a Live badge) when we actually have live posture data —
+  // never fabricate a default under a Live claim.
+  const hasScore = typeof overallScore === 'number';
+  const scoreIsLive = live && hasScore;
+  const tileColor = typeof overallScore === 'number' ? scoreColor(overallScore) : '#94a3b8';
+  const grade = typeof overallScore === 'number' ? scoreGrade(overallScore) : '—';
+  const barWidth = typeof overallScore === 'number' ? overallScore : 0;
 
   // Calculate status from fleet if not provided
   const calculatedStatus = useMemo(() => {
@@ -69,16 +83,16 @@ export default function FleetRiskPosture({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
-            <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+            <Icon name="shield-check" className="w-4 h-4 text-violet-600" strokeWidth={2} />
           </div>
           <div>
             <div className="text-sm font-semibold text-slate-900">Fleet Risk Posture</div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">AWS Scoping Matrix</span>
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">OWASP Agentic</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">Live</span>
+              {scoreIsLive
+                ? <LiveDataBadge source="Fleet risk posture" />
+                : <MockDataBadge integration="Fleet risk scoring across the deployed agent fleet" />}
             </div>
           </div>
         </div>
@@ -90,27 +104,29 @@ export default function FleetRiskPosture({
       {/* 4-Tile Grid */}
       <div className="grid grid-cols-4 gap-4">
         {/* Tile 1: Overall Score */}
-        <div className="p-4 bg-slate-50 rounded-xl border-t-4" style={{ borderTopColor: scoreColor(overallScore) }}>
+        <div className="p-4 bg-slate-50 rounded-xl border-t-4" style={{ borderTopColor: tileColor }}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Overall Score</span>
             <span
               className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
-              style={{ backgroundColor: scoreColor(overallScore) }}
+              style={{ backgroundColor: tileColor }}
             >
-              {scoreGrade(overallScore)}
+              {grade}
             </span>
           </div>
-          <div className="text-3xl font-bold" style={{ color: scoreColor(overallScore) }}>
-            {overallScore}<span className="text-lg text-slate-400">/100</span>
+          <div className="text-3xl font-bold" style={{ color: tileColor }}>
+            {hasScore ? overallScore : '—'}<span className="text-lg text-slate-400">/100</span>
           </div>
           <div className="text-[10px] text-slate-500 mt-1">
-            avg of 6 risk dimensions across {totalAgents} agents
+            {hasScore
+              ? `avg of 6 risk dimensions across ${totalAgents} agents`
+              : 'awaiting live posture scoring'}
           </div>
           {/* Score bar */}
           <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mt-3">
             <div
               className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${overallScore}%`, backgroundColor: scoreColor(overallScore) }}
+              style={{ width: `${barWidth}%`, backgroundColor: tileColor }}
             />
           </div>
         </div>
@@ -192,9 +208,7 @@ export default function FleetRiskPosture({
           </div>
           {topGaps.length === 0 ? (
             <div className="flex items-center gap-2 text-emerald-600 mt-3">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Icon name="check-circle" className="w-5 h-5" strokeWidth={2} />
               <span className="text-xs font-medium">No gaps — all agents meet floor</span>
             </div>
           ) : (

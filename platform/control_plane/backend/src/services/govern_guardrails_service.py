@@ -23,16 +23,32 @@ from datetime import datetime, timedelta, timezone
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from core.security_utils import mask_account_id
 from core.ttl_cache import get_or_load
 from models.govern_guardrails import (
     GuardrailSummary,
     GuardrailTelemetryResponse,
     PolicyBreakdown,
 )
+from models.guardrail import (
+    ContentFilterConfig,
+    ContextualGroundingConfig,
+    DeniedTopic,
+    FilterStrength,
+    FilterType,
+    GuardrailStatus,
+    GuardrailTemplate,
+    PiiAction,
+    PiiEntityConfig,
+    PiiEntityType,
+    SensitiveRegexConfig,
+    WordFilterConfig,
+)
 
 logger = logging.getLogger(__name__)
 
 _TELEMETRY_TTL = 120  # 2 min
+_LIST_TTL = 120  # 2 min — live guardrail config list
 
 # Policy types Bedrock emits under GuardrailPolicyType, with display metadata.
 _POLICY_TYPES = {
@@ -42,6 +58,34 @@ _POLICY_TYPES = {
     "SensitiveInformationPolicy": ("PII / sensitive data", "PII, PHI & PCI detection / redaction"),
     "ContextualGroundingPolicy": ("Contextual grounding", "Hallucination & relevance thresholds"),
 }
+
+# Bedrock guardrail status → GuardrailTemplate status. Anything unlisted falls back
+# to the matching lowercase enum member when valid, else DRAFT (keeps the model valid).
+_BEDROCK_STATUS_MAP = {
+    "READY": GuardrailStatus.ACTIVE,
+    "CREATING": GuardrailStatus.CREATING,
+    "UPDATING": GuardrailStatus.UPDATING,
+    "FAILED": GuardrailStatus.FAILED,
+}
+
+
+def _map_guardrail_status(bedrock_status: str | None) -> GuardrailStatus:
+    """Map a Bedrock guardrail status to the GuardrailTemplate status enum."""
+    s = (bedrock_status or "").upper()
+    if s in _BEDROCK_STATUS_MAP:
+        return _BEDROCK_STATUS_MAP[s]
+    try:
+        return GuardrailStatus(s.lower())
+    except ValueError:
+        return GuardrailStatus.DRAFT
+
+
+def _safe_filter_strength(value: str | None) -> FilterStrength:
+    """Coerce a Bedrock filter strength to the FilterStrength enum (MEDIUM fallback)."""
+    try:
+        return FilterStrength(value)
+    except ValueError:
+        return FilterStrength.MEDIUM
 
 
 class GovernGuardrailsService:
@@ -68,7 +112,12 @@ class GovernGuardrailsService:
         )
         if result.live and (time.time() - cached_at) >= 2:
             stamp = f"Cached {int(time.time() - cached_at)}s ago"
-            result.note = f"{result.note} · {stamp}" if result.note else stamp
+            # ttl_cache hands back the object it still holds, so mutating result.note
+            # would append a stamp per hit and grow the cached note without bound.
+            # model_copy swaps only this top-level scalar, leaving the cache entry intact.
+            result = result.model_copy(
+                update={"note": f"{result.note} · {stamp}" if result.note else stamp}
+            )
         return result
 
     def _fetch_telemetry(self, days: int = 30) -> GuardrailTelemetryResponse:
@@ -87,9 +136,12 @@ class GovernGuardrailsService:
             # 1) Per-guardrail Invocations + InvocationsIntervened (by ARN+Version).
             per_guardrail = self._per_guardrail_metrics(guardrails, arn_by_id, start, end, period)
             for g in guardrails:
-                inv, intv = per_guardrail.get(g.guardrail_id, (0, 0))
+                m = per_guardrail.get(g.guardrail_id) or {}
+                inv = m.get("Invocations", 0)
+                intv = m.get("InvocationsIntervened", 0)
                 g.invocations = inv
                 g.interventions = intv
+                g.blocked = m.get("InvocationsBlocked", 0)
                 g.has_metrics = (inv > 0 or intv > 0)
                 g.intervention_rate_pct = round((intv / inv * 100), 2) if inv > 0 else 0.0
 
@@ -98,6 +150,7 @@ class GovernGuardrailsService:
 
             total_inv = sum(g.invocations for g in guardrails)
             total_intv = sum(g.interventions for g in guardrails)
+            total_blocked = sum(g.blocked for g in guardrails)
             with_metrics = sum(1 for g in guardrails if g.has_metrics)
             guardrails.sort(key=lambda g: (g.interventions, g.invocations), reverse=True)
 
@@ -107,6 +160,7 @@ class GovernGuardrailsService:
                 total_guardrails=len(guardrails),
                 total_invocations=total_inv,
                 total_interventions=total_intv,
+                total_blocked=total_blocked,
                 intervention_rate_pct=round((total_intv / total_inv * 100), 2) if total_inv > 0 else 0.0,
                 guardrails_with_metrics=with_metrics,
                 window_days=days,
@@ -144,6 +198,7 @@ class GovernGuardrailsService:
                 out.append(GuardrailSummary(
                     guardrail_id=gid,
                     name=g.get("name", gid),
+                    region=self.region,
                     status=g.get("status", ""),
                     version=g.get("version", ""),
                     description=g.get("description"),
@@ -154,14 +209,21 @@ class GovernGuardrailsService:
                 break
         return out, arn_by_id
 
-    def _per_guardrail_metrics(self, guardrails, arn_by_id, start, end, period) -> dict[str, tuple[int, int]]:
-        """Sum of Invocations + InvocationsIntervened per guardrail id over the window."""
+    #: CloudWatch metrics fetched per guardrail. Intervened and Blocked are NOT the
+    #: same measurement and must not be substituted for one another: an intervention
+    #: is any guardrail action, which includes masking PII and letting the request
+    #: through, while blocked counts only refusals. Reporting interventions as blocks
+    #: overstates refusals by however much PII masking is in use.
+    _PER_GUARDRAIL_METRICS = ("Invocations", "InvocationsIntervened", "InvocationsBlocked")
+
+    def _per_guardrail_metrics(self, guardrails, arn_by_id, start, end, period) -> dict[str, dict[str, int]]:
+        """Sum of Invocations / InvocationsIntervened / InvocationsBlocked per guardrail id."""
         cw = self._cw_client()
         queries = []
         qid_map: dict[str, tuple[str, str]] = {}  # query id -> (guardrail_id, metric)
         for i, g in enumerate(guardrails):
             arn = arn_by_id.get(g.guardrail_id) or f"arn:aws:bedrock:{self.region}::guardrail/{g.guardrail_id}"
-            for j, metric in enumerate(("Invocations", "InvocationsIntervened")):
+            for j, metric in enumerate(self._PER_GUARDRAIL_METRICS):
                 qid = f"g{i}_{j}"
                 qid_map[qid] = (g.guardrail_id, metric)
                 queries.append({
@@ -195,7 +257,7 @@ class GovernGuardrailsService:
         for qid, (gid, metric) in qid_map.items():
             agg.setdefault(gid, {})[metric] = results.get(qid, 0.0)
         return {
-            gid: (int(v.get("Invocations", 0)), int(v.get("InvocationsIntervened", 0)))
+            gid: {m: int(v.get(m, 0)) for m in self._PER_GUARDRAIL_METRICS}
             for gid, v in agg.items()
         }
 
@@ -241,3 +303,145 @@ class GovernGuardrailsService:
         ]
         out.sort(key=lambda p: p.interventions, reverse=True)
         return out
+
+    # --- Live guardrail config list (Secure module's GuardrailTemplate shape) ---
+
+    def get_guardrails_list(self) -> list[GuardrailTemplate]:
+        """Live Bedrock guardrails in this region as GuardrailTemplate records (2 min TTL).
+
+        Same shape the Secure module serves so the Prompt Governance panel renders
+        content filters / PII / denied topics / grounding with no transform. Never
+        raises: any AWS error yields []. Cached only when the list is non-empty so a
+        transient failure doesn't pin an empty list for the whole TTL.
+        """
+        result, _cached_at = get_or_load(
+            f"guardrails:list:{self.region}", _LIST_TTL,
+            self._fetch_guardrails_list, should_cache=lambda r: bool(r),
+        )
+        return result
+
+    def _fetch_guardrails_list(self) -> list[GuardrailTemplate]:
+        try:
+            client = self._bedrock_client()
+            summaries: list[dict] = []
+            token = None
+            while len(summaries) < 200:
+                kwargs = {"maxResults": 50}
+                if token:
+                    kwargs["nextToken"] = token
+                resp = client.list_guardrails(**kwargs)
+                summaries.extend(resp.get("guardrails", []))
+                token = resp.get("nextToken")
+                if not token:
+                    break
+        except (ClientError, BotoCoreError) as e:
+            logger.warning("bedrock:ListGuardrails unavailable, returning []: %s", e)
+            return []
+
+        templates: list[GuardrailTemplate] = []
+        for summary in summaries:
+            gid = summary.get("id", "")
+            if not gid:
+                continue
+            try:
+                templates.append(self._guardrail_to_template(client, summary))
+            except (ClientError, BotoCoreError, ValueError, KeyError) as e:
+                logger.warning("Skipping guardrail %s (get_guardrail failed): %s", gid, e)
+        return templates
+
+    def _guardrail_to_template(self, client, summary: dict) -> GuardrailTemplate:
+        """Map one Bedrock guardrail (+ its DRAFT config) to a GuardrailTemplate.
+
+        Mirrors the Secure guardrail service's Bedrock→template field mapping so both
+        surfaces render identically; account IDs in the ARN are masked.
+        """
+        gid = summary["id"]
+        version = summary.get("version") or "DRAFT"
+        detail = client.get_guardrail(guardrailIdentifier=gid, guardrailVersion="DRAFT")
+
+        # Content filters ← contentPolicy.filters (skip types this model doesn't know).
+        valid_filter_types = {t.value for t in FilterType}
+        content_filters: list[ContentFilterConfig] = []
+        for f in (detail.get("contentPolicy") or {}).get("filters", []) or []:
+            ftype = f.get("type")
+            if ftype not in valid_filter_types:
+                continue
+            content_filters.append(ContentFilterConfig(
+                type=FilterType(ftype),
+                input_strength=_safe_filter_strength(f.get("inputStrength")),
+                output_strength=_safe_filter_strength(f.get("outputStrength")),
+            ))
+
+        # Denied topics ← topicPolicy.topics (DENY).
+        denied_topics: list[DeniedTopic] = []
+        for t in (detail.get("topicPolicy") or {}).get("topics", []) or []:
+            if t.get("type") and t.get("type") != "DENY":
+                continue
+            denied_topics.append(DeniedTopic(
+                name=t.get("name", ""),
+                definition=t.get("definition") or "",
+                examples=t.get("examples", []) or [],
+            ))
+
+        # PII entities + custom regexes ← sensitiveInformationPolicy.
+        si = detail.get("sensitiveInformationPolicy") or {}
+        pii_entities: list[PiiEntityConfig] = []
+        for p in si.get("piiEntities", []) or []:
+            try:
+                pii_entities.append(PiiEntityConfig(
+                    type=PiiEntityType(p.get("type")),
+                    action=PiiAction(p.get("action", "ANONYMIZE")),
+                ))
+            except ValueError:
+                continue  # entity type this model doesn't enumerate
+        sensitive_regexes: list[SensitiveRegexConfig] = []
+        for r in si.get("regexes", []) or []:
+            try:
+                sensitive_regexes.append(SensitiveRegexConfig(
+                    name=r.get("name") or "pattern",
+                    pattern=r.get("pattern") or "",
+                    description=r.get("description"),
+                    action=PiiAction(r.get("action", "BLOCK")),
+                ))
+            except ValueError:
+                continue
+
+        # Word filter ← wordPolicy.
+        word_filter = None
+        wp = detail.get("wordPolicy") or {}
+        managed = wp.get("managedWordLists", []) or []
+        words = wp.get("words", []) or []
+        if managed or words:
+            word_filter = WordFilterConfig(
+                enable_profanity=any(m.get("type") == "PROFANITY" for m in managed),
+                blocked_words=[w.get("text", "") for w in words if w.get("text")],
+            )
+
+        # Contextual grounding ← contextualGroundingPolicy.filters.
+        contextual_grounding = None
+        cg_filters = (detail.get("contextualGroundingPolicy") or {}).get("filters", []) or []
+        if cg_filters:
+            thresholds = {c.get("type"): c.get("threshold") for c in cg_filters}
+            contextual_grounding = ContextualGroundingConfig(
+                enabled=True,
+                grounding_threshold=float(thresholds.get("GROUNDING") or 0.0),
+                relevance_threshold=float(thresholds.get("RELEVANCE") or 0.0),
+            )
+
+        arn = detail.get("guardrailArn") or summary.get("arn")
+        return GuardrailTemplate(
+            template_id=gid,  # stable, unique key for the frontend
+            name=detail.get("name") or summary.get("name") or gid,
+            description=detail.get("description"),
+            status=_map_guardrail_status(detail.get("status") or summary.get("status")),
+            guardrail_id=gid,
+            guardrail_arn=mask_account_id(arn),
+            guardrail_version=version,
+            content_filters=content_filters,
+            denied_topics=denied_topics,
+            pii_entities=pii_entities,
+            sensitive_regexes=sensitive_regexes,
+            word_filter=word_filter,
+            contextual_grounding=contextual_grounding,
+            created_by="bedrock-live",
+        )

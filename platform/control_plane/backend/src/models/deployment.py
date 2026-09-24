@@ -64,7 +64,11 @@ VALID_TRANSITIONS = {
     DeploymentStatus.ROLLED_BACK: set(),
     # Legacy transitions for S3-only flow
     DeploymentStatus.PACKAGED:    {DeploymentStatus.DELIVERED, DeploymentStatus.FAILED},
-    DeploymentStatus.DELIVERED:   set(),
+    # DELIVERED is not terminal: create_deployment delivers the bundle to S3 and only then
+    # starts the Step Functions pipeline. If that start fails (e.g. the template declares no
+    # onboarding job) the deployment has failed, and must be recordable as such — otherwise
+    # update_status raises and masks the real cause behind a generic 500.
+    DeploymentStatus.DELIVERED:   {DeploymentStatus.FAILED},
 }
 
 

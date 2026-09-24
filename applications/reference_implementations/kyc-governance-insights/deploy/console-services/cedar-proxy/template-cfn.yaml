@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Cedar Proxy Lambda for KYC Governance Demo'
+
+Parameters:
+  PolicyStoreId:
+    Type: String
+    Description: Amazon Verified Permissions Policy Store ID
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+  GuardrailId:
+    Type: String
+    Default: ''
+    Description: Bedrock Guardrail ID used by the /ar-check automated-reasoning check.
+  GuardrailVersion:
+    Type: String
+    Default: '4'
+    Description: >
+      Published guardrail version for /ar-check. ApplyGuardrail requires a published
+      numeric version — DRAFT is rejected in this account — so this must point at a
+      published version of GuardrailId (matches grounding-proxy).
+
+Resources:
+  CedarProxyLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/kyc-cedar-proxy
+      RetentionInDays: 30
+
+  CedarProxyFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: CedarProxyLogGroup
+    Properties:
+      FunctionName: kyc-cedar-proxy
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 10
+      MemorySize: 256
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          POLICY_STORE_ID: !Ref PolicyStoreId
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+          GUARDRAIL_ID: !Ref GuardrailId
+          GUARDRAIL_VERSION: !Ref GuardrailVersion
+      Role: !GetAtt CedarProxyRole.Arn
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: cedar}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, boto3, os
+          avp = boto3.client('verifiedpermissions')
+          STORE = os.environ['POLICY_STORE_ID']
+          ORIGIN = os.environ['ALLOWED_ORIGIN']
+          GUARDRAIL_ID = os.environ.get('GUARDRAIL_ID', '')
+          GUARDRAIL_VERSION = os.environ.get('GUARDRAIL_VERSION', '4')
+          CORS = {'Access-Control-Allow-Origin': ORIGIN, 'Access-Control-Allow-Headers': 'Content-Type,x-api-key,x-tenant-id', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'}
+          def handler(event, ctx):
+              path = event.get('rawPath', '')
+              method = event.get('requestContext', {}).get('http', {}).get('method', 'GET')
+              # Auth is enforced at the edge by the shared origin-verify API Gateway
+              # authorizer (invariant #1) — this handler contains no auth logic.
+              if method == 'OPTIONS':
+                  return {'statusCode': 200, 'headers': CORS}
+              tenant_id = (event.get('headers') or {}).get('x-tenant-id', 'default')
+              try:
+                  if path == '/policies':
+                      resp = avp.list_policies(policyStoreId=STORE, maxResults=50)
+                      policies = [{'policyId': p['policyId'], 'policyType': p['policyType'], 'principal': str(p.get('principal', '')), 'effect': p.get('effect', ''), 'createdDate': str(p.get('createdDate', ''))} for p in resp.get('policies', [])]
+                      return {'statusCode': 200, 'headers': CORS, 'body': json.dumps(policies)}
+                  elif path == '/evaluate':
+                      body = json.loads(event.get('body', '{}'))
+                      kwargs = {'policyStoreId': STORE, 'principal': body.get('principal', {}), 'action': body.get('action', {}), 'resource': body.get('resource', {})}
+                      if body.get('entities'): kwargs['entities'] = body['entities']
+                      if body.get('context'): kwargs['context'] = body['context']
+                      resp = avp.is_authorized(**kwargs)
+                      reasons = [dp.get('policyId') for dp in resp.get('determiningPolicies', [])]
+                      return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'decision': resp['decision'], 'reasons': reasons})}
+                  elif path == '/ar-check' and not GUARDRAIL_ID:
+                      # Cedar /evaluate keeps working without a guardrail; only this branch
+                      # needs one. Report it rather than failing as if the service were down.
+                      print(json.dumps({'svc': 'cedar-proxy', 'event': 'not_configured',
+                                        'path': path, 'detail': 'no guardrail id supplied'}))
+                      return {'statusCode': 503, 'headers': CORS,
+                              'body': json.dumps({'error': 'automated reasoning is not '
+                                                  'configured (no Bedrock guardrail deployed)'})}
+                  elif path == '/ar-check':
+                      body = json.loads(event.get('body', '{}'))
+                      br = boto3.client('bedrock-runtime')
+                      resp = br.apply_guardrail(guardrailIdentifier=GUARDRAIL_ID, guardrailVersion=GUARDRAIL_VERSION, source='INPUT', content=[{'text': {'text': body.get('text', '')}}])
+                      verdict = 'VALID' if resp.get('action') == 'NONE' else 'INVALID'
+                      return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'verdict': verdict, 'violations': [], 'checkedRules': 1, 'latencyMs': 0})}
+                  elif path == '/health':
+                      return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'status': 'ok', 'service': 'cedar-proxy', 'timestamp': __import__('datetime').datetime.utcnow().isoformat()})}
+                  return {'statusCode': 404, 'headers': CORS, 'body': '{"error":"not found"}'}
+              except Exception as e:
+                  # Log before answering: a deliberate 500 raises no Lambda error metric, so
+                  # without this the failure is invisible in CloudWatch.
+                  print(json.dumps({'svc': 'cedar-proxy', 'event': 'error',
+                                    'path': path, 'detail': str(e)}))
+                  return {'statusCode': 500, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
+
+  CedarProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AVPAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [verifiedpermissions:ListPolicies, verifiedpermissions:IsAuthorized, verifiedpermissions:GetPolicy, bedrock:ApplyGuardrail, bedrock:GetGuardrail]
+                Resource: '*'
+
+  CedarApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: kyc-cedar-proxy
+      ProtocolType: HTTP
+      # CORS handled in the Lambda (OPTIONS handler on the $default route) so we can allow
+      # x-api-key / x-tenant-id headers and avoid duplicate Access-Control-Allow-Origin.
+
+  # Edge auth (invariant #1): shared origin-verify REQUEST authorizer, imported from the
+  # origin-verify-authorizer stack. A missing x-origin-verify header is 401'd by API
+  # Gateway before the Lambda runs; a present-but-wrong value returns isAuthorized:false.
+  OriginVerifyAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref CedarApi
+      AuthorizerType: REQUEST
+      Name: kyc-origin-verify
+      IdentitySource:
+        - '$request.header.x-origin-verify'
+      AuthorizerPayloadFormatVersion: '2.0'
+      EnableSimpleResponses: true
+      AuthorizerResultTtlInSeconds: 300
+      AuthorizerUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnArn}/invocations'
+        - FnArn: !ImportValue kyc-origin-verify-authorizer-arn
+
+  OriginVerifyAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue kyc-origin-verify-authorizer-arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CedarApi}/authorizers/${OriginVerifyAuthorizer}'
+
+  CedarApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref CedarApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt CedarProxyFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  CedarApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref CedarApi
+      RouteKey: '$default'
+      Target: !Sub integrations/${CedarApiIntegration}
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  CedarApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref CedarApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  CedarApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CedarProxyFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CedarApi}/*/*
+
+Outputs:
+  ApiUrl:
+    Value: !Sub https://${CedarApi}.execute-api.${AWS::Region}.amazonaws.com

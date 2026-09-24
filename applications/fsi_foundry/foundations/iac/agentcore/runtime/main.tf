@@ -134,26 +134,26 @@ resource "aws_cloudformation_stack" "agentcore_runtime" {
   template_body = file("${path.module}/agentcore_runtime.yaml")
 
   parameters = {
-    AgentName      = local.agent_name
-    RoleArn        = data.terraform_remote_state.infra.outputs.agentcore_role_arn
-    ECRRepository  = data.terraform_remote_state.infra.outputs.agentcore_ecr_repository
+    AgentName     = local.agent_name
+    RoleArn       = data.terraform_remote_state.infra.outputs.agentcore_role_arn
+    ECRRepository = data.terraform_remote_state.infra.outputs.agentcore_ecr_repository
     # Plain tag only. AgentCore cannot pull "<tag>@sha256:<digest>" (results in
     # a 502 with no logs). Cache-busting on redeploy is handled by the build
     # pushing a unique tag per build (see buildspec.yml), not by digest pinning.
-    ImageTag       = var.image_tag
-    DataBucket     = data.terraform_remote_state.infra.outputs.s3_data_bucket
-    BedrockModelId = var.bedrock_model_id
-    Description    = "AVA - ${var.use_case_name} (${var.framework})"
-    Environment    = data.terraform_remote_state.infra.outputs.environment
-    AwsRegion      = data.terraform_remote_state.infra.outputs.aws_region
-    UseCaseId        = var.use_case_id
-    UseCaseName      = var.use_case_name
-    Framework        = var.framework
-    EnableTracing    = var.enable_tracing
-    LangfuseHost     = var.langfuse_host
-    LangfuseSecretName = var.langfuse_secret_name
-    GuardrailId      = var.guardrail_id
-    GuardrailVersion = var.guardrail_version
+    ImageTag                  = var.image_tag
+    DataBucket                = data.terraform_remote_state.infra.outputs.s3_data_bucket
+    BedrockModelId            = var.bedrock_model_id
+    Description               = "AVA - ${var.use_case_name} (${var.framework})"
+    Environment               = data.terraform_remote_state.infra.outputs.environment
+    AwsRegion                 = data.terraform_remote_state.infra.outputs.aws_region
+    UseCaseId                 = var.use_case_id
+    UseCaseName               = var.use_case_name
+    Framework                 = var.framework
+    EnableTracing             = var.enable_tracing
+    LangfuseHost              = var.langfuse_host
+    LangfuseSecretName        = var.langfuse_secret_name
+    GuardrailId               = var.guardrail_id
+    GuardrailVersion          = var.guardrail_version
     LlmGatewayBaseUrl         = var.llm_gateway_base_url
     LlmGatewayApiKeySecretArn = var.llm_gateway_api_key_secret_arn
   }

@@ -172,3 +172,23 @@ output "a2a_agents_table_arn" {
   description = "ARN of the A2A Agents registry DynamoDB table"
   value       = aws_dynamodb_table.a2a_agents.arn
 }
+
+output "evaluations_table_name" {
+  description = "Name of the evaluations DynamoDB table"
+  value       = aws_dynamodb_table.evaluations.name
+}
+
+output "evaluations_table_arn" {
+  description = "ARN of the evaluations DynamoDB table"
+  value       = aws_dynamodb_table.evaluations.arn
+}
+
+output "login_events_table_name" {
+  description = "Name of the login-events audit DynamoDB table"
+  value       = aws_dynamodb_table.login_events.name
+}
+
+output "login_events_table_arn" {
+  description = "ARN of the login-events audit DynamoDB table"
+  value       = aws_dynamodb_table.login_events.arn
+}

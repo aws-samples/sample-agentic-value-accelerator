@@ -1,0 +1,56 @@
+# =============================================================================
+# AVA - Base Docker Image
+# =============================================================================
+# Common base image with platform code. Extended by pattern-specific Dockerfiles.
+#
+# This image contains:
+# - Python runtime
+# - Platform source code (adapters, base classes, tools)
+# - Base dependencies
+#
+# Build args are used to inject use case and framework at build time.
+# =============================================================================
+
+FROM python:3.11-slim AS base
+
+# Build arguments for customization
+ARG USE_CASE_ID=kyc
+ARG FRAMEWORK=langchain_langgraph
+
+# Image labels
+LABEL org.opencontainers.image.title="AVA"
+LABEL org.opencontainers.image.description="AVA - Agentic Value Accelerator for AI Agent Platform for Financial Services"
+LABEL org.opencontainers.image.vendor="AWS"
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy base requirements
+COPY platform/src/requirements/requirements.txt ./requirements/
+
+# Install base dependencies
+RUN pip install --no-cache-dir -r requirements/requirements.txt
+
+# Copy platform source code
+COPY platform/src/ .
+
+# Create use_cases directory structure
+RUN mkdir -p use_cases
+
+# Copy the specified use case and framework
+# The COPY command uses build args to select the right application code
+COPY applications/fsi_foundry/use_cases/${USE_CASE_ID}/src/${FRAMEWORK}/ ./use_cases/${USE_CASE_ID}/
+
+# Create use_cases __init__.py
+RUN echo '"""AVA Use Cases."""' > use_cases/__init__.py
+
+# Store build args as environment variables for runtime reference
+ENV USE_CASE_ID=${USE_CASE_ID}
+ENV FRAMEWORK=${FRAMEWORK}
+
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser

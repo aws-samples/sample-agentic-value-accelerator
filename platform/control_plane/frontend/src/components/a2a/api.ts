@@ -31,6 +31,9 @@ export interface A2aAgent {
   delegation_mode: string;
   source: string;
   status: string;
+  // Present on agents registered from a curated reference (source === 'curated');
+  // the register() payload carries it and the backend persists/returns it.
+  curated_id?: string;
   created_at: string;
   updated_at: string;
 }

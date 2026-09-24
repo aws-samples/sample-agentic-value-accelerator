@@ -14,6 +14,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from models.govern_region_provenance import RegionProvenance
+
 
 class EvaluationJob(BaseModel):
     """One Bedrock evaluation job, from ListEvaluationJobs."""
@@ -31,6 +33,12 @@ class EvaluationJob(BaseModel):
 class EvaluationJobsResponse(BaseModel):
     """The account's real Bedrock evaluation jobs + a status roll-up."""
 
+    # `model_evals` counts Bedrock ModelEvaluation jobs - meaningful domain
+    # vocabulary about AI models, not a pydantic internal. Pydantic reserves the
+    # `model_` prefix, so the namespace guard is disabled deliberately; renaming the
+    # field would break the API contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
+
     jobs: List[EvaluationJob] = Field(default_factory=list)
     total: int = 0
     completed: int = 0
@@ -41,6 +49,13 @@ class EvaluationJobsResponse(BaseModel):
     live: bool
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )
 
 
 class MetricScore(BaseModel):

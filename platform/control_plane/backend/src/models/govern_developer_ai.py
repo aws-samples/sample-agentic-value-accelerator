@@ -235,10 +235,28 @@ class ShadowAIResponse(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class ShadowAiUnapprovedUser(BaseModel):
-    """An unapproved user calling AI services (from CloudTrail)."""
+    """An unapproved user calling AI services (from CloudTrail).
+
+    Token counts are MEASURED from the Bedrock model-invocation log group, never
+    estimated — CloudTrail management events carry no token data at all. When the
+    invocation logs cannot attribute tokens to this identity the counts are None
+    ("not measured"), which the UI must render as unknown rather than as zero.
+    """
     email: str = Field(..., description="User identity from CloudTrail")
     first_seen: str = Field(..., description="ISO timestamp of first activity")
-    tokens: int = Field(default=0, description="Estimated token usage")
+    tokens: Optional[int] = Field(
+        default=None,
+        description="Measured input+output tokens from Bedrock invocation logs; "
+                    "None when not measurable for this identity (never estimated)",
+    )
+    input_tokens: Optional[int] = Field(
+        default=None, description="Measured input tokens; None when not measured"
+    )
+    output_tokens: Optional[int] = Field(
+        default=None,
+        description="Measured output tokens; None when the model emits none "
+                    "(e.g. embeddings) or nothing was measured",
+    )
     source: str = Field(default="cloudtrail", description="Detection source")
     recommended_action: str = Field(
         default="Review user and either add to approved list or revoke access"
@@ -258,11 +276,34 @@ class ShadowAiUnknownTool(BaseModel):
 
 
 class ShadowAiUnapprovedModel(BaseModel):
-    """An unapproved model being invoked."""
+    """An unapproved model being invoked.
+
+    Cost is computed from MEASURED token counts times this model's published
+    per-token rate. It is None when either the tokens were not measured or the
+    model has no rate entry — a model is never priced at a fallback rate that
+    would silently misreport its spend.
+    """
+
+    # `model_id` is an AI model identifier (read from CloudTrail) - meaningful domain
+    # vocabulary, not a pydantic internal. Pydantic reserves the `model_` prefix, so
+    # the namespace guard is disabled deliberately; renaming the field would break
+    # the API contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
+
     model_id: str = Field(..., description="Model identifier from CloudTrail")
     users: int = Field(default=1, description="Number of distinct users")
     requests: int = Field(default=0, description="Number of invocations")
-    cost: float = Field(default=0.0, description="Estimated cost")
+    cost: Optional[float] = Field(
+        default=None,
+        description="USD from measured tokens x per-model rate; None when tokens "
+                    "were not measured or the model has no published rate",
+    )
+    input_tokens: Optional[int] = Field(
+        default=None, description="Measured input tokens; None when not measured"
+    )
+    output_tokens: Optional[int] = Field(
+        default=None, description="Measured output tokens; None when not measured"
+    )
     evidence: str = Field(..., description="CloudTrail event details")
     recommended_action: str = Field(
         default="Review model usage and add to approved list or restrict access"
@@ -275,7 +316,25 @@ class ShadowAiDetection(BaseModel):
     unknown_tools: List[ShadowAiUnknownTool] = Field(default_factory=list)
     unapproved_models: List[ShadowAiUnapprovedModel] = Field(default_factory=list)
     total_shadow_events: int = Field(default=0)
-    shadow_cost_estimate: float = Field(default=0.0)
+    shadow_cost_estimate: float = Field(
+        default=0.0,
+        description="Sum of the priceable per-model costs only; models with no "
+                    "measured tokens or no rate are excluded and named in `note`",
+    )
+    # Honest-degrade triple for the token/cost dimension specifically: the
+    # CloudTrail event discovery can succeed while the token measurement fails,
+    # and the UI needs to know which happened before it renders a Live badge.
+    live: bool = Field(
+        default=False,
+        description="True only when token counts were actually measured",
+    )
+    source: str = Field(
+        default="cloudtrail",
+        description="cloudtrail (events only) or cloudtrail+bedrock-invocation-logs",
+    )
+    note: Optional[str] = Field(
+        default=None, description="Why tokens/cost are partial or unavailable"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -332,7 +391,7 @@ class AgenticRepoActivity(BaseModel):
 class UnapprovedAgenticAction(BaseModel):
     """An agentic action that bypassed approval governance.
 
-    These are governance risks: commits without review, PRs merged without approval,
+    These are governance risks: commits without review, PRs opened without approval,
     changes to sensitive files, agents exceeding their authorized scope.
     """
 
@@ -363,7 +422,7 @@ class AgenticCodingGovernanceRisk(BaseModel):
     """
 
     unapproved_commits: int = Field(0, description="Commits without human review")
-    unapproved_prs_merged: int = Field(0, description="PRs merged without approval")
+    unapproved_prs_created: int = Field(0, description="PRs opened by agents without approval")
     sensitive_file_changes: int = Field(0, description="Changes to security/config/secrets")
     high_autonomy_on_prod_repos: int = Field(0, description="Full-autonomy tasks on prod repos")
     scope_exceeded_count: int = Field(0, description="Agents exceeding authorized scope")
@@ -391,7 +450,7 @@ class AgenticCodingActivity(BaseModel):
 
     Governance concerns for agentic coding:
     - Commits without human review
-    - PRs merged without approval
+    - PRs opened without approval
     - Changes to sensitive files (security, config, secrets)
     - High autonomy on production repos
     - Agents exceeding their authorized scope
@@ -473,4 +532,408 @@ class DeveloperAIPostureResponse(BaseModel):
     period: str = Field(..., description="Time period: 24h | 7d | 30d")
     live: bool = Field(default=False, description="True when all sources are live")
     source: str = Field(default="cloudwatch-otel", description="Data source")
+    note: Optional[str] = None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Local Agent Discovery Models
+# ──────────────────────────────────────────────────────────────────────────────
+
+class LocalAgentConfig(BaseModel):
+    """A discovered local agent configuration file in a repository."""
+
+    repo_name: str = Field(..., description="Repository name")
+    repo_arn: Optional[str] = Field(default=None, description="Full CodeCommit ARN")
+    file_path: str = Field(..., description="Path to the agent config file")
+    tool: str = Field(..., description="Tool name: Claude Code, Copilot, Cursor, Kiro, Q Desktop, etc.")
+    owner: Optional[str] = Field(default=None, description="Last committer or repo owner")
+    team: Optional[str] = Field(default=None, description="Team tag from repo")
+    last_modified: Optional[str] = Field(default=None, description="ISO timestamp of last modification")
+    risk_level: str = Field(default="medium", description="low | medium | high | critical")
+    description: Optional[str] = Field(default=None, description="Extracted agent description or purpose")
+    file_size_bytes: int = Field(default=0, description="Size of the config file")
+    content_preview: Optional[str] = Field(default=None, description="First 500 chars of content")
+
+
+class LocalAgentToolSummary(BaseModel):
+    """Summary of discovered agents by tool type."""
+
+    tool: str = Field(..., description="Tool name")
+    file_pattern: str = Field(..., description="File pattern used for detection")
+    count: int = Field(default=0, description="Number of repos with this config")
+    icon: str = Field(default="?", description="Short icon code for UI")
+
+
+class LocalAgentDiscoveryResponse(BaseModel):
+    """Response from scanning repositories for local agent configurations."""
+
+    agents: List[LocalAgentConfig] = Field(default_factory=list)
+    total_found: int = Field(default=0)
+    by_tool: List[LocalAgentToolSummary] = Field(default_factory=list)
+    repos_scanned: int = Field(default=0)
+    repos_with_agents: int = Field(default=0)
+    critical_count: int = Field(default=0)
+    high_count: int = Field(default=0)
+    medium_count: int = Field(default=0)
+    low_count: int = Field(default=0)
+    live: bool = Field(default=False)
+    source: str = Field(default="codecommit")
+    note: Optional[str] = None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Policy Engine Models
+# ──────────────────────────────────────────────────────────────────────────────
+
+class PolicyStatus(str, Enum):
+    """Status of a policy rule."""
+    APPROVED = "approved"
+    BLOCKED = "blocked"
+    REVIEW = "review"  # Requires manual review
+
+
+class PolicyRule(BaseModel):
+    """A single policy rule for tools or models."""
+
+    id: str = Field(..., description="Unique rule ID")
+    name: str = Field(..., description="Human-readable rule name")
+    rule_type: str = Field(..., description="tool | model | user | routing")
+    pattern: str = Field(..., description="Pattern to match (e.g., 'claude-cli*', 'gpt-4*')")
+    status: PolicyStatus = Field(..., description="What happens when matched")
+    reason: Optional[str] = Field(default=None, description="Why this rule exists")
+    created_by: Optional[str] = Field(default=None)
+    created_at: Optional[str] = Field(default=None)
+    updated_at: Optional[str] = Field(default=None)
+
+
+class AgentPolicy(BaseModel):
+    """Complete policy configuration for agentic coding governance."""
+
+    id: str = Field(default="default", description="Policy ID")
+    name: str = Field(default="Default Policy", description="Policy name")
+    description: Optional[str] = Field(default=None)
+
+    # Tool rules
+    approved_tools: List[str] = Field(
+        default_factory=lambda: ["claude-cli", "claude-code", "kiro", "amazonq", "aws-toolkit"],
+        description="Tool patterns that are approved"
+    )
+    blocked_tools: List[str] = Field(
+        default_factory=list,
+        description="Tool patterns that are blocked"
+    )
+    review_tools: List[str] = Field(
+        default_factory=lambda: ["cursor", "copilot"],
+        description="Tools requiring manual review"
+    )
+
+    # Model rules
+    approved_models: List[str] = Field(
+        default_factory=lambda: ["anthropic.claude-*", "amazon.nova-*", "amazon.titan-*"],
+        description="Model ID patterns that are approved"
+    )
+    blocked_models: List[str] = Field(
+        default_factory=lambda: ["gpt-4*"],
+        description="Model ID patterns that are blocked"
+    )
+
+    # User rules
+    approved_users: List[str] = Field(
+        default_factory=list,
+        description="User patterns that are pre-approved"
+    )
+    blocked_users: List[str] = Field(
+        default_factory=list,
+        description="User patterns that are blocked"
+    )
+
+    # Thresholds
+    max_requests_per_hour: int = Field(default=100, description="Rate limit per user")
+    max_daily_cost_usd: float = Field(default=50.0, description="Cost limit per user per day")
+    require_guardrails: bool = Field(default=False, description="Require Bedrock guardrails")
+
+    # Metadata
+    is_active: bool = Field(default=True)
+    created_at: Optional[str] = Field(default=None)
+    updated_at: Optional[str] = Field(default=None)
+
+
+class PolicyViolation(BaseModel):
+    """A detected policy violation."""
+
+    id: str = Field(..., description="Violation ID")
+    violation_type: str = Field(..., description="tool | model | user | rate | cost")
+    severity: str = Field(default="medium", description="low | medium | high | critical")
+
+    # What triggered the violation
+    user: str = Field(..., description="User who triggered the violation")
+    tool: Optional[str] = Field(default=None, description="Tool involved")
+    model: Optional[str] = Field(default=None, description="Model involved")
+
+    # Violation details
+    rule_matched: str = Field(..., description="The rule pattern that was matched")
+    policy_status: PolicyStatus = Field(..., description="What the policy says")
+
+    # Context
+    request_count: int = Field(default=1, description="Number of violating requests")
+    first_seen: str = Field(..., description="When first detected")
+    last_seen: str = Field(..., description="Most recent occurrence")
+
+    # Action taken
+    action_taken: Optional[str] = Field(default=None, description="auto-blocked | flagged | none")
+    reviewed_by: Optional[str] = Field(default=None)
+    reviewed_at: Optional[str] = Field(default=None)
+    resolution: Optional[str] = Field(default=None)
+
+
+class PolicyEvaluationResult(BaseModel):
+    """Result of evaluating activity against policy."""
+
+    policy_id: str
+    policy_name: str
+
+    # Counts
+    total_evaluated: int = Field(default=0)
+    approved_count: int = Field(default=0)
+    blocked_count: int = Field(default=0)
+    review_count: int = Field(default=0)
+
+    # Violations found
+    violations: List[PolicyViolation] = Field(default_factory=list)
+
+    # Summary by type
+    violations_by_type: dict = Field(default_factory=dict)
+    violations_by_severity: dict = Field(default_factory=dict)
+
+    live: bool = Field(default=False)
+    source: str = Field(default="policy-engine")
+    note: Optional[str] = Field(default=None)
+
+
+class PolicyListResponse(BaseModel):
+    """List of available policies."""
+
+    policies: List[AgentPolicy] = Field(default_factory=list)
+    active_policy_id: Optional[str] = Field(default=None)
+    live: bool = Field(default=True)
+    source: str = Field(default="local")
+
+
+class PolicyUpdateRequest(BaseModel):
+    """Request to update a policy."""
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    approved_tools: Optional[List[str]] = None
+    blocked_tools: Optional[List[str]] = None
+    review_tools: Optional[List[str]] = None
+    approved_models: Optional[List[str]] = None
+    blocked_models: Optional[List[str]] = None
+    approved_users: Optional[List[str]] = None
+    blocked_users: Optional[List[str]] = None
+    max_requests_per_hour: Optional[int] = None
+    max_daily_cost_usd: Optional[float] = None
+    require_guardrails: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Cost Attribution Models
+# ──────────────────────────────────────────────────────────────────────────────
+
+class CostByTool(BaseModel):
+    """Cost breakdown by tool."""
+
+    tool: str = Field(..., description="Tool name from userAgent")
+    requests: int = Field(default=0)
+    input_tokens: int = Field(default=0)
+    output_tokens: int = Field(default=0)
+    estimated_cost_usd: float = Field(default=0.0)
+    users: int = Field(default=0, description="Unique users")
+
+
+class CostByUser(BaseModel):
+    """Cost breakdown by user."""
+
+    user: str = Field(..., description="User identity")
+    requests: int = Field(default=0)
+    input_tokens: int = Field(default=0)
+    output_tokens: int = Field(default=0)
+    estimated_cost_usd: float = Field(default=0.0)
+    tools: List[str] = Field(default_factory=list, description="Tools used")
+    models: List[str] = Field(default_factory=list, description="Models used")
+
+
+class CostByModel(BaseModel):
+    """Cost breakdown by model.
+
+    This is the authoritative per-model cut: token counts are measured from the
+    Bedrock model-invocation logs and priced with this model's own rate. Cost is
+    None when the model has no published rate — the by_tool / by_user / trend
+    cuts and the response total then exclude it, and `note` names it.
+
+    All three measured fields are Optional because unmeasured must stay
+    distinguishable from a measured zero. A model appears in this cut if either
+    source saw it, so there are two distinct unmeasured cases: CloudTrail named
+    the model but the invocation logs never joined to it (no token record at
+    all), and the logs joined but the model emits no output-token field. Both
+    previously coerced to 0, which reads as "this model ran and cost nothing" —
+    indistinguishable from a model that genuinely used zero output tokens.
+    """
+
+    model: str = Field(..., description="Model ID")
+    requests: int = Field(
+        default=0,
+        description="CloudTrail events for this model. 0 is a measured zero: the "
+                    "invocation logs saw it but CloudTrail's bounded paging did not "
+                    "return matching events. The two sources count independently.",
+    )
+    input_tokens: Optional[int] = Field(
+        default=None,
+        description="Measured input tokens; None when unmeasured (never 0 as a stand-in)",
+    )
+    output_tokens: Optional[int] = Field(
+        default=None,
+        description="Measured output tokens; None when unmeasured or when the model "
+                    "emits no output-token field",
+    )
+    estimated_cost_usd: Optional[float] = Field(
+        default=None,
+        description="USD from measured tokens x this model's rate; None when the "
+                    "model has no published rate (never a fallback rate)",
+    )
+    users: int = Field(default=0)
+
+
+class CostTrend(BaseModel):
+    """Daily cost trend point."""
+
+    date: str = Field(..., description="YYYY-MM-DD")
+    requests: int = Field(default=0)
+    estimated_cost_usd: float = Field(default=0.0)
+
+
+class CostAttributionResponse(BaseModel):
+    """Cost attribution breakdown for agentic coding."""
+
+    period_days: int = Field(default=7)
+    total_requests: int = Field(default=0)
+    total_estimated_cost_usd: float = Field(default=0.0)
+
+    by_tool: List[CostByTool] = Field(default_factory=list)
+    by_user: List[CostByUser] = Field(default_factory=list)
+    by_model: List[CostByModel] = Field(default_factory=list)
+    trend: List[CostTrend] = Field(default_factory=list)
+
+    live: bool = Field(default=False)
+    source: str = Field(default="cloudtrail")
+    note: Optional[str] = None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# AI Tool Provenance — where a call went, and how the tool got installed
+#
+# Defence in depth for agentic coding. Two independent classifications per observed
+# (principal, tool) pair, each with an explicit unknown, plus the coverage denominators
+# that say how much of the estate could have produced a finding at all.
+#
+# The classification logic lives in `core.ai_tool_provenance` and is unit-tested there;
+# these are the wire shapes. See that module for why `unknown` may never default to a
+# confident value.
+# ──────────────────────────────────────────────────────────────────────────────
+
+class CoverageRatioModel(BaseModel):
+    """A measured fraction of the estate, denominator retained.
+
+    `pct` is null when `total` is 0. Not 0.0 — "nothing exists to cover" and "nothing is
+    covered" are different findings, and showing the first as 0% invents a failing control.
+    """
+
+    covered: int = Field(..., description="How many units are covered by this signal")
+    total: int = Field(..., description="How many units exist. 0 means the denominator is unknown/empty")
+    label: str = Field(..., description="Human-readable name of what is being measured")
+    unit: str = Field(default="hosts", description="What is being counted: hosts, VPCs, calls")
+    pct: Optional[float] = Field(default=None, description="Percentage covered, or null when total is 0")
+    complete: bool = Field(default=False, description="True only when a real denominator is fully covered")
+    note: Optional[str] = None
+
+
+class ProvenanceCoverageModel(BaseModel):
+    """How much of the estate the provenance answer actually covers."""
+
+    endpoint: CoverageRatioModel = Field(..., description="Hosts under endpoint management / hosts known")
+    dns: CoverageRatioModel = Field(..., description="VPCs with resolver query logging / VPCs total")
+    call_path: CoverageRatioModel = Field(..., description="Calls with a determined path / calls observed")
+    package_inventory: CoverageRatioModel = Field(..., description="Managed hosts with package inventory / managed hosts")
+    unattributed_callers: int = Field(
+        default=0,
+        description=(
+            "Observed callers that resolved to no host. Read alongside `endpoint`: that ratio "
+            "counts EC2 instances, and developer machines are not EC2, so a complete EC2 ratio "
+            "is not coverage of the hosts that made these calls."
+        ),
+    )
+    blind_spots: List[str] = Field(
+        default_factory=list,
+        description="Plain statements of what this signal set cannot answer. Rendered verbatim.",
+    )
+
+
+class AiToolProvenanceRecord(BaseModel):
+    """One observed (principal, tool) pair with its provenance classifications."""
+
+    principal: str = Field(..., description="CloudTrail username / role that made the calls")
+    tool: str = Field(..., description="Identified tool, or the raw user agent when unidentified")
+    version: Optional[str] = None
+    icon: str = Field(default="?", description="Short icon code for UI")
+    tool_class: str = Field(..., description="coding_tool | sdk_caller | unidentified")
+    call_path: str = Field(..., description="bedrock | public_api | unknown")
+    install_provenance: str = Field(
+        ..., description="managed | managed_runtime | self_installed | unknown_host"
+    )
+    provider: Optional[str] = Field(default=None, description="AWS Bedrock, Anthropic, OpenAI, …")
+    exec_env: Optional[str] = Field(
+        default=None, description="AWS-managed runtime the caller ran in (Lambda, Fargate, …)"
+    )
+    host_id: Optional[str] = Field(default=None, description="EC2 instance id when the call could be attributed")
+    source_ip: Optional[str] = None
+    user_agent: Optional[str] = None
+    requests: int = 0
+    models: List[str] = Field(default_factory=list)
+    first_seen: Optional[str] = None
+    last_seen: Optional[str] = None
+    governed: bool = Field(default=False, description="True only when the call path is proven to stay in AWS")
+    needs_attention: bool = Field(
+        default=False,
+        description="A coding tool that left AWS or whose install cannot be vouched for. Excludes SDK callers.",
+    )
+    tool_evidence: str = Field(default="", description="Why this tool identity was assigned")
+    call_path_evidence: str = Field(default="", description="Why this call path was assigned")
+    install_evidence: str = Field(default="", description="Why this install provenance was assigned")
+    host_evidence: str = Field(default="", description="How the host was (or was not) attributed")
+
+
+class AiToolProvenanceResponse(BaseModel):
+    """AI tool provenance with coverage denominators.
+
+    Read the counts and the coverage together. `by_call_path` reporting zero `public_api`
+    with `coverage.dns.covered == 0` does not mean nobody used a vendor API — it means the
+    platform cannot see vendor API traffic at all.
+    """
+
+    records: List[AiToolProvenanceRecord] = Field(default_factory=list)
+    total_records: int = 0
+    by_call_path: dict = Field(default_factory=dict, description="Counts keyed by bedrock/public_api/unknown")
+    by_install_provenance: dict = Field(
+        default_factory=dict,
+        description="Counts keyed by managed/managed_runtime/self_installed/unknown_host",
+    )
+    by_tool_class: dict = Field(default_factory=dict, description="Counts keyed by coding_tool/sdk_caller/unidentified")
+    coding_tool_count: int = Field(default=0, description="Records that are identified AI coding tools")
+    needs_attention_count: int = Field(default=0, description="Coding tools that left AWS or have unvouched installs")
+    calls_observed: int = Field(default=0, description="Total API calls behind these records")
+    window_days: int = Field(default=7, description="Lookback used, in days")
+    coverage: Optional[ProvenanceCoverageModel] = None
+    live: bool = Field(default=False)
+    source: str = Field(default="cloudtrail+ssm")
     note: Optional[str] = None

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { harnessApi, type FoundationModel, type HarnessCreateRequest, type ToolConfig } from './api';
+import { harnessApi, type HarnessCreateRequest, type ToolConfig } from './api';
 import { mcpApi, type McpServer } from '../mcp/api';
 
 /**
@@ -55,23 +55,7 @@ export default function HarnessCreate({ editMode = false }: HarnessCreateProps) 
   // ValidationException: "The provided model identifier is invalid".
   const DEFAULT_MODEL_ID = 'global.anthropic.claude-haiku-4-5-20251001-v1:0';
 
-  // Static fallback the dropdown falls back to when the Bedrock
-  // ListFoundationModels call is unavailable (missing IAM, region gap, or
-  // pre-Terraform-apply local dev). Not exhaustive — just the curated set most
-  // FSI teams reach for. IDs verified against `aws bedrock
-  // list-inference-profiles` in us-east-1 on the golden account.
-  const FALLBACK_MODELS: FoundationModel[] = [
-    { modelId: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',  modelName: 'Claude Haiku 4.5',   providerName: 'Anthropic', inputModalities: ['TEXT'], outputModalities: ['TEXT'] },
-    { modelId: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0', modelName: 'Claude Sonnet 4.5',  providerName: 'Anthropic', inputModalities: ['TEXT'], outputModalities: ['TEXT'] },
-    { modelId: 'global.anthropic.claude-opus-4-5-20251101-v1:0',   modelName: 'Claude Opus 4.5',    providerName: 'Anthropic', inputModalities: ['TEXT'], outputModalities: ['TEXT'] },
-    { modelId: 'us.amazon.nova-pro-v1:0',                          modelName: 'Amazon Nova Pro',    providerName: 'Amazon',    inputModalities: ['TEXT'], outputModalities: ['TEXT'] },
-    { modelId: 'us.amazon.nova-lite-v1:0',                         modelName: 'Amazon Nova Lite',   providerName: 'Amazon',    inputModalities: ['TEXT'], outputModalities: ['TEXT'] },
-  ];
-
-  const [models, setModels] = useState<FoundationModel[]>([]);
   const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
-  const [modelsLoading, setModelsLoading] = useState(true);
-  const [modelsErr, setModelsErr] = useState('');
 
   const [browser, setBrowser] = useState(false);
   const [codeInterp, setCodeInterp] = useState(false);
@@ -91,18 +75,6 @@ export default function HarnessCreate({ editMode = false }: HarnessCreateProps) 
   const [guardrailVersion, setGuardrailVersion] = useState('DRAFT');
 
   useEffect(() => {
-    harnessApi
-      .listModels()
-      .then((r) => {
-        // Dynamic list wins when available; otherwise fall back to the curated
-        // set so the wizard still functions.
-        setModels(r.models && r.models.length > 0 ? r.models : FALLBACK_MODELS);
-      })
-      .catch((e) => {
-        setModelsErr(String(e));
-        setModels(FALLBACK_MODELS);
-      })
-      .finally(() => setModelsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // Pre-fill the execution role ARN from the auto-provisioned Terraform role.
     // Empty string is fine — the field remains editable if the user wants to
@@ -202,15 +174,6 @@ export default function HarnessCreate({ editMode = false }: HarnessCreateProps) 
     setSelectedMcpIds(ids);
     setPendingMcpUrls(null);
   }, [pendingMcpUrls, mcpServers]);
-
-  // Group models by provider for a readable dropdown
-  const grouped = useMemo(() => {
-    const g: Record<string, FoundationModel[]> = {};
-    for (const m of models) {
-      (g[m.providerName || 'Other'] ||= []).push(m);
-    }
-    return g;
-  }, [models]);
 
   const tools: ToolConfig[] = useMemo(() => {
     const t: ToolConfig[] = [];

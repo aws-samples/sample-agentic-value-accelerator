@@ -1,7 +1,12 @@
 /**
- * useDataLineage — Build data lineage from live AWS data
+ * useDataLineage — Build an ILLUSTRATIVE data-lineage topology from live AWS feeds
  *
- * Sources:
+ * The individual source feeds below are live, but the node-to-node pairings are an
+ * approximation (callers, deployments, guardrails, and models are matched by index /
+ * modulo, not by observed data flow). Treat the resulting flows as representative, not
+ * as measured end-to-end lineage.
+ *
+ * Source feeds:
  * 1. CloudTrail AI callers (who initiated)
  * 2. Invocation logs (what was called, input→output flow)
  * 3. Guardrails (protection stage)
@@ -12,7 +17,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export interface LineageNode {
   id: string;
@@ -20,7 +25,6 @@ export interface LineageNode {
   label: string;
   detail: string;
   status: 'active' | 'warning' | 'error';
-  live: boolean;
 }
 
 export interface LineageFlow {
@@ -142,9 +146,7 @@ export function useDataLineage(): DataLineageResult {
             type: 'caller',
             label: callerName.split(':').pop() || callerName,
             detail: callerService,
-            status: 'active',
-            live: true,
-          },
+            status: 'active',          },
         ];
 
         // Add deployment/agent node if we have deployments
@@ -155,9 +157,7 @@ export function useDataLineage(): DataLineageResult {
             type: 'agent',
             label: deployment.deployment_name || 'Agent',
             detail: `Template: ${deployment.template_id}`,
-            status: deployment.status === 'deployed' ? 'active' : 'warning',
-            live: true,
-          });
+            status: deployment.status === 'deployed' ? 'active' : 'warning',          });
         }
 
         // Add guardrail node
@@ -168,9 +168,7 @@ export function useDataLineage(): DataLineageResult {
             type: 'guardrail',
             label: guardrail.name,
             detail: `${guardrail.pii_entities?.length || 0} PII types protected`,
-            status: 'active',
-            live: true,
-          });
+            status: 'active',          });
         }
 
         // Add model node
@@ -180,9 +178,7 @@ export function useDataLineage(): DataLineageResult {
           type: 'model',
           label: modelName.split('.').pop() || modelName,
           detail: `${(modelBreakdown[modelName] || callCount).toLocaleString()} invocations`,
-          status: 'active',
-          live: true,
-        });
+          status: 'active',        });
 
         // Add output node
         nodes.push({
@@ -190,9 +186,7 @@ export function useDataLineage(): DataLineageResult {
           type: 'output',
           label: 'Response',
           detail: hasGuardrails ? 'Protected output' : 'Unprotected output',
-          status: hasGuardrails ? 'active' : 'warning',
-          live: true,
-        });
+          status: hasGuardrails ? 'active' : 'warning',        });
 
         flows.push({
           id: `flow-${idx}`,
@@ -214,9 +208,7 @@ export function useDataLineage(): DataLineageResult {
           type: 'caller',
           label: 'API Callers',
           detail: 'Bedrock API',
-          status: 'active',
-          live: true,
-        },
+          status: 'active',        },
       ];
 
       if (hasGuardrails) {
@@ -225,9 +217,7 @@ export function useDataLineage(): DataLineageResult {
           type: 'guardrail',
           label: activeGuardrails[0]?.name || 'Guardrail',
           detail: `${activeGuardrails.length} active`,
-          status: 'active',
-          live: true,
-        });
+          status: 'active',        });
       }
 
       modelList.slice(0, 3).forEach((model, i) => {
@@ -236,9 +226,7 @@ export function useDataLineage(): DataLineageResult {
           type: 'model',
           label: model.split('.').pop() || model,
           detail: `${(modelBreakdown[model] || 0).toLocaleString()} calls`,
-          status: 'active',
-          live: true,
-        });
+          status: 'active',        });
       });
 
       flows.push({

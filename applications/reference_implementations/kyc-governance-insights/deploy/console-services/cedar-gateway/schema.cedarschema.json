@@ -1,0 +1,154 @@
+{
+  "AgentCore::Governance": {
+    "entityTypes": {
+      "Agent": {
+        "memberOfTypes": ["AgentGroup"],
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "agent_id": {"type": "String", "required": true},
+            "agent_role": {"type": "String", "required": true},
+            "current_tier": {"type": "Long", "required": true},
+            "deployment_region": {"type": "String", "required": true},
+            "model_id": {"type": "String", "required": true},
+            "max_credit_amount": {"type": "Long", "required": true},
+            "jurisdiction_allowlist": {"type": "Set", "element": {"type": "String"}, "required": true}
+          }
+        }
+      },
+      "AgentGroup": {
+        "memberOfTypes": ["AgentGroup"],
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "description": {"type": "String", "required": false}
+          }
+        }
+      },
+      "HumanOperator": {
+        "memberOfTypes": ["HumanGroup"],
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "alias": {"type": "String", "required": true},
+            "clearance_level": {"type": "Long", "required": true}
+          }
+        }
+      },
+      "HumanGroup": {
+        "memberOfTypes": ["HumanGroup"],
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "description": {"type": "String", "required": false}
+          }
+        }
+      },
+      "CustomerRecord": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "customer_id": {"type": "String", "required": true},
+            "jurisdiction": {"type": "String", "required": true},
+            "incorporation_country": {"type": "String", "required": true},
+            "risk_tier": {"type": "String", "required": true},
+            "risk_score": {"type": "Long", "required": true},
+            "requested_facility_amount": {"type": "Long", "required": true},
+            "currency": {"type": "String", "required": true},
+            "pep_level": {"type": "Long", "required": true},
+            "sanctions_fuzzy_match_score": {"type": "Long", "required": true},
+            "matched_list": {"type": "String", "required": true},
+            "credit_score": {"type": "Long", "required": true},
+            "years_in_business": {"type": "Long", "required": true},
+            "ubo_chain_depth": {"type": "Long", "required": true},
+            "data_residency_region": {"type": "String", "required": true}
+          }
+        }
+      },
+      "ToolResource": {
+        "shape": {
+          "type": "Record",
+          "attributes": {
+            "tool_id": {"type": "String", "required": true},
+            "tool_name": {"type": "String", "required": true},
+            "tool_category": {"type": "String", "required": true},
+            "sensitivity_level": {"type": "String", "required": true},
+            "max_invocations_per_session": {"type": "Long", "required": true}
+          }
+        }
+      }
+    },
+    "actions": {
+      "ApproveApplication": {
+        "appliesTo": {
+          "principalTypes": ["Agent", "HumanOperator"],
+          "resourceTypes": ["CustomerRecord"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "request_hour": {"type": "Long", "required": true},
+              "source_ip": {"type": "String", "required": false},
+              "session_id": {"type": "String", "required": false}
+            }
+          }
+        }
+      },
+      "ExecuteSanctionsQuery": {
+        "appliesTo": {
+          "principalTypes": ["Agent", "HumanOperator"],
+          "resourceTypes": ["CustomerRecord"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "request_hour": {"type": "Long", "required": true},
+              "source_ip": {"type": "String", "required": false},
+              "session_id": {"type": "String", "required": false}
+            }
+          }
+        }
+      },
+      "AccessCustomerRecord": {
+        "appliesTo": {
+          "principalTypes": ["Agent", "HumanOperator"],
+          "resourceTypes": ["CustomerRecord"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "request_hour": {"type": "Long", "required": true},
+              "source_ip": {"type": "String", "required": false},
+              "session_id": {"type": "String", "required": false}
+            }
+          }
+        }
+      },
+      "ExecuteToolCall": {
+        "appliesTo": {
+          "principalTypes": ["Agent"],
+          "resourceTypes": ["ToolResource"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "request_hour": {"type": "Long", "required": true},
+              "source_ip": {"type": "String", "required": false},
+              "session_id": {"type": "String", "required": false}
+            }
+          }
+        }
+      },
+      "RecommendFacility": {
+        "appliesTo": {
+          "principalTypes": ["Agent", "HumanOperator"],
+          "resourceTypes": ["CustomerRecord"],
+          "context": {
+            "type": "Record",
+            "attributes": {
+              "request_hour": {"type": "Long", "required": true},
+              "source_ip": {"type": "String", "required": false},
+              "session_id": {"type": "String", "required": false}
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -96,6 +96,12 @@ class GuardrailConfig(BaseModel):
 
 
 class HarnessCreateRequest(BaseModel):
+    # `model_id` on this and the sibling request models is an AI model identifier (a
+    # Bedrock modelId) - meaningful domain vocabulary, not a pydantic internal.
+    # Pydantic reserves the `model_` prefix, so the namespace guard is disabled
+    # deliberately; renaming the field would break the API contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
+
     harness_name: str = Field(..., min_length=1, max_length=100)
     execution_role_arn: Optional[str] = Field(
         default=None,
@@ -117,6 +123,8 @@ class HarnessCreateRequest(BaseModel):
 
 
 class HarnessUpdateRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
     system_prompt: Optional[str] = None
     model_id: Optional[str] = None
     api_format: Optional[str] = None

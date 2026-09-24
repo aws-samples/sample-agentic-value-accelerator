@@ -50,7 +50,7 @@ export default function DataMetadata() {
               <MockDataBadge integration="Amazon Bedrock Knowledge Bases" />
             </div>
             <p className="text-slate-500 mt-1 max-w-2xl">
-              RAG metadata schemas for knowledge base ingestion, with extraction statistics and filter templates.
+              RAG metadata schemas for knowledge-base ingestion — extraction stats, filter templates, and consistent tagging.
             </p>
           </div>
         </div>

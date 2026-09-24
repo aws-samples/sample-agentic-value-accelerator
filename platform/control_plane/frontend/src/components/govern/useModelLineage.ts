@@ -1,19 +1,24 @@
 /**
- * useModelLineage — Fetch SageMaker model lineage data
+ * useModelLineage — Fetch real SageMaker ML Lineage data
  *
- * Calls the SageMaker QueryLineage API to get model provenance information:
+ * Calls the backend GET /api/v1/govern/sagemaker/lineage route, which reads the
+ * SageMaker ML Lineage list APIs (ListArtifacts / ListContexts / ListAssociations)
+ * to build a model provenance graph:
  * - Training data artifacts
  * - Model artifacts
- * - Endpoint deployments
- * - Associations between artifacts
- * - Base model identification (for fine-tuned models)
+ * - Endpoint deployment contexts
+ * - Associations (edges) between entities
  *
- * Degrades gracefully with mock data fallback when the API is unavailable.
+ * This hook shows only real data. When the account has no lineage entities
+ * (the common case until models are registered / lineage tracking runs) it
+ * returns an empty graph that is still honestly `live` — never fabricated demo
+ * data. A non-live state (`live=false`) is reserved for genuine failures:
+ * the API being unreachable or lineage list permissions not being granted.
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -32,6 +37,20 @@ export interface LineageNode {
   modelType?: 'base' | 'fine-tuned' | 'custom';
   /** For fine-tuned models: the base model ARN/ID */
   baseModelId?: string;
+  /** SPDX license identifier */
+  licenseSpdx?: string;
+  /** License URL */
+  licenseUrl?: string;
+  /** SHA-256 hash of the artifact for integrity */
+  hash?: string;
+  /** Supplier information */
+  supplier?: {
+    name: string;
+    email?: string;
+    url?: string;
+  };
+  /** Sensitivity level for data nodes */
+  sensitivityLevel?: 'public' | 'internal' | 'confidential' | 'restricted';
   /** Source of data: 'live' or 'mock' */
   source: 'live' | 'mock';
 }
@@ -56,6 +75,44 @@ export interface ModelLineageStats {
   fineTunedModels: number;
 }
 
+export interface MLSBOMSupplier {
+  name: string;
+  url?: string;
+  contact?: Array<{ email?: string; name?: string }>;
+}
+
+export interface MLSBOMComponent {
+  type: string;
+  name: string;
+  version: string;
+  description: string;
+  licenses?: Array<{ license: { id: string; url?: string } }>;
+  externalReferences?: Array<{ type: string; url: string }>;
+  properties?: Array<{ name: string; value: string }>;
+  supplier?: MLSBOMSupplier;
+  hashes?: Array<{ alg: string; content: string }>;
+  pedigree?: {
+    ancestors?: Array<{ type: string; name: string; version?: string }>;
+  };
+}
+
+export interface MLSBOMPrivacyInfo {
+  differentialPrivacy?: {
+    enabled: boolean;
+    mechanism: string;
+    epsilon: number;
+    delta?: number;
+    noiseMultiplier?: number;
+    maxGradNorm?: number;
+  };
+  privacyRiskAssessment?: {
+    membershipInferenceRisk: string;
+    dataExtractionRisk: string;
+    assessmentMethod?: string;
+    mitigations?: string[];
+  };
+}
+
 export interface MLSBOM {
   specVersion: string;
   serialNumber: string;
@@ -68,16 +125,11 @@ export interface MLSBOM {
       name: string;
       version: string;
     };
+    supplier?: MLSBOMSupplier;
+    licenses?: Array<{ license: { id: string; url?: string } }>;
+    privacy?: MLSBOMPrivacyInfo;
   };
-  components: Array<{
-    type: string;
-    name: string;
-    version: string;
-    description: string;
-    licenses?: Array<{ license: { id: string } }>;
-    externalReferences?: Array<{ type: string; url: string }>;
-    properties?: Array<{ name: string; value: string }>;
-  }>;
+  components: MLSBOMComponent[];
   dependencies: Array<{
     ref: string;
     dependsOn: string[];
@@ -90,251 +142,82 @@ export interface UseModelLineageResult {
   graph: LineageGraph;
   stats: ModelLineageStats;
   live: boolean;
+  /** Honest note from the backend (e.g. "no lineage entities in this account"). */
+  note: string | null;
   selectedNode: LineageNode | null;
   selectNode: (nodeId: string | null) => void;
   exportMLSBOM: () => MLSBOM;
   refresh: () => void;
 }
 
-// ─────────────────────────── Mock Data ───────────────────────────
-
-function generateMockLineageGraph(): LineageGraph {
-  const nodes: LineageNode[] = [
-    // Training datasets
-    {
-      id: 'ds-financial-corpus',
-      type: 'dataset',
-      name: 'financial-corpus-v2',
-      displayName: 'Financial Corpus v2',
-      createdAt: '2024-11-15T10:30:00Z',
-      properties: {
-        'Records': '2.4M',
-        'Format': 'Parquet',
-        'S3Location': 's3://data-lake/financial-corpus/',
-        'Classification': 'Confidential',
-      },
-      source: 'mock',
-    },
-    {
-      id: 'ds-customer-interactions',
-      type: 'dataset',
-      name: 'customer-interactions-q4',
-      displayName: 'Customer Interactions Q4',
-      createdAt: '2024-12-01T08:00:00Z',
-      properties: {
-        'Records': '850K',
-        'Format': 'JSON',
-        'S3Location': 's3://data-lake/customer-interactions/',
-        'PII': 'Redacted',
-      },
-      source: 'mock',
-    },
-    {
-      id: 'ds-compliance-docs',
-      type: 'dataset',
-      name: 'compliance-documents',
-      displayName: 'Compliance Documents',
-      createdAt: '2024-10-20T14:00:00Z',
-      properties: {
-        'Records': '125K',
-        'Format': 'PDF/Text',
-        'S3Location': 's3://data-lake/compliance-docs/',
-        'Sensitivity': 'Internal',
-      },
-      source: 'mock',
-    },
-
-    // Base models
-    {
-      id: 'model-claude-3-haiku',
-      type: 'model',
-      name: 'anthropic.claude-3-haiku-20240307-v1:0',
-      displayName: 'Claude 3 Haiku',
-      modelType: 'base',
-      createdAt: '2024-03-07T00:00:00Z',
-      properties: {
-        'Provider': 'Anthropic',
-        'Version': '1.0',
-        'Parameters': '20B',
-        'Context': '200K tokens',
-      },
-      source: 'mock',
-    },
-    {
-      id: 'model-titan-embed',
-      type: 'model',
-      name: 'amazon.titan-embed-text-v2:0',
-      displayName: 'Titan Embeddings v2',
-      modelType: 'base',
-      createdAt: '2024-04-15T00:00:00Z',
-      properties: {
-        'Provider': 'Amazon',
-        'Dimensions': '1024',
-        'Max Tokens': '8192',
-      },
-      source: 'mock',
-    },
-
-    // Fine-tuned models
-    {
-      id: 'model-fsi-advisor',
-      type: 'model',
-      name: 'fsi-financial-advisor-v3',
-      displayName: 'FSI Financial Advisor v3',
-      modelType: 'fine-tuned',
-      baseModelId: 'model-claude-3-haiku',
-      createdAt: '2025-01-10T16:00:00Z',
-      lastModifiedAt: '2025-01-15T09:30:00Z',
-      properties: {
-        'Provider': 'Custom',
-        'Base Model': 'Claude 3 Haiku',
-        'Training Jobs': '3',
-        'Epochs': '5',
-        'Loss': '0.0023',
-      },
-      source: 'mock',
-    },
-    {
-      id: 'model-compliance-qa',
-      type: 'model',
-      name: 'compliance-qa-bot-v2',
-      displayName: 'Compliance QA Bot v2',
-      modelType: 'fine-tuned',
-      baseModelId: 'model-claude-3-haiku',
-      createdAt: '2025-01-05T11:00:00Z',
-      properties: {
-        'Provider': 'Custom',
-        'Base Model': 'Claude 3 Haiku',
-        'Training Jobs': '2',
-        'Accuracy': '94.2%',
-      },
-      source: 'mock',
-    },
-
-    // Endpoints
-    {
-      id: 'endpoint-fsi-prod',
-      type: 'endpoint',
-      name: 'fsi-advisor-prod-endpoint',
-      displayName: 'FSI Advisor (Prod)',
-      createdAt: '2025-01-16T10:00:00Z',
-      properties: {
-        'Status': 'InService',
-        'Instance Type': 'ml.g5.xlarge',
-        'Invocations/Day': '45K',
-        'Latency P99': '1.2s',
-      },
-      source: 'mock',
-    },
-    {
-      id: 'endpoint-compliance-prod',
-      type: 'endpoint',
-      name: 'compliance-qa-prod-endpoint',
-      displayName: 'Compliance QA (Prod)',
-      createdAt: '2025-01-08T14:00:00Z',
-      properties: {
-        'Status': 'InService',
-        'Instance Type': 'ml.g5.2xlarge',
-        'Invocations/Day': '12K',
-        'Latency P99': '0.8s',
-      },
-      source: 'mock',
-    },
-    {
-      id: 'endpoint-embed-shared',
-      type: 'endpoint',
-      name: 'titan-embed-shared-endpoint',
-      displayName: 'Titan Embed (Shared)',
-      createdAt: '2024-12-01T00:00:00Z',
-      properties: {
-        'Status': 'InService',
-        'Instance Type': 'ml.g4dn.xlarge',
-        'Invocations/Day': '120K',
-        'Latency P99': '0.15s',
-      },
-      source: 'mock',
-    },
-  ];
-
-  const edges: LineageEdge[] = [
-    // Datasets feed into fine-tuned models
-    { sourceId: 'ds-financial-corpus', targetId: 'model-fsi-advisor', associationType: 'ContributedTo' },
-    { sourceId: 'ds-customer-interactions', targetId: 'model-fsi-advisor', associationType: 'ContributedTo' },
-    { sourceId: 'ds-compliance-docs', targetId: 'model-compliance-qa', associationType: 'ContributedTo' },
-
-    // Fine-tuned models derive from base models
-    { sourceId: 'model-claude-3-haiku', targetId: 'model-fsi-advisor', associationType: 'DerivedFrom' },
-    { sourceId: 'model-claude-3-haiku', targetId: 'model-compliance-qa', associationType: 'DerivedFrom' },
-
-    // Models produce endpoints
-    { sourceId: 'model-fsi-advisor', targetId: 'endpoint-fsi-prod', associationType: 'Produced' },
-    { sourceId: 'model-compliance-qa', targetId: 'endpoint-compliance-prod', associationType: 'Produced' },
-    { sourceId: 'model-titan-embed', targetId: 'endpoint-embed-shared', associationType: 'Produced' },
-  ];
-
-  return { nodes, edges };
-}
-
 // ─────────────────────────── API Fetch ───────────────────────────
 
-async function fetchLineageFromAPI(): Promise<{ graph: LineageGraph; live: boolean }> {
-  try {
-    const response = await fetch(`${API_BASE}/api/v1/govern/sagemaker/lineage`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const data = await response.json();
+interface LineageFetchResult {
+  graph: LineageGraph;
+  live: boolean;
+  note: string | null;
+}
 
-    // Transform API response to our graph format
-    const nodes: LineageNode[] = [];
-    const edges: LineageEdge[] = [];
-
-    // Process artifacts (datasets, models)
-    (data.artifacts || []).forEach((artifact: any) => {
-      const type = inferNodeType(artifact.artifact_type);
-      nodes.push({
-        id: artifact.artifact_arn || artifact.artifact_name,
-        arn: artifact.artifact_arn,
-        type,
-        name: artifact.artifact_name,
-        displayName: artifact.artifact_name?.split('/').pop() || artifact.artifact_name,
-        createdAt: artifact.creation_time,
-        lastModifiedAt: artifact.last_modified_time,
-        properties: artifact.properties || {},
-        modelType: type === 'model' ? inferModelType(artifact) : undefined,
-        baseModelId: artifact.properties?.['BaseModelArn'],
-        source: 'live',
-      });
-    });
-
-    // Process contexts (training jobs, experiments)
-    (data.contexts || []).forEach((context: any) => {
-      nodes.push({
-        id: context.context_arn || context.context_name,
-        arn: context.context_arn,
-        type: 'context',
-        name: context.context_name,
-        displayName: context.context_name?.split('/').pop() || context.context_name,
-        createdAt: context.creation_time,
-        properties: context.properties || {},
-        source: 'live',
-      });
-    });
-
-    // Process associations (edges)
-    (data.associations || []).forEach((assoc: any) => {
-      edges.push({
-        sourceId: assoc.source_arn,
-        targetId: assoc.destination_arn,
-        associationType: assoc.association_type || 'AssociatedWith',
-      });
-    });
-
-    return { graph: { nodes, edges }, live: data.live ?? true };
-  } catch (err) {
-    console.warn('SageMaker lineage API unavailable, using mock data:', err);
-    return { graph: generateMockLineageGraph(), live: false };
+/**
+ * Fetch the real SageMaker ML Lineage graph from the backend.
+ *
+ * A 200 with empty arrays is a valid, honestly-live empty graph — NOT an error
+ * and NOT a cue to fabricate demo data. Only a non-2xx response or a network
+ * failure throws; the hook then renders an honest non-live / error state.
+ */
+async function fetchLineageFromAPI(): Promise<LineageFetchResult> {
+  const response = await fetch(`${API_BASE}/api/v1/govern/sagemaker/lineage`);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
   }
+  const data = await response.json();
+
+  // Transform the real API response into our graph format.
+  const nodes: LineageNode[] = [];
+  const edges: LineageEdge[] = [];
+
+  // Artifacts (datasets, models, images)
+  (data.artifacts || []).forEach((artifact: any) => {
+    const type = inferNodeType(artifact.artifact_type);
+    nodes.push({
+      id: artifact.artifact_arn || artifact.artifact_name,
+      arn: artifact.artifact_arn,
+      type,
+      name: artifact.artifact_name,
+      displayName: artifact.artifact_name?.split('/').pop() || artifact.artifact_name,
+      createdAt: artifact.creation_time,
+      lastModifiedAt: artifact.last_modified_time,
+      properties: artifact.properties || {},
+      modelType: type === 'model' ? inferModelType(artifact) : undefined,
+      baseModelId: artifact.properties?.['BaseModelArn'],
+      source: 'live',
+    });
+  });
+
+  // Contexts (endpoints, model deployments, experiments)
+  (data.contexts || []).forEach((context: any) => {
+    nodes.push({
+      id: context.context_arn || context.context_name,
+      arn: context.context_arn,
+      type: 'context',
+      name: context.context_name,
+      displayName: context.context_name?.split('/').pop() || context.context_name,
+      createdAt: context.creation_time,
+      properties: context.properties || {},
+      source: 'live',
+    });
+  });
+
+  // Associations (edges)
+  (data.associations || []).forEach((assoc: any) => {
+    edges.push({
+      sourceId: assoc.source_arn,
+      targetId: assoc.destination_arn,
+      associationType: assoc.association_type || 'AssociatedWith',
+    });
+  });
+
+  return { graph: { nodes, edges }, live: data.live ?? true, note: data.note ?? null };
 }
 
 function inferNodeType(artifactType: string): LineageNodeType {
@@ -368,17 +251,71 @@ function generateMLSBOM(graph: LineageGraph): MLSBOM {
   const models = graph.nodes.filter(n => n.type === 'model');
   const primaryModel = models.find(m => m.modelType === 'fine-tuned') || models[0];
 
-  const components = graph.nodes.map(node => ({
-    type: mapNodeTypeToSBOMType(node.type),
-    name: node.name,
-    version: node.properties?.['Version'] || '1.0.0',
-    description: `${node.displayName} (${node.type})`,
-    properties: Object.entries(node.properties || {}).map(([name, value]) => ({
-      name,
-      value: String(value),
-    })),
-    externalReferences: node.arn ? [{ type: 'distribution', url: node.arn }] : undefined,
-  }));
+  // Find base model for fine-tuned primary model
+  const baseModel = primaryModel?.baseModelId
+    ? graph.nodes.find(n => n.id === primaryModel.baseModelId)
+    : undefined;
+
+  const components: MLSBOMComponent[] = graph.nodes.map(node => {
+    const component: MLSBOMComponent = {
+      type: mapNodeTypeToSBOMType(node.type),
+      name: node.name,
+      version: node.properties?.['Version'] || 'unknown',
+      description: `${node.displayName} (${node.type})`,
+      properties: [
+        ...Object.entries(node.properties || {}).map(([name, value]) => ({
+          name,
+          value: String(value),
+        })),
+        // Add sensitivity level for data components
+        ...(node.sensitivityLevel ? [{ name: 'sensitivityLevel', value: node.sensitivityLevel }] : []),
+        // Add model type for ML models
+        ...(node.modelType ? [{ name: 'modelType', value: node.modelType }] : []),
+      ],
+      externalReferences: node.arn ? [{ type: 'distribution', url: node.arn }] : undefined,
+    };
+
+    // Add license info if available
+    if (node.licenseSpdx) {
+      component.licenses = [{
+        license: {
+          id: node.licenseSpdx,
+          ...(node.licenseUrl ? { url: node.licenseUrl } : {}),
+        },
+      }];
+    }
+
+    // Add supplier info if available
+    if (node.supplier) {
+      component.supplier = {
+        name: node.supplier.name,
+        ...(node.supplier.url ? { url: node.supplier.url } : {}),
+        ...(node.supplier.email ? { contact: [{ email: node.supplier.email }] } : {}),
+      };
+    }
+
+    // Add hash if available
+    if (node.hash) {
+      const [alg, content] = node.hash.includes(':') ? node.hash.split(':') : ['sha256', node.hash];
+      component.hashes = [{ alg: alg.toUpperCase(), content }];
+    }
+
+    // Add pedigree for fine-tuned models
+    if (node.modelType === 'fine-tuned' && node.baseModelId) {
+      const baseNode = graph.nodes.find(n => n.id === node.baseModelId);
+      if (baseNode) {
+        component.pedigree = {
+          ancestors: [{
+            type: 'machine-learning-model',
+            name: baseNode.name,
+            version: baseNode.properties?.['Version'],
+          }],
+        };
+      }
+    }
+
+    return component;
+  });
 
   const dependencies = graph.edges.map(edge => ({
     ref: edge.targetId,
@@ -398,21 +335,50 @@ function generateMLSBOM(graph: LineageGraph): MLSBOM {
     consolidatedDeps.push({ ref, dependsOn: Array.from(sources) });
   });
 
+  // Build metadata with supplier and license info from primary model
+  const metadata: MLSBOM['metadata'] = {
+    timestamp,
+    tools: [
+      { vendor: 'AVA Platform', name: 'Model Lineage Viewer', version: '1.0.0' },
+    ],
+    component: {
+      type: 'machine-learning-model',
+      name: primaryModel?.name || 'Unknown Model',
+      version: primaryModel?.properties?.['Version'] || 'unknown',
+    },
+  };
+
+  // Add supplier from primary model or base model
+  const supplierSource = primaryModel?.supplier || baseModel?.supplier;
+  if (supplierSource) {
+    metadata.supplier = {
+      name: supplierSource.name,
+      ...(supplierSource.url ? { url: supplierSource.url } : {}),
+      ...(supplierSource.email ? { contact: [{ email: supplierSource.email }] } : {}),
+    };
+  }
+
+  // Add license from primary model
+  if (primaryModel?.licenseSpdx) {
+    metadata.licenses = [{
+      license: {
+        id: primaryModel.licenseSpdx,
+        ...(primaryModel.licenseUrl ? { url: primaryModel.licenseUrl } : {}),
+      },
+    }];
+  }
+
+  // Privacy metadata (differential privacy, membership-inference risk, etc.) is
+  // intentionally omitted: SageMaker ML Lineage does not expose these values, so
+  // publishing them would be fabricated governance data. If a future lineage /
+  // model-registry integration surfaces real privacy attributes, populate
+  // `metadata.privacy` from those fields here — never from hardcoded defaults.
+
   return {
     specVersion: '1.5',
     serialNumber,
     version: 1,
-    metadata: {
-      timestamp,
-      tools: [
-        { vendor: 'AVA Platform', name: 'Model Lineage Viewer', version: '1.0.0' },
-      ],
-      component: {
-        type: 'machine-learning-model',
-        name: primaryModel?.name || 'Unknown Model',
-        version: primaryModel?.properties?.['Version'] || '1.0.0',
-      },
-    },
+    metadata,
     components,
     dependencies: consolidatedDeps,
   };
@@ -434,6 +400,7 @@ export function useModelLineage(): UseModelLineageResult {
   const [error, setError] = useState<string | null>(null);
   const [graph, setGraph] = useState<LineageGraph>({ nodes: [], edges: [] });
   const [live, setLive] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -447,14 +414,16 @@ export function useModelLineage(): UseModelLineageResult {
         if (!cancelled) {
           setGraph(result.graph);
           setLive(result.live);
+          setNote(result.note);
         }
       })
       .catch(err => {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load lineage');
-          // Still set mock data so UI has something to show
-          setGraph(generateMockLineageGraph());
+          // Honest failure: show an empty graph, never fabricated demo data.
+          setGraph({ nodes: [], edges: [] });
           setLive(false);
+          setNote(null);
         }
       })
       .finally(() => {
@@ -504,6 +473,7 @@ export function useModelLineage(): UseModelLineageResult {
     graph,
     stats,
     live,
+    note,
     selectedNode,
     selectNode,
     exportMLSBOM,

@@ -1,320 +1,147 @@
-# Govern Module Frontend Security Analysis
-
-**Analysis Date:** 2026-07-22  
-**Scope:** `src/components/govern/` and `src/api/client.ts`  
-**Analyst:** Claude Security Review
+# Govern Branch — Pre-Merge Security Analysis
 
 ---
 
-## Executive Summary
+## Pre-release gate (policy round) — 2026-09-02
 
-The Govern module frontend demonstrates generally sound security practices with proper authentication integration via AWS Cognito, no dangerous patterns like `dangerouslySetInnerHTML` or `eval()`, and consistent use of the centralized API client with Bearer token authentication. However, several areas warrant attention, particularly around localStorage data exposure, console logging, input validation, and missing Content Security Policy considerations.
+Review type: Read-only security review of the AgentCore Policy + A2A-Trust surfaces changed this
+round (region-split fix + seeded-data exposure).
+Scope reviewed:
+- `backend/src/api/routes/policies.py`, `backend/src/services/policy_service.py` (region-split fix)
+- `backend/src/api/routes/govern_a2a_trust.py`, `services/govern_a2a_trust_service.py`, `models/govern_a2a_trust.py`
+- `docker-compose.yaml` (`POLICY_ENGINE_ID` added)
+- Seeded-data GETs: `/policies`, `/policies/engines`, `/policies?engine_id=`, `/govern/a2a-trust/{policies,identities}`
 
----
+### MUST-FIX COUNT: 1
 
-## Findings by Severity
+Findings, most-severe first.
 
-### CRITICAL (Must Fix Before Merge)
+#### [MUST-FIX] Create-policy response returns the full `policyArn` (real account id) unmasked
+- `PolicyService.create_policy` appends a `StatusHistoryEntry` whose `message` is
+  `f"Deployed to AgentCore (ARN: {agentcore_arn})"` (`policy_service.py:258-264`). `agentcore_arn` is
+  `response["policyArn"]` from `create_policy` — a full ARN
+  (`arn:aws:bedrock-agentcore:<region>:<ACCOUNT_ID>:...`) that embeds the real 12-digit account id.
+- `POST /api/v1/policies` has `response_model=Policy`, and `Policy.status_history` is serialized, so
+  the create response ships the account id to the frontend **unmasked**. This contradicts the hard
+  rule that the account id must not appear in any API response, and `core/security_utils.mask_arn` /
+  `mask_account_id` exist precisely to prevent this.
+- Nuance (does not clear it): OPERATOR-gated; the ARN is the account's own resource; and the line is
+  pre-existing (not introduced by the region-split). But the file is in-scope this round and the
+  exposure is real. Fix: mask the ARN in the status-history message (e.g. `mask_arn(agentcore_arn)`)
+  or drop the account/region portion before it reaches the response.
+- NOT affected: `list_policies` and `get_policy` construct `Policy` with an empty `status_history`
+  and expose no ARN-bearing field (`policy_id/name/description/resource_type/resource_id/status/
+  rules/rules_count/blocking_rules/created_by/timestamps` only). The seeded-data GET paths in scope
+  are clean.
 
-**No critical findings identified.**
+### Accepted warnings
 
-The codebase avoids the most dangerous security anti-patterns:
-- No `dangerouslySetInnerHTML` usage
-- No `eval()` or `new Function()` calls
-- No direct `.innerHTML` assignments
-- Authentication is enforced at the App level via `AuthGate` component
+1. **`AgentIdentity.role_arn` is returned unmasked by `GET /govern/a2a-trust/identities` (VIEWER)**
+   (`models/govern_a2a_trust.py:47`; `service.list_identities`). It defaults `None` and no in-repo
+   seed populates it, so no account id is exposed today. Latent: if an OPERATOR ever upserts an
+   identity with a real role ARN, a VIEWER would see the account id. Recommend masking on read.
+2. **`USE_DEV_AUTH=true`** in `docker-compose.yaml:68` — expected for the local demo. Accepted:
+   `rbac.py::_is_dev_auth_allowed()` hard-disables the bypass whenever `ENVIRONMENT=production`, even
+   if the flag is set, so it cannot weaken a prod deploy.
+3. **`create_policy` accepts raw `cedar_code` and `rules_to_cedar` interpolates `rule.target`/
+   `rule.value` into Cedar strings** (`policy_service.py:47-73,185`). OPERATOR-gated, validated
+   server-side by AgentCore, and pre-existing — out of the region-change scope. The **seeded** path
+   uses server-defined presets (`FSI_POLICY_PRESETS`) with constant targets/values and generates
+   Cedar via `rules_to_cedar`; no user-injected Cedar reaches the seed. Note only.
 
----
+### Task verifications (PASS)
 
-### HIGH (Fix Soon)
-
-#### H1: Auth Token Stored in localStorage
-
-**Location:** `src/api/client.ts` (lines 37-40, 64, 82, 103, 140), `src/auth/AuthContext.tsx` (lines 64, 82, 103)
-
-**Issue:** JWT authentication tokens are stored in `localStorage`, making them vulnerable to XSS attacks. If any XSS vulnerability is introduced, attackers could steal auth tokens.
-
-```typescript
-localStorage.setItem('auth_token', idToken);
-```
-
-**Risk:** Token theft via XSS could lead to session hijacking.
-
-**Recommendation:** 
-- Consider using `httpOnly` cookies for token storage (requires backend changes)
-- Alternatively, implement token refresh with short-lived access tokens
-- Ensure strict Content Security Policy to mitigate XSS risk
-
-#### H2: Development Mode User Email Header Injection
-
-**Location:** `src/api/client.ts` (lines 44-47)
-
-**Issue:** The `x-user-email` header is populated from `localStorage` for dev mode user simulation. This pattern could be accidentally left enabled in production or exploited if attackers can manipulate localStorage.
-
-```typescript
-const devUserEmail = localStorage.getItem('dev_user_email');
-if (devUserEmail) {
-  config.headers["x-user-email"] = devUserEmail;
-}
-```
-
-**Risk:** User impersonation if backend trusts this header without proper environment gating.
-
-**Recommendation:**
-- Ensure backend validates this header is only processed in development environments
-- Add explicit environment check in frontend before sending this header
-- Consider removing this pattern entirely and using proper test authentication
-
-#### H3: Sensitive Data in localStorage Without Expiration
-
-**Location:** Multiple files using `usePersistedState.ts`, `ComplianceCenter.tsx`, `HRAISAssessment.tsx`, `ShadowAI.tsx`
-
-**Issue:** Various governance data (HRAIS assessments, compliance progress, framework selections) are persisted to localStorage indefinitely:
-
-- `ava_selected_frameworks`
-- `ava_unified_program_progress`
-- `ava_compliance_gap_actions`
-- `hrais-selected-risks` / `hrais-profile`
-- `ava_govern_shadow_ai_disposition`
-
-**Risk:** Sensitive governance data persists even after logout and could be accessed by other users on shared machines or extracted via XSS.
-
-**Recommendation:**
-- Clear governance-specific localStorage keys on logout
-- Add expiration timestamps to persisted data
-- Consider using sessionStorage for non-persistent data
-- Document which data is appropriate for localStorage persistence
+1. **Account-ID / ARN leak scan** — the real 12-digit account id has **zero** matches anywhere in the working tree.
+   Every 12-digit ARN found is a placeholder (`123456789012`, `000000000000`, `111111111111`,
+   `222222222222`, `999999999999`, `111122223333`) in docs/tests/fixtures — no real account. In
+   `policies.py`, ARNs are runtime f-string TEMPLATES: `account_id` comes from
+   `boto3.client("sts").get_caller_identity()["Account"]` (lines 252-253, 294-295) — not hardcoded.
+   `docker-compose.yaml` `POLICY_ENGINE_ID=PolicyEngine_P1-y_2qsnuwtp` is a resource id, not an
+   account/ARN. `policy_service.py` builds no ARN from an account id.
+2. **Response masking** — see MUST-FIX (create response) + warning #1 (role_arn). `list_policies`/
+   `get_policy`/engines/observability responses carry no unmasked account id.
+3. **RBAC** — all `policies.py` routes retain `require_role`: engines GET=VIEWER, POST=OPERATOR,
+   DELETE=ADMIN, attach/detach/set-mode=OPERATOR, gateways/presets/list/get/audit/metrics/
+   observability/evaluate=VIEWER, create/update/delete/activate/disable=OPERATOR. The region change
+   only added `agentcore_region` to `get_service()` — no auth dropped.
+4. **Input handling** — region is sourced from `settings.GOVERN_AWS_REGION` (env), never
+   user-controlled; no new injection surface. Seed Cedar is server-generated from presets.
+5. **A2A AuthZ unchanged** — create (`POST /policies`) = OPERATOR, `evaluate` = OPERATOR, list
+   policies/identities = VIEWER (`govern_a2a_trust.py:47-105`). Confirmed unchanged.
 
 ---
 
-### MEDIUM (Address in Future Sprint)
+# Govern Branch — Pre-Merge Security Analysis (prior round)
 
-#### M1: Console Logging of Errors May Leak Information
+Review type: Read-only pre-merge security review of UNCOMMITTED changes on the AVA Govern branch.
+Date: 2026-08-31
+Scope: files changed vs HEAD (`git diff --name-only HEAD`). MUST-FIX = defects in touched files only.
 
-**Location:** 14 files with console.log/error/warn statements
+## MUST-FIX COUNT: 0
 
-Key occurrences:
-- `ConnectionWizard.tsx:168,185` - API error logging
-- `useAgentRegistry.ts:317` - Agent registry load failures
-- `useComplianceAttestations.ts:103,168,196,212` - Compliance API errors
-- `useGovernanceAggregator.ts:413` - Governance data load failures
-- `safety/RedTeamTestPipeline.tsx:584,589` - Debug logging with finding IDs
-
-**Risk:** Error messages could leak internal API endpoints, stack traces, or sensitive data structures to browser console where they can be observed.
-
-**Recommendation:**
-- Replace console.error with structured error handling/logging service
-- Remove debug console.log statements (lines 584, 589 in RedTeamTestPipeline)
-- Ensure error messages shown to users are sanitized
-
-#### M2: URL Parameters Used Without Sanitization
-
-**Location:** `AgentRegistry.tsx`, `DevToolsGovernance.tsx`, `ModelManagement.tsx`, `MultiCloudGovernance.tsx`, `RiskManagement.tsx`
-
-**Issue:** URL search parameters are read and used for tab/filter state without explicit sanitization:
-
-```typescript
-const tabFromUrl = searchParams.get('tab') as TabId | null;
-const agentFromUrl = searchParams.get('agent');
-const providerFromUrl = searchParams.get('provider') as AgentProvider | null;
-```
-
-**Risk:** While React's JSX escaping provides protection, unsanitized URL params used in logic could cause issues.
-
-**Positive note:** The code does validate against allowed values:
-```typescript
-tabFromUrl && TABS.some(t => t.id === tabFromUrl) ? tabFromUrl : 'agents'
-```
-
-**Recommendation:**
-- Continue the pattern of validating URL params against allowed values
-- Add TypeScript strict type guards for URL parameter parsing
-- Document expected URL parameter formats
-
-#### M3: Direct fetch() Calls Bypass Central Client
-
-**Location:** `data/useDataLineage.ts`, `data/useDataQuality.ts`, `data/useDataReadiness.ts`, `evalData.ts`
-
-**Issue:** Several data hooks use raw `fetch()` instead of the centralized axios client:
-
-```typescript
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001';
-const res = await fetch(url);
-```
-
-**Risk:** These calls bypass the central authentication interceptor and error handling. If these endpoints require authentication, they won't receive the Bearer token.
-
-**Recommendation:**
-- Migrate to using the centralized client from `../../api/client.ts`
-- Or explicitly add auth headers if fetch must be used
-- Audit whether these endpoints actually require authentication
-
-#### M4: External Image Sources
-
-**Location:** `data/GraphRAG.tsx:139`, `PromptGovernance.tsx:635`
-
-**Issue:** External images are loaded from AWS CDN:
-```tsx
-<img src="https://a0.awsstatic.com/libra-css/images/logos/aws_smile-header-desktop-en-white_59x35@2x.png" .../>
-```
-
-**Risk:** 
-- External asset loading could be blocked by strict CSP
-- AWS CDN changes could affect display
-- Privacy: third-party requests reveal user activity
-
-**Recommendation:**
-- Host critical images locally or in project assets
-- Add `onError` handlers (already present in PromptGovernance.tsx - good pattern)
-- Document expected CSP policy for external resources
-
-#### M5: No Input Validation on Form Inputs
-
-**Location:** 41 files with form inputs (onChange handlers)
-
-**Issue:** While React provides XSS protection, there's no visible input validation for:
-- Maximum length limits
-- Character restrictions
-- Format validation before API submission
-
-**Examples:** Search filters, name inputs, description fields across the Govern module.
-
-**Recommendation:**
-- Add maxLength attributes to text inputs
-- Implement validation before API calls
-- Consider using a form validation library (react-hook-form, yup)
+No security defects were found in the touched files. Details and the specific verifications performed are below (most-severe first — none rise above informational).
 
 ---
 
-### LOW (Awareness / Best Practice)
+## Verifications performed (all PASS)
 
-#### L1: CSV Export Without Sanitization
+### 1. Backend `govern_cost_service.py` — SAFE
+- **`_AI_SERVICE_NAMES` new constant** (lines ~97-105): contains only AWS service *display names*
+  ("Amazon Bedrock", "Amazon Bedrock Service", "Amazon SageMaker", "Amazon Comprehend",
+  "Amazon Textract", "Amazon Kendra"). No credentials, account IDs, ARNs, tokens, or local paths.
+- **`get_by_tag(key, months=6, ai_only=True)`** (lines 487-552): the new `ai_only` param has a
+  default (`True`), `months` has a default, `key` is required — the signature cannot throw on a
+  missing param. The SERVICE `Filter` is only added to `kwargs` when `ai_only` is truthy, so an
+  `ai_only=False` call omits it cleanly. Graceful error handling is preserved: the CE call remains
+  inside the `try`, and the `except (ClientError, BotoCoreError, KeyError, ValueError)` block
+  (lines 546-552) still returns an `unavailable-fallback` `CostTagBreakdown`. No exception can escape.
+- **Route gating unchanged**: `GET /by-tag` (`api/routes/govern_cost.py:101-108`) still wraps the
+  handler in `Depends(require_role(Role.VIEWER))`. The route was not modified by this branch and
+  RBAC gating is intact. It calls `get_by_tag(key=key, months=months)`, relying on the `ai_only=True`
+  default — consistent with the "scope to AI spend" intent.
 
-**Location:** `ComplianceCenter.tsx:497-503`, `ModelOperations.tsx:24-25`
+### 2. `PutModelInvocationLoggingConfiguration` — NOT in app code (CONFIRMED)
+- Grep of the entire backend for `PutModelInvocationLoggingConfiguration` /
+  `put_model_invocation_logging_configuration` returned **no matches**. The one-off admin action to
+  enable invocation logging is not invoked from service/route code.
 
-**Issue:** CSV export uses basic quote escaping but doesn't handle CSV injection:
+### 3. `govern_invocation_safety_service.py` note change — SAFE (no injection)
+- The changed `note` (lines 242-246) is a static, developer-authored operational message. The only
+  interpolated value is `days` (an `int` request param). No user-supplied or unsanitized data is
+  injected into the note. The fallback `except` block (lines 248-253) is unchanged and still returns
+  a graceful `unavailable-fallback` response.
+- `log_group=None` is deliberately redacted with a comment ("log group name can reveal internal
+  naming") — good data-minimization practice, unchanged.
 
-```typescript
-const escape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
-```
+### 4. Frontend input handling / data exposure — SAFE
+- **No `dangerouslySetInnerHTML` introduced.** The only two occurrences in the codebase
+  (`Documentation.tsx`, `guardrails/RegexPatternBuilder.tsx`) are NOT in the changed-file set.
+- **`api/client.ts`**: changes are TypeScript interface updates to match the backend Pydantic
+  `DeveloperAiUsageResponse`/`UsageAnomaly` models, plus a `days` query param on `governDeveloperAiApi.usage`.
+  No auth/interceptor/`Authorization`/Bearer/`localStorage`/credential handling was touched (verified
+  by grep of the diff — the only "token" matches are `input_tokens`/`output_tokens`/`total_tokens`
+  usage metrics, not auth tokens). The new interface exposes PII-adjacent fields (`email`,
+  `department`, `cost_center`, `user_id`, `team_id`), but these are typed shapes of data returned by
+  an authenticated, RBAC-gated backend endpoint (`/api/v1/govern/developer-ai/usage`) — not hardcoded
+  values, and consistent with usage-attribution intent. Informational only.
+- **`mockData.ts`**: only two additions — a `'not-started'` union literal, and the removal of a set
+  of duplicate object keys (`riskScore`/`provider`/`externalId`/`governanceStatus`) in an
+  `EXTERNAL_AGENTS` entry (a latent duplicate-key bug fix). No secrets/PII introduced.
 
-**Risk:** CSV injection could execute formulas if opened in Excel (=, +, -, @, |, %).
+### 5. AuthZ (RBAC) — no regression
+- No route files are in the changed set (only the two backend *service* files). Therefore no changed
+  route could have dropped RBAC gating. The exposed surface for the changed services (`/by-tag`)
+  retains `require_role(Role.VIEWER)`.
 
-**Recommendation:**
-- Prefix potentially dangerous characters with single quote
-- Document CSV security risks to users
-
-#### L2: sessionStorage for Audit Events
-
-**Location:** `auditLog.ts`
-
-**Issue:** Audit event buffer uses sessionStorage, which is appropriate for session-scoped data. The code comment mentions security considerations (good).
-
-**Positive:** Code comment at line 14 documents the security reasoning.
-
-**Recommendation:** None - this is implemented correctly.
-
-#### L3: No Test Coverage for Security Scenarios
-
-**Location:** No `*.test.*` files found in govern directory
-
-**Issue:** No unit or integration tests exist for the Govern module to verify security behaviors.
-
-**Recommendation:**
-- Add tests for authentication flow
-- Test input sanitization
-- Test error handling doesn't leak sensitive data
-
-#### L4: File Download Pattern
-
-**Location:** `exportUtils.ts`, `AuditIncidents.tsx`, `ComplianceCenter.tsx`, `FriaWizard.tsx`
-
-**Issue:** File downloads use blob URL pattern which is standard but worth monitoring:
-
-```typescript
-const blob = new Blob([content], { type: mimeType });
-const url = URL.createObjectURL(blob);
-// ... download ...
-URL.revokeObjectURL(url);
-```
-
-**Positive:** `URL.revokeObjectURL()` is properly called to clean up.
-
-**Recommendation:** None - implemented correctly.
-
-#### L5: External Links Without noopener/noreferrer
-
-**Location:** Most external links DO use `rel="noopener noreferrer"` (good pattern observed)
-
-**Positive:** External links consistently use proper rel attributes:
-```tsx
-<a href="..." target="_blank" rel="noopener noreferrer">
-```
-
-**Recommendation:** None - implemented correctly.
+### 6. Secrets / PII spot-scan — clean for introduced lines
+- Placeholder identifiers exist in some changed govern files — `123456789012` (the canonical AWS
+  documentation example account ID) in `FleetOverview.tsx`, and synthetic `sha256:` mock hashes in
+  `operations/ReportsCenter.tsx`. A diff-scoped grep confirmed **none of these lines were added by
+  this branch** (they are pre-existing, unchanged content). No real account IDs, ARNs, tokens, or
+  absolute local paths were introduced in any changed file.
 
 ---
 
-## API Client Security Review
+## MUST-FIX list
 
-### Strengths
-
-1. **Centralized Authentication:** Bearer token is automatically added via request interceptor
-2. **401 Handling:** Automatic token clearing and page reload on unauthorized responses
-3. **Type Safety:** TypeScript interfaces for API requests/responses
-4. **URL Encoding:** Proper use of `encodeURIComponent` for dynamic URL parameters
-
-### Areas for Improvement
-
-1. **No CSRF Protection:** No CSRF tokens observed (may be handled by backend)
-2. **No Request/Response Logging Control:** Consider adding opt-in request logging for debugging
-3. **No Retry Logic:** Failed requests aren't retried (may be intentional)
-
----
-
-## OWASP Top 10 Assessment
-
-| Risk | Status | Notes |
-|------|--------|-------|
-| A01:2021 - Broken Access Control | **PARTIAL** | Auth enforced but no visible RBAC in frontend |
-| A02:2021 - Cryptographic Failures | **OK** | HTTPS assumed; tokens handled appropriately |
-| A03:2021 - Injection | **OK** | No SQL/command injection vectors; React escapes output |
-| A04:2021 - Insecure Design | **OK** | Proper separation of concerns |
-| A05:2021 - Security Misconfiguration | **REVIEW** | CSP policy not visible in frontend |
-| A06:2021 - Vulnerable Components | **UNKNOWN** | Package audit recommended |
-| A07:2021 - Auth Failures | **PARTIAL** | Cognito integration solid; token storage could improve |
-| A08:2021 - Data Integrity Failures | **OK** | API client validates responses |
-| A09:2021 - Logging & Monitoring | **PARTIAL** | Console logging needs cleanup |
-| A10:2021 - SSRF | **N/A** | Frontend doesn't make server-side requests |
-
----
-
-## Recommendations Summary
-
-### Immediate Actions
-1. Audit and remove debug console.log statements
-2. Add localStorage cleanup on logout for sensitive governance data
-3. Evaluate token storage strategy (localStorage vs httpOnly cookies)
-
-### Short-term Actions
-1. Migrate direct fetch() calls to centralized client
-2. Add input validation to form fields
-3. Add security-focused unit tests
-
-### Long-term Actions
-1. Implement proper CSP headers (backend/infrastructure)
-2. Add structured error logging service
-3. Consider implementing RBAC display controls based on user roles
-
----
-
-## Files Reviewed
-
-- `src/api/client.ts` (full review)
-- `src/auth/AuthContext.tsx` (full review)
-- `src/App.tsx` (route protection review)
-- 216 files in `src/components/govern/` (pattern-based review)
-
----
-
-*This analysis focuses on client-side security. Backend API security, infrastructure security, and dependency vulnerabilities require separate assessments.*
+None. Zero MUST-FIX defects in the touched files.

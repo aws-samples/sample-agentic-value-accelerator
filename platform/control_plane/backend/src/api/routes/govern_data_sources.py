@@ -1,206 +1,122 @@
-"""Govern Data Sources — unified sync status for all AWS data sources.
+"""Govern Data Sources — measured reachability for every source the UI names.
 
-Single endpoint that returns the connection and sync status for all
-data sources used by the Govern module, including last-refresh times.
+Each source is verified by one real AWS call defined in
+`services.govern_data_source_probes`. See that module for why the probes call
+AWS directly instead of reusing each Govern service's `live` flag (short version:
+`live` means "has data", not "is reachable", and the services swallow
+AccessDenied into an empty result).
+
+Response contract
+-----------------
+`sources` is keyed by the source id the frontend catalog uses, so
+DataSourceIndicator needs no id-translation table, and there is no path by which
+an id present in the UI but absent from the registry can be shown as connected —
+the UI treats a missing id as `not_probed`.
+
+Each source carries a single `status` from the seven-value contract. There is
+deliberately NO boolean `live` field. The previous version of this route returned
+`'live': live if live is not None else True`, which coerced "unknown" to "yes"
+and is exactly why a source could report itself connected without a completed
+AWS call. A boolean also cannot separate "reachable and empty" from "reachable
+but switched off", and those must count differently.
 """
 
-from fastapi import APIRouter, Depends
+from __future__ import annotations
+
+import asyncio
 import logging
 import time
-from typing import Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from fastapi import APIRouter, Depends
+
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
+from services import govern_data_source_probes as probes
 from services.guardrail_service import GuardrailService
-from services.govern_models_service import GovernModelsService
-from services.govern_agentcore_service import GovernAgentCoreService
-from services.govern_cost_service import GovernCostService
-from services.govern_posture_service import GovernPostureService
-from services.govern_security_service import GovernSecurityService
-from services.govern_trail_service import GovernTrailService
-from services.govern_evals_service import GovernEvalsService
-from services.govern_invocation_safety_service import GovernInvocationSafetyService
-from services.govern_security_hub_ai_service import GovernSecurityHubAIService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/data-sources", tags=["govern-data-sources"])
 
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_data_sources", region_scope.CONTROL_PLANE, prefix="/govern/data-sources")
 
-def _probe_source(name: str, fn) -> dict:
-    """Probe a single data source and return status."""
-    start = time.time()
-    try:
-        result = fn()
-        elapsed = int((time.time() - start) * 1000)
-        live = getattr(result, 'live', None)
-        note = getattr(result, 'note', None)
-        source = getattr(result, 'source', None)
 
-        # Extract useful metrics based on the type of response
-        metrics = {}
-        if hasattr(result, 'total'):
-            metrics['total'] = result.total
-        if hasattr(result, 'total_models'):
-            metrics['total_models'] = result.total_models
-        if hasattr(result, 'active_models'):
-            metrics['active_models'] = result.active_models
-        if hasattr(result, 'total_agents'):
-            metrics['total_agents'] = result.total_agents
-        if hasattr(result, 'total_findings'):
-            metrics['total_findings'] = result.total_findings
-        if hasattr(result, 'total_calls'):
-            metrics['total_calls'] = result.total_calls
-        if hasattr(result, 'total_callers'):
-            metrics['total_callers'] = result.total_callers
+def _guardrail_sync_state() -> dict:
+    """Guardrail sync freshness, read from class state with no AWS call.
 
-        return {
-            'name': name,
-            'status': 'connected' if live else 'partial',
-            'live': live if live is not None else True,
-            'source': source,
-            'note': note,
-            'latency_ms': elapsed,
-            'metrics': metrics if metrics else None,
-            'error': None,
-        }
-    except Exception as e:
-        elapsed = int((time.time() - start) * 1000)
-        logger.warning(f"Data source probe failed for {name}: {e}")
-        return {
-            'name': name,
-            'status': 'error',
-            'live': False,
-            'source': None,
-            'note': None,
-            'latency_ms': elapsed,
-            'metrics': None,
-            'error': str(e)[:200],
-        }
+    Preserved from the previous implementation because the sync interval is a
+    genuinely useful signal, but read off the class attributes rather than by
+    constructing a GuardrailService: the old version built one with
+    `auto_sync=False` specifically to avoid a write during a status check, and
+    not constructing it at all is strictly safer.
+    """
+    last = getattr(GuardrailService, "_last_sync_time", 0) or 0
+    return {
+        "last_sync_seconds_ago": int(time.time() - last) if last > 0 else None,
+        "sync_interval_seconds": getattr(GuardrailService, "_SYNC_INTERVAL_SECONDS", None),
+    }
 
 
 @router.get("/status")
 async def get_data_sources_status(_=Depends(require_role(Role.VIEWER))):
-    """Get unified status for all AWS data sources.
+    """Probe every registered data source and report measured reachability.
 
-    Returns connection status, live flag, last-refresh info, and key metrics
-    for each data source. Probes run in parallel for speed.
-
-    This is the single source of truth for the Connection Wizard and
-    data source health monitoring.
+    Probes run concurrently in a thread pool, and the pool is awaited off the
+    event loop so a slow AWS endpoint cannot block other requests. Results are
+    cached per source (5 min for the 46 free probes, 6 h for the four billed
+    Cost Explorer probes); `summary.billed_usd` reports what this call actually
+    spent, which is $0 whenever the Cost Explorer results came from cache.
     """
-    region = settings.AWS_REGION
-
-    # Define all probes
-    probes = {
-        'guardrails': lambda: _probe_guardrails(region),
-        'bedrock_models': lambda: GovernModelsService(region).get_catalog(),
-        'bedrock_agents': lambda: GovernAgentCoreService(region).get_agents(),
-        'agentcore_posture': lambda: GovernAgentCoreService(region).get_posture(),
-        'cloudwatch_metrics': lambda: GovernModelsService(region).get_runtime_metrics(7),
-        'cost_explorer': lambda: GovernCostService(region).get_by_model(months=1),
-        'aws_config': lambda: GovernPostureService(region).get_config_compliance(),
-        'security_services': lambda: GovernSecurityService(region).get_posture(),
-        'cloudtrail': lambda: GovernTrailService(region).get_ai_callers(hours=168),
-        'bedrock_evals': lambda: GovernEvalsService(region).get_jobs(max_jobs=10),
-        'invocation_logs': lambda: GovernInvocationSafetyService(region).get_telemetry(days=7),
-        'security_hub_ai': lambda: GovernSecurityHubAIService(region).get_ai_inventory(),
-    }
-
-    # Run all probes in parallel
-    results = {}
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        futures = {pool.submit(_probe_source, name, fn): name for name, fn in probes.items()}
-        for fut in as_completed(futures):
-            name = futures[fut]
-            try:
-                results[name] = fut.result()
-            except Exception as e:
-                results[name] = {
-                    'name': name,
-                    'status': 'error',
-                    'live': False,
-                    'error': str(e)[:200],
-                }
-
-    # Compute summary
-    connected = sum(1 for r in results.values() if r.get('live'))
-    total = len(results)
-
+    results = await asyncio.to_thread(probes.run_all_probes)
+    summary = probes.summarize(results)
     return {
-        'summary': {
-            'connected': connected,
-            'total': total,
-            'all_connected': connected == total,
-            'timestamp': time.time(),
-        },
-        'sources': results,
+        "summary": summary,
+        "sources": results,
+        "guardrail_sync": _guardrail_sync_state(),
     }
-
-
-def _probe_guardrails(region: str):
-    """Special probe for guardrails that includes sync status."""
-    svc = GuardrailService(
-        table_name=settings.GUARDRAILS_TABLE_NAME,
-        region=region,
-        auto_sync=False,  # Don't trigger sync during status check
-    )
-
-    # Get tracked guardrails
-    tracked = svc.list_templates(auto_sync=False)
-    tracked_ids = {t.guardrail_id for t in tracked if t.guardrail_id}
-    tracked_count = len(tracked)
-
-    # Get AWS guardrails
-    try:
-        resp = svc.bedrock_client.list_guardrails(maxResults=50)
-        aws_guardrails = resp.get("guardrails", [])
-        aws_count = len(aws_guardrails)
-        aws_ids = {g.get("id") for g in aws_guardrails}
-        untracked_count = len(aws_ids - tracked_ids)
-    except Exception:
-        aws_count = 0
-        untracked_count = 0
-
-    # Build a response-like object
-    class GuardrailStatus:
-        live = tracked_count > 0 or aws_count > 0
-        source = 'bedrock-guardrails'
-        note = f'{tracked_count} tracked, {aws_count} in AWS'
-        total = tracked_count
-        aws_total = aws_count
-        untracked = untracked_count
-        in_sync = untracked_count == 0
-        last_sync_seconds_ago = int(time.time() - GuardrailService._last_sync_time) if GuardrailService._last_sync_time > 0 else None
-        sync_interval = GuardrailService._SYNC_INTERVAL_SECONDS
-
-    return GuardrailStatus()
 
 
 @router.post("/refresh")
 async def refresh_all_sources(_=Depends(require_role(Role.OPERATOR))):
-    """Force refresh all data source caches.
+    """Force a refresh of all data source caches and re-probe on the next read.
 
-    Clears TTL caches and triggers fresh fetches from AWS.
-    Use sparingly — normal operation uses automatic cache refresh.
+    Note this clears the probe cache too, so the following /status call re-runs
+    the four billed Cost Explorer probes ($0.04). That is the point of an
+    explicit operator-triggered refresh, but it is why /status alone will not do
+    it.
     """
     from core.ttl_cache import clear_all
 
-    # Clear all TTL caches
     cleared = clear_all()
+    probe_entries = probes.clear_probe_cache()
 
-    # Trigger guardrails sync
-    region = settings.AWS_REGION
-    svc = GuardrailService(
-        table_name=settings.GUARDRAILS_TABLE_NAME,
-        region=region,
-        auto_sync=False,
-    )
-    sync_result = svc.discover_aws_guardrails()
+    # Guardrail discovery is a real write-side sync, so it stays on the explicit
+    # refresh path and out of the read-only status probe.
+    sync_result = {}
+    try:
+        svc = GuardrailService(
+            # Regions resolve per tier inside the service; see core.region_config.
+            table_name=settings.GUARDRAILS_TABLE_NAME,
+            auto_sync=False,
+        )
+        sync_result = svc.discover_aws_guardrails() or {}
+    except Exception as exc:  # noqa: BLE001
+        # Report the failure instead of returning success with a silent 0.
+        logger.warning("Guardrail sync during refresh failed: %s", exc)
+        return {
+            "success": False,
+            "caches_cleared": cleared,
+            "probe_cache_cleared": probe_entries,
+            "guardrails_synced": None,
+            "error": probes.sanitize_error(str(exc)),
+            "timestamp": time.time(),
+        }
 
     return {
-        'success': True,
-        'caches_cleared': cleared,
-        'guardrails_synced': sync_result.get('synced', 0),
-        'timestamp': time.time(),
+        "success": True,
+        "caches_cleared": cleared,
+        "probe_cache_cleared": probe_entries,
+        "guardrails_synced": sync_result.get("synced", 0),
+        "timestamp": time.time(),
     }

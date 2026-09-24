@@ -48,9 +48,8 @@
       "posture": "community",
       "runtime": "bedrock-agentcore-harness",
       "runtime_ref": "harness/kyc-triage",
-      "description": "Reference implementation of a KYC triage agent — screens applicant profiles against sanctions/PEP lists, escalates with regulation citations. Ships as a deployable FSI Foundry use case; register it here if you want other agents to delegate to it.",
+      "description": "Reference implementation of a KYC triage agent — screens applicant profiles against sanctions/PEP lists, escalates with regulation citations. Ships as a deployable FSI Foundry use case; register it here if you want other agents to delegate to it. Implementation walkthrough lives in this repo under applications/fsi_foundry/docs/use_cases/kyc_banking/.",
       "capabilities": ["kyc-triage", "sanctions-check", "regulation-citation"],
-      "docs_url": "https://docs.hub.amazon.dev/",
       "auth_hint": "aws-sigv4"
     }
   ]

@@ -9,9 +9,9 @@
  *
  * Part of the Govern module's compliance posture surface.
  */
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Icon } from '../icons';
-import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
+import { LiveDataBadge } from '../DataSourceIndicator';
 import LiveHeader from '../LiveHeader';
 import {
   useSecurityHubCompliance,
@@ -97,7 +97,6 @@ export default function SecurityHubFindingsPanel({
   const data = useSecurityHubCompliance(pollIntervalMs, { aiOnly, maxFindings });
 
   const [expandedStandard, setExpandedStandard] = useState<ComplianceStandard | null>(null);
-  const [showAllFindings, setShowAllFindings] = useState(false);
   const [filterSeverity, setFilterSeverity] = useState<SeverityLevel | 'all'>('all');
 
   // Filter findings based on severity selection
@@ -241,6 +240,17 @@ export default function SecurityHubFindingsPanel({
                 <Icon name="chart-bar" className="w-4 h-4 text-slate-500" />
                 <h3 className="text-sm font-semibold text-slate-900">Findings by Severity</h3>
                 <LiveDataBadge />
+                {/* The scan stops at its limit, so every bar is a floor. Saying so here
+                    matters more than elsewhere: this chart is the shape of the estate's risk,
+                    and a reader takes an unqualified distribution as complete. */}
+                {data.countsAreFloors && (
+                  <span
+                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200"
+                    title={`Counts cover the first ${data.scannedCount} active findings examined. Security Hub holds more, so each bar is a minimum, not a total.`}
+                  >
+                    Floor
+                  </span>
+                )}
               </div>
               <div className="space-y-2">
                 {data.bySeverity.map(s => {
@@ -263,7 +273,11 @@ export default function SecurityHubFindingsPanel({
                         />
                       </div>
                       <span className="w-12 text-right tabular-nums text-slate-700 font-semibold">{s.count}</span>
-                      {s.aiRelatedCount > 0 && (
+                      {/* Only shown when it counts the same population as `count`. When the
+                          count comes from the API's server-side breakdown, the AI subset is
+                          only knowable for the returned sample, so comparing the two would
+                          put two different denominators side by side. */}
+                      {s.aiRelatedCount !== null && s.aiRelatedCount > 0 && (
                         <span className="text-[9px] text-cyan-600 font-medium">({s.aiRelatedCount} AI)</span>
                       )}
                     </button>
@@ -418,8 +432,13 @@ export default function SecurityHubFindingsPanel({
                       <Icon name="arrow-top-right-on-square" className="w-3.5 h-3.5" />
                       View in Security Hub
                     </a>
-                    <button className="px-3 py-1.5 bg-white text-amber-700 border border-amber-300 text-xs font-medium rounded-lg hover:bg-amber-50 transition-colors">
+                    <button
+                      disabled
+                      title="Planned — not yet wired to a backend"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-amber-700 border border-amber-300 text-xs font-medium rounded-lg opacity-50 cursor-not-allowed"
+                    >
                       Export Remediation Plan
+                      <span className="text-[9px] font-normal text-amber-500">(planned)</span>
                     </button>
                   </div>
                 </div>
@@ -522,11 +541,21 @@ function FindingRow({ finding }: FindingRowProps) {
                   View in Console
                 </a>
               )}
-              <button className="text-[10px] px-2 py-1 bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 transition-colors">
+              <button
+                disabled
+                title="Planned — not yet wired to a backend"
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-emerald-100 text-emerald-700 rounded opacity-50 cursor-not-allowed"
+              >
                 Mark Remediated
+                <span className="text-[8px] text-emerald-500">(planned)</span>
               </button>
-              <button className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors">
+              <button
+                disabled
+                title="Planned — not yet wired to a backend"
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded opacity-50 cursor-not-allowed"
+              >
                 Accept Risk
+                <span className="text-[8px] text-slate-400">(planned)</span>
               </button>
             </div>
 

@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Controlled Quality Output — Policy Config store.
+  DynamoDB table holding the mutable policy configuration (risk thresholds and
+  prohibited-jurisdiction list) that the policy-cascade service reads at eval
+  time and the Decision-Rules UI writes to. This makes thresholds "config, not
+  code" (invariant #3): they live in a config store, not hardcoded in source/env.
+
+Parameters:
+  ResourcePrefix:
+    Type: String
+    Default: kyc-gov
+    Description: Prefix for resource names (keeps this stack isolated from other use cases)
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+
+Resources:
+  PolicyConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ResourcePrefix}-policy-config'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: tenant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenant_id
+          KeyType: HASH
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: policy-config}
+        - {Key: ManagedBy, Value: cloudformation}
+
+  # Immutable audit log of every config change (who/what/when). Append-only:
+  # the writer only ever PutItem's; no DeleteItem permission is granted anywhere.
+  # Mirrors the HITL audit-table pattern. Consumed by the Decision-Rules change log.
+  PolicyConfigAuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ResourcePrefix}-policy-config-audit'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: tenant_id
+          AttributeType: S
+        - AttributeName: changed_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenant_id
+          KeyType: HASH
+        - AttributeName: changed_at
+          KeyType: RANGE
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: policy-config}
+        - {Key: ManagedBy, Value: cloudformation}
+
+  # Publish table names to SSM so the policy-cascade service (reader) and the
+  # policy-config proxy (writer, Task 3) resolve them without cross-stack
+  # ImportValue coupling (decoupled reference — invariant #7 / Warning #3).
+  PolicyConfigTableParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/policy-config-table'
+      Type: String
+      Value: !Ref PolicyConfigTable
+      Description: Name of the kyc-gov policy-config DynamoDB table.
+
+  PolicyConfigAuditTableParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/policy-config-audit-table'
+      Type: String
+      Value: !Ref PolicyConfigAuditTable
+      Description: Name of the kyc-gov policy-config audit (change-log) DynamoDB table.
+
+Outputs:
+  PolicyConfigTableName:
+    Description: Policy config DynamoDB table name
+    Value: !Ref PolicyConfigTable
+  PolicyConfigAuditTableName:
+    Description: Policy config audit (change-log) DynamoDB table name
+    Value: !Ref PolicyConfigAuditTable

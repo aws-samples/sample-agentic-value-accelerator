@@ -57,7 +57,15 @@ class LangfuseServerCreate(BaseModel):
         return v
 
     class Config:
-        schema_extra = {
+        # `json_schema_extra`, not `schema_extra`. The v1 spelling is not an alias in
+        # pydantic v2 - it is silently DROPPED, so every example in this file was absent
+        # from /openapi.json while still sitting here looking authored. Pydantic says so
+        # at import ("'schema_extra' has been renamed to 'json_schema_extra'") but only as
+        # a UserWarning among ~30 protected-namespace warnings, so nothing surfaced it.
+        # Verified against the pydantic 2.9.2 in this image: a model declaring the v1 key
+        # renders a schema with no example; the v2 key renders it. `class Config` itself is
+        # deprecated but still honoured, so only the key needed changing.
+        json_schema_extra = {
             "example": {
                 "name": "production-langfuse",
                 "endpoint": "https://langfuse.example.com",
@@ -85,7 +93,8 @@ class LangfuseServerResponse(BaseModel):
     updated_at: str = Field(..., description="Last update timestamp (ISO 8601)")
 
     class Config:
-        schema_extra = {
+        # See the note on the v1/v2 key rename at the first Config block in this file.
+        json_schema_extra = {
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "production-langfuse",
@@ -120,7 +129,8 @@ class LangfuseServerUpdate(BaseModel):
         return v
 
     class Config:
-        schema_extra = {
+        # See the note on the v1/v2 key rename at the first Config block in this file.
+        json_schema_extra = {
             "example": {
                 "status": "maintenance"
             }

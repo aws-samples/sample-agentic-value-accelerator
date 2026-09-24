@@ -1,0 +1,39 @@
+{
+  "customer_id": "CUST006",
+  "kyc_verification": {
+    "status": "failed",
+    "date": "2026-06-18",
+    "documents_verified": [
+      "Certificate of Incorporation"
+    ]
+  },
+  "sanctions_screening": {
+    "status": "clear",
+    "last_check": "2026-06-24",
+    "databases_checked": [
+      "OFAC",
+      "UN",
+      "EU",
+      "UK HMT"
+    ],
+    "matches": [],
+    "note": "Best match 12% \u2014 below threshold"
+  },
+  "pep_screening": {
+    "status": "clear",
+    "matches": []
+  },
+  "adverse_media": {
+    "status": "clear",
+    "last_check": "2026-06-20",
+    "findings": []
+  },
+  "aml_risk_rating": "high",
+  "enhanced_due_diligence_required": true,
+  "next_review_date": "2026-09-18",
+  "regulatory_notes": [
+    "5 shell indicators: nominee directors, registered agent address, minimal trading, unknown UBO, no physical office",
+    "Cannot proceed per BSA/AML until UBO verified",
+    "FCIU investigation referral created"
+  ]
+}

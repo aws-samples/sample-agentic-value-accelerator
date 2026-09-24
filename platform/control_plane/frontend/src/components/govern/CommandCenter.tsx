@@ -38,7 +38,7 @@ export default function CommandCenter() {
             </p>
           </div>
           <div className="text-xs text-slate-400">
-            Updated {now.toLocaleTimeString()} · <span className="text-emerald-600 font-medium">● Live</span>
+            Updated {now.toLocaleTimeString()}
           </div>
         </div>
 

@@ -1,0 +1,286 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: KYC Contextual Grounding Proxy - Lambda + API Gateway fronting Bedrock Guardrails ApplyGuardrail with contextual grounding
+
+Parameters:
+  GuardrailId:
+    Type: String
+    Default: ''
+    Description: Bedrock Guardrail ID with contextual grounding enabled
+  GuardrailVersion:
+    Type: String
+    Default: '4'
+    Description: Published guardrail version. ApplyGuardrail requires a published numeric version (DRAFT is rejected in this account), so this must point at a published version of GuardrailId.
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS allowed origin (e.g. https://<dist>.cloudfront.net). Default '*' for local dev; override in prod.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  GroundingProxyLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/kyc-grounding-proxy
+      RetentionInDays: 30
+
+  GroundingProxyFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: GroundingProxyLogGroup
+    Properties:
+      FunctionName: kyc-grounding-proxy
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          GUARDRAIL_ID: !Ref GuardrailId
+          GUARDRAIL_VERSION: !Ref GuardrailVersion
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: grounding}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+
+          bedrock_runtime = boto3.client('bedrock-runtime', region_name='us-east-1')
+
+          GUARDRAIL_ID = os.environ.get('GUARDRAIL_ID', '')
+          GUARDRAIL_VERSION = os.environ['GUARDRAIL_VERSION']
+          ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+
+          def handler(event, context):
+              headers = {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': ORIGIN,
+                  'Access-Control-Allow-Headers': 'Content-Type',
+                  'Access-Control-Allow-Methods': 'POST,GET,OPTIONS'
+              }
+
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', '')
+              path = event.get('path') or event.get('rawPath', '')
+
+              # Auth is enforced at the edge by the shared origin-verify API Gateway
+              # authorizer (invariant #1) — this handler contains no auth logic.
+
+              # An unconfigured guardrail is not a server fault. Answering 500 here is what
+              # previously made a missing guardrail look like a broken service, with nothing in
+              # the logs. Name the condition so the console can report it accurately.
+              if not GUARDRAIL_ID:
+                  print(json.dumps({'svc': 'grounding-proxy', 'event': 'not_configured',
+                                    'detail': 'no guardrail id supplied'}))
+                  return {
+                      'statusCode': 503,
+                      'headers': headers,
+                      'body': json.dumps({'error': 'contextual grounding is not configured '
+                                                   '(no Bedrock guardrail deployed)'})
+                  }
+              if method == 'OPTIONS':
+                  return {'statusCode': 200, 'headers': headers, 'body': ''}
+
+              tenant_id = (event.get('headers') or {}).get('x-tenant-id', 'default')
+
+              if path.endswith('/health'):
+                  return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'status': 'ok', 'service': 'grounding-proxy', 'timestamp': __import__('datetime').datetime.utcnow().isoformat()})}
+
+              try:
+                  body = json.loads(event.get('body', '{}'))
+                  grounding_source = body.get('grounding_source', '')
+                  query = body.get('query', '')
+                  response_text = body.get('response_text', '')
+
+                  if not grounding_source or not response_text:
+                      return {
+                          'statusCode': 400,
+                          'headers': headers,
+                          'body': json.dumps({'error': 'grounding_source and response_text required'})
+                      }
+
+                  # Call ApplyGuardrail with contextual grounding qualifiers
+                  result = bedrock_runtime.apply_guardrail(
+                      guardrailIdentifier=GUARDRAIL_ID,
+                      guardrailVersion=GUARDRAIL_VERSION,
+                      source='OUTPUT',
+                      content=[
+                          {
+                              'text': {'text': grounding_source[:100000], 'qualifiers': ['grounding_source']}
+                          },
+                          {
+                              'text': {'text': query[:1000], 'qualifiers': ['query']}
+                          },
+                          {
+                              'text': {'text': response_text[:5000], 'qualifiers': ['guard_content']}
+                          }
+                      ]
+                  )
+
+                  # Extract grounding scores
+                  action = result.get('action', 'NONE')
+                  assessments = result.get('assessments', [])
+                  
+                  grounding_score = None
+                  relevance_score = None
+                  
+                  for assessment in assessments:
+                      cg = assessment.get('contextualGroundingPolicy', {})
+                      filters = cg.get('filters', [])
+                      for f in filters:
+                          if f.get('type') == 'GROUNDING':
+                              grounding_score = f.get('score', 0)
+                          elif f.get('type') == 'RELEVANCE':
+                              relevance_score = f.get('score', 0)
+
+                  return {
+                      'statusCode': 200,
+                      'headers': headers,
+                      'body': json.dumps({
+                          'action': action,
+                          'grounding_score': grounding_score,
+                          'relevance_score': relevance_score,
+                          'grounded': action != 'GUARDRAIL_INTERVENED',
+                          'thresholds': {'grounding': 0.85, 'relevance': 0.75}
+                      })
+                  }
+
+              except Exception as e:
+                  # Log before answering. A deliberate 500 produces no Lambda error metric and
+                  # no stack trace, so without this the only symptom is a 500 in the browser
+                  # and a log group containing nothing but START/END/REPORT.
+                  print(json.dumps({'svc': 'grounding-proxy', 'event': 'error',
+                                    'guardrail': GUARDRAIL_ID, 'version': GUARDRAIL_VERSION,
+                                    'detail': str(e)}))
+                  return {
+                      'statusCode': 500,
+                      'headers': headers,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+      Role: !GetAtt GroundingProxyRole.Arn
+
+  GroundingProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: kyc-grounding-proxy-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockGuardrailAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:ApplyGuardrail
+                  - bedrock:GetGuardrail
+                Resource: '*'
+
+  GroundingApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: kyc-grounding-proxy
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - content-type
+          - x-api-key
+          - x-tenant-id
+
+  # Edge auth (invariant #1): shared origin-verify REQUEST authorizer, imported from the
+  # origin-verify-authorizer stack.
+  OriginVerifyAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref GroundingApi
+      AuthorizerType: REQUEST
+      Name: kyc-origin-verify
+      IdentitySource:
+        - '$request.header.x-origin-verify'
+      AuthorizerPayloadFormatVersion: '2.0'
+      EnableSimpleResponses: true
+      AuthorizerResultTtlInSeconds: 300
+      AuthorizerUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnArn}/invocations'
+        - FnArn: !ImportValue kyc-origin-verify-authorizer-arn
+
+  OriginVerifyAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue kyc-origin-verify-authorizer-arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GroundingApi}/authorizers/${OriginVerifyAuthorizer}'
+
+  GroundingApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref GroundingApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GroundingProxyFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  GroundingApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref GroundingApi
+      RouteKey: POST /check-grounding
+      Target: !Sub integrations/${GroundingApiIntegration}
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  GroundingHealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref GroundingApi
+      RouteKey: GET /health
+      Target: !Sub integrations/${GroundingApiIntegration}
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  GroundingApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref GroundingApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  GroundingApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GroundingProxyFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GroundingApi}/*
+
+Outputs:
+  GroundingApiUrl:
+    Description: Grounding proxy API URL
+    Value: !GetAtt GroundingApi.ApiEndpoint
+    Export:
+      Name: kyc-grounding-proxy-url

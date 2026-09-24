@@ -3,10 +3,14 @@
 import boto3
 import logging
 import re
+import time
 import uuid
 from typing import Dict, List, Optional
 from datetime import datetime
 
+from botocore.exceptions import BotoCoreError, ClientError
+
+from core.security_utils import mask_account_id
 from models.policy import (
     Policy,
     PolicyCreate,
@@ -25,6 +29,22 @@ from models.policy import (
 )
 
 logger = logging.getLogger(__name__)
+
+# How long a DynamoDB failure keeps metadata/audit reads on the degraded path before the
+# next caller is allowed to re-probe. Matches GovernOperationsService and
+# GovernComplianceService: 60s is short enough that a throttle or a credential refresh
+# self-heals inside one page refresh, and long enough that a genuinely absent table costs
+# ~1 failed call per minute instead of one per request.
+_TABLE_RETRY_COOLDOWN_SECONDS = 60
+
+# Page cap for the metadata/audit table sweeps. A DynamoDB scan returns at most 1 MB per
+# call, so a single un-paginated scan silently truncates - it returns a partial result that
+# is indistinguishable from a complete one, with no exception and no LastEvaluatedKey check.
+# Bounded rather than `while True`: an unbounded sweep over a table that grows without limit
+# turns one API request into an open-ended number of DynamoDB calls. When the cap is hit the
+# sweep says so (see _metadata_truncated / _audit_truncated) instead of quietly capping,
+# because a bounded sweep that does not disclose its bound is the same lie as no bound.
+_SCAN_MAX_PAGES = 20
 
 
 class PolicyConflictError(Exception):
@@ -143,19 +163,118 @@ FSI_POLICY_PRESETS: List[PolicyPreset] = [
 
 
 class PolicyService:
-    def __init__(self, table_name: str = "fsi-control-plane-policies", region: str = "us-east-1",
-                 policy_engine_id: str = "", gateway_arn: str = ""):
-        self.table_name = table_name
+    def __init__(self, table_name: str, region: str,
+                 policy_engine_id: str = "", gateway_arn: str = "", agentcore_region: str = ""):
+        # `table_name` and `region` are both REQUIRED, deliberately - neither has a default
+        # that is safe to guess.
+        #
+        # `region` used to default to "us-east-1", which is not where this table lives
+        # (us-east-2). It was masked only because the one caller passes AWS_REGION
+        # explicitly, but the default was a live trap rather than dead weight: a DynamoDB
+        # read against the wrong region SUCCEEDS and returns that region's empty
+        # inventory, so the next caller that omitted the kwarg would have read zero policy
+        # metadata with no exception, no ERROR, and a 200 response. Callers resolve it via
+        # region_config.table_region("POLICIES").
+        #
+        # `table_name` used to default to "fsi-control-plane-policies" - the correct name -
+        # which made the failure harder to see, not easier: the route overrode that good
+        # default with settings.POLICIES_TABLE_NAME, which was "". One name, owned by
+        # config.py, so the default cannot silently disagree with the setting again.
+        self.table_name = (table_name or "").strip()
         self.region = region
+        # AgentCore control-plane resources (policy engines, gateways, Cedar policies) can live in a
+        # DIFFERENT region than the DynamoDB control-plane metadata store. Default to `region` so
+        # single-region deployments are unaffected; the split matters when GOVERN_AWS_REGION
+        # (Bedrock/AgentCore) differs from AWS_REGION (DynamoDB metadata).
+        self.agentcore_region = agentcore_region or region
         self.policy_engine_id = policy_engine_id
         self.gateway_arn = gateway_arn
 
-        # AgentCore control plane client
-        self.agentcore = boto3.client("bedrock-agentcore-control", region_name=region)
+        # AgentCore control plane client (Bedrock/AgentCore region)
+        self.agentcore = boto3.client("bedrock-agentcore-control", region_name=self.agentcore_region)
 
-        # DynamoDB for local metadata (audit events, rule configs, mapping)
-        self.dynamodb = boto3.resource("dynamodb", region_name=region)
-        self.table = self.dynamodb.Table(table_name)
+        # DynamoDB for local metadata (audit events, rule configs, mapping) — control-plane region.
+        # Built lazily. Eagerly calling .Table(table_name) here is what produced an ERROR on
+        # every single GET /api/v1/policies: an unconfigured name yields a Table("") object that
+        # constructs fine and only raises ParamValidationError when first used, so a
+        # CONFIGURATION state surfaced as a per-request runtime error deep inside a read.
+        self._dynamodb = None
+        self._table = None
+        # Tri-state: None = not tried, True = last call succeeded, False = last call failed
+        # (paired with _table_failed_at so False decays instead of latching for the process life).
+        self._table_ok: Optional[bool] = None
+        self._table_failed_at: Optional[float] = None
+        # Disclosure flags for the two bounded sweeps. True means the last sweep stopped at
+        # _SCAN_MAX_PAGES with pages still unread, so its result is a prefix of the truth and
+        # a caller must not present it as the complete set.
+        self._metadata_truncated: bool = False
+        self._audit_truncated: bool = False
+
+        # Warned ONCE here, at construction, rather than per request. This is the only place
+        # that can distinguish "operator did not configure a table" from "a call failed", and
+        # naming the setting is the whole diagnostic - the previous per-request
+        # "Failed to load metadata: Invalid length for parameter TableName" named neither the
+        # table nor the setting that was empty.
+        if not self.table_name:
+            logger.warning(
+                "POLICIES_TABLE_NAME is not configured; policy metadata (rule configs, Cedar "
+                "statements) and policy audit events will NOT be persisted or read. Policies "
+                "themselves still come from AgentCore, so the list stays populated but shows "
+                "no stored rule counts or audit history. Set POLICIES_TABLE_NAME to enable it."
+            )
+
+    # --- DynamoDB helpers ---
+
+    def _get_table(self):
+        """Lazily address the metadata table. Returns None when unconfigured/unaddressable.
+
+        Guarded because `region` is configuration-driven: a typo'd POLICIES_TABLE_REGION makes
+        boto3.resource raise InvalidRegionError, which - raised from __init__ - would 500 every
+        policy endpoint on a one-character env-var mistake instead of degrading.
+        """
+        if not self.table_name:
+            return None
+        if self._table is None:
+            try:
+                if self._dynamodb is None:
+                    self._dynamodb = boto3.resource("dynamodb", region_name=self.region)
+                self._table = self._dynamodb.Table(self.table_name)
+            except Exception as e:
+                logger.warning(
+                    "Cannot address policy metadata table %r in region %r (%s: %s). Check "
+                    "POLICIES_TABLE_REGION / CONTROL_PLANE_TABLE_REGION / AWS_REGION.",
+                    self.table_name, self.region, type(e).__name__, e,
+                )
+                self._mark_table_failed()
+                return None
+        return self._table
+
+    def _table_available(self) -> bool:
+        """Whether a DynamoDB call should be attempted right now.
+
+        False for an unconfigured table, and for the cool-off window after a failure. Once
+        _TABLE_RETRY_COOLDOWN_SECONDS has elapsed this returns True again so the next caller
+        re-probes: a throttle, a brief partition, or a table created after the process started
+        all recover without a restart. Monotonic time, so an NTP step cannot extend or skip
+        the cool-off.
+        """
+        if not self.table_name:
+            return False
+        if self._table_ok is not False:
+            return True
+        if self._table_failed_at is None:
+            return True
+        return (time.monotonic() - self._table_failed_at) >= _TABLE_RETRY_COOLDOWN_SECONDS
+
+    def _mark_table_ok(self) -> None:
+        """Record that the table answered - clears any pending cool-off."""
+        self._table_ok = True
+        self._table_failed_at = None
+
+    def _mark_table_failed(self) -> None:
+        """Record a failure and start the cool-off before the next probe."""
+        self._table_ok = False
+        self._table_failed_at = time.monotonic()
 
     # --- AgentCore Policy CRUD ---
 
@@ -200,7 +319,6 @@ class PolicyService:
             # Poll briefly so the returned status reflects reality (CREATING -> ACTIVE
             # usually settles within a few seconds). Avoids the UI showing DRAFT forever.
             if agentcore_status == "CREATING":
-                import time
                 for _ in range(5):
                     time.sleep(1)
                     try:
@@ -254,7 +372,9 @@ class PolicyService:
             StatusHistoryEntry(
                 status=policy.status.value,
                 timestamp=datetime.utcnow().isoformat(),
-                message=f"Deployed to AgentCore (ARN: {agentcore_arn})"
+                # Mask the account id embedded in the policy ARN — this StatusHistoryEntry
+                # is serialized into the POST /api/v1/policies response.
+                message=mask_account_id(f"Deployed to AgentCore (ARN: {agentcore_arn})")
             )
         )
 
@@ -536,7 +656,15 @@ class PolicyService:
     # --- Metadata helpers (DynamoDB) ---
 
     def _save_metadata(self, policy: Policy, cedar_statement: Optional[str], agentcore_arn: Optional[str]):
-        """Save policy metadata to DynamoDB for enrichment."""
+        """Save policy metadata to DynamoDB for enrichment.
+
+        Best-effort by design. This runs AFTER the policy has already been created in
+        AgentCore, so raising here is worse than degrading: an unconfigured table made
+        create_policy answer 500 while the Cedar policy it just created stayed live in the
+        engine, i.e. the caller was told the create failed when half of it had not. The
+        policy is real either way; only the local enrichment (rule counts, Cedar text) is
+        lost, and list_policies already re-derives counts from the Cedar statement.
+        """
         import json
         from decimal import Decimal
 
@@ -564,34 +692,93 @@ class PolicyService:
 
         # Convert floats to Decimal for DynamoDB
         item = json.loads(json.dumps(item, default=str), parse_float=Decimal)
-        self.table.put_item(Item=item)
+
+        table = self._get_table() if self._table_available() else None
+        if table is None:
+            logger.warning(
+                "Policy %s metadata not persisted: policy metadata table unavailable "
+                "(POLICIES_TABLE_NAME=%r). The policy itself exists in AgentCore.",
+                policy.policy_id, self.table_name,
+            )
+            return
+        try:
+            table.put_item(Item=item)
+            self._mark_table_ok()
+        except (BotoCoreError, ClientError) as e:
+            logger.warning(f"Failed to save policy metadata for {policy.policy_id}: {e}")
+            self._mark_table_failed()
 
     def _load_metadata(self, policy_id: str) -> dict:
-        """Load local metadata for a policy."""
+        """Load local metadata for a policy. Empty dict when the store is unavailable."""
+        table = self._get_table() if self._table_available() else None
+        if table is None:
+            return {}
         try:
-            resp = self.table.get_item(Key={"pk": f"POLICY#{policy_id}", "sk": "META"})
+            resp = table.get_item(Key={"pk": f"POLICY#{policy_id}", "sk": "META"})
+            self._mark_table_ok()
             item = resp.get("Item", {})
             item.pop("pk", None)
             item.pop("sk", None)
             return item
-        except Exception:
+        except (BotoCoreError, ClientError):
+            self._mark_table_failed()
             return {}
 
     def _load_all_metadata(self) -> Dict[str, dict]:
-        """Load all policy metadata from DynamoDB."""
+        """Load all policy metadata from DynamoDB. Empty when the store is unavailable.
+
+        Paginates. A single scan() returns at most 1 MB, so the previous one-shot call
+        dropped every policy's metadata past that boundary with no signal: list_policies
+        then fell through to deriving rule counts from the Cedar statement, so affected
+        policies rendered with plausible-looking counts and a "system" author instead of
+        their stored name, resource_id, triggered_count and created_by. Nothing surfaced
+        because the miss looks identical to a policy that simply has no stored metadata.
+        """
         from boto3.dynamodb.conditions import Attr
-        try:
-            resp = self.table.scan(FilterExpression=Attr("pk").begins_with("POLICY#"))
-            result = {}
-            for item in resp.get("Items", []):
-                policy_id = item["pk"].replace("POLICY#", "")
-                item.pop("pk", None)
-                item.pop("sk", None)
-                result[policy_id] = item
-            return result
-        except Exception as e:
-            logger.error(f"Failed to load metadata: {e}")
+
+        # WARNING, not ERROR, and skipped entirely when the table is unconfigured. This is the
+        # line that logged "Failed to load metadata: Invalid length for parameter TableName" on
+        # EVERY GET /api/v1/policies while the route still answered 200 - an unset setting
+        # presented as a recurring runtime fault, which reads like a broken table or bad
+        # credentials rather than a config value nobody had filled in.
+        self._metadata_truncated = False
+        table = self._get_table() if self._table_available() else None
+        if table is None:
             return {}
+
+        result: Dict[str, dict] = {}
+        scan_kwargs: Dict[str, object] = {"FilterExpression": Attr("pk").begins_with("POLICY#")}
+        try:
+            for _page in range(_SCAN_MAX_PAGES):
+                resp = table.scan(**scan_kwargs)
+                for item in resp.get("Items", []):
+                    policy_id = item["pk"].replace("POLICY#", "")
+                    item.pop("pk", None)
+                    item.pop("sk", None)
+                    result[policy_id] = item
+                last_key = resp.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+                scan_kwargs["ExclusiveStartKey"] = last_key
+            else:
+                # Loop ran the full cap and the last page still had more to read.
+                self._metadata_truncated = True
+                logger.warning(
+                    "Policy metadata sweep stopped at the %d-page cap with more pages "
+                    "remaining; loaded %d records. Policies beyond this point will show "
+                    "Cedar-derived rule counts instead of their stored metadata.",
+                    _SCAN_MAX_PAGES, len(result),
+                )
+            self._mark_table_ok()
+            return result
+        except (BotoCoreError, ClientError) as e:
+            logger.warning(f"Failed to load policy metadata from {self.table_name!r} in {self.region}: {e}")
+            self._mark_table_failed()
+            # Return what was read rather than discarding it, but mark it partial: a
+            # mid-sweep failure otherwise looks like an empty table.
+            if result:
+                self._metadata_truncated = True
+            return result
 
     def _load_rules(self, meta: dict) -> List[PolicyRule]:
         """Load rules from metadata JSON."""
@@ -632,23 +819,79 @@ class PolicyService:
     def get_audit_events(self, policy_id: Optional[str] = None,
                          action_filter: Optional[AuditActionTaken] = None,
                          limit: int = 50) -> List[PolicyAuditEvent]:
-        """Get audit events (stored locally)."""
+        """Get audit events (stored locally). Empty when the store is unavailable."""
         from boto3.dynamodb.conditions import Key, Attr
 
-        try:
-            if policy_id:
-                resp = self.table.query(
-                    KeyConditionExpression=Key("pk").eq(f"AUDIT#{policy_id}"),
-                    ScanIndexForward=False,
-                    Limit=limit,
-                )
-            else:
-                filter_expr = Attr("pk").begins_with("AUDIT#")
-                if action_filter:
-                    filter_expr = filter_expr & Attr("action_taken").eq(action_filter.value)
-                resp = self.table.scan(FilterExpression=filter_expr, Limit=limit)
+        # Second of the two ERROR-per-request sites ("Failed to get audit events: Parameter
+        # validation failed"), same empty-table-name cause as _load_all_metadata.
+        self._audit_truncated = False
+        table = self._get_table() if self._table_available() else None
+        if table is None:
+            return []
 
-            items = resp.get("Items", [])
+        # DynamoDB applies Limit to items EXAMINED, then applies FilterExpression to that page.
+        # The scan path therefore used to return "up to `limit` of the first `limit` rows it
+        # happened to touch", which on an audit endpoint destroys the only thing the endpoint
+        # is for: a caller could not tell "3 audit events exist" from "we stopped after 50 rows
+        # and 3 of them matched". With action_filter set, the more rows the table held the fewer
+        # events came back. Both paths now page until the requested count is genuinely met.
+        action_expr = Attr("action_taken").eq(action_filter.value) if action_filter else None
+
+        if policy_id:
+            # pk is exact and sk is time-ordered, so ScanIndexForward=False yields newest-first
+            # and stopping as soon as `limit` MATCHES are held is exactly the newest `limit`.
+            # Note action_filter is now honoured here too; it was previously applied only on the
+            # scan path, so get_audit_events(policy_id=..., action_filter=...) silently ignored
+            # the filter and returned every action type.
+            operation = table.query
+            page_kwargs: Dict[str, object] = {
+                "KeyConditionExpression": Key("pk").eq(f"AUDIT#{policy_id}"),
+                "ScanIndexForward": False,
+            }
+            if action_expr is not None:
+                page_kwargs["FilterExpression"] = action_expr
+            stop_at_limit = True
+        else:
+            # A scan returns pages in arbitrary order, so "newest `limit`" is only correct once
+            # every matching row has been seen. Deliberately does NOT stop at `limit`: an early
+            # exit here would return the newest of an arbitrary subset while looking like the
+            # newest overall. The page cap bounds the cost, and hitting it sets the flag.
+            operation = table.scan
+            pk_expr = Attr("pk").begins_with("AUDIT#")
+            page_kwargs = {
+                "FilterExpression": (pk_expr & action_expr) if action_expr is not None else pk_expr
+            }
+            stop_at_limit = False
+
+        items: List[dict] = []
+        try:
+            for _page in range(_SCAN_MAX_PAGES):
+                resp = operation(**page_kwargs)
+                items.extend(resp.get("Items", []))
+                last_key = resp.get("LastEvaluatedKey")
+                if not last_key or (stop_at_limit and len(items) >= limit):
+                    break
+                page_kwargs["ExclusiveStartKey"] = last_key
+            else:
+                self._audit_truncated = True
+                logger.warning(
+                    "Policy audit sweep stopped at the %d-page cap with more pages remaining; "
+                    "collected %d matching events for limit=%d. The returned events are the "
+                    "newest of what was scanned, NOT necessarily the newest that exist.",
+                    _SCAN_MAX_PAGES, len(items), limit,
+                )
+            self._mark_table_ok()
+        except (BotoCoreError, ClientError) as e:
+            logger.warning(f"Failed to get policy audit events from {self.table_name!r} in {self.region}: {e}")
+            self._mark_table_failed()
+            return []
+
+        # Row parsing is caught separately from the DynamoDB call and does NOT trip the
+        # cool-off: a row that fails PolicyAuditEvent validation says nothing about whether
+        # the table is reachable, and marking it failed would suppress reads of the good rows
+        # for the next 60s. Narrowing the boto3 catch above without this arm would also turn a
+        # single malformed stored row into a 500 on an endpoint that previously degraded.
+        try:
             events = []
             for item in items:
                 item.pop("pk", None)
@@ -657,7 +900,7 @@ class PolicyService:
             events.sort(key=lambda e: e.timestamp, reverse=True)
             return events[:limit]
         except Exception as e:
-            logger.error(f"Failed to get audit events: {e}")
+            logger.warning(f"Discarding unparseable policy audit rows: {e}")
             return []
 
     def get_metrics(self, policy_id: str) -> PolicyMetrics:

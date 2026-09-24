@@ -167,7 +167,13 @@ resource "aws_iam_role_policy" "codebuild_cloudformation" {
           "cloudformation:ExecuteChangeSet",
           "cloudformation:DeleteChangeSet",
           "cloudformation:ListStacks",
-          "cloudformation:GetTemplateSummary"
+          "cloudformation:GetTemplateSummary",
+          # Deploy scripts inspect exports to decide whether a shared resource is
+          # already owned by another stack (adopt) or must be created. Without this,
+          # the lookup fails and a script that swallows the error will try to create
+          # a duplicate of a fixed-name resource.
+          "cloudformation:ListExports",
+          "cloudformation:ListImports"
         ]
         Resource = "*"
       },
@@ -276,6 +282,10 @@ resource "aws_iam_role_policy" "codebuild_iac_provisioning" {
           "wafv2:*",
           "secretsmanager:*",
           "kms:*",
+          # Amazon Verified Permissions — the KYC Governance reference implementation
+          # creates an AVP policy store, puts the Cedar schema, and loads its
+          # policies-as-data from *.cedar files at deploy time.
+          "verifiedpermissions:*",
           "elasticache:*",
           "rds:*",
           "rds-db:*",

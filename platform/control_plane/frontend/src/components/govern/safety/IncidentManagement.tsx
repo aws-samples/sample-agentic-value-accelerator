@@ -10,7 +10,10 @@
  * immutable evidence trail this draws from — evidence, not lifecycle.
  *
  * Data flow: Fetches live incident events from governAuditApi.list('incident'),
- * then supplements with static mock incidents for demo completeness.
+ * then supplements with static mock incidents for demo completeness. The KPI
+ * tiles never mix the two: when live events exist they count live records only
+ * (the excluded fixture count is disclosed beneath the tiles), while the table
+ * and category chart show both with each live row flagged.
  */
 import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -22,8 +25,8 @@ import { Icon } from '../icons';
 import { governAuditApi, type GovernAuditEvent } from '../../../api/client';
 import {
   INCIDENTS,
-  INCIDENT_FIXTURE_TODAY,
   computeIncidentCounts,
+  isReportOverdue,
   CATEGORY_LABELS,
   STATUS_LABELS,
   SEVERITY_LABELS,
@@ -110,12 +113,21 @@ function auditEventToIncident(event: GovernAuditEvent): Incident {
     title: event.summary.length > 60 ? event.summary.slice(0, 57) + '...' : event.summary,
     severity,
     category,
-    status: 'detected', // Live events start in detected state
+    // Every audit-derived row is permanently 'detected' - nothing tracks a lifecycle for
+    // them, so none can ever move to mitigated/resolved. Left as 'detected' because that is
+    // the only honest reading of "an audit event exists", but flagged unassessed below so
+    // the Art. 73 columns do not pretend a determination was made.
+    status: 'detected',
     affected: event.agent || 'Unknown agent',
     detectedAt,
-    reportable: severity === 'critical' || severity === 'high',
-    reportClockDays: severity === 'critical' ? 2 : severity === 'high' ? 15 : null,
-    reportDeadline: 'n/a', // Would need to calculate from detectedAt + clock
+    // NOT derived from the inferred severity. `severity` here comes from substring-matching
+    // the event summary a few lines above; turning that guess into an EU AI Act Article 73
+    // reporting obligation with a 2- or 15-day statutory clock asserts a regulatory
+    // conclusion nobody made. Left unset and marked unassessed.
+    reportable: false,
+    reportClockDays: null,
+    reportableAssessed: false,
+    reportDeadline: 'n/a',
     summary: event.summary,
     remediation: event.action || 'Under investigation',
   };
@@ -147,25 +159,37 @@ export default function IncidentManagement() {
     return () => { mounted = false; };
   }, []);
 
-  // Combine live incidents with mock fallback (dedupe by id)
-  const allIncidents = useMemo(() => {
-    const liveIds = new Set(liveIncidents.map(i => i.id));
-    const mockOnly = INCIDENTS.filter(i => !liveIds.has(i.id));
-    return [...liveIncidents, ...mockOnly];
-  }, [liveIncidents]);
+  // Track which incident IDs came from live data
+  const liveIncidentIds = useMemo(() => new Set(liveIncidents.map(i => i.id)), [liveIncidents]);
 
-  const counts = useMemo(() => computeIncidentCounts(allIncidents, INCIDENT_FIXTURE_TODAY), [allIncidents]);
+  // Demo fixtures not already represented by a live audit event.
+  const demoIncidents = useMemo(
+    () => INCIDENTS.filter(i => !liveIncidentIds.has(i.id)),
+    [liveIncidentIds],
+  );
+
+  // Combine live incidents with mock fallback (dedupe by id) — this is what the
+  // table and category chart render, with each live row flagged individually.
+  const allIncidents = useMemo(() => [...liveIncidents, ...demoIncidents], [liveIncidents, demoIncidents]);
+
+  // Deadline math runs against real today (see computeIncidentCounts default), so
+  // "deadline soon" and overdue states reflect the live statutory clock.
+  const allCounts = useMemo(() => computeIncidentCounts(allIncidents), [allIncidents]);
+  const liveCounts = useMemo(() => computeIncidentCounts(liveIncidents), [liveIncidents]);
+
+  // KPI tiles must never blend sources under a live badge: once real incident
+  // events exist the tiles count ONLY those, and the demo fixtures they exclude
+  // are disclosed under the tile row. Without live events the tiles are the
+  // fixture counts and the page carries a MockDataBadge.
+  const kpi = isLive ? liveCounts : allCounts;
 
   const categoryData = useMemo(
     () =>
-      (Object.keys(counts.byCategory) as IncidentCategory[])
-        .map(c => ({ id: c, name: CATEGORY_LABELS[c], value: counts.byCategory[c] }))
+      (Object.keys(allCounts.byCategory) as IncidentCategory[])
+        .map(c => ({ id: c, name: CATEGORY_LABELS[c], value: allCounts.byCategory[c] }))
         .filter(d => d.value > 0),
-    [counts.byCategory],
+    [allCounts.byCategory],
   );
-
-  // Track which incident IDs came from live data
-  const liveIncidentIds = useMemo(() => new Set(liveIncidents.map(i => i.id)), [liveIncidents]);
 
   return (
     <GovernPageLayout
@@ -181,22 +205,48 @@ export default function IncidentManagement() {
       backPath="/govern/safety"
       backLabel="AI Safety"
     >
-      {/* Stat row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <StatCard
-          label="Open incidents"
-          value={loading ? '...' : counts.open}
-          variant={counts.open ? 'danger' : 'success'}
-          sub={isLive ? `${liveIncidents.length} from audit log` : 'not yet resolved'}
-        />
-        <StatCard label="Near-misses" value={loading ? '...' : counts.nearMisses} variant="info" sub="leading indicator" />
-        <StatCard
-          label="Reportable (Art. 73)"
-          value={loading ? '...' : counts.reportable}
-          variant={counts.approachingDeadline ? 'warning' : counts.reportable ? 'info' : 'muted'}
-          sub={counts.approachingDeadline ? `${counts.approachingDeadline} deadline soon` : 'EU serious-incident'}
-        />
-        <StatCard label="Resolved" value={loading ? '...' : counts.resolved + counts.reported} variant="success" sub="closed out" />
+      {/* Stat row — live-only counts when live audit events exist (see `kpi`) */}
+      <div className="mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard
+            label="Open incidents"
+            value={loading ? '...' : kpi.open}
+            variant={kpi.open ? 'danger' : 'success'}
+            sub={isLive ? 'live only · not yet resolved' : 'not yet resolved'}
+          />
+          <StatCard
+            label="Near-misses"
+            value={loading ? '...' : kpi.nearMisses}
+            variant="info"
+            sub={isLive ? 'live only · leading indicator' : 'leading indicator'}
+          />
+          <StatCard
+            label="Reportable (Art. 73)"
+            value={loading ? '...' : kpi.reportable}
+            variant={kpi.approachingDeadline ? 'warning' : kpi.reportable ? 'info' : 'muted'}
+            sub={
+              kpi.approachingDeadline
+                ? `${kpi.approachingDeadline} deadline soon`
+                : isLive ? 'live only · EU serious-incident' : 'EU serious-incident'
+            }
+          />
+          <StatCard
+            label="Resolved"
+            value={loading ? '...' : kpi.resolved + kpi.reported}
+            variant="success"
+            sub={isLive ? 'live only · closed out' : 'closed out'}
+          />
+        </div>
+        {isLive && (
+          <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-500">
+            <Icon name="information-circle" className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-px" />
+            <span>
+              Tiles count the {liveIncidents.length} live audit incident{liveIncidents.length === 1 ? '' : 's'} only —
+              the {demoIncidents.length} illustrative fixture{demoIncidents.length === 1 ? '' : 's'} in the table below
+              are excluded from these KPIs.
+            </span>
+          </p>
+        )}
       </div>
 
       {/* EU AI Act Article 73 reporting clocks callout */}
@@ -236,8 +286,13 @@ export default function IncidentManagement() {
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Incident lifecycle</h3>
               <p className="text-[11px] text-slate-500">
-                {loading ? 'Loading...' : `${counts.total} tracked · ${counts.nearMisses} near-misses`}
-                {isLive && <span className="text-emerald-600 ml-1">· {liveIncidents.length} live</span>}
+                {loading ? 'Loading...' : `${allCounts.total} tracked · ${allCounts.nearMisses} near-misses`}
+                {isLive && (
+                  <span className="ml-1">
+                    <span className="text-emerald-600">· {liveIncidents.length} live</span>
+                    <span> · {demoIncidents.length} demo</span>
+                  </span>
+                )}
               </p>
             </div>
             {isLive && (
@@ -295,7 +350,14 @@ export default function IncidentManagement() {
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {inc.reportable && inc.reportClockDays !== null ? (
+                      {inc.reportableAssessed === false ? (
+                        <span
+                          className="text-[10px] text-slate-400 border border-dashed border-slate-300 rounded px-1.5 py-0.5"
+                          title="No Article 73 determination has been made for this incident. It was derived from an audit event whose severity is inferred from its text, which is not a basis for a statutory reporting obligation either way."
+                        >
+                          classification pending
+                        </span>
+                      ) : inc.reportable && inc.reportClockDays !== null ? (
                         <span className={`text-[9px] font-semibold px-2 py-0.5 rounded border ${clockBadge[inc.reportClockDays]}`}>
                           {inc.reportClockDays}-day clock
                         </span>
@@ -303,8 +365,17 @@ export default function IncidentManagement() {
                         <span className="text-[10px] text-slate-400">not reportable</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-[11px] text-slate-600 whitespace-nowrap font-mono">
-                      {inc.reportDeadline === 'n/a' ? <span className="text-slate-300">—</span> : inc.reportDeadline}
+                    <td className="px-4 py-3 text-[11px] whitespace-nowrap font-mono">
+                      {inc.reportDeadline === 'n/a' ? (
+                        <span className="text-slate-300">—</span>
+                      ) : isReportOverdue(inc) ? (
+                        <span className="inline-flex items-center gap-1 text-rose-600 font-semibold">
+                          {inc.reportDeadline}
+                          <span className="text-[8px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded bg-rose-100 text-rose-700">overdue</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-600">{inc.reportDeadline}</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -315,7 +386,9 @@ export default function IncidentManagement() {
 
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
           <h3 className="text-sm font-semibold text-slate-900 mb-1">Incidents by category</h3>
-          <p className="text-[11px] text-slate-500 mb-3">AIID/OECD-style taxonomy</p>
+          <p className="text-[11px] text-slate-500 mb-3">
+            AIID/OECD-style taxonomy{isLive ? ' · live + demo rows, as listed' : ''}
+          </p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={categoryData} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />

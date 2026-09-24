@@ -377,7 +377,9 @@ export default function EmergencyControls({ compact = false }: Props) {
     setResult({
       id: action.id,
       label: action.label,
-      output: `${action.label} executed successfully. All affected agents notified.`,
+      // Honesty: no API call was made. Do NOT claim the action executed. State plainly
+      // that this is a simulation so a demo never implies a live kill/throttle occurred.
+      output: `Simulation only — no live action taken. In production this would apply the Cedar policy and notify affected agents (via /api/agents/security-operations).`,
       ts: new Date().toISOString(),
     });
     setBusy(null);
@@ -508,14 +510,16 @@ export default function EmergencyControls({ compact = false }: Props) {
         </div>
       )}
 
-      {/* Result Banner */}
+      {/* Result Banner — simulation only (no live action is performed) */}
       {result && (
-        <div className="mx-4 mt-3 p-2 rounded-lg bg-emerald-50 border border-emerald-200">
+        <div className="mx-4 mt-3 p-2 rounded-lg bg-amber-50 border border-dashed border-amber-300">
           <div className="flex items-center gap-2">
-            <Icon name="check-circle" className="w-3.5 h-3.5 text-emerald-600" strokeWidth={2} />
-            <span className="text-[10px] font-medium text-emerald-800">{result.label}</span>
-            <span className="text-[9px] text-emerald-600 ml-auto">{new Date(result.ts).toLocaleTimeString()}</span>
+            <Icon name="beaker" className="w-3.5 h-3.5 text-amber-600" strokeWidth={2} />
+            <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold uppercase tracking-wide">Simulation</span>
+            <span className="text-[10px] font-medium text-amber-800">{result.label}</span>
+            <span className="text-[9px] text-amber-600 ml-auto">{new Date(result.ts).toLocaleTimeString()}</span>
           </div>
+          <p className="text-[9px] text-amber-700 mt-1 leading-snug">{result.output}</p>
         </div>
       )}
 

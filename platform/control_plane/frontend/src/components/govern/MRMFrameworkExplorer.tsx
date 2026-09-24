@@ -33,7 +33,7 @@ interface Framework {
   regulator: string;
   effectiveDate: string;
   color: string;
-  icon: string;
+  icon: IconName;
   overview: string;
   scope: string;
   keyPrinciples: string[];
@@ -53,7 +53,7 @@ const FRAMEWORKS: Framework[] = [
     regulator: 'Federal Reserve Board',
     effectiveDate: '2026-01-01',
     color: '#8b5cf6',
-    icon: '🇺🇸',
+    icon: 'flag',
     overview: 'SR 26-2 updates the Federal Reserve\'s model risk management guidance (originally SR 11-7) to address AI/ML models. It establishes expectations for banks\' use of AI in decision-making, requiring robust governance, validation, and ongoing monitoring.',
     scope: 'All bank holding companies, state member banks, and their subsidiaries using AI/ML models for material business decisions.',
     keyPrinciples: [
@@ -94,7 +94,7 @@ const FRAMEWORKS: Framework[] = [
     regulator: 'Office of the Superintendent of Financial Institutions',
     effectiveDate: '2027-05-01',
     color: '#ec4899',
-    icon: '🇨🇦',
+    icon: 'flag',
     overview: 'OSFI E-23 is Canada\'s enterprise-wide model risk management guideline. It requires federally regulated financial institutions to establish comprehensive frameworks for identifying, measuring, and managing model risk across all model types including AI/ML.',
     scope: 'All federally regulated financial institutions (FRFIs) in Canada including banks, insurance companies, and trust companies.',
     keyPrinciples: [
@@ -133,7 +133,7 @@ const FRAMEWORKS: Framework[] = [
     regulator: 'National Institute of Standards and Technology',
     effectiveDate: '2023-01-26',
     color: '#3b82f6',
-    icon: '🇺🇸',
+    icon: 'flag',
     overview: 'The NIST AI RMF provides a voluntary framework for managing AI risks throughout the AI lifecycle. It emphasizes trustworthy AI characteristics and provides actionable guidance for organizations of all sizes.',
     scope: 'Voluntary framework applicable to all organizations developing, deploying, or using AI systems. Often referenced by regulators as a baseline.',
     keyPrinciples: [
@@ -174,7 +174,7 @@ const FRAMEWORKS: Framework[] = [
     regulator: 'European Commission',
     effectiveDate: '2024-08-01',
     color: '#f59e0b',
-    icon: '🇪🇺',
+    icon: 'flag',
     overview: 'The EU AI Act is the world\'s first comprehensive legal framework for AI. It takes a risk-based approach, with strict requirements for high-risk AI systems and prohibitions on certain AI practices.',
     scope: 'All AI systems placed on the market or used in the EU, regardless of where providers are established. Applies to providers, deployers, importers, and distributors.',
     keyPrinciples: [
@@ -366,12 +366,8 @@ const FRAMEWORKS: Framework[] = [
   },
 ];
 
-const ICON_SLUGS = new Set(['cloud', 'building-office']);
-function FwIcon({ icon, className }: { icon: string; className?: string }) {
-  if (ICON_SLUGS.has(icon)) {
-    return <Icon name={icon as IconName} className={className ?? 'w-5 h-5'} />;
-  }
-  return <span>{icon}</span>;
+function FwIcon({ icon, className }: { icon: IconName; className?: string }) {
+  return <Icon name={icon} className={className ?? 'w-5 h-5'} />;
 }
 
 export default function MRMFrameworkExplorer({ isOpen, onClose }: Props) {

@@ -9,9 +9,10 @@ shows real movement in a fresh environment.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
+from core import region_scope
 from core.config import settings
 from core.rbac import Role, require_role
 from models.govern_audit import AuditCategory, AuditEventCreate, AuditSeverity
@@ -26,6 +27,9 @@ from services.govern_graduation_service import GovernGraduationService, StepDown
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/govern/graduation", tags=["govern-graduation"])
+
+# Region scope, declared for GET /govern/regions/scope. See core/region_scope.py.
+REGION_SCOPE = region_scope.declare("govern_graduation", region_scope.CONTROL_PLANE, prefix="/govern/graduation")
 
 _svc: Optional[GovernGraduationService] = None
 
@@ -68,8 +72,22 @@ async def get_graduation(agent_id: str, _=Depends(require_role(Role.VIEWER))):
 
 
 @router.post("/records", response_model=GraduationRecord, status_code=201)
-async def upsert_record(req: GraduationRecordCreate, _=Depends(require_role(Role.OPERATOR))):
-    return get_service().upsert(req, created_by="user")
+async def upsert_record(
+    req: GraduationRecordCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    """Create or update a graduation record.
+
+    The actor on every write in this file comes from the `x-user-email` header, or
+    `"unknown"` when absent - `require_role` returns only a Role, never a principal.
+    These rows record who granted an agent more autonomy, so the previous literal
+    "user" was the worst case: it reads like a real principal, so nobody goes
+    looking for the identity that was never captured. Same header core/rbac.py:88
+    reads to decide the role. Note the seed endpoint below deliberately keeps its
+    own literals ("seed", a reserved example domain) - those are honest.
+    """
+    return get_service().upsert(req, created_by=x_user_email or "unknown")
 
 
 class PromoteRequest(BaseModel):
@@ -78,10 +96,15 @@ class PromoteRequest(BaseModel):
 
 
 @router.post("/{agent_id}/promote", response_model=AgentGraduation)
-async def promote(agent_id: str, req: PromoteRequest = PromoteRequest(), _=Depends(require_role(Role.OPERATOR))):
+async def promote(
+    agent_id: str,
+    req: PromoteRequest = PromoteRequest(),
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
     try:
         g = get_service().promote(
-            agent_id, promoted_by="user",
+            agent_id, promoted_by=x_user_email or "unknown",
             probation_days=req.probation_days, override_step_down=req.override_step_down,
         )
     except StepDownGuardError as e:
@@ -97,8 +120,16 @@ class StepDownRequest(BaseModel):
 
 
 @router.post("/{agent_id}/step-down", response_model=AgentGraduation)
-async def step_down(agent_id: str, req: StepDownRequest, _=Depends(require_role(Role.OPERATOR))):
-    g = get_service().step_down(agent_id, reason=req.reason, triggered_by_event_id=req.triggered_by_event_id, actor="user")
+async def step_down(
+    agent_id: str,
+    req: StepDownRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    g = get_service().step_down(
+        agent_id, reason=req.reason, triggered_by_event_id=req.triggered_by_event_id,
+        actor=x_user_email or "unknown",
+    )
     if not g:
         raise HTTPException(status_code=404, detail="No graduation record for agent")
     return g

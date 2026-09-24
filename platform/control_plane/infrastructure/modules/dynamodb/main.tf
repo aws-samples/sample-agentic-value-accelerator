@@ -661,3 +661,87 @@ resource "aws_dynamodb_table" "a2a_agents" {
     Name = "${var.name_prefix}-a2a-agents"
   })
 }
+
+# ============================================================================
+# Evaluations Table (Operate → Evaluation)
+# ============================================================================
+# Stores evaluation suites (SUITE#<id>), runs (RUN#<id>), and cached pairwise
+# comparisons (PAIRWISE#<a>::<b>) under a single prefixed hash key — the
+# access pattern the evaluation service uses (point reads by pk, prefix scans
+# with a projected summary for list pages).
+
+resource "aws_dynamodb_table" "evaluations" {
+  name         = "${var.name_prefix}-evaluations"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-evaluations"
+  })
+}
+
+# ============================================================================
+# Login Events Table (audit)
+# ============================================================================
+# Written by the Cognito PostAuthentication Lambda after every successful
+# sign-in. Two access patterns supported:
+#
+#   1. Per-user history — Query(pk = USER#<sub>) sorted by sk (ISO ts).
+#   2. Per-day report   — Query GSI by_date (event_date = YYYY-MM-DD).
+#
+# PITR is on because this is an audit-grade table; encryption at rest via
+# AWS-managed KMS. PAY_PER_REQUEST matches the rest of the CP tables.
+
+resource "aws_dynamodb_table" "login_events" {
+  name         = "${var.name_prefix}-login-events"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  attribute {
+    name = "event_date"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "by_date"
+    hash_key        = "event_date"
+    range_key       = "sk"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-login-events"
+  })
+}

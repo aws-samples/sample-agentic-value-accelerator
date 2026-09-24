@@ -1,0 +1,26 @@
+{
+  "tenants": [
+    {
+      "tenant_id": "default",
+      "risk_escalate_threshold": 60,
+      "risk_block_threshold": 80,
+      "prohibited_jurisdictions": ["KP", "IR", "SY", "MM"],
+      "sanctions_threshold": 0.70,
+      "pep_threshold": 0.60,
+      "version": 1,
+      "updated_by": "seed",
+      "note": "Fallback tenant. Board-approved baseline governance configuration."
+    },
+    {
+      "tenant_id": "fsi-demo",
+      "risk_escalate_threshold": 60,
+      "risk_block_threshold": 80,
+      "prohibited_jurisdictions": ["KP", "IR", "SY", "MM"],
+      "sanctions_threshold": 0.70,
+      "pep_threshold": 0.60,
+      "version": 1,
+      "updated_by": "seed",
+      "note": "Deployed demo tenant (CloudFront injects x-tenant-id=fsi-demo, matching runtime-config tenant_id). The Decision-Rules UI writes here and the agent's policy-cascade + sanctions-pep read here, so the tenant must be seeded for the slider->decision loop to work. Mutable at runtime via the UI."
+    }
+  ]
+}

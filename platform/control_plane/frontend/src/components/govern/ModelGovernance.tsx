@@ -18,6 +18,16 @@ import ModelMetricsPanel from './metrics/ModelMetricsPanel';
 import { useGovernModels } from './useGovernModels';
 import { LiveDataBadge } from './DataSourceIndicator';
 
+// Average a framework's compliance across only the models that actually carry
+// that framework — models without it must not be counted as 0 and dilute the
+// mean, and the denominator must be those contributing models (not MODELS.length).
+const avgFrameworkCompliance = (framework: string): number => {
+  const scores = Object.values(MODEL_DETAILS)
+    .map(d => d.mrmFrameworks?.find((f: { framework: string; compliance: number }) => f.framework === framework)?.compliance)
+    .filter((c): c is number => typeof c === 'number');
+  return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+};
+
 // ─────────────────────────── Risk Categories ───────────────────────────
 
 const RISK_CATEGORIES = [
@@ -155,9 +165,13 @@ export default function ModelGovernance() {
           name: liveModel.name,
           provider: liveModel.provider,
           owner: mockMatch?.owner ?? 'Unassigned',
-          tier: mockMatch?.tier ?? 'Tier 3' as const,
-          status: mockMatch?.status ?? 'Production' as const,
-          evalScore: mockMatch?.evalScore ?? 75,
+          // null rather than 'Tier 3', matching ModelRegistry and ModelComparison. Nothing
+          // in this file renders these two today (unifiedModels is consumed only for
+          // showingLiveData and a badge count), but leaving a fabricated tier in the object
+          // is how it ends up rendered by the next person to reach for this list.
+          tier: mockMatch?.tier ?? null,
+          status: mockMatch?.status ?? 'Pending Review' as const,
+          evalScore: mockMatch?.evalScore ?? null,
           useCases: mockMatch?.useCases ?? 0,
           monthlyCost: mockMatch?.monthlyCost ?? 0,
           lastValidated: mockMatch?.lastValidated ?? 'N/A',
@@ -556,8 +570,8 @@ export default function ModelGovernance() {
           <div className="grid grid-cols-4 gap-4">
             {[
               { label: 'SR 26-2', region: 'US Federal Reserve', value: Object.values(MODEL_DETAILS).filter(d => d.attestation.sr26_2.attested).length, sub: `of ${MODELS.length} attested`, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200' },
-              { label: 'OSFI E-23', region: 'Canada', value: Math.round(Object.values(MODEL_DETAILS).reduce((sum, d) => sum + (d.mrmFrameworks?.find((f: { framework: string; compliance: number }) => f.framework === 'OSFI E-23 (Canada)')?.compliance || 0), 0) / MODELS.length), sub: '% avg compliance', color: 'text-pink-600', bg: 'bg-pink-50', border: 'border-pink-200' },
-              { label: 'NIST AI RMF', region: 'US', value: Math.round(Object.values(MODEL_DETAILS).reduce((sum, d) => sum + (d.mrmFrameworks?.find((f: { framework: string; compliance: number }) => f.framework === 'NIST AI RMF (US)')?.compliance || 0), 0) / MODELS.length), sub: '% avg compliance', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
+              { label: 'OSFI E-23', region: 'Canada', value: avgFrameworkCompliance('OSFI E-23 (Canada)'), sub: '% avg compliance', color: 'text-pink-600', bg: 'bg-pink-50', border: 'border-pink-200' },
+              { label: 'NIST AI RMF', region: 'US', value: avgFrameworkCompliance('NIST AI RMF (US)'), sub: '% avg compliance', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
               { label: 'EU AI Act', region: 'European Union', value: Object.values(MODEL_DETAILS).filter(d => d.attestation.euAiAct.documented).length, sub: `of ${MODELS.length} documented`, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
             ].map(kpi => (
               <div key={kpi.label} className={`${kpi.bg} backdrop-blur-sm rounded-xl border ${kpi.border} p-4 shadow-sm`}>

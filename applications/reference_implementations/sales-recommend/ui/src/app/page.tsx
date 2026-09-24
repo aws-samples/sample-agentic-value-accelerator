@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatView } from "@/components/ChatView";
+import { EmailCaptureModal } from "@/components/EmailCaptureModal";
 import { ReportPreviewPanel } from "@/components/ReportPreviewPanel";
 import { SolutionMatrix } from "@/components/SolutionMatrix";
 import { ClientApproachReport } from "@/components/ClientApproachReport";
+import { VisitorsView } from "@/components/VisitorsView";
 import { ChatMessage, HighlightsBlock } from "@/lib/types";
 import { initialMessages } from "@/lib/mockData";
 import { newSessionId, streamAgentReply } from "@/lib/agentClient";
@@ -13,7 +15,7 @@ import { extractHighlights } from "@/lib/highlights";
 import { extractChoices } from "@/lib/choices";
 import { dbg } from "@/lib/debug";
 
-type View = "chat" | "matrix" | "report";
+type View = "chat" | "matrix" | "report" | "visitors";
 
 function timestampNow() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -209,6 +211,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-ink-950 text-slate-200">
+      <EmailCaptureModal />
       <Sidebar
         activeView={view}
         onNavigate={(v) => {
@@ -268,6 +271,8 @@ export default function Home() {
         {view === "matrix" && <SolutionMatrix onBack={() => setView("chat")} />}
 
         {view === "report" && <ClientApproachReport onBack={() => setView("chat")} />}
+
+        {view === "visitors" && <VisitorsView onBack={() => setView("chat")} />}
       </main>
     </div>
   );

@@ -7,6 +7,8 @@ import { STATUSES } from './business_cases/types';
 import BusinessCaseDrawer from './business_cases/BusinessCaseDrawer';
 import ConfirmDialog from './ConfirmDialog';
 import { Icon } from './govern/icons';
+import ExportReportButton from './ExportReportButton';
+import { buildBusinessCaseReport } from './business_cases/report';
 
 type SortKey = 'npv' | 'irr' | 'risk' | 'updated' | 'name';
 
@@ -333,6 +335,7 @@ function BCCard({ bc, onEdit, onDelete }: { bc: BusinessCase; onEdit: () => void
           </Link>
         </div>
         <div className="flex gap-1">
+          <ExportReportButton getDefinition={() => buildBusinessCaseReport(bc)} variant="link" label="Export" title="Download this business case as a PDF report" />
           <button onClick={onEdit} className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md hover:bg-blue-100">Edit</button>
           <button onClick={onDelete} className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded-md hover:bg-red-100">Delete</button>
         </div>

@@ -1,0 +1,42 @@
+{
+  "customer_id": "CUST005",
+  "credit_score": 480,
+  "credit_rating": "C",
+  "existing_facilities": [
+    {
+      "type": "Term Loan",
+      "limit": 8000000,
+      "utilized": 7800000,
+      "status": "past_due",
+      "bank": "Barclays"
+    }
+  ],
+  "payment_history": {
+    "payments_on_time": 30,
+    "payments_total": 42,
+    "on_time_payments": 30,
+    "late_payments": 8,
+    "defaults": 4,
+    "average_days_to_pay": 62
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "USD",
+    "total_assets": 18000000,
+    "total_liabilities": 16000000,
+    "current_assets": 4000000,
+    "current_liabilities": 6000000,
+    "revenue": 14000000,
+    "net_income": -420000,
+    "debt_to_equity": 8.0,
+    "current_ratio": 0.67,
+    "net_margin": -0.03
+  },
+  "agent_claims": {
+    "de_ratio": 8.0,
+    "current_ratio": 0.67,
+    "net_margin": -0.03,
+    "payment_pct": 71.43
+  },
+  "credit_inquiries_last_12_months": 9
+}

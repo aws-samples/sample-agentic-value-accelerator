@@ -45,8 +45,14 @@ export default function ConfigGuardrailsSideBySide() {
   }, []);
 
   const configRules = configData?.failing_rules ?? [];
-  const guardrails = guardrailsData?.guardrails ?? [];
-  const byPolicy = (guardrailsData?.by_policy ?? []) as PolicyBreakdown[];
+  // Map the live AWS policy-breakdown shape (label/dimension) onto the local
+  // PolicyBreakdown shape used by this panel (display_name/description).
+  const byPolicy: PolicyBreakdown[] = (guardrailsData?.by_policy ?? []).map(p => ({
+    policy_type: p.policy_type,
+    display_name: p.label,
+    description: p.dimension,
+    interventions: p.interventions,
+  }));
 
   const configStats = useMemo(() => {
     if (!configData?.live) return null;

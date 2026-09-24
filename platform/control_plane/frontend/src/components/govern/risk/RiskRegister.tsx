@@ -10,7 +10,7 @@
  * risks in the register, providing a unified view across all risk sources.
  */
 
-import { useState, useMemo, useId } from 'react';
+import { useState, useMemo, useId, useEffect } from 'react';
 import {
   RISKS as INITIAL_RISKS, CONTROLS, RISK_CATEGORIES, getRiskClass,
   LIKELIHOOD_LABELS, SEVERITY_LABELS,
@@ -18,6 +18,7 @@ import {
 } from './riskData';
 import { rowButtonProps } from '../a11y';
 import Drawer from '../Drawer';
+import { Icon, type IconName } from '../icons';
 import { usePersistedState } from '../usePersistedState';
 import { useGovernanceAggregator, USE_CASE_RISK_CATEGORIES } from '../useGovernanceAggregator';
 import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
@@ -236,7 +237,7 @@ export default function RiskRegister() {
             >
               <option value="all">All Categories</option>
               {RISK_CATEGORIES.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
           </div>
@@ -392,7 +393,7 @@ export default function RiskRegister() {
                     </td>
                     <td className="py-2.5 px-3">
                       <span className="inline-flex items-center gap-1 text-xs" style={{ color: cat?.color }}>
-                        <span>{cat?.icon}</span>
+                        {cat && <Icon name={cat.icon as IconName} className="w-3.5 h-3.5" />}
                         <span>{cat?.name}</span>
                       </span>
                     </td>
@@ -672,12 +673,8 @@ interface RiskFormDrawerProps {
   initialData?: Risk | null;
 }
 
-function RiskFormDrawer({ open, onClose, onSave, existingIds, initialData }: RiskFormDrawerProps) {
-  const isEditing = !!initialData;
-  const today = new Date().toISOString().split('T')[0];
-  const fid = useId();
-
-  const [form, setForm] = useState<Partial<Risk>>(() => initialData || {
+function buildDefaultRiskForm(today: string): Partial<Risk> {
+  return {
     title: '',
     description: '',
     category: 'operational' as RiskCategory,
@@ -695,14 +692,22 @@ function RiskFormDrawer({ open, onClose, onSave, existingIds, initialData }: Ris
     lastReviewed: today,
     nextReview: '',
     notes: '',
-  });
+  };
+}
 
-  // Reset form when initialData changes
-  useState(() => {
-    if (initialData) {
-      setForm(initialData);
-    }
-  });
+function RiskFormDrawer({ open, onClose, onSave, existingIds, initialData }: RiskFormDrawerProps) {
+  const isEditing = !!initialData;
+  const today = new Date().toISOString().split('T')[0];
+  const fid = useId();
+
+  const [form, setForm] = useState<Partial<Risk>>(() => initialData ?? buildDefaultRiskForm(today));
+
+  // Keep the form in sync with the selected risk. This drawer stays mounted, so
+  // without this effect editing a different risk would show the previously
+  // loaded (stale) fields, and re-opening the Add drawer would keep old values.
+  useEffect(() => {
+    setForm(initialData ?? buildDefaultRiskForm(today));
+  }, [initialData, open, today]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -788,7 +793,7 @@ function RiskFormDrawer({ open, onClose, onSave, existingIds, initialData }: Ris
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {RISK_CATEGORIES.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             </div>

@@ -7,6 +7,11 @@ output "cloudfront_url" {
   value       = module.cloudfront.distribution_url
 }
 
+output "leads_table_name" {
+  description = "DynamoDB table capturing self-reported visitor emails"
+  value       = module.leads.table_name
+}
+
 output "agent_runtime_arn" {
   description = "Bedrock AgentCore Runtime ARN"
   value       = module.agentcore.agent_runtime_arn

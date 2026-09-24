@@ -8,12 +8,12 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from 'recharts';
 import GovernPageLayout from '../GovernPageLayout';
 import { MockDataBadge } from '../DataSourceIndicator';
 import StatCard from '../StatCard';
 import { Icon } from '../icons';
+import LiveRuntimeSafety from './LiveRuntimeSafety';
 import {
   FORBIDDEN_TARGETS,
   TARGET_TYPE_META,
@@ -23,9 +23,6 @@ import {
   getUnresolvedDriftEvents,
   getRecentlyTriggeredTargets,
   computeFleetReliability,
-  type ForbiddenTarget,
-  type AlignmentDriftEvent,
-  type ReliabilityMetrics,
 } from './agentSafetyControls';
 
 const tooltipStyle = {
@@ -55,6 +52,10 @@ export default function RuntimeSafetyControls() {
       backPath="/govern/safety"
       backLabel="AI Safety"
     >
+      {/* Live runtime safety telemetry — real Bedrock invocation outcomes.
+          Surfaced above the illustrative research-derived controls below. */}
+      <LiveRuntimeSafety />
+
       {/* Tab nav */}
       <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-6 w-fit">
         {([

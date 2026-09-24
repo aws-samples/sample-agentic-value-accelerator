@@ -240,9 +240,16 @@ export function computeAggregate(
 
   const total = campaigns.reduce((s, c) => s + totalFindings(c.findings), 0);
 
+  // Findings-weighted remediation: Σ(rate × totalFindings) / Σ(totalFindings).
+  // A campaign with more findings pulls the headline harder than a small one, so a
+  // low-remediation campaign carrying most of the findings isn't masked by a tidy
+  // simple average across campaigns.
   const active = campaigns.filter(c => c.status !== 'planned');
-  const meanRemediation = active.length
-    ? Math.round(active.reduce((s, c) => s + c.remediationRate, 0) / active.length)
+  const weightDenom = active.reduce((s, c) => s + totalFindings(c.findings), 0);
+  const meanRemediation = weightDenom
+    ? Math.round(
+        active.reduce((s, c) => s + c.remediationRate * totalFindings(c.findings), 0) / weightDenom,
+      )
     : 0;
 
   // Benchmarks "passing" = numeric benchmarks with a threshold where every model

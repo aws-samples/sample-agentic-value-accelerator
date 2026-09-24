@@ -4,7 +4,6 @@ Pydantic schemas for Project endpoints
 
 from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict
-from datetime import datetime
 import re
 
 
@@ -73,7 +72,12 @@ class ProjectCreate(BaseModel):
         return v
 
     class Config:
-        schema_extra = {
+        # `json_schema_extra`, not `schema_extra`. The v1 spelling is not an alias in
+        # pydantic v2 - it is silently DROPPED, so both examples in this file were absent
+        # from /openapi.json while still sitting here looking authored. Verified against the
+        # pydantic 2.9.2 in this image. `class Config` itself is deprecated but still
+        # honoured, so only the key needed changing.
+        json_schema_extra = {
             "example": {
                 "project_name": "my-kyc-agent",
                 "framework": "langraph",
@@ -105,7 +109,8 @@ class ProjectResponse(BaseModel):
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
 
     class Config:
-        schema_extra = {
+        # See the note on the v1/v2 key rename at the first Config block in this file.
+        json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "project_name": "my-kyc-agent",

@@ -15,12 +15,14 @@ import csv
 import io
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, NamedTuple, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import boto3
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from core import region_config
 from core.config import settings
 from core.rbac import Role, require_role
 from services.litellm_provisioning import (
@@ -62,10 +64,36 @@ class ModelInfo(BaseModel):
 
 
 class ModelsResponse(BaseModel):
-    """Response for GET /api/gateway/models."""
+    """Response for GET /api/gateway/models.
+
+    Carries two SEPARATE honest-degrade triples because the body is two
+    independent measurements that fail independently: the catalog rows
+    themselves and the per-model spend enrichment. Collapsing them into one
+    live/source/note would force the response to lie about whichever half
+    disagreed - a live catalog with dead spend is the common case.
+    """
 
     models: List[ModelInfo]
     total_count: int
+
+    # Whether `models` was really read from the account's DynamoDB catalog, or
+    # is AVA's compiled-in _default_model_catalog(). The fallback's prices and
+    # token limits are source-code constants, so a caller that renders them as
+    # "the models configured in this account" is asserting something unmeasured.
+    catalog_live: bool = False
+    catalog_source: str = "unknown"
+    catalog_note: Optional[str] = None
+
+    # Whether every ModelInfo.spend_usd above is a measured figure. When this is
+    # false the spend scan never ran (or never finished) and every spend_usd is a
+    # placeholder 0.0 - NOT a measured "this model cost nothing". spend_usd stays
+    # a float rather than going null because the UI formatter does
+    # `usd.toFixed()` unguarded and null would coerce past its `=== 0` check and
+    # throw, so the disclaimer has to ride alongside the number instead of
+    # replacing it. Renderers must badge the column when spend_live is false.
+    spend_live: bool = False
+    spend_source: str = "unknown"
+    spend_note: Optional[str] = None
 
 
 class SpendSummaryRecord(BaseModel):
@@ -91,6 +119,16 @@ class SpendSummaryResponse(BaseModel):
     total_requests: int
     period: str
     filters: Dict[str, Optional[str]] = {}
+
+    # Honest-degrade triple, same shape as the govern_* services. This body is
+    # only ever produced by a scan that actually reached the table, so live is
+    # true here and the note explains a measured zero or excluded rows; the
+    # not-configured and scan-failed paths return 503 rather than this model,
+    # because total_cost_usd=0.0 over an empty records list reads exactly like a
+    # period with no spend.
+    live: bool = False
+    source: str = "unknown"
+    note: Optional[str] = None
 
 
 class GatewayHealthResponse(BaseModel):
@@ -252,9 +290,13 @@ def _get_finops_writer():
         table_name = settings.FINOPS_SPEND_TABLE_NAME
         if not table_name:
             return None
+        # table_region(), not AWS_REGION: the writer must follow the same relocation knob as
+        # the reader in govern_cost_service. Setting FINOPS_SPEND_TABLE_REGION while this one
+        # stayed on AWS_REGION would write to one region and read from another - exactly the
+        # split-brain that region_config.table_region() documents.
         _finops_writer = FinOpsDataStoreWriter(
             table_name=table_name,
-            region=settings.AWS_REGION,
+            region=region_config.table_region("FINOPS_SPEND"),
         )
     return _finops_writer
 
@@ -426,20 +468,21 @@ async def list_models(_=Depends(require_role(Role.VIEWER))):
 
     Returns models from the Config Generator's model catalog, enriched with
     spend data from the FinOps data store when available.
+
+    The catalog and the spend enrichment fail independently, so the response
+    carries a separate live/source/note triple for each. Both are served even
+    when one degrades: failing the whole endpoint because spend was unreachable
+    would take the model list down with it.
     """
-    from services.config_generator import ConfigGenerator, ModelCatalogEntry
-
-    config_gen = _get_config_generator()
-
-    # Load model catalog from DynamoDB or fallback to a static catalog
-    model_catalog = _load_model_catalog()
-
-    # Optionally enrich with per-model spend data
-    spend_by_model = _get_spend_by_model()
+    catalog = _load_model_catalog()
+    spend = _get_spend_by_model()
 
     models = []
-    for entry in model_catalog:
-        spend = spend_by_model.get(entry.model_id, 0.0)
+    for entry in catalog.entries:
+        # When spend.live is false this is always 0.0 and is NOT measured spend;
+        # spend_live / spend_note on the response say so. It cannot be null here
+        # because the catalog UI calls .toFixed() on it unguarded.
+        spend_usd = spend.spend.get(entry.model_id, 0.0)
         models.append(
             ModelInfo(
                 model_id=entry.model_id,
@@ -452,11 +495,20 @@ async def list_models(_=Depends(require_role(Role.VIEWER))):
                 output_cost_per_token=entry.output_cost_per_token,
                 max_input_tokens=entry.max_input_tokens,
                 max_output_tokens=entry.max_output_tokens,
-                spend_usd=spend,
+                spend_usd=spend_usd,
             )
         )
 
-    return ModelsResponse(models=models, total_count=len(models))
+    return ModelsResponse(
+        models=models,
+        total_count=len(models),
+        catalog_live=catalog.live,
+        catalog_source=catalog.source,
+        catalog_note=catalog.note,
+        spend_live=spend.live,
+        spend_source=spend.source,
+        spend_note=spend.note,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -477,8 +529,12 @@ async def get_spend_summary(
 
     Reads aggregated spend data from the FinOps DynamoDB table and returns
     filtered, summarized records.
+
+    Raises:
+        HTTPException: 503 when the spend store is unconfigured or unreachable,
+            so that a query which never ran is never served as a total.
     """
-    records = _query_spend_records(
+    result = _query_spend_records(
         use_case=use_case,
         team=team,
         model=model,
@@ -486,11 +542,20 @@ async def get_spend_summary(
         days=days,
     )
 
-    total_cost = sum(r.total_cost_usd for r in records)
-    total_requests = sum(r.request_count for r in records)
+    if not result.live:
+        # 503 rather than a zeroed 200 body. An empty records list sums to
+        # total_cost_usd=0.0 / total_requests=0, which is byte-for-byte what a period
+        # with genuinely no spend returns - so the dashboard drew a flat $0.00 cost
+        # trend over a scan that had errored, with nothing marking it as unmeasured.
+        # A non-2xx also reaches the user without any frontend change: the existing
+        # axios caller routes it to its error banner instead of the charts.
+        raise HTTPException(status_code=503, detail=result.note or "Spend data is unavailable.")
+
+    total_cost = sum(r.total_cost_usd for r in result.records)
+    total_requests = sum(r.request_count for r in result.records)
 
     return SpendSummaryResponse(
-        records=records,
+        records=result.records,
         total_cost_usd=round(total_cost, 6),
         total_requests=total_requests,
         period=period,
@@ -499,6 +564,9 @@ async def get_spend_summary(
             "team": team,
             "model": model,
         },
+        live=result.live,
+        source=result.source,
+        note=result.note,
     )
 
 
@@ -519,14 +587,31 @@ async def export_spend_csv(
     """Export spend data as CSV (daily/weekly/monthly).
 
     Returns a downloadable CSV file with spend records matching the filters.
+
+    Raises:
+        HTTPException: 503 when the spend store is unconfigured or unreachable.
     """
-    records = _query_spend_records(
+    result = _query_spend_records(
         use_case=use_case,
         team=team,
         model=model,
         period=period,
         days=days,
     )
+
+    if not result.live:
+        # The worst place in this file to serve an unmeasured zero. A CSV detaches from
+        # the API - it becomes a file on someone's disk and then a row in a spreadsheet
+        # reconciled against a ledger - and it has no field to carry live/source/note.
+        # A header-only CSV therefore reads as an authoritative "no spend this period"
+        # with no way left to discover the scan had failed. Refuse instead: the existing
+        # blob-download caller treats a non-2xx as an error and writes no file at all.
+        raise HTTPException(
+            status_code=503,
+            detail=result.note or "Spend data is unavailable, so no export can be produced.",
+        )
+
+    records = result.records
 
     # Build CSV in memory
     output = io.StringIO()
@@ -629,17 +714,46 @@ async def regenerate_config(
     validates it, publishes to S3, and triggers an ECS rolling update.
     """
     config_gen = _get_config_generator()
-    model_catalog = _load_model_catalog()
+    catalog = _load_model_catalog()
 
-    if not model_catalog:
+    if catalog.source == "unavailable-fallback":
+        # Refuse when the catalog READ FAILED. _load_model_catalog() substitutes AVA's
+        # eight compiled-in models on failure, and this route publishes whatever it is
+        # given to S3 and then triggers an ECS rolling update - so an unreachable table
+        # would have silently overwritten the live gateway's real model set with
+        # source-code defaults, deleting every model the account had configured.
+        # Deliberately keyed on the failed-read source only: "not-configured" and
+        # "default-catalog" are measured states (nothing is seeded yet), which is a
+        # legitimate bootstrap, so those still publish - loudly, below.
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Refusing to regenerate gateway config: the model catalog could not be "
+                f"read, so publishing would overwrite the live gateway with AVA's "
+                f"compiled-in defaults. {catalog.note}"
+            ),
+        )
+
+    if not catalog.entries:
         raise HTTPException(
             status_code=400,
             detail="Model catalog is empty. Cannot generate config.",
         )
 
+    if not catalog.live:
+        # Measured-but-unseeded. Allowed, because it is how a new deployment bootstraps,
+        # but an operator must be able to find out afterwards that the gateway is running
+        # compiled-in defaults rather than a curated catalog.
+        logger.warning(
+            "Regenerating gateway config from AVA's compiled-in default catalog "
+            "(catalog_source=%s): %s",
+            catalog.source,
+            catalog.note,
+        )
+
     try:
         # Generate config
-        config_yaml = config_gen.generate(model_catalog)
+        config_yaml = config_gen.generate(catalog.entries)
 
         # Validate
         validation = config_gen.validate(config_yaml)
@@ -683,57 +797,266 @@ async def regenerate_config(
 # ---------------------------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------------------------
+#
+# The three helpers below used to return a bare list / dict and swallow every
+# failure into an empty one. An empty container is not a measurement: a caller
+# handed `{}` cannot tell "we scanned the table and the account spent nothing"
+# from "the scan never ran", and both rendered as $0.00. Each helper now returns
+# its rows alongside the repo's live/source/note triple so the route can say
+# which of the two happened.
 
 
-def _load_model_catalog():
-    """Load the model catalog from DynamoDB or provide defaults.
+class _CatalogResult(NamedTuple):
+    """A model catalog plus whether it was really read from the account.
 
-    Attempts to load from the deployments table. Falls back to a default
-    catalog based on AVA's standard Bedrock models if unavailable.
+    `_load_model_catalog()` returned a bare list, so the compiled-in
+    `_default_model_catalog()` fallback was indistinguishable from a catalog
+    genuinely read out of DynamoDB - /gateway/models presented eight
+    source-code constants (prices, token limits, regions) as this deployment's
+    configuration, and /gateway/config/regenerate would publish them to the
+    live gateway.
+    """
+
+    entries: list
+    live: bool
+    source: str
+    note: Optional[str]
+
+
+class _SpendByModelResult(NamedTuple):
+    """Per-model spend totals plus whether the scan actually ran.
+
+    `_get_spend_by_model()` returned `{}` on any failure, so `list_models()`
+    resolved every model to spend_usd=0.0 and the model catalog rendered
+    "$0.00" per model for a query that never executed - a confidently wrong
+    financial number carrying no hint that it was unmeasured.
+    """
+
+    spend: Dict[str, float]
+    live: bool
+    source: str
+    note: Optional[str]
+
+
+class _SpendRecordsResult(NamedTuple):
+    """Spend rows plus whether the scan actually ran.
+
+    Same defect as `_SpendByModelResult`, one layer up: `[]` from a failed scan
+    summed to total_cost_usd=0.0 / total_requests=0, so the Spend dashboard drew
+    a flat zero cost trend and a $0.00 header over a query that had errored.
+    """
+
+    records: List[SpendSummaryRecord]
+    live: bool
+    source: str
+    note: Optional[str]
+
+
+def _default_inference_region() -> str:
+    """Region a catalog row with no explicit region routes model INFERENCE to.
+
+    Tier 2 (the governed fleet), NOT tier 1 (AVA's own control plane). See
+    core.region_config for the tier definitions. `ModelCatalogEntry.region` is consumed
+    by ConfigGenerator._build_model_list() as litellm_params["aws_region_name"] for
+    bedrock providers and as the api_base host
+    (https://bedrock-mantle.{region}.api.aws/v1) for bedrock-mantle, so this value is
+    where customer prompts are actually sent. That is the governed estate by definition.
+
+    Why one function instead of two independent expressions: a row that omits `region`
+    must resolve to the SAME region whether it came out of the DynamoDB catalog or out
+    of AVA's compiled-in `_default_model_catalog()`. When the two paths derived the
+    default separately they disagreed - the table path used GOVERN_AWS_REGION while
+    every compiled-in entry carried the literal "us-east-2" - so a catalog-read failure
+    silently relocated inference to a different region than the same row would have used
+    on the happy path. Nothing in the response changed shape, so the swap was invisible.
+
+    `settings.GOVERN_AWS_REGION` first rather than `get_governed_regions()[0]` outright:
+    a catalog row carries exactly one region, and [0] of the persisted governed set
+    would make the inference target depend on the order somebody happened to add regions
+    to governance. The governed set is consulted only when GOVERN_AWS_REGION is
+    explicitly blank, and it is consulted rather than emitting "" because an empty
+    aws_region_name is not an error - botocore falls back to the ambient/profile region,
+    which is the control-plane region again, i.e. the same tier-1 mistake with no
+    literal left to grep for. get_governed_regions() is guaranteed non-empty (its own
+    _fallback() always returns a one-element list), so [0] is safe.
+
+    Verified behaviour (GOVERN_REGIONS_CONFIG_PATH pointed at a two-region file):
+      GOVERN_AWS_REGION=us-east-1                     -> us-east-1  (explicit wins)
+      GOVERN_AWS_REGION unset, governed set present   -> eu-west-1  (first governed)
+      GOVERN_AWS_REGION unset, no governed-set file   -> us-east-2  (= AWS_REGION)
+    That last row is region_config._fallback()'s documented tier-2 contract, not a
+    regression of this fix: with tier 2 entirely unconfigured there is no governed
+    region to name, and deferring to the one declared fallback beats re-deciding it
+    here.
+
+    The branch is taken on `GOVERN_AWS_REGION_DECLARED`, not on the region string being
+    empty, and the difference is the whole point. GOVERN_AWS_REGION's default became ""
+    (follow AWS_REGION) and `Settings.__init__` now fills it, so by the time anything reads
+    it the string is always non-empty - testing emptiness here would have made the middle
+    row unreachable and quietly routed customer prompts to the CONTROL-PLANE region for
+    every deployer who governs a region they do not host AVA in. The flag records which of
+    the two happened; the string alone can no longer tell you.
+    """
+    if settings.GOVERN_AWS_REGION_DECLARED:
+        return settings.GOVERN_AWS_REGION.strip()
+    return region_config.get_governed_regions()[0]
+
+
+def _load_model_catalog() -> _CatalogResult:
+    """Load the model catalog from DynamoDB, or fall back to compiled-in defaults.
+
+    Returns the catalog together with whether it was really read from the
+    account, so no caller can present the fallback as this account's config.
     """
     from services.config_generator import ModelCatalogEntry
 
-    # Try loading from DynamoDB model catalog table
+    table_name = settings.DEPLOYMENTS_TABLE_NAME
+    # table_region(), not settings.AWS_REGION directly, so DEPLOYMENTS_TABLE_REGION is
+    # honoured here as it is everywhere else this table is read. Reading it raw meant
+    # the override silently did nothing on this one path.
+    region = region_config.table_region("DEPLOYMENTS")
+
+    # An unconfigured table is a configuration state, not a failure. It needs its own
+    # branch because boto3 accepts `Table("")` happily and only raises
+    # ParamValidationError ("Invalid length for parameter TableName") once the query
+    # runs - so without this guard the misconfiguration arrived from inside the try
+    # below and got reported as an AWS outage.
+    if not table_name:
+        return _CatalogResult(
+            _default_model_catalog(),
+            live=False,
+            source="not-configured",
+            note=(
+                "DEPLOYMENTS_TABLE_NAME is not configured, so these are AVA's "
+                "compiled-in default models, not this account's catalog."
+            ),
+        )
+
     try:
-        dynamodb = boto3.resource("dynamodb", region_name=settings.AWS_REGION)
-        table = dynamodb.Table(settings.DEPLOYMENTS_TABLE_NAME)
+        dynamodb = boto3.resource("dynamodb", region_name=region)
+        table = dynamodb.Table(table_name)
 
         response = table.query(
             KeyConditionExpression="pk = :pk",
             ExpressionAttributeValues={":pk": "MODEL_CATALOG"},
         )
-
         items = response.get("Items", [])
-        if items:
-            catalog = []
-            for item in items:
-                catalog.append(
-                    ModelCatalogEntry(
-                        model_id=item.get("model_id", ""),
-                        display_name=item.get("display_name", ""),
-                        provider=item.get("provider", "bedrock"),
-                        litellm_prefix=item.get("litellm_prefix", "bedrock/"),
-                        region=item.get("region", settings.AWS_REGION),
-                        mode=item.get("mode", "chat"),
-                        input_cost_per_token=float(item.get("input_cost_per_token", 0)),
-                        output_cost_per_token=float(item.get("output_cost_per_token", 0)),
-                        max_input_tokens=int(item.get("max_input_tokens", 0)),
-                        max_output_tokens=int(item.get("max_output_tokens", 0)),
-                        active=item.get("active", True),
-                        fallback_models=item.get("fallback_models", []),
-                    )
-                )
-            return catalog
-    except Exception as e:
-        logger.debug("Could not load model catalog from DynamoDB: %s", str(e))
 
-    # Return default catalog with standard Bedrock models
-    return _default_model_catalog()
+        catalog = []
+        for item in items:
+            catalog.append(
+                ModelCatalogEntry(
+                    model_id=item.get("model_id", ""),
+                    display_name=item.get("display_name", ""),
+                    provider=item.get("provider", "bedrock"),
+                    litellm_prefix=item.get("litellm_prefix", "bedrock/"),
+                    # Tier 2 (governed fleet), not AWS_REGION: this field becomes
+                    # litellm_params["aws_region_name"] and the Bedrock api_base, so it
+                    # is where model INFERENCE is routed - a governed-fleet region, not
+                    # the control plane's. Defaulting it to AWS_REGION sent catalog rows
+                    # with no explicit region to us-east-2, which holds no guardrails.
+                    #
+                    # `or`, not `.get(key, default)`: DynamoDB happily stores this
+                    # attribute as NULL or "", and `.get("region", default)` returns the
+                    # stored None/"" rather than the default in both cases. None then
+                    # formats into the Mantle api_base as the literal string "None"
+                    # (https://bedrock-mantle.None.api.aws/v1) and "" leaves
+                    # aws_region_name empty so botocore falls back to the ambient region.
+                    # Neither raises here; both surface later as a routing failure or a
+                    # silently retargeted call.
+                    region=item.get("region") or _default_inference_region(),
+                    mode=item.get("mode", "chat"),
+                    input_cost_per_token=float(item.get("input_cost_per_token", 0)),
+                    output_cost_per_token=float(item.get("output_cost_per_token", 0)),
+                    max_input_tokens=int(item.get("max_input_tokens", 0)),
+                    max_output_tokens=int(item.get("max_output_tokens", 0)),
+                    active=item.get("active", True),
+                    fallback_models=item.get("fallback_models", []),
+                )
+            )
+        # Deliberately NOT a per-row skip like the spend scans use: this catalog is what
+        # /gateway/config/regenerate publishes to the live gateway, so quietly dropping a
+        # malformed row would quietly remove that model from the gateway. One bad row
+        # therefore fails the whole read and lands in the except below, which reports
+        # catalog_live=false instead of serving a silently short catalog.
+    except Exception as e:
+        # WARNING, not debug. The app logs at INFO, so the old logger.debug meant a
+        # ResourceNotFoundException, an AccessDeniedException, a throttle or a wrong-region
+        # setting produced no log line at all while the response silently swapped in
+        # hardcoded models. Name the exception type, the table and the region: "Could not
+        # load model catalog" gave a reader nothing to act on. No exc_info - this fires
+        # once per request and a traceback per request buries the signal.
+        logger.warning(
+            "Model catalog read failed (%s) on DynamoDB table %r in %s: %s. "
+            "/gateway/models falls back to AVA's compiled-in default catalog with "
+            "catalog_live=false, and /gateway/config/regenerate will refuse to publish.",
+            type(e).__name__,
+            table_name,
+            region,
+            e,
+        )
+        return _CatalogResult(
+            _default_model_catalog(),
+            live=False,
+            source="unavailable-fallback",
+            note=(
+                f"Model catalog table '{table_name}' in {region} is unreachable "
+                f"({type(e).__name__}); showing AVA's compiled-in default models. If the "
+                "table exists in another region, set DEPLOYMENTS_TABLE_REGION."
+            ),
+        )
+
+    if not catalog:
+        # A reachable table with no MODEL_CATALOG rows IS a measured answer, but the rows
+        # we hand back are still the compiled-in defaults, so this cannot claim live -
+        # only that the emptiness was measured rather than guessed. The distinct source
+        # value is what lets regenerate_config treat this as a bootstrap state and the
+        # unavailable-fallback case above as a refusal.
+        return _CatalogResult(
+            _default_model_catalog(),
+            live=False,
+            source="default-catalog",
+            note=(
+                f"No MODEL_CATALOG rows in '{table_name}' ({region}); showing AVA's "
+                "compiled-in default models. Seed the catalog to manage models per account."
+            ),
+        )
+
+    return _CatalogResult(catalog, live=True, source="deployments-table", note=None)
 
 
 def _default_model_catalog():
-    """Return a default model catalog with standard AVA Bedrock models."""
+    """Return a default model catalog with standard AVA Bedrock models.
+
+    Every entry below used to hardcode region="us-east-2". That literal is the demo
+    account's AWS_REGION - tier 1, the control plane - while the governed fleet lives in
+    GOVERN_AWS_REGION=us-east-1. The literal was therefore wrong by exactly one region
+    tier, and nothing anywhere raised: Bedrock in us-east-2 serves these model ids, so
+    the call returns 200 and the response carries no hint that inference left the
+    governed estate.
+
+    Verified read-only against the demo account on 2026-09-14:
+      - `bedrock list-guardrails`: us-east-1 -> 7 guardrails (FSI-Best-Practice-Guardrail
+        and friends); us-east-2 -> 0. Guardrails are regional and cannot be attached
+        across regions, so a model pinned to us-east-2 runs with no guardrail at all.
+      - `bedrock get-model-invocation-logging-configuration`: us-east-1 -> CloudWatch
+        /aws/bedrock/model-invocations plus an S3 sink; us-east-2 -> empty body, exit 0.
+        That empty-body-exit-0 is the whole problem in one API call: invocation logging
+        is simply off, and asking about it does not error.
+      - `bedrock list-inference-profiles`: 75 profiles in us-east-1 vs 73 in us-east-2.
+    Combined blast radius: /gateway/config/regenerate publishes this catalog to the live
+    LiteLLM gateway, so on any catalog-read failure the gateway was reconfigured to send
+    real prompts to a region with no guardrails and no invocation logging - while the
+    Govern dashboards, which read the us-east-1 log group, kept reporting zero
+    invocations. Ungoverned traffic that also looks like no traffic.
+
+    The region is resolved once here rather than per entry so a future entry cannot
+    reintroduce a literal by copy-paste, and it is resolved at call time (not import
+    time) so an env change is picked up on the next request without a restart.
+    """
     from services.config_generator import ModelCatalogEntry
+
+    region = _default_inference_region()
 
     return [
         ModelCatalogEntry(
@@ -741,7 +1064,7 @@ def _default_model_catalog():
             display_name="Claude Opus 4.8",
             provider="bedrock",
             litellm_prefix="bedrock/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.000015,
             output_cost_per_token=0.000075,
@@ -755,7 +1078,7 @@ def _default_model_catalog():
             display_name="Claude Sonnet 4.6",
             provider="bedrock",
             litellm_prefix="bedrock/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.000003,
             output_cost_per_token=0.000015,
@@ -769,7 +1092,7 @@ def _default_model_catalog():
             display_name="Claude Haiku 4.5",
             provider="bedrock",
             litellm_prefix="bedrock/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.0000008,
             output_cost_per_token=0.000004,
@@ -782,7 +1105,7 @@ def _default_model_catalog():
             display_name="GPT-5.5",
             provider="bedrock-mantle",
             litellm_prefix="bedrock_mantle/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.0000055,
             output_cost_per_token=0.000033,
@@ -795,7 +1118,7 @@ def _default_model_catalog():
             display_name="Amazon Nova Pro",
             provider="bedrock",
             litellm_prefix="bedrock/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.0000008,
             output_cost_per_token=0.0000032,
@@ -808,7 +1131,7 @@ def _default_model_catalog():
             display_name="Amazon Nova Lite",
             provider="bedrock",
             litellm_prefix="bedrock/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.00000006,
             output_cost_per_token=0.00000024,
@@ -821,7 +1144,7 @@ def _default_model_catalog():
             display_name="Amazon Nova Lite v2",
             provider="bedrock",
             litellm_prefix="bedrock/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.00000004,
             output_cost_per_token=0.00000016,
@@ -834,7 +1157,7 @@ def _default_model_catalog():
             display_name="GPT-5.4",
             provider="bedrock-mantle",
             litellm_prefix="bedrock_mantle/",
-            region="us-east-2",
+            region=region,
             mode="chat",
             input_cost_per_token=0.00000275,
             output_cost_per_token=0.0000165,
@@ -845,20 +1168,41 @@ def _default_model_catalog():
     ]
 
 
-def _get_spend_by_model() -> Dict[str, float]:
+def _get_spend_by_model() -> _SpendByModelResult:
     """Get total spend per model from the FinOps data store.
 
-    Queries DynamoDB for the most recent daily aggregated spend records
-    and sums them per model. Paginates until LastEvaluatedKey is exhausted.
+    Scans the daily aggregated spend rows and sums cost per model, paginating
+    until LastEvaluatedKey is exhausted. Reports whether the scan actually ran,
+    so no caller can render an unmeasured 0.0 as currency.
     """
-    try:
-        import boto3
-        from boto3.dynamodb.conditions import Key
+    table_name = settings.FINOPS_SPEND_TABLE_NAME
+    # Reader must resolve the spend table's home the same way the writer does.
+    region = region_config.table_region("FINOPS_SPEND")
 
-        dynamodb = boto3.resource("dynamodb", region_name=settings.AWS_REGION)
-        table = dynamodb.Table(settings.FINOPS_SPEND_TABLE_NAME)
+    # FINOPS_SPEND_TABLE_NAME defaults to "" in core.config, and boto3 accepts
+    # `Table("")` without complaint - it only raises ParamValidationError ("Invalid
+    # length for parameter TableName") once scan() runs. Without this guard an unset
+    # setting therefore arrived as an exception from the AWS call and got reported as
+    # an unreachable table, sending the reader to look for an outage or an IAM gap.
+    if not table_name:
+        return _SpendByModelResult(
+            {},
+            live=False,
+            source="not-configured",
+            note=(
+                "Per-model spend store not configured - set FINOPS_SPEND_TABLE_NAME and run "
+                "the spend aggregator. The spend figures shown are placeholders, not $0.00 of "
+                "measured usage."
+            ),
+        )
+
+    try:
+        dynamodb = boto3.resource("dynamodb", region_name=region)
+        table = dynamodb.Table(table_name)
 
         spend_by_model: Dict[str, float] = {}
+        unattributed_usd = 0.0
+        skipped_rows = 0
         scan_kwargs = {
             "FilterExpression": "begins_with(pk, :prefix) AND #p = :period",
             "ExpressionAttributeNames": {"#p": "period"},
@@ -869,25 +1213,93 @@ def _get_spend_by_model() -> Dict[str, float]:
             "Limit": 500,
         }
 
-        # Paginate until all items are retrieved
         while True:
             response = table.scan(**scan_kwargs)
             for item in response.get("Items", []):
-                model_id = item.get("model_id", "")
-                cost = float(item.get("total_cost_usd", 0))
+                try:
+                    # `or 0` before float(): DynamoDB can hold a NULL or an empty string
+                    # here, and float(None) raises TypeError. Previously that TypeError
+                    # escaped to the bare except below and returned {}, so ONE malformed
+                    # row zeroed the reported spend of EVERY model. Skip and count the
+                    # row instead, and disclose the count in the note.
+                    cost = float(item.get("total_cost_usd") or 0)
+                except (TypeError, ValueError):
+                    skipped_rows += 1
+                    continue
+
+                raw_model = item.get("model_id")
+                if raw_model:
+                    model_id = str(raw_model)
+                else:
+                    # Was `item.get("model_id", "")`, which bucketed unattributed spend
+                    # under "" - and since no catalog entry has an empty model_id, the
+                    # caller's .get(entry.model_id) never matched it and the money simply
+                    # vanished from the response. Bucket it under a name and total it, so
+                    # the note can state how much spend the per-model figures exclude.
+                    model_id = "unknown"
+                    unattributed_usd += cost
+
                 spend_by_model[model_id] = spend_by_model.get(model_id, 0.0) + cost
 
-            # Check for more pages
-            if "LastEvaluatedKey" in response:
-                scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
-            else:
+            # Terminates: ExclusiveStartKey advances to the key DynamoDB just returned,
+            # and DynamoDB omits LastEvaluatedKey on the final page. Reading it via .get()
+            # rather than `in` also covers a driver returning an explicit null.
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
                 break
+            scan_kwargs["ExclusiveStartKey"] = last_key
 
-        return spend_by_model
+        notes = []
+        if not spend_by_model:
+            # A reachable table with no rows IS live data. Say the zero was measured, so
+            # a reader does not have to guess whether the query ran.
+            notes.append(
+                "No daily spend rows recorded yet - a measured zero, not a failed query."
+            )
+        if unattributed_usd:
+            notes.append(
+                f"${unattributed_usd:.6f} of recorded spend carries no model_id; it is "
+                "totalled under 'unknown' and no catalog row matches it, so it is NOT "
+                "included in the per-model figures."
+            )
+        if skipped_rows:
+            notes.append(
+                f"{skipped_rows} spend row(s) had an unreadable total_cost_usd and were "
+                "excluded, so the per-model totals are lower than actual spend."
+            )
+        return _SpendByModelResult(
+            spend_by_model,
+            live=True,
+            source="finops-spend-store",
+            note=" ".join(notes) or None,
+        )
 
     except Exception as e:
-        logger.debug("Could not load per-model spend data: %s", str(e))
-        return {}
+        # WARNING, not debug. The app logs at INFO, so the old logger.debug meant a
+        # ResourceNotFoundException, an AccessDeniedException, a throttle or a wrong-region
+        # setting produced NO log line at all - invisible even to log aggregation - while
+        # the caller went on to publish $0.00 per model. Name the exception type, the
+        # table, the region and the user-visible consequence.
+        logger.warning(
+            "Per-model spend scan failed (%s) on DynamoDB table %r in %s: %s. "
+            "/gateway/models reports spend_usd=0.0 for every model with spend_live=false; "
+            "those zeros are NOT measured spend.",
+            type(e).__name__,
+            table_name,
+            region,
+            e,
+        )
+        return _SpendByModelResult(
+            {},
+            live=False,
+            source="unavailable-fallback",
+            note=(
+                f"FinOps spend store unreachable - table '{table_name}' in {region} "
+                f"({type(e).__name__}). Per-model spend could not be measured; the 0.00 "
+                "figures shown are placeholders. If the table exists in another region, "
+                "set FINOPS_SPEND_TABLE_REGION."
+            ),
+        )
 
 
 def _query_spend_records(
@@ -896,11 +1308,12 @@ def _query_spend_records(
     model: Optional[str] = None,
     period: str = "daily",
     days: int = 30,
-) -> List[SpendSummaryRecord]:
+) -> _SpendRecordsResult:
     """Query spend records from the FinOps DynamoDB table with filters.
 
     Paginates until LastEvaluatedKey is exhausted to avoid silently
-    dropping records.
+    dropping records. Reports whether the scan actually ran, so a caller never
+    presents a failed query's empty result as a period with no spend.
 
     Args:
         use_case: Optional use case filter.
@@ -910,14 +1323,30 @@ def _query_spend_records(
         days: Number of days of history to include.
 
     Returns:
-        List of SpendSummaryRecord objects matching the filters.
+        The matching records plus a live/source/note triple describing whether
+        the table was actually reached.
     """
-    try:
-        import boto3
-        from boto3.dynamodb.conditions import Key, Attr
+    table_name = settings.FINOPS_SPEND_TABLE_NAME
+    # Reader must resolve the spend table's home the same way the writer does.
+    region = region_config.table_region("FINOPS_SPEND")
 
-        dynamodb = boto3.resource("dynamodb", region_name=settings.AWS_REGION)
-        table = dynamodb.Table(settings.FINOPS_SPEND_TABLE_NAME)
+    # Same guard and same reason as _get_spend_by_model: FINOPS_SPEND_TABLE_NAME defaults
+    # to "", boto3 defers the ParamValidationError to the scan() call, and a config gap
+    # dressed up as an AWS failure sends the reader hunting for the wrong cause.
+    if not table_name:
+        return _SpendRecordsResult(
+            [],
+            live=False,
+            source="not-configured",
+            note=(
+                "Spend store not configured - set FINOPS_SPEND_TABLE_NAME and run the spend "
+                "aggregator. No spend was measured, so no total can be reported."
+            ),
+        )
+
+    try:
+        dynamodb = boto3.resource("dynamodb", region_name=region)
+        table = dynamodb.Table(table_name)
 
         # Build filter expression
         filter_parts = []
@@ -963,43 +1392,90 @@ def _query_spend_records(
         }
 
         records = []
+        skipped_rows = 0
 
-        # Paginate until all items are retrieved
         while True:
             response = table.scan(**scan_kwargs)
             for item in response.get("Items", []):
-                records.append(
-                    SpendSummaryRecord(
-                        use_case=item.get("use_case_id", "unknown"),
-                        team=item.get("team_id", "unknown"),
-                        model=item.get("model_id", "unknown"),
-                        period=item.get("period", period),
-                        date=item.get("date", ""),
-                        total_cost_usd=float(item.get("total_cost_usd", 0)),
-                        input_tokens=int(item.get("input_tokens", 0)),
-                        output_tokens=int(item.get("output_tokens", 0)),
-                        request_count=int(item.get("request_count", 0)),
-                        avg_latency_ms=float(item.get("avg_latency_ms", 0)),
+                try:
+                    records.append(
+                        SpendSummaryRecord(
+                            use_case=item.get("use_case_id") or "unknown",
+                            team=item.get("team_id") or "unknown",
+                            model=item.get("model_id") or "unknown",
+                            period=item.get("period") or period,
+                            date=str(item.get("date") or ""),
+                            # `or 0` before the casts: a NULL attribute makes float(None) /
+                            # int(None) raise TypeError, and a numeric `date` makes pydantic
+                            # raise ValidationError (a ValueError subclass). Either one used
+                            # to escape to the bare except below and return [], so a single
+                            # malformed row turned the whole period's spend into $0.00.
+                            total_cost_usd=float(item.get("total_cost_usd") or 0),
+                            input_tokens=int(item.get("input_tokens") or 0),
+                            output_tokens=int(item.get("output_tokens") or 0),
+                            request_count=int(item.get("request_count") or 0),
+                            avg_latency_ms=float(item.get("avg_latency_ms") or 0),
+                        )
                     )
-                )
+                except (TypeError, ValueError):
+                    skipped_rows += 1
+                    continue
 
-            # Check for more pages
-            if "LastEvaluatedKey" in response:
-                scan_kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
-            else:
+            # Terminates: ExclusiveStartKey advances to the key DynamoDB just returned,
+            # and DynamoDB omits LastEvaluatedKey on the final page.
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
                 break
+            scan_kwargs["ExclusiveStartKey"] = last_key
 
         # Sort by date descending
         records.sort(key=lambda r: r.date, reverse=True)
-        return records
+
+        notes = []
+        if not records:
+            # A reachable table with nothing in the window IS live data. Naming it as a
+            # measured zero is the whole point: the caller must not have to guess.
+            notes.append(
+                f"No {period} spend rows in the trailing {days} day(s) - a measured zero, "
+                "not a failed query."
+            )
+        if skipped_rows:
+            notes.append(
+                f"{skipped_rows} spend row(s) were unreadable and excluded, so the totals "
+                "are lower than actual spend."
+            )
+        return _SpendRecordsResult(
+            records,
+            live=True,
+            source="finops-spend-store",
+            note=" ".join(notes) or None,
+        )
 
     except Exception as e:
-        logger.error("Failed to query spend records: %s", str(e))
-        return []
-
-
-# Required for the boto3 import used in helper functions
-import boto3
+        # WARNING, not ERROR: an unreachable dependency degrades this view but is not an
+        # application fault, and the route turns it into a 503 the caller can see. Name the
+        # exception type, the table, the region and the consequence - the old bare "Failed
+        # to query spend records: <msg>" told a reader neither which table nor which region
+        # was searched, which is the failure that actually happens here.
+        logger.warning(
+            "Spend record scan failed (%s) on DynamoDB table %r in %s: %s. "
+            "/gateway/spend and /gateway/spend/export return 503 rather than a $0.00 total.",
+            type(e).__name__,
+            table_name,
+            region,
+            e,
+        )
+        return _SpendRecordsResult(
+            [],
+            live=False,
+            source="unavailable-fallback",
+            note=(
+                f"FinOps spend store unreachable - table '{table_name}' in {region} "
+                f"({type(e).__name__}). Spend could not be measured, so no total is "
+                "reported. If the table exists in another region, set "
+                "FINOPS_SPEND_TABLE_REGION."
+            ),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1047,10 +1523,9 @@ def _get_guardrail_service():
     if _guardrail_service is None:
         from services.guardrail_service import GuardrailService
 
-        _guardrail_service = GuardrailService(
-            table_name=settings.GUARDRAILS_TABLE_NAME,
-            region=settings.AWS_REGION,
-        )
+        # Regions resolve per tier inside the service (control-plane table vs
+        # governed Bedrock/CloudWatch); see core.region_config.
+        _guardrail_service = GuardrailService(table_name=settings.GUARDRAILS_TABLE_NAME)
     return _guardrail_service
 
 
@@ -1062,6 +1537,7 @@ def _get_guardrail_service():
 @router.post("/guardrails/assign", response_model=GuardrailAssignResponse, status_code=201)
 async def assign_guardrail(
     req: GuardrailAssignRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
     _=Depends(require_role(Role.OPERATOR)),
 ):
     """Assign a Bedrock Guardrail to a specific use case or team.
@@ -1083,7 +1559,12 @@ async def assign_guardrail(
             team=req.team,
             guardrail_id=req.guardrail_id,
             guardrail_version=req.guardrail_version,
-            assigned_by="control-plane-operator",
+            # Not the literal "control-plane-operator": that is a worse version of the
+            # created_by="user" defect fixed across the route tree - it reads like a
+            # real service principal, so a guardrail assignment whose author was never
+            # captured looked attributed to something specific. x-user-email is the
+            # same header core/rbac.py:88 reads to decide the role.
+            assigned_by=x_user_email or "unknown",
         )
 
         return GuardrailAssignResponse(

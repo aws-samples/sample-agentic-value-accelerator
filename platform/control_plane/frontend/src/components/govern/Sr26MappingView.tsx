@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
 import { governSr26Api, type Sr26Mapping } from '../../api/client';
 
@@ -151,12 +151,25 @@ export default function Sr26MappingView({ embedded = false }: { embedded?: boole
       </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a mapping that failed to load would inherit a Live header.
+  const badge = state === 'ready' && mapping
+    ? <LiveDataBadge source="SR 26-2 mapping API" detail="SR 26-2 mapping persisted in the control-plane backend (DynamoDB); conformance and evidence-backed % recomputed server-side" />
+    : <MockDataBadge integration="SR 26-2 mapping — control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
+
   return (
     <GovernPageLayout
       title="SR 26-2 — Agent Model Risk"
       description="The current US model-risk guidance of record (SR 26-2, Apr 2026, supersedes SR 11-7), reframed for autonomous agents and evaluated against live signals. Exact clause text to be confirmed against the Fed letter."
-      badge={<MockDataBadge integration="SR 26-2 mapping — control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

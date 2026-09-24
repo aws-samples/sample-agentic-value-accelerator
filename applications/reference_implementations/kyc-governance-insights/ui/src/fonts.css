@@ -1,0 +1,25 @@
+/* Local font declarations — eliminates external Google Fonts dependency */
+/* Place inter-400.woff2, inter-500.woff2, inter-600.woff2 in public/fonts/ */
+@font-face {
+  font-family: 'Inter';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/inter-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/inter-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/inter-600.woff2') format('woff2');
+}

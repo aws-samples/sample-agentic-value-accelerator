@@ -91,6 +91,7 @@ variable "llm_gateway_api_key_secret_arn" {
   default     = ""
 }
 
+
 variable "enable_agentcore_observability" {
   description = "Wire AgentCore runtime APPLICATION_LOGS to CloudWatch Logs and TRACES to X-Ray (Transaction Search). Independent of Langfuse."
   type        = bool

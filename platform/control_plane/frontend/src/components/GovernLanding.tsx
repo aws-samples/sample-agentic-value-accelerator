@@ -8,9 +8,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import ProgramProgress from './govern/ProgramProgress';
-import ConnectionWizard from './govern/ConnectionWizard';
 import { governDeveloperAiApi } from '../api/client';
-import CoreBadge, { CorePillarLegend, CORE_MODULES, getModulePillar } from './govern/CoreBadge';
+import CoreBadge, { CorePillarLegend } from './govern/CoreBadge';
+import { Icon } from './govern/icons';
+import { DataSourceInfo, getPageDataSources } from './govern/DataSourceInfo';
+import DataSourceIndicator from './govern/DataSourceIndicator';
+import RegionDiscoveryPrompt from './govern/RegionDiscoveryPrompt';
+import { useAssessmentState } from './govern/assessment/useAssessmentState';
 
 // Shadow AI Alert Banner — shows when there are critical/high issues
 function ShadowAIAlertBanner() {
@@ -23,9 +27,9 @@ function ShadowAIAlertBanner() {
     if (dismissed) return;
     governDeveloperAiApi.shadowAi()
       .then(d => {
-        const critical = d.unapproved_users?.length || 0;
-        const high = d.unknown_tools?.length || 0;
-        const models = d.unapproved_models?.length || 0;
+        const critical = d.shadow_ai?.unapproved_users?.length || 0;
+        const high = d.shadow_ai?.unknown_tools?.length || 0;
+        const models = d.shadow_ai?.unapproved_models?.length || 0;
         setShadowData({ critical, high, total: critical + high + models });
       })
       .catch(() => {
@@ -84,6 +88,120 @@ function ShadowAIAlertBanner() {
             </svg>
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function GovernanceAssessmentBanner() {
+  const navigate = useNavigate();
+  const assessmentState = useAssessmentState();
+
+  // Compact view when assessment is complete
+  if (assessmentState.hasAssessment) {
+    const { overallMaturity, totalGaps, criticalGaps, lastAssessedAt } = assessmentState;
+    const maturityLabel = overallMaturity >= 4 ? 'Managed' : overallMaturity >= 3 ? 'Defined' : overallMaturity >= 2 ? 'Developing' : 'Initial';
+    const maturityColor = overallMaturity >= 4 ? 'emerald' : overallMaturity >= 3 ? 'blue' : overallMaturity >= 2 ? 'amber' : 'rose';
+    const assessedDate = lastAssessedAt ? new Date(lastAssessedAt).toLocaleDateString() : 'Recently';
+
+    return (
+      <div className="mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm animate-fade-in">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-lg bg-${maturityColor}-100 flex items-center justify-center flex-shrink-0`}>
+              <Icon name="clipboard-document-check" className={`w-5 h-5 text-${maturityColor}-600`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-900">Governance Assessment</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full bg-${maturityColor}-100 text-${maturityColor}-700 font-semibold`}>
+                  {maturityLabel} ({overallMaturity.toFixed(1)})
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                  {totalGaps} gaps
+                </span>
+                {criticalGaps > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">
+                    {criticalGaps} critical
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Last assessed {assessedDate}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/govern/assessment')}
+              className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            >
+              View Results
+            </button>
+            {/* startNew distinguishes this from "View Results" above. The assessment route
+                now rehydrates the stored result and opens on the results view, so both
+                buttons navigating to the bare path made Re-assess a second View Results
+                that needed a further click on "New Assessment" to do what it says. */}
+            <button
+              onClick={() => navigate('/govern/assessment', { state: { startNew: true } })}
+              className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1"
+            >
+              <Icon name="arrow-path" className="w-3 h-3" />
+              Re-assess
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Full banner when no assessment exists
+  return (
+    <div className="mb-6 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200/60 rounded-xl p-5 shadow-sm animate-fade-in">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-200">
+            <Icon name="clipboard-document-check" className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-lg font-semibold text-slate-900">AI Governance Assessment</h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">
+                14 Domains
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">
+                11 Frameworks
+              </span>
+            </div>
+            <p className="text-sm text-slate-600 mb-3 max-w-xl">
+              Evaluate your organization's AI governance maturity across 14 domains. Get framework-specific gap analysis
+              for NIST AI RMF, EU AI Act, SR 26-2, and more. Auto-populates from your existing AVA data.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span className="flex items-center gap-1">
+                <Icon name="clock" className="w-3.5 h-3.5" />
+                ~15 min
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="flex items-center gap-1">
+                <Icon name="sparkles" className="w-3.5 h-3.5 text-amber-500" />
+                Auto-populate from AVA
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="flex items-center gap-1">
+                <Icon name="document-chart-bar" className="w-3.5 h-3.5" />
+                Executive-ready reports
+              </span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate('/govern/assessment')}
+          className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 flex-shrink-0"
+        >
+          Start Assessment
+          <Icon name="arrow-right" className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -412,25 +530,172 @@ const GOV_ITEMS: GovItem[] = [
       { label: 'DDQ Avg', value: '88%' },
     ],
   },
+  {
+    id: 'security-policies',
+    path: '/govern/security-policies',
+    name: 'Security Policy Templates',
+    tagline: 'Pre-built agent policies.',
+    description: 'Pre-built security policy templates for common FSI scenarios: strict production, development sandbox, customer-facing, and more. Apply guardrails consistently across your agent fleet.',
+    iconBg: 'from-emerald-500 to-teal-600',
+    iconPath: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z',
+    illustration: 'compliance',
+    tags: ['Templates', 'Guardrails', 'FSI', 'Policies'],
+    stats: [
+      { label: 'Templates', value: '5' },
+      { label: 'Agents Covered', value: '18' },
+    ],
+  },
+  {
+    id: 'lifecycle-policies',
+    path: '/govern/lifecycle-policies',
+    name: 'Agent Lifecycle',
+    tagline: 'Automate agent governance.',
+    description: 'Automated lifecycle policies: expire inactive agents, flag ownerless assets, enforce review cadences, and auto-block high-risk agents. Keep your fleet healthy and compliant.',
+    iconBg: 'from-blue-500 to-indigo-600',
+    iconPath: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99',
+    illustration: 'fleet',
+    tags: ['Lifecycle', 'Inactive', 'Ownerless', 'Auto-expire'],
+    stats: [
+      { label: 'Policies', value: '4' },
+      { label: 'At Risk', value: '3' },
+    ],
+  },
+  {
+    id: 'topology',
+    path: '/govern/topology',
+    name: 'Agent Topology Map',
+    tagline: 'Visualize agent relationships.',
+    description: 'Interactive graph showing how agents connect to each other, tools, MCP servers, and data sources. Understand your agent ecosystem at a glance with real-time status indicators.',
+    iconBg: 'from-purple-500 to-pink-600',
+    iconPath: 'M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
+    illustration: 'fleet',
+    tags: ['Topology', 'Relationships', 'A2A', 'Graph'],
+    stats: [
+      { label: 'Nodes', value: '24' },
+      { label: 'Connections', value: '42' },
+    ],
+  },
+  {
+    id: 'investigation-queue',
+    path: '/govern/investigations',
+    name: 'Investigation Queue',
+    tagline: 'Content safety cases.',
+    description: 'Investigate flagged AI interactions: content safety violations, data leaks, bias incidents. Case management with evidence attachment, resolution tracking, and compliance reporting.',
+    iconBg: 'from-rose-500 to-red-600',
+    iconPath: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z',
+    illustration: 'audit',
+    tags: ['Investigations', 'Cases', 'Evidence', 'SLA'],
+    stats: [
+      { label: 'Open Cases', value: '5' },
+      { label: 'Avg Resolution', value: '2.3d' },
+    ],
+  },
+  {
+    id: 'onboarding',
+    path: '/govern/onboarding',
+    name: 'Agent Onboarding',
+    tagline: 'IT-controlled agent deployment.',
+    description: 'Structured 8-step onboarding workflow with security policy templates, risk-based approval routing, and audit trail. Every agent starts secure, governed, and compliant.',
+    iconBg: 'from-indigo-500 to-purple-600',
+    iconPath: 'M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z',
+    illustration: 'agents',
+    tags: ['Onboarding', 'Workflow', 'Approvals', 'Policies'],
+    stats: [
+      { label: 'Pending', value: '3' },
+      { label: 'Steps', value: '8' },
+    ],
+  },
+  {
+    id: 'oncall',
+    path: '/govern/oncall',
+    name: 'On-Call Dashboard',
+    tagline: 'Real-time ops visibility.',
+    description: 'Live operational view for on-call engineers. Active alerts, agent fleet status, incident tracking, and quick actions. The single pane of glass for AI operations.',
+    iconBg: 'from-rose-500 to-orange-600',
+    iconPath: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0',
+    illustration: 'audit',
+    tags: ['On-Call', 'Alerts', 'Incidents', 'Fleet Status'],
+    stats: [
+      { label: 'Active Alerts', value: '4' },
+      { label: 'Agents', value: '18' },
+    ],
+    isCore: true,
+    pillar: 'see',
+  },
+  {
+    id: 'alerts',
+    path: '/govern/alerts',
+    name: 'Alerting Rules',
+    tagline: 'Custom alert conditions.',
+    description: 'Define alerting rules for agent metrics with multi-channel notifications. Route to PagerDuty, OpsGenie, Slack, or SNS with escalation policies and auto-remediation.',
+    iconBg: 'from-amber-500 to-orange-600',
+    iconPath: 'M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z',
+    illustration: 'audit',
+    tags: ['Alerts', 'PagerDuty', 'OpsGenie', 'Escalation'],
+    stats: [
+      { label: 'Rules', value: '12' },
+      { label: 'Channels', value: '6' },
+    ],
+  },
+  {
+    id: 'sla',
+    path: '/govern/sla',
+    name: 'SLA Management',
+    tagline: 'Define and track SLAs.',
+    description: 'Define SLAs for availability, latency, error rates, and throughput. Track compliance, manage breaches, and generate evidence for auditors and stakeholders.',
+    iconBg: 'from-emerald-500 to-teal-600',
+    iconPath: 'M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z',
+    illustration: 'compliance',
+    tags: ['SLAs', 'Availability', 'Breaches', 'Compliance'],
+    stats: [
+      { label: 'Active SLAs', value: '8' },
+      { label: 'Compliance', value: '96%' },
+    ],
+    isCore: true,
+    pillar: 'govern',
+  },
+  {
+    id: 'runbooks',
+    path: '/govern/runbooks',
+    name: 'Operational Runbooks',
+    tagline: 'Standardized response procedures.',
+    description: 'Pre-built and custom runbooks for incident response, scaling, recovery, and maintenance. Step-by-step execution with automated and manual tasks.',
+    iconBg: 'from-blue-500 to-indigo-600',
+    iconPath: 'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25',
+    illustration: 'playbook',
+    tags: ['Runbooks', 'Incident Response', 'Automation'],
+    stats: [
+      { label: 'Runbooks', value: '6' },
+      { label: 'Executions', value: '23' },
+    ],
+  },
+  {
+    id: 'ops-metrics',
+    path: '/govern/metrics',
+    name: 'Operational Metrics',
+    tagline: 'DORA-style ops KPIs.',
+    description: 'Track MTTR, MTTD, change failure rate, and availability across your agent fleet. DORA-style metrics for AI operations with per-agent health breakdown.',
+    iconBg: 'from-violet-500 to-purple-600',
+    iconPath: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z',
+    illustration: 'finops',
+    tags: ['MTTR', 'MTTD', 'Availability', 'DORA'],
+    stats: [
+      { label: 'MTTR', value: '42m' },
+      { label: 'Availability', value: '99.87%' },
+    ],
+    isCore: true,
+    pillar: 'show',
+  },
 ];
 
 export default function GovernLanding() {
   const navigate = useNavigate();
-  const [showWizard, setShowWizard] = useState(() => {
-    // Show wizard by default unless dismissed in this session
-    return sessionStorage.getItem('govern-wizard-dismissed') !== 'true';
-  });
   const [showCoreOnly, setShowCoreOnly] = useState(false);
 
   const filteredItems = useMemo(() => {
     if (!showCoreOnly) return GOV_ITEMS;
     return GOV_ITEMS.filter(item => item.isCore);
   }, [showCoreOnly]);
-
-  const handleDismissWizard = () => {
-    setShowWizard(false);
-    sessionStorage.setItem('govern-wizard-dismissed', 'true');
-  };
 
   return (
     <div className="relative min-h-[calc(100dvh-4rem)]">
@@ -451,25 +716,29 @@ export default function GovernLanding() {
             AI Governance, Risk, Compliance — one view.
           </h1>
           <p className="text-slate-500 mt-4 max-w-2xl">
-            The AI GRC hub your executives, auditors, and engineers share. Monitor trust, track compliance, manage risk, and control cost across every agent in your fleet.
+            One AI GRC hub for executives, auditors, and engineers — monitor trust, track compliance, manage risk, and control cost across every agent in your fleet.
           </p>
           <div className="text-xs text-slate-400 mt-2">
             Updated {new Date().toLocaleTimeString()} · <span className="text-emerald-600 font-medium">● Live</span>
           </div>
         </div>
 
+        {/* Governance Assessment — primary entry point for maturity evaluation */}
+        <GovernanceAssessmentBanner />
+
         {/* Shadow AI Alert Banner — shows when issues detected */}
         <ShadowAIAlertBanner />
 
-        {/* Connection Wizard — compact status bar, expands for details */}
-        {showWizard && (
-          <div className="mb-4 animate-fade-in stagger-1">
-            <ConnectionWizard onDismiss={handleDismissWizard} />
-          </div>
-        )}
-
         {/* Getting Started — role entry points + live program spine, unified */}
         <ProgramProgress />
+
+        {/* Multi-region governance — prompt to pull in active-but-ungoverned regions */}
+        <RegionDiscoveryPrompt />
+
+        {/* AWS Data Sources — live vs mock integration status across services */}
+        <div className="mb-6">
+          <DataSourceIndicator />
+        </div>
 
         {/* Core filter toggle + pillar legend */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4 animate-fade-in stagger-2">
@@ -507,6 +776,15 @@ export default function GovernLanding() {
           {filteredItems.map((item) => (
             <GovCard key={item.id} item={item} onClick={() => navigate(item.path)} />
           ))}
+        </div>
+
+        {/* Data Source Info Panel */}
+        <div className="mt-10">
+          <DataSourceInfo
+            pageId="govern-landing"
+            pageTitle="Govern"
+            sources={getPageDataSources('command-center')}
+          />
         </div>
       </div>
     </div>

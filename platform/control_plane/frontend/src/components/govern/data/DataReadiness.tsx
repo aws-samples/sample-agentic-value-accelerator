@@ -1,35 +1,53 @@
 /**
- * DataReadiness — AI Data Readiness Assessment (LIVE)
+ * DataReadiness — AI Data Readiness DERIVED SCORECARD
  *
- * Computes readiness scores from live AWS data:
- * - Guardrails (Bedrock)
- * - Invocation Logs
- * - CloudTrail
- * - AWS Config
- * - Security Hub
- * - Service Approvals
+ * The dimension scores are heuristic step-ladders derived from live AWS signals
+ * (Guardrails, Invocation Logs, CloudTrail, AWS Config, Security Hub, Service
+ * Approvals). The underlying signals are live, but the resulting 0-100 scores are
+ * DERIVED estimates — this page badges them as "Derived", never as a live measurement.
+ * Per-dimension status dots reflect whether the underlying signal was fetched live.
  *
  * No user deployment required - uses existing AWS data.
  */
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import { useDataReadiness } from './useDataReadiness';
-import { MATURITY_QUESTIONS, MATURITY_LEVELS } from './dataGovernanceData';
-import { LiveDataBadge } from '../DataSourceIndicator';
+import { computeMaturityAssessment } from './dataReadinessEngine';
+import { MATURITY_QUESTIONS } from './dataGovernanceData';
 
 const tooltipStyle = { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '11px' };
+
+/**
+ * Neutral badge for a DERIVED scorecard: the underlying signals are live, but the
+ * displayed score is a heuristic computed from them — not a direct measurement.
+ */
+function DerivedBadge({ detail }: { detail?: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300 cursor-help"
+      title={detail || 'Derived scorecard — heuristic scores computed from live AWS signals, not direct measurements'}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+      Derived
+    </span>
+  );
+}
 
 export default function DataReadiness() {
   const readiness = useDataReadiness();
 
-  const met = readiness.dimensions.filter(d => d.status === 'met').length;
-  const atRisk = readiness.dimensions.filter(d => d.status === 'at-risk').length;
-  const notMet = readiness.dimensions.filter(d => d.status === 'not-met').length;
+  // Only scored dimensions feed the radar / bar / status tallies. "Not measured"
+  // dimensions (e.g. Data Quality without Glue DQ) are shown as informational cards only.
+  const scoredDimensions = readiness.dimensions.filter(d => d.scored !== false);
+
+  const met = scoredDimensions.filter(d => d.status === 'met').length;
+  const atRisk = scoredDimensions.filter(d => d.status === 'at-risk').length;
+  const notMet = scoredDimensions.filter(d => d.status === 'not-met').length;
 
   return (
     <div className="min-h-[calc(100vh-4rem)] relative">
@@ -42,13 +60,22 @@ export default function DataReadiness() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">AI Data Readiness</h1>
-              <LiveDataBadge />
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
-                {readiness.liveSourcesCount}/{readiness.totalSourcesCount} live
-              </span>
+              <DerivedBadge detail="Derived scorecard — dimension scores are heuristics computed from live AWS signals, not direct measurements" />
+              {readiness.liveSourcesCount > 0 ? (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                  {readiness.liveSourcesCount}/{readiness.totalSourcesCount} signals live
+                </span>
+              ) : (
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium"
+                  title="No live AWS signals available — score is not backed by live data (insufficient data / degraded)"
+                >
+                  Insufficient live data
+                </span>
+              )}
             </div>
             <p className="text-slate-500 mt-1 max-w-2xl">
-              7-dimension assessment computed from live AWS data. No additional setup required.
+              Derived scorecard: dimension scores are heuristics computed from live AWS signals. No additional setup required.
             </p>
           </div>
           <button
@@ -81,7 +108,7 @@ export default function DataReadiness() {
                 <div>
                   <h3 className="text-lg font-semibold text-cyan-800">AI Data Readiness Assessment</h3>
                   <p className="text-sm text-slate-600 mt-1">
-                    Computed from {readiness.liveSourcesCount} live AWS data sources. Target: {readiness.overallTarget}+ to be AI-Ready.
+                    Derived scorecard from {readiness.liveSourcesCount} live AWS signal sources. Target: {readiness.overallTarget}+ to be AI-Ready.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -122,7 +149,7 @@ export default function DataReadiness() {
                   <div className="text-[10px] text-slate-500 mb-1">Data sources:</div>
                   {readiness.dimensions.slice(0, 4).map(d => (
                     <div key={d.id} className="flex items-center gap-1 text-[9px] text-slate-600 mb-0.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${d.live ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full ${d.live ? 'bg-emerald-500' : 'bg-slate-300'}`} title={d.live ? 'Live signal' : 'Signal unavailable'} />
                       {d.source}
                     </div>
                   ))}
@@ -133,7 +160,7 @@ export default function DataReadiness() {
               <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4">
                 <h4 className="text-xs font-semibold text-slate-700 mb-2">Readiness Radar</h4>
                 <ResponsiveContainer width="100%" height={240}>
-                  <RadarChart data={readiness.dimensions.map(d => ({
+                  <RadarChart data={scoredDimensions.map(d => ({
                     dimension: d.name.split(' ').pop(),
                     score: d.score,
                     target: d.target,
@@ -153,7 +180,7 @@ export default function DataReadiness() {
                 <h4 className="text-xs font-semibold text-slate-700 mb-2">Dimension Scores</h4>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart
-                    data={readiness.dimensions.map(d => ({
+                    data={scoredDimensions.map(d => ({
                       name: d.name.split(' ').pop(),
                       score: d.score,
                       target: d.target,
@@ -166,7 +193,7 @@ export default function DataReadiness() {
                     <YAxis type="category" dataKey="name" tick={{ fill: '#475569', fontSize: 9 }} width={65} />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="score" name="Current" radius={[0, 4, 4, 0]}>
-                      {readiness.dimensions.map((d, i) => (
+                      {scoredDimensions.map((d, i) => (
                         <Cell
                           key={i}
                           fill={d.status === 'met' ? '#10b981' : d.status === 'at-risk' ? '#f59e0b' : '#ef4444'}
@@ -192,7 +219,7 @@ export default function DataReadiness() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-semibold text-slate-900">{d.name}</h4>
-                      <span className={`w-2 h-2 rounded-full ${d.live ? 'bg-emerald-500' : 'bg-slate-300'}`} title={d.live ? 'Live data' : 'Estimated'} />
+                      <span className={`w-2 h-2 rounded-full ${d.live ? 'bg-emerald-500' : 'bg-slate-300'}`} title={d.live ? 'Live signal (score is derived)' : d.scored === false ? 'Not measured' : 'Signal unavailable'} />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-lg font-bold ${
@@ -261,7 +288,7 @@ export default function DataReadiness() {
                 </strong>
                 {' '}
                 {readiness.status === 'ai-ready'
-                  ? `Your data governance posture scores ${readiness.overallScore}/100, exceeding the ${readiness.overallTarget} threshold. All ${readiness.liveSourcesCount} dimensions assessed from live AWS data.`
+                  ? `Your data governance posture scores ${readiness.overallScore}/100, exceeding the ${readiness.overallTarget} threshold. Derived from ${readiness.liveSourcesCount} live AWS signal sources.`
                   : readiness.status === 'partially-ready'
                     ? `Score ${readiness.overallScore}/100 (target: ${readiness.overallTarget}). Focus on dimensions marked "at-risk" or "not-met" to improve readiness.`
                     : `Score ${readiness.overallScore}/100 (target: ${readiness.overallTarget}). Multiple dimensions need attention before AI workloads are production-ready.`
@@ -279,12 +306,8 @@ function MaturityAssessment() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [expanded, setExpanded] = useState(false);
 
-  const answered = Object.keys(answers).length;
-  const total = MATURITY_QUESTIONS.length;
-  const avgScore = answered > 0 ? Object.values(answers).reduce((s, v) => s + v, 0) / answered : 0;
-  const maturityLevel = useMemo(() =>
-    MATURITY_LEVELS.find(l => avgScore >= l.range[0] && avgScore <= l.range[1]) || MATURITY_LEVELS[0],
-  [avgScore]);
+  // Shared readiness/maturity engine: ONE consistent avgScore + level computation.
+  const { answered, total, avgScore, level: maturityLevel } = computeMaturityAssessment(answers);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">

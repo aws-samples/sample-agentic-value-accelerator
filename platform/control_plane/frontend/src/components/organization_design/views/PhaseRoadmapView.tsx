@@ -3,7 +3,7 @@ import { PHASES, PHASE_ATTRIBUTES } from '../types';
 import { phaseColor } from '../scoring';
 
 // 4-phase implementation roadmap.
-export default function PhaseRoadmapView({ computed, currentPhase, targetPhase }: { computed: ComputedOrganizationDesign; currentPhase: string; targetPhase: string }) {
+export default function PhaseRoadmapView({ currentPhase, targetPhase }: { computed: ComputedOrganizationDesign; currentPhase: string; targetPhase: string }) {
   return (
     <div className="p-5 rounded-2xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between mb-3">

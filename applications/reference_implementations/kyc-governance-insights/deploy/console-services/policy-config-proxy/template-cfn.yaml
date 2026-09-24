@@ -1,0 +1,304 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Policy-Config Proxy — Lambda + HTTP API fronting the policy-config DynamoDB
+  table. Serves the Decision-Rules UI: GET returns the active policy config, PUT
+  persists a slider/profile change (server-side, not localStorage — invariant #4)
+  and appends an immutable audit-log entry. Auth is enforced at the edge by the
+  shared origin-verify API Gateway authorizer (invariant #1); this handler has no
+  auth logic.
+
+Parameters:
+  AllowedOrigin:
+    Type: String
+    Default: 'https://d34f241zukf5gh.cloudfront.net'
+  PolicyConfigTable:
+    Type: String
+    Default: kyc-gov-policy-config
+    Description: DynamoDB table holding the mutable policy config (shared with policy-cascade).
+  PolicyConfigAuditTable:
+    Type: String
+    Default: kyc-gov-policy-config-audit
+    Description: Append-only DynamoDB table for the config change log.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+
+Resources:
+  ProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PolicyConfigReadWrite
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # GetItem + PutItem on the config table (PutItem is the update path).
+              # No DeleteItem anywhere — config is never destroyed here.
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PolicyConfigTable}'
+              # Audit table is APPEND-ONLY: PutItem only, no Update/Delete.
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PolicyConfigAuditTable}'
+
+  HandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-handler'
+      RetentionInDays: 30
+
+  HandlerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: HandlerLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-handler'
+      Role: !GetAtt ProxyRole.Arn
+      Runtime: python3.12
+      Timeout: 15
+      MemorySize: 256
+      ReservedConcurrentExecutions: 10
+      Handler: index.handler
+      Environment:
+        Variables:
+          POLICY_CONFIG_TABLE: !Ref PolicyConfigTable
+          POLICY_CONFIG_AUDIT_TABLE: !Ref PolicyConfigAuditTable
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: policy-config}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, logging, os, time, datetime
+          from decimal import Decimal
+          import boto3
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          CONFIG_TABLE = os.environ['POLICY_CONFIG_TABLE']
+          AUDIT_TABLE = os.environ['POLICY_CONFIG_AUDIT_TABLE']
+          ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+          _ddb = None
+
+          def _t(name):
+              global _ddb
+              if _ddb is None:
+                  _ddb = boto3.resource('dynamodb')
+              return _ddb.Table(name)
+
+          def cors(body, status=200):
+              return {'statusCode': status,
+                      'headers': {'Content-Type': 'application/json',
+                                  'Access-Control-Allow-Origin': ORIGIN,
+                                  'Access-Control-Allow-Headers': 'Content-Type,x-api-key,x-tenant-id',
+                                  'Access-Control-Allow-Methods': 'GET,PUT,POST,OPTIONS'},
+                      'body': json.dumps(body, default=str)}
+
+          def handler(event, context):
+              # Auth is enforced at the edge by the shared origin-verify API Gateway
+              # authorizer (invariant #1) — this handler contains no auth logic.
+              rid = getattr(context, 'aws_request_id', None)
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', 'GET')
+              path = event.get('path') or event.get('rawPath', '')
+              if method == 'OPTIONS':
+                  return cors({})
+              tenant = (event.get('headers') or {}).get('x-tenant-id', 'default')
+              try:
+                  if path.endswith('/health'):
+                      return cors({'status': 'ok', 'service': 'policy-config-proxy'})
+                  if method == 'GET':
+                      return get_config(tenant)
+                  if method in ('PUT', 'POST'):
+                      body = json.loads(event.get('body', '{}') or '{}')
+                      return put_config(tenant, body)
+              except Exception as e:
+                  logger.exception(json.dumps({'svc': 'policy-config-proxy', 'request_id': rid,
+                                               'tenant': tenant, 'method': method, 'event': 'error',
+                                               'detail': str(e)}))
+                  return cors({'error': str(e)}, 500)
+              return cors({'error': 'not found'}, 404)
+
+          def _read(tenant):
+              item = _t(CONFIG_TABLE).get_item(Key={'tenant_id': tenant}, ConsistentRead=True).get('Item')
+              if item is None and tenant != 'default':
+                  item = _t(CONFIG_TABLE).get_item(Key={'tenant_id': 'default'}, ConsistentRead=True).get('Item')
+              return item
+
+          def get_config(tenant):
+              item = _read(tenant)
+              if item is None:
+                  return cors({'found': False, 'profileId': 'balanced', 'params': None})
+              ui = json.loads(item['ui_params_json']) if item.get('ui_params_json') else None
+              return cors({'found': True,
+                           'profileId': item.get('profile_id', 'custom'),
+                           'params': ui,
+                           'risk_escalate_threshold': int(item.get('risk_escalate_threshold', 0)),
+                           'risk_block_threshold': int(item.get('risk_block_threshold', 0)),
+                           'prohibited_jurisdictions': sorted(item.get('prohibited_jurisdictions', [])),
+                           'sanctions_threshold': float(item.get('sanctions_threshold', 0)),
+                           'pep_threshold': float(item.get('pep_threshold', 0)),
+                           'version': int(item.get('version', 0))})
+
+          def put_config(tenant, body):
+              params = body.get('params') or {}
+              profile_id = body.get('profileId', 'custom')
+              user = body.get('user', 'presenter')
+              existing = _read(tenant) or {}
+              # Mapping (documented, behavior-preserving): the UI riskScoreThreshold
+              # slider drives the cascade ESCALATE boundary. The BLOCK threshold and
+              # prohibited-jurisdiction list are preserved from the existing row
+              # (board-approved baseline) so Acme->ALLOW / Omega->BLOCK are unchanged.
+              risk_escalate = int(params.get('riskScoreThreshold', existing.get('risk_escalate_threshold', 60)))
+              risk_block = int(existing.get('risk_block_threshold', 80))
+              prohibited = set(existing.get('prohibited_jurisdictions', ['KP', 'IR', 'SY', 'MM'])) or {'KP', 'IR', 'SY', 'MM'}
+              # Sanctions/PEP thresholds are board-approved baseline, not UI-editable —
+              # carry them forward from the existing row so a slider save (which only
+              # drives the ESCALATE boundary) never wipes them. put_item replaces the
+              # whole item, so they must be written back explicitly.
+              sanctions_threshold = Decimal(str(existing.get('sanctions_threshold', Decimal('0.70'))))
+              pep_threshold = Decimal(str(existing.get('pep_threshold', Decimal('0.60'))))
+              version = int(existing.get('version', 0)) + 1
+              now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+              _t(CONFIG_TABLE).put_item(Item={
+                  'tenant_id': tenant, 'profile_id': profile_id,
+                  'ui_params_json': json.dumps(params),
+                  'risk_escalate_threshold': risk_escalate,
+                  'risk_block_threshold': risk_block,
+                  'prohibited_jurisdictions': prohibited,
+                  'sanctions_threshold': sanctions_threshold,
+                  'pep_threshold': pep_threshold,
+                  'version': version, 'updated_by': user, 'updated_at': now})
+              # Immutable append-only audit entry (PutItem only).
+              _t(AUDIT_TABLE).put_item(Item={
+                  'tenant_id': tenant, 'changed_at': now, 'profile_id': profile_id,
+                  'ui_params_json': json.dumps(params),
+                  'risk_escalate_threshold': risk_escalate, 'version': version,
+                  'updated_by': user})
+              logger.info(json.dumps({'svc': 'policy-config-proxy', 'tenant': tenant,
+                                      'event': 'config_updated', 'profile_id': profile_id,
+                                      'version': version, 'risk_escalate_threshold': risk_escalate,
+                                      'risk_block_threshold': risk_block, 'updated_by': user}))
+              return cors({'success': True, 'version': version,
+                           'risk_escalate_threshold': risk_escalate,
+                           'risk_block_threshold': risk_block})
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: [!Ref AllowedOrigin]
+        AllowMethods: [GET, PUT, POST, OPTIONS]
+        AllowHeaders: [Content-Type, x-api-key, x-tenant-id]
+        MaxAge: 3600
+
+  OriginVerifyAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: REQUEST
+      Name: kyc-origin-verify
+      IdentitySource:
+        - '$request.header.x-origin-verify'
+      AuthorizerPayloadFormatVersion: '2.0'
+      EnableSimpleResponses: true
+      AuthorizerResultTtlInSeconds: 300
+      AuthorizerUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnArn}/invocations'
+        - FnArn: !ImportValue kyc-origin-verify-authorizer-arn
+
+  OriginVerifyAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue kyc-origin-verify-authorizer-arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/authorizers/${OriginVerifyAuthorizer}'
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt HandlerFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  GetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /policy-config'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  PutRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'PUT /policy-config'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${ApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*'
+
+  # Publish the invoke URL to SSM for the UI deploy to wire the CloudFront
+  # /svc/policy-config behavior (decoupled reference — invariant #7).
+  PolicyConfigApiUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/policy-config-api-url'
+      Type: String
+      Value: !GetAtt HttpApi.ApiEndpoint
+      Description: Invoke URL for the kyc policy-config proxy (UI /svc/policy-config origin).
+
+Outputs:
+  ApiEndpoint:
+    Description: Policy-Config Proxy API endpoint URL
+    Value: !GetAtt HttpApi.ApiEndpoint

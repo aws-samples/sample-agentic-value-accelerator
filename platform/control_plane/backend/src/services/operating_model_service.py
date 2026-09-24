@@ -128,10 +128,18 @@ class OperatingModelService:
         return m
 
     def get(self, operating_model_id: str) -> Optional[OperatingModel]:
-        resp = self.table.get_item(Key={
-            "pk": f"{self.PK_PREFIX}{operating_model_id}",
-            "sk": self.SK_LATEST,
-        })
+        try:
+            resp = self.table.get_item(Key={
+                "pk": f"{self.PK_PREFIX}{operating_model_id}",
+                "sk": self.SK_LATEST,
+            })
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Operating model table not provisioned; returning None for get"
+                )
+                return None
+            raise
         item = resp.get("Item")
         if not item:
             return None
@@ -141,7 +149,15 @@ class OperatingModelService:
         scan_kwargs = {"FilterExpression": Attr("pk").begins_with(self.PK_PREFIX)}
         if status:
             scan_kwargs["FilterExpression"] = scan_kwargs["FilterExpression"] & Attr("status").eq(status.value)
-        resp = self.table.scan(**scan_kwargs)
+        try:
+            resp = self.table.scan(**scan_kwargs)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Operating model table not provisioned; returning empty operating model list"
+                )
+                return []
+            raise
         items = resp.get("Items", [])
         out = [self._from_item(i) for i in items]
         out.sort(key=lambda x: x.updated_at, reverse=True)

@@ -10,6 +10,14 @@ deployed gateway (empty master key -> 401 -> 502). _resolve_master_key must:
 The route module imports `core.config` and FastAPI at import time; we stub
 `core.config` (mirroring the importlib pattern used by the other tests) and
 load the module directly so the Settings() chain isn't required.
+
+The two route-level tests at the bottom patch `safe_fetch.fetch_internal`. They
+used to patch `urllib.request.urlopen`, which the gateway calls no longer go
+through: `_gateway_fetch` routes them via `core.safe_fetch` so a 302 cannot replay
+the master key. `fetch_internal` is the same kind of seam urlopen was - the
+transport, one level below the code under test - so `_gateway_fetch`'s own status
+and truncation checks stay on the path. What these two tests are actually about
+(the `name` -> `key_alias` mapping and the master-key fallback) is unchanged.
 """
 import importlib.util
 import os
@@ -17,6 +25,11 @@ import sys
 import types
 
 import pytest
+
+# Imported before core is stubbed, and registered on the stub below: _gateway_fetch
+# does a deferred `from core import safe_fetch`, which a bare ModuleType("core")
+# answers with ImportError from inside the except block trying to report it.
+from core import safe_fetch
 
 
 def _load_module(monkeypatch):
@@ -26,8 +39,10 @@ def _load_module(monkeypatch):
     fake_config = types.ModuleType("core.config")
     fake_config.settings = types.SimpleNamespace(AWS_REGION="us-east-1")
     fake_core.config = fake_config
+    fake_core.safe_fetch = safe_fetch
     monkeypatch.setitem(sys.modules, "core", fake_core)
     monkeypatch.setitem(sys.modules, "core.config", fake_config)
+    monkeypatch.setitem(sys.modules, "core.safe_fetch", safe_fetch)
 
     # Stub core.rbac so the RBAC imports resolve without the full backend
     fake_rbac = types.ModuleType("core.rbac")
@@ -40,6 +55,22 @@ def _load_module(monkeypatch):
     fake_rbac.Role = _FakeRole
     fake_rbac.require_role = lambda role: lambda: None
     monkeypatch.setitem(sys.modules, "core.rbac", fake_rbac)
+
+    # core.region_config, for the DEPLOYMENTS table region. The route used to build its
+    # DynamoDB resource from AWS_REGION, which silently disagreed with litellm.py's read of
+    # the SAME table via DEPLOYMENTS_TABLE_REGION - so one reader saw the gateway instances
+    # and the other got an empty list rather than an error. The stub records its argument so
+    # the test can assert the table region is asked for by key, not hardcoded.
+    fake_region_config = types.ModuleType("core.region_config")
+    fake_region_config.asked_for = []
+
+    def _table_region(key):
+        fake_region_config.asked_for.append(key)
+        return "us-east-1"
+
+    fake_region_config.table_region = _table_region
+    fake_core.region_config = fake_region_config
+    monkeypatch.setitem(sys.modules, "core.region_config", fake_region_config)
 
     path = os.path.join(os.path.dirname(__file__), os.pardir, "src", "api", "routes", "llm_gateway.py")
     spec = importlib.util.spec_from_file_location("llm_gateway_under_test", os.path.abspath(path))
@@ -145,13 +176,34 @@ def test_filter_display_models_dedupes_when_aliases_present(monkeypatch):
     assert out == ["Claude Haiku 4.5", "Amazon Nova Pro"]
 
 
+def _fake_fetch_internal(monkeypatch, captured, payload):
+    """Patch the transport seam and record what the route sent.
+
+    Returns a real `SafeResponse`, not a duck, so `_gateway_fetch`'s status and
+    truncation checks and `.json()` all behave as they do in production.
+    """
+    import json
+
+    def fake(url, *, timeout=None, method="GET", headers=None, body=None, **kwargs):
+        assert timeout, "a timeout is mandatory on every gateway call"
+        captured["url"] = url
+        captured["method"] = method
+        captured["headers"] = headers or {}
+        captured["body"] = json.loads(body) if body else None
+        return safe_fetch.SafeResponse(
+            status=200,
+            body=json.dumps(payload).encode(),
+            final_url=url,
+            headers={"content-type": "application/json"},
+        )
+
+    monkeypatch.setattr(safe_fetch, "fetch_internal", fake)
+
+
 def test_create_virtual_key_maps_name_to_key_alias(monkeypatch):
     """The create payload must send LiteLLM's `key_alias`, not `name`,
     otherwise created keys show a blank alias in the UI."""
     import asyncio
-    import contextlib
-    import io
-    import json
 
     mod = _load_module(monkeypatch)
 
@@ -168,20 +220,13 @@ def test_create_virtual_key_maps_name_to_key_alias(monkeypatch):
     monkeypatch.setattr(mod, "_resolve_master_key", lambda i: "sk-master")
 
     captured = {}
-
-    @contextlib.contextmanager
-    def fake_urlopen(req, timeout=None):
-        captured["body"] = json.loads(req.data.decode())
-        captured["url"] = req.full_url
-        yield io.BytesIO(json.dumps({"key": "sk-new", "key_alias": "my-key"}).encode())
-
-    import urllib.request
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    _fake_fetch_internal(monkeypatch, captured, {"key": "sk-new", "key_alias": "my-key"})
 
     req = mod.VirtualKeyCreate(name="my-key", budget_duration="30d")
     asyncio.run(mod.create_virtual_key("g", req))
 
     assert captured["url"].endswith("/key/generate")
+    assert captured["method"] == "POST"
     assert captured["body"].get("key_alias") == "my-key"
     assert "name" not in captured["body"]
 
@@ -190,9 +235,6 @@ def test_playground_falls_back_to_master_key_when_no_virtual_key(monkeypatch):
     """Empty virtual key in the Playground must use the resolved gateway master
     key (the UI hint says "uses master key if empty")."""
     import asyncio
-    import contextlib
-    import io
-    import json
 
     mod = _load_module(monkeypatch)
 
@@ -209,19 +251,13 @@ def test_playground_falls_back_to_master_key_when_no_virtual_key(monkeypatch):
     monkeypatch.setattr(mod, "_resolve_master_key", lambda i: "sk-master-resolved")
 
     captured = {}
-
-    @contextlib.contextmanager
-    def fake_urlopen(req, timeout=None):
-        captured["auth"] = req.headers.get("Authorization")
-        yield io.BytesIO(json.dumps({"choices": [{"message": {"content": "hi"}}]}).encode())
-
-    import urllib.request
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    _fake_fetch_internal(monkeypatch, captured, {"choices": [{"message": {"content": "hi"}}]})
 
     req = mod.PlaygroundRequest(model="m", messages=[{"role": "user", "content": "hi"}], virtual_key=None)
-    asyncio.run(mod.playground("g", req))
+    out = asyncio.run(mod.playground("g", req))
 
-    assert captured["auth"] == "Bearer sk-master-resolved"
+    assert captured["headers"].get("Authorization") == "Bearer sk-master-resolved"
+    assert out == {"choices": [{"message": {"content": "hi"}}]}
 
 
 if __name__ == "__main__":

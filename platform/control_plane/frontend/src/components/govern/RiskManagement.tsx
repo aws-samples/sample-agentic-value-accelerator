@@ -48,6 +48,13 @@ const TABS: { id: Tab; label: string; description: string }[] = [
   { id: 'policy-as-code', label: 'Policy as Code', description: 'CI/CD governance gates' },
 ];
 
+/**
+ * The only tabs the parent's `useGovernanceAggregator` risk scores describe. Every other tab
+ * reads its own source (Security Hub, the model catalog, seeded control libraries), so a
+ * page-level badge cannot speak for it.
+ */
+const RISK_SCORE_TABS = new Set<Tab>(['dashboard', 'register']);
+
 export default function RiskManagement() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as Tab | null;
@@ -80,12 +87,23 @@ export default function RiskManagement() {
   return (
     <GovernPageLayout
       title="Risk Management"
-      description="Enterprise risk register, assessments, controls, and issue tracking for AI/ML systems."
+      description="Identify, assess, and treat AI risk — register, controls, third-party access, and live security findings in one workflow."
       badge={
-        <div className="flex items-center gap-2">
-          {hasLiveRiskData && !loading && <LiveDataBadge />}
-          <MockDataBadge integration="Controls & Issues need custom backend" />
-        </div>
+        /* Scoped to the two tabs this signal actually covers.
+         *
+         * `hasLiveRiskData` is derived from the use-case registry's risk scores, which back the
+         * Dashboard and Register only — it says nothing about the other nine tabs. The header
+         * used to put that one signal behind whichever tab happened to be open, and it rendered
+         * an unconditional MockDataBadge next to it, so the page asserted "live" and "seeded"
+         * simultaneously for all eleven tabs. Both claims were wrong most of the time.
+         *
+         * Everything else stays silent here and badges itself inside its own tab, which is the
+         * only place the source is actually known. */
+        RISK_SCORE_TABS.has(activeTab) ? (
+          hasLiveRiskData && !loading
+            ? <LiveDataBadge source="AVA use-case registry risk scores" detail="Portfolio risk computed from your registered use cases" />
+            : <MockDataBadge integration="AVA use-case registry — no scored use cases yet" />
+        ) : undefined
       }
     >
         {/* Unified Guide (How to Use + Make Live in AWS) */}

@@ -1,6 +1,20 @@
 # Local deployment of AVA Control Plane + LiteLLM Gateway
 # Usage: finch compose up --build -d (or: docker compose up --build -d)
 #
+# This file is docker-compose.yaml, NOT .yml - `-f docker-compose.yml` will not
+# resolve.
+#
+# Two build gotchas that make a "successful" rebuild serve stale code:
+#   - The backend has NO source volume mount (only ~/.aws, the LiteLLM config, and
+#     ./backend/data below). Any backend edit needs an image rebuild:
+#       docker compose build backend && docker compose up -d --force-recreate backend
+#   - The frontend Dockerfile only COPYs a host-built dist/. Run `npm run build` in
+#     ./frontend BEFORE `docker compose build frontend`, or nginx serves the old JS.
+#
+# Readiness: /api/v1/health does not exist (404) - health_router is mounted without
+# the API prefix. Use /ping, or /api/v1/govern/compliance/posture to exercise the
+# Govern data path.
+#
 # Services:
 #   - frontend:  React UI on http://localhost:3000
 #   - backend:   FastAPI on http://localhost:8000
@@ -61,11 +75,103 @@ services:
       - LITELLM_MASTER_KEY=sk-local-dev-key
       - LITELLM_LOCAL_CONFIG_PATH=/app/litellm-config.yaml
       - LOCAL_MODE=true
-      - AWS_REGION=us-east-2
+      # Two different regions, and swapping them fails SILENTLY. An AWS API call
+      # against the wrong region succeeds and returns that region's smaller (often
+      # empty) inventory instead of raising, so the mistake surfaces as an undercount
+      # under a Live badge, not as an error - the Operations Hub once reported a
+      # 1-agent fleet against a real fleet of 36 this way. See
+      # backend/src/core/region_config.py for all three tiers.
+      #
+      # AWS_REGION        = tier 1, the CONTROL-PLANE region: AVA's own DynamoDB
+      #                     tables and infra. Also the last fallback in
+      #                     region_config.table_region().
+      # GOVERN_AWS_REGION = tier 2, where the GOVERNED fleet lives: Bedrock agents,
+      #                     AgentCore runtimes, guardrails, and their CloudWatch
+      #                     metrics. Fallback when the governed-region set below is
+      #                     empty. Never used to reach a control-plane table.
+      #
+      # Both are interpolated with the demo account's values as DEFAULTS, not baked in
+      # as literals. They were literals, which made them the only two region settings in
+      # this file a deployer could not override - `AWS_REGION_NAME` on the gateway service
+      # above has always used this pattern. Baked-in regions are the same silent failure as
+      # getting the tiers backwards: someone deploying AVA into eu-west-1 would set
+      # AWS_REGION in their shell, see it ignored, and get a 200 with an empty inventory
+      # from us-east-1 rather than an error naming the region.
+      #
+      # Note the two forms differ, and the difference is load-bearing:
+      #   ${VAR:-default} substitutes the default when VAR is unset OR EMPTY
+      #   ${VAR-default}  substitutes it only when VAR is UNSET
+      # Verified with `docker compose config` against a .env holding `VAR=`: the colon form
+      # yielded us-east-1, the plain form yielded "".
+      #
+      # AWS_REGION keeps the colon form because an empty control-plane region is never an
+      # intent - it is the terminal fallback for every table, and boto3 does not degrade on
+      # it, it raises ValueError("Invalid endpoint: https://sts..amazonaws.com") at client
+      # construction. GOVERN_AWS_REGION uses the plain form because empty IS a meaningful
+      # value there: it means "the governed fleet is in AWS_REGION", which Settings.__init__
+      # resolves. Under the colon form that intent was inexpressible - a deployer following
+      # infrastructure/.env.example and setting GOVERN_AWS_REGION= would have had it quietly
+      # rewritten to us-east-1, reintroducing the exact hardcoded region this change removes.
+      - AWS_REGION=${AWS_REGION:-us-east-2}
+      - GOVERN_AWS_REGION=${GOVERN_AWS_REGION-us-east-1}
+      # Persisted governed-region set (tier 2 fans out over these, read-only, and
+      # merges). Bind-mounted below so runtime "govern this region" survives restart;
+      # absent/empty/unreadable falls back to [GOVERN_AWS_REGION].
+      - GOVERN_REGIONS_CONFIG_PATH=/app/data/governed_regions.json
+      - GOVERN_PREWARM_INTERVAL=150
       - USE_DEV_AUTH=true
       - DEPLOYMENTS_TABLE_NAME=fsi-control-plane-deployments
       - GUARDRAILS_TABLE_NAME=fsi-control-plane-guardrails
+      # This table was provisioned in us-east-1 before the control plane moved to
+      # us-east-2, and it holds real templates. A control-plane table has exactly
+      # one home region (see core/region_config.py), so it is declared here rather
+      # than read as a union of both regions. Remove this line once the table is
+      # migrated into AWS_REGION.
+      #
+      # This is the per-table escape hatch. table_region() resolves most-specific
+      # first: <TABLE_KEY>_TABLE_REGION -> CONTROL_PLANE_TABLE_REGION -> AWS_REGION,
+      # where <TABLE_KEY> is the settings prefix before _TABLE_NAME. Configured,
+      # never discovered - probing regions for a matching name would silently pick
+      # one, and a read-write table picked at random is a split-brain write target.
+      #
+      # Interpolated for the same reason as the two regions above, but note the default
+      # differs in intent: us-east-1 is where THIS account's table happens to live, not a
+      # recommendation. A fresh deployer gets the guardrails table created by Terraform in
+      # their own var.aws_region, so they should set GUARDRAILS_TABLE_REGION= (empty) and
+      # let table_region() fall through to AWS_REGION. See infrastructure/.env.example.
+      #
+      # Plain `-` form, not `:-`, for exactly that reason: table_region() treats empty as
+      # "no override, fall through", and the colon form cannot express empty (see the
+      # AWS_REGION/GOVERN_AWS_REGION comment above). With `:-` the instruction on the line
+      # above would not have worked - the fresh deployer's empty value would come back as
+      # us-east-1 and Scan a table Terraform never created there, which DynamoDB answers as
+      # an empty result rather than an error.
+      - GUARDRAILS_TABLE_REGION=${GUARDRAILS_TABLE_REGION-us-east-1}
       - FINOPS_SPEND_TABLE_NAME=fsi-control-plane-finops-spend
+      # Service-onboarding approval runs. Same shape as FINOPS_SPEND above: the table is
+      # provisioned in AWS_REGION but config.py defaults the NAME to "", so it must be
+      # declared here or nowhere. Undeclared, the ava-approvals data-source probe reports
+      # `not_probed - SERVICE_APPROVAL_TABLE_NAME is not configured` rather than an error,
+      # which reads as "nothing to probe" instead of "a real table is going unread".
+      - SERVICE_APPROVAL_TABLE_NAME=fsi-control-plane-service-approval
+      # Both declared in infrastructure/environments/dev/main.tf. No *_TABLE_REGION
+      # override, so they resolve to AWS_REGION (us-east-2), same as the rest of the
+      # control plane. Values match the config.py defaults; listed here so the local
+      # stack's write targets are explicit rather than implied.
+      - GOVERN_OPERATIONS_TABLE_NAME=fsi-control-plane-govern-operations
+      - GOVERN_COMPLIANCE_TABLE_NAME=fsi-control-plane-govern-compliance
+      # Policy metadata + policy audit events. Also in us-east-2, so no *_TABLE_REGION
+      # override. Stated here for the same reason as the two above: config.py now defaults
+      # it correctly, but this setting's default used to be the empty string, and
+      # boto3.resource("dynamodb").Table("") constructs without complaint - the resource
+      # factory validates nothing, so the empty name survived a module-level lazy singleton's
+      # __init__ and raised once per request from inside botocore's serializer. Declared
+      # rather than inherited so the local write target is visible, not implied.
+      - POLICIES_TABLE_NAME=fsi-control-plane-policies
+      # Default AgentCore policy engine for the Secure Policy UI + the Fleet "Policies"
+      # card (aggregator lists policies for this engine when none is specified).
+      # In us-east-1 (GOVERN_AWS_REGION). Not a secret/ARN/account id.
+      - POLICY_ENGINE_ID=PolicyEngine_P1-y_2qsnuwtp
       - PYTHONPATH=/app/src
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
@@ -73,6 +179,7 @@ services:
     volumes:
       - ~/.aws:/root/.aws:ro
       - ./gateway/litellm-config-local.yaml:/app/litellm-config.yaml:ro
+      - ./backend/data:/app/data
     depends_on:
       - gateway
 

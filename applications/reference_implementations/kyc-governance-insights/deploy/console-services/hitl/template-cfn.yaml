@@ -1,0 +1,330 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'KYC HITL Review Proxy - Lambda + API Gateway for human-in-the-loop workflow'
+
+Parameters:
+  PendingTable:
+    Type: String
+    Default: hitl-pending-reviews
+  AuditTable:
+    Type: String
+    Default: hitl-audit-log
+  StateMachineArn:
+    Type: String
+    Default: ''
+    Description: HITL Step Functions state machine ARN (optional)
+  AllowedOrigin:
+    Type: String
+    Default: 'https://d34f241zukf5gh.cloudfront.net'
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  # NOTE: PendingTable (hitl-pending-reviews) and AuditTable (hitl-audit-log) are NOT created
+  # here — CloudFormation deploys to this stack are currently blocked by an account-level
+  # AWS::EarlyValidation::ResourceExistenceCheck hook. The tables were created out-of-band via
+  # the AWS CLI (PK review_id, PAY_PER_REQUEST) so the Lambda's scan works. To make them
+  # IaC-owned, resolve the hook then import/add them here. See docs/KNOWN_GAPS.md.
+  HitlProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Pending-reviews table: full CRUD — the Lambda removes a review from
+              # pending once a decision is submitted, so DeleteItem is required here.
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PendingTable}'
+              # Audit-log table: append + read only. NO DeleteItem — audit records
+              # must be immutable (SEC-MRI-2).
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AuditTable}'
+        - PolicyName: StepFunctionsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                  - states:SendTaskSuccess
+                  - states:SendTaskFailure
+                Resource: '*'
+
+  HitlLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-handler'
+      RetentionInDays: 30
+
+  HitlFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: HitlLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-handler'
+      Role: !GetAtt HitlProxyRole.Arn
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: 5
+      Handler: index.handler
+      Environment:
+        Variables:
+          PENDING_TABLE: !Ref PendingTable
+          AUDIT_TABLE: !Ref AuditTable
+          STATE_MACHINE_ARN: !Ref StateMachineArn
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: hitl}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, os, boto3, uuid
+          from datetime import datetime, timezone
+          from decimal import Decimal
+
+          dynamodb = boto3.resource('dynamodb')
+          pending_table = dynamodb.Table(os.environ['PENDING_TABLE'])
+          audit_table = dynamodb.Table(os.environ['AUDIT_TABLE'])
+          sfn = boto3.client('stepfunctions')
+          STATE_MACHINE_ARN = os.environ.get('STATE_MACHINE_ARN', '')
+          ORIGIN = os.environ['ALLOWED_ORIGIN']
+
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, o):
+                  if isinstance(o, Decimal):
+                      return float(o)
+                  return super().default(o)
+
+          def cors(body, status=200):
+              return {
+                  'statusCode': status,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': ORIGIN,
+                      'Access-Control-Allow-Headers': 'Content-Type,x-api-key',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                  },
+                  'body': json.dumps(body, cls=DecimalEncoder),
+              }
+
+          def handler(event, context):
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', '')
+              path = event.get('path') or event.get('rawPath', '')
+
+              # Auth is enforced at the edge by the shared origin-verify API Gateway
+              # authorizer (invariant #1) — this handler contains no auth logic.
+
+              if method == 'OPTIONS':
+                  return cors({})
+
+              tenant_id = (event.get('headers') or {}).get('x-tenant-id', 'default')
+
+              try:
+                  if path.endswith('/health') and method == 'GET':
+                      return cors({'status': 'ok', 'service': 'hitl-proxy', 'timestamp': datetime.now(timezone.utc).isoformat()})
+
+                  elif path.endswith('/pending') and method == 'GET':
+                      return get_pending()
+
+                  elif path.endswith('/audit') and method == 'GET':
+                      return get_audit()
+
+                  elif path.endswith('/escalate') and method == 'POST':
+                      body = json.loads(event.get('body', '{}'))
+                      return create_escalation(body)
+
+                  elif path.endswith('/decision') and method == 'POST':
+                      body = json.loads(event.get('body', '{}'))
+                      return submit_decision(body)
+
+                  return cors({'error': 'Not found'}, 404)
+
+              except Exception as e:
+                  return cors({'error': str(e)}, 500)
+
+          def get_pending():
+              resp = pending_table.scan()
+              items = sorted(resp.get('Items', []), key=lambda x: x.get('timestamp', ''), reverse=True)
+              return cors({'reviews': items})
+
+          def get_audit():
+              resp = audit_table.scan()
+              items = sorted(resp.get('Items', []), key=lambda x: x.get('timestamp', ''), reverse=True)
+              return cors({'audit': items})
+
+          def create_escalation(body):
+              review_id = f'REV-{uuid.uuid4().hex[:8]}'
+              now = datetime.now(timezone.utc).isoformat()
+              item = {
+                  'review_id': review_id,
+                  'case_id': body.get('case_id', 'unknown'),
+                  'scenario': body.get('scenario', ''),
+                  'agent_verdict': body.get('agent_verdict', 'ESCALATE'),
+                  'escalation_reason': body.get('escalation_reason', 'Risk threshold exceeded'),
+                  'timestamp': now,
+                  'status': 'PENDING',
+              }
+              pending_table.put_item(Item=item)
+
+              # Start Step Functions execution if configured
+              execution_arn = ''
+              if STATE_MACHINE_ARN:
+                  resp = sfn.start_execution(
+                      stateMachineArn=STATE_MACHINE_ARN,
+                      name=review_id,
+                      input=json.dumps(item),
+                  )
+                  execution_arn = resp.get('executionArn', '')
+
+              return cors({'review_id': review_id, 'execution_arn': execution_arn, 'status': 'PENDING'})
+
+          def submit_decision(body):
+              review_id = body.get('reviewId') or body.get('review_id', '')
+              decision = body.get('decision', 'APPROVED')
+              notes = body.get('notes', '')
+              reviewer = body.get('reviewer', 'presenter')
+              now = datetime.now(timezone.utc).isoformat()
+
+              # Remove from pending
+              if review_id:
+                  try:
+                      pending_table.delete_item(Key={'review_id': review_id})
+                  except:
+                      pass
+
+              # Write to audit log
+              audit_item = {
+                  'review_id': review_id or f'REV-{uuid.uuid4().hex[:8]}',
+                  'decision': decision,
+                  'reviewer': reviewer,
+                  'notes': notes,
+                  'timestamp': now,
+                  'deliberation_seconds': body.get('deliberationSeconds', 0),
+              }
+              audit_table.put_item(Item=audit_item)
+
+              # Complete Step Functions task if token provided
+              task_token = body.get('taskToken', '')
+              if task_token:
+                  try:
+                      if decision in ('APPROVED', 'approve'):
+                          sfn.send_task_success(taskToken=task_token, output=json.dumps(audit_item))
+                      else:
+                          sfn.send_task_failure(taskToken=task_token, error='REJECTED', cause=notes or 'Human reviewer rejected')
+                  except:
+                      pass
+
+              return cors({'status': 'completed', 'review_id': audit_item['review_id'], 'decision': decision})
+
+  HitlApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - x-api-key
+        MaxAge: 3600
+
+  # Edge auth (invariant #1): shared origin-verify REQUEST authorizer, imported from the
+  # origin-verify-authorizer stack.
+  OriginVerifyAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HitlApi
+      AuthorizerType: REQUEST
+      Name: kyc-origin-verify
+      IdentitySource:
+        - '$request.header.x-origin-verify'
+      AuthorizerPayloadFormatVersion: '2.0'
+      EnableSimpleResponses: true
+      AuthorizerResultTtlInSeconds: 300
+      AuthorizerUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnArn}/invocations'
+        - FnArn: !ImportValue kyc-origin-verify-authorizer-arn
+
+  OriginVerifyAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue kyc-origin-verify-authorizer-arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HitlApi}/authorizers/${OriginVerifyAuthorizer}'
+
+  HitlApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HitlApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt HitlFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  HitlDefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HitlApi
+      RouteKey: '$default'
+      Target: !Sub 'integrations/${HitlApiIntegration}'
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  HitlApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HitlApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  HitlLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HitlFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HitlApi}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: HITL Proxy API endpoint URL
+    Value: !GetAtt HitlApi.ApiEndpoint

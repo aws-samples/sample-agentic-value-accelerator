@@ -5,6 +5,8 @@ import { DIMENSIONS, DIM_ACCENTS, LEVEL_NAMES, STATUSES, PATTERNS } from './oper
 import type { OperatingModel, OperatingModelCreate } from './operating_model/types';
 import { levelColor, patternColor } from './operating_model/scoring';
 import OperatingModelDrawer from './operating_model/OperatingModelDrawer';
+import ExportReportButton from './ExportReportButton';
+import { buildOperatingModelReport } from './operating_model/report';
 
 type SortKey = 'composite' | 'completion' | 'updated' | 'name' | 'investment';
 
@@ -309,6 +311,7 @@ function OmCard({ m, onEdit, onDelete }: { m: OperatingModel; onEdit: () => void
       <div className="border-t border-slate-100 px-5 py-2.5 flex items-center justify-between bg-slate-50/40">
         <span className="text-[10px] text-slate-400">Updated {new Date(m.updated_at).toLocaleDateString()}</span>
         <div className="flex gap-1">
+          <ExportReportButton getDefinition={() => buildOperatingModelReport(m)} variant="link" label="Export" title="Download this operating model as a PDF report" />
           <button onClick={onEdit} className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md hover:bg-blue-100">Edit</button>
           <button onClick={onDelete} className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded-md hover:bg-red-100">Delete</button>
         </div>

@@ -32,6 +32,7 @@ from api.routes.business_cases import router as business_cases_router
 from api.routes.knowledge import router as knowledge_router
 from api.routes.operating_model import router as operating_model_router
 from api.routes.organization_design import router as organization_design_router
+from api.routes.transformation_value_model import router as transformation_value_model_router
 from api.routes.service_approval import router as service_approval_router
 from api.routes.policies import router as policies_router
 from api.routes.advpo import router as advpo_router
@@ -46,12 +47,14 @@ from api.routes.govern_cost import router as govern_cost_router
 from api.routes.govern_models import router as govern_models_router
 from api.routes.govern_posture import router as govern_posture_router
 from api.routes.govern_evals import router as govern_evals_router
+from api.routes.evaluations import router as evaluations_router
 from api.routes.govern_risk_posture import router as govern_risk_posture_router
 from api.routes.govern_trail import router as govern_trail_router
 from api.routes.govern_security import router as govern_security_router
 from api.routes.govern_agentcore import router as govern_agentcore_router
 from api.routes.govern_guardrails import router as govern_guardrails_router
 from api.routes.govern_invocation_safety import router as govern_invocation_safety_router
+from api.routes.govern_regions import router as govern_regions_router
 from api.routes.govern_data_sources import router as govern_data_sources_router
 from api.routes.govern_data_catalog import router as govern_data_catalog_router
 from api.routes.govern_fleet import router as govern_fleet_router
@@ -60,6 +63,37 @@ from api.routes.govern_sagemaker import router as govern_sagemaker_router
 from api.routes.govern_controls import router as govern_controls_router
 from api.routes.govern_developer_ai import router as govern_developer_ai_router
 from api.routes.govern_guardduty_ai import router as govern_guardduty_ai_router
+from api.routes.govern_aidlc import router as govern_aidlc_router
+from api.routes.govern_harness_audit import router as govern_harness_audit_router
+from api.routes.govern_harness_policy import router as govern_harness_policy_router
+from api.routes.govern_validation import router as govern_validation_router
+from api.routes.govern_policy_drift import router as govern_policy_drift_router
+from api.routes.govern_posture_score import router as govern_posture_score_router
+from api.routes.govern_compliance_evidence import router as govern_compliance_evidence_router
+from api.routes.govern_llm_quality import router as govern_llm_quality_router
+from api.routes.govern_path_jail import router as govern_path_jail_router
+from api.routes.govern_capacity import router as govern_capacity_router
+from api.routes.govern_iam import router as govern_iam_router
+from api.routes.govern_operations import router as govern_operations_router
+from api.routes.govern_marketplace import router as govern_marketplace_router
+from api.routes.govern_command_center import router as govern_command_center_router
+from api.routes.govern_knowledge_bases import router as govern_knowledge_bases_router
+from api.routes.govern_xray import router as govern_xray_router
+from api.routes.govern_bedrock_assets import router as govern_bedrock_assets_router
+from api.routes.multicloud import router as multicloud_router
+from api.routes.govern_security_lake import router as govern_security_lake_router
+from api.routes.govern_audit_manager import router as govern_audit_manager_router
+from api.routes.govern_governance import router as govern_governance_router
+from api.routes.govern_ctlake import router as govern_ctlake_router
+from api.routes.govern_macie import router as govern_macie_router
+from api.routes.govern_cost_resource import router as govern_cost_resource_router
+from api.routes.govern_invocations import router as govern_invocations_router
+from api.routes.govern_resource_tags import router as govern_resource_tags_router
+from api.routes.govern_trusted_advisor import router as govern_trusted_advisor_router
+from api.routes.govern_service_quotas import router as govern_service_quotas_router
+from api.routes.govern_compute_optimizer import router as govern_compute_optimizer_router
+from api.routes.govern_verified_permissions import router as govern_verified_permissions_router
+from api.routes.govern_health import router as govern_health_router
 
 __all__ = [
     "projects_router",
@@ -93,6 +127,7 @@ __all__ = [
     "knowledge_router",
     "operating_model_router",
     "organization_design_router",
+    "transformation_value_model_router",
     "service_approval_router",
     "advpo_router",
     "govern_audit_router",
@@ -105,12 +140,14 @@ __all__ = [
     "govern_models_router",
     "govern_posture_router",
     "govern_evals_router",
+    "evaluations_router",
     "govern_risk_posture_router",
     "govern_trail_router",
     "govern_security_router",
     "govern_agentcore_router",
     "govern_guardrails_router",
     "govern_invocation_safety_router",
+    "govern_regions_router",
     "govern_data_sources_router",
     "govern_data_catalog_router",
     "govern_fleet_router",
@@ -119,4 +156,35 @@ __all__ = [
     "govern_controls_router",
     "govern_developer_ai_router",
     "govern_guardduty_ai_router",
+    "govern_aidlc_router",
+    "govern_harness_audit_router",
+    "govern_harness_policy_router",
+    "govern_validation_router",
+    "govern_policy_drift_router",
+    "govern_posture_score_router",
+    "govern_compliance_evidence_router",
+    "govern_llm_quality_router",
+    "govern_path_jail_router",
+    "govern_capacity_router",
+    "govern_iam_router",
+    "govern_operations_router",
+    "govern_marketplace_router",
+    "govern_command_center_router",
+    "govern_knowledge_bases_router",
+    "govern_xray_router",
+    "govern_bedrock_assets_router",
+    "govern_security_lake_router",
+    "govern_audit_manager_router",
+    "govern_governance_router",
+    "govern_ctlake_router",
+    "govern_macie_router",
+    "govern_cost_resource_router",
+    "govern_invocations_router",
+    "govern_resource_tags_router",
+    "govern_trusted_advisor_router",
+    "govern_service_quotas_router",
+    "govern_compute_optimizer_router",
+    "govern_verified_permissions_router",
+    "govern_health_router",
+    "multicloud_router",
 ]

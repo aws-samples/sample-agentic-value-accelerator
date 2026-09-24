@@ -15,13 +15,23 @@ Metadata:
           default: Deployment Configuration
         Parameters:
           - ComputeType
+          - EvaluationOutputBucketArns
+          - EnableWriteActions
           - EnableCostExplorer
           - EnableBedrock
           - EnableCloudWatch
           - EnableCloudTrail
+          - EnableSecurityServices
+          - EnableComplianceAudit
+          - EnableDataGovernance
+          - EnableOperations
     ParameterLabels:
       ComputeType:
         default: Where will AVA Govern run?
+      EvaluationOutputBucketArns:
+        default: Bedrock evaluation output bucket ARNs (optional, narrows S3 read)
+      EnableWriteActions:
+        default: Allow the few write actions Govern features need? (default no)
       EnableCostExplorer:
         default: Enable FinOps (Cost Explorer)?
       EnableBedrock:
@@ -30,6 +40,14 @@ Metadata:
         default: Enable observability (CloudWatch)?
       EnableCloudTrail:
         default: Enable audit trail (CloudTrail)?
+      EnableSecurityServices:
+        default: Enable security posture (Security Hub, GuardDuty, Inspector, Macie)?
+      EnableComplianceAudit:
+        default: Enable compliance and audit (Config, Audit Manager, Organizations)?
+      EnableDataGovernance:
+        default: Enable data and model governance (Glue, SageMaker, KMS, tags)?
+      EnableOperations:
+        default: Enable operations (Service Quotas, SSM, Health, Trusted Advisor)?
 
 Parameters:
   ComputeType:
@@ -42,6 +60,30 @@ Parameters:
       - lambda
       - apprunner
     Description: The compute service where AVA Govern will run
+
+  EvaluationOutputBucketArns:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: >-
+      Optional. Bedrock evaluation output bucket ARNs, comma separated. Give BOTH forms
+      per bucket so ListBucket and GetObject both resolve, e.g.
+      "arn:aws:s3:::my-evals,arn:aws:s3:::my-evals/*".
+      When set, S3EvaluationOutputRead is scoped to exactly these ARNs. When left empty
+      the statement falls back to all buckets IN THIS ACCOUNT ONLY (aws:ResourceAccount)
+      - never unconditional. Setting this is the single largest permission reduction
+      available in this template.
+
+  EnableWriteActions:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Allow the small set of WRITE actions some Govern features need: applying a
+      guardrail to test it, publishing the AVA/LLMQuality custom metrics, creating
+      CloudWatch dashboards/alarms, and requesting service-quota increases. Defaults
+      to FALSE - Govern is read-only by design, and every surface degrades honestly
+      rather than erroring when a permission is absent. Turn this on only if you use
+      those features. See AVAGovernWriteActions below for the exact grants.
 
   EnableCostExplorer:
     Type: String
@@ -67,6 +109,38 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: Allow AVA Govern to read CloudTrail events for audit
 
+  EnableSecurityServices:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Allow AVA Govern to read findings from Security Hub, GuardDuty, Inspector,
+      Macie, Detective, IAM Access Analyzer, and Security Lake
+
+  EnableComplianceAudit:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Allow AVA Govern to read AWS Config rules, Audit Manager assessments,
+      Organizations service control policies, and Verified Permissions stores
+
+  EnableDataGovernance:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Allow AVA Govern to read the Glue Data Catalog, SageMaker inventory,
+      KMS key metadata, resource tags, and governance artifacts in S3
+
+  EnableOperations:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Allow AVA Govern to read Service Quotas, Systems Manager inventory,
+      AWS Health events, Trusted Advisor checks, and repository metadata
+
 Conditions:
   IsECS: !Equals [!Ref ComputeType, 'ecs']
   IsEKS: !Equals [!Ref ComputeType, 'eks']
@@ -75,10 +149,18 @@ Conditions:
   IsAppRunner: !Equals [!Ref ComputeType, 'apprunner']
   NeedsInstanceProfile: !Or [!Condition IsEC2, !Condition IsECS]
 
+  # Empty CommaDelimitedList joins to '' — that is how we detect "not provided".
+  ScopeEvalBuckets: !Not [!Equals [!Join ['', !Ref EvaluationOutputBucketArns], '']]
+
+  UseWriteActions: !Equals [!Ref EnableWriteActions, 'true']
   UseCostExplorer: !Equals [!Ref EnableCostExplorer, 'true']
   UseBedrock: !Equals [!Ref EnableBedrock, 'true']
   UseCloudWatch: !Equals [!Ref EnableCloudWatch, 'true']
   UseCloudTrail: !Equals [!Ref EnableCloudTrail, 'true']
+  UseSecurityServices: !Equals [!Ref EnableSecurityServices, 'true']
+  UseComplianceAudit: !Equals [!Ref EnableComplianceAudit, 'true']
+  UseDataGovernance: !Equals [!Ref EnableDataGovernance, 'true']
+  UseOperations: !Equals [!Ref EnableOperations, 'true']
 
 Resources:
   AVAGovernRole:
@@ -121,6 +203,22 @@ Resources:
               Principal:
                 Service: tasks.apprunner.amazonaws.com
               Action: sts:AssumeRole
+            - !Ref AWS::NoValue
+          # EKS - Pod Identity. `eks` was an AllowedValue of ComputeType and the
+          # IsEKS condition was declared, but no trust statement referenced it, so
+          # deploying with ComputeType=eks produced a role whose Statement list was
+          # empty (every !If resolved to AWS::NoValue) and CloudFormation rejected
+          # the stack with MalformedPolicyDocument. Found by cfn-lint W8001.
+          # Pod Identity is used rather than IRSA so no OIDC provider ARN parameter
+          # is needed. sts:TagSession is required alongside sts:AssumeRole.
+          - !If
+            - IsEKS
+            - Effect: Allow
+              Principal:
+                Service: pods.eks.amazonaws.com
+              Action:
+                - sts:AssumeRole
+                - sts:TagSession
             - !Ref AWS::NoValue
       Tags:
         - Key: Application
@@ -205,8 +303,13 @@ Resources:
             Effect: Allow
             Action:
               - bedrock:ListGuardrails
+              # bedrock:GetGuardrailPolicy was listed here and does not exist.
+              # Confirmed against two independent sources: it is absent from
+              # boto3's bedrock service model (only Create/Delete/Get/List/Update
+              # Guardrail and the enforced-configuration calls exist) and cfn-lint
+              # rejects it as an unknown action. Nothing in the backend called it.
+              # GetGuardrail already returns the guardrail's policy configuration.
               - bedrock:GetGuardrail
-              - bedrock:GetGuardrailPolicy
             Resource: '*'
 
           # Bedrock Knowledge Bases
@@ -257,6 +360,7 @@ Resources:
               - cloudwatch:GetMetricStatistics
               - cloudwatch:ListMetrics
               - cloudwatch:DescribeAlarms
+              - cloudwatch:DescribeAlarmHistory
               - cloudwatch:DescribeAlarmsForMetric
               - cloudwatch:GetDashboard
               - cloudwatch:ListDashboards
@@ -332,6 +436,489 @@ Resources:
               - iam:SimulatePrincipalPolicy
             Resource: '*'
 
+  # ---------------------------------------------------------------------------
+  # SIZE BUDGET: IAM caps the aggregate size of all inline policies on one role
+  # at 10,240 characters (whitespace excluded). With every Enable parameter set
+  # to true, the eleven inline policies below total roughly 9,360 characters,
+  # leaving about 880 characters of headroom. Before adding actions here, check
+  # that headroom. If a new capability does not fit, add it as a separate
+  # AWS::IAM::ManagedPolicy (6,144 characters each, 20 attachable per identity)
+  # rather than shrinking an existing statement.
+  #
+  # Every action below is read, list, get, or describe only. AVA Govern never
+  # writes to a governed account. Two features are therefore intentionally
+  # unsupported by this role: Service Quotas increase requests and the harness
+  # audit S3 sink. See docs/ava-govern-iam-permissions.md.
+  # ---------------------------------------------------------------------------
+
+  # Security Services Policy (findings readers)
+  SecurityServicesPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseSecurityServices
+    Properties:
+      PolicyName: AVAGovernSecurityServices
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Security Hub - risk posture severity roll-up
+          - Sid: SecurityHubRead
+            Effect: Allow
+            Action:
+              - securityhub:GetFindings
+            Resource: '*'
+
+          # GuardDuty - detector discovery is account level
+          - Sid: GuardDutyListDetectors
+            Effect: Allow
+            Action:
+              - guardduty:ListDetectors
+            Resource: '*'
+
+          # GuardDuty - findings are scoped to detectors in this account
+          - Sid: GuardDutyFindingsRead
+            Effect: Allow
+            Action:
+              - guardduty:ListFindings
+              - guardduty:GetFindings
+            Resource: !Sub 'arn:${AWS::Partition}:guardduty:${AWS::Region}:${AWS::AccountId}:detector/*'
+
+          # Inspector - vulnerability findings and coverage
+          - Sid: Inspector2Read
+            Effect: Allow
+            Action:
+              - inspector2:ListFindings
+              - inspector2:ListCoverage
+            Resource: '*'
+
+          # Detective - behavior graph and investigation discovery
+          - Sid: DetectiveRead
+            Effect: Allow
+            Action:
+              - detective:ListGraphs
+              - detective:ListInvestigations
+            Resource: '*'
+
+          # Macie - data sensitivity findings and bucket inventory
+          - Sid: Macie2Read
+            Effect: Allow
+            Action:
+              - macie2:GetMacieSession
+              - macie2:DescribeBuckets
+              - macie2:GetFindingStatistics
+              - macie2:ListFindings
+              - macie2:GetFindings
+            Resource: '*'
+
+          # IAM Access Analyzer - analyzer discovery is account level
+          - Sid: AccessAnalyzerListAnalyzers
+            Effect: Allow
+            Action:
+              - access-analyzer:ListAnalyzers
+            Resource: '*'
+
+          # IAM Access Analyzer - findings are scoped to analyzers in this account.
+          # ListFindings and ListFindingsV2 are both authorized by ListFindings.
+          - Sid: AccessAnalyzerFindingsRead
+            Effect: Allow
+            Action:
+              - access-analyzer:ListFindings
+            Resource: !Sub 'arn:${AWS::Partition}:access-analyzer:${AWS::Region}:${AWS::AccountId}:analyzer/*'
+
+          # Security Lake - data lake, subscriber, and log source inventory
+          - Sid: SecurityLakeRead
+            Effect: Allow
+            Action:
+              - securitylake:ListDataLakes
+              - securitylake:ListSubscribers
+              - securitylake:ListLogSources
+            Resource: '*'
+
+  # Compliance and Audit Policy
+  ComplianceAuditPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseComplianceAudit
+    Properties:
+      PolicyName: AVAGovernComplianceAudit
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # AWS Config - rule inventory and compliance roll-up
+          - Sid: ConfigComplianceRead
+            Effect: Allow
+            Action:
+              - config:DescribeConfigRules
+              - config:DescribeComplianceByConfigRule
+              - config:GetComplianceDetailsByConfigRule
+            Resource: '*'
+
+          # Audit Manager - assessment discovery is account level
+          - Sid: AuditManagerListAssessments
+            Effect: Allow
+            Action:
+              - auditmanager:ListAssessments
+            Resource: '*'
+
+          # Audit Manager - assessment detail and evidence
+          - Sid: AuditManagerEvidenceRead
+            Effect: Allow
+            Action:
+              - auditmanager:GetAssessment
+              - auditmanager:GetEvidenceFoldersByAssessment
+              - auditmanager:GetEvidenceByEvidenceFolder
+            Resource: !Sub 'arn:${AWS::Partition}:auditmanager:${AWS::Region}:${AWS::AccountId}:assessment/*'
+
+          # Organizations - service control policy inventory
+          - Sid: OrganizationsPolicyRead
+            Effect: Allow
+            Action:
+              - organizations:ListPolicies
+              - organizations:ListTargetsForPolicy
+            Resource: '*'
+
+          # Verified Permissions - policy store inventory and schema
+          - Sid: VerifiedPermissionsRead
+            Effect: Allow
+            Action:
+              - verifiedpermissions:ListPolicyStores
+              - verifiedpermissions:GetPolicyStore
+              - verifiedpermissions:ListPolicies
+              - verifiedpermissions:ListIdentitySources
+              - verifiedpermissions:GetSchema
+            Resource: '*'
+
+  # Bedrock AgentCore Policy
+  # NOTE: the boto3 client is named "bedrock-agentcore-control" but the IAM
+  # service prefix is "bedrock-agentcore" for both the control and data planes.
+  AgentCorePolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseBedrock
+    Properties:
+      PolicyName: AVAGovernAgentCore
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AgentCoreRead
+            Effect: Allow
+            Action:
+              - bedrock-agentcore:ListAgentRuntimes
+              - bedrock-agentcore:ListGateways
+              - bedrock-agentcore:ListGatewayTargets
+              - bedrock-agentcore:ListMemories
+              - bedrock-agentcore:ListPolicyEngines
+              - bedrock-agentcore:ListWorkloadIdentities
+              - bedrock-agentcore:GetWorkloadIdentity
+            Resource: '*'
+
+  # Data and Model Governance Policy
+  DataGovernancePolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseDataGovernance
+    Properties:
+      PolicyName: AVAGovernDataGovernance
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Glue Data Catalog - database and table inventory
+          - Sid: GlueCatalogRead
+            Effect: Allow
+            Action:
+              - glue:GetDatabases
+              - glue:GetTables
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/*'
+              - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/*/*'
+
+          # Glue Data Quality - ruleset and evaluation run history
+          - Sid: GlueDataQualityRead
+            Effect: Allow
+            Action:
+              - glue:ListDataQualityRulesets
+              - glue:ListDataQualityRulesetEvaluationRuns
+              - glue:GetDataQualityRulesetEvaluationRun
+            Resource: '*'
+
+          # SageMaker - inventory and lineage. List APIs are account scoped.
+          - Sid: SageMakerInventoryRead
+            Effect: Allow
+            Action:
+              - sagemaker:ListModels
+              - sagemaker:ListEndpoints
+              - sagemaker:ListModelPackages
+              - sagemaker:ListModelCards
+              - sagemaker:ListProcessingJobs
+              - sagemaker:ListArtifacts
+              - sagemaker:ListContexts
+              - sagemaker:ListAssociations
+            Resource: '*'
+
+          # SageMaker - Model Monitor job status
+          - Sid: SageMakerProcessingJobRead
+            Effect: Allow
+            Action:
+              - sagemaker:DescribeProcessingJob
+            Resource: !Sub 'arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:processing-job/*'
+
+          # S3 - SageMaker Model Monitor baseline and violation reports in the
+          # default SageMaker bucket, which has a deterministic name.
+          - Sid: S3SageMakerMonitorRead
+            Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}'
+              - !Sub 'arn:${AWS::Partition}:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}/*'
+
+          # S3 - Bedrock evaluation job output.
+          #
+          # This is the widest statement in the role. Each eval job names its own output
+          # bucket in its job config at runtime, so the bucket is genuinely not knowable
+          # when this template is written - but 'Resource: *' with no condition was wider
+          # than that constraint requires, in two ways:
+          #
+          #   1. It allowed reading objects in OTHER ACCOUNTS' buckets whose bucket policy
+          #      permits this principal. Nothing about reading eval output needs that, and
+          #      aws:ResourceAccount removes it at no functional cost.
+          #   2. It gave no way to narrow the grant without editing the template. The
+          #      EvaluationOutputBuckets parameter now does that, and an operator who knows
+          #      their buckets gets the largest available permission reduction here.
+          #
+          # Read-only either way: s3:GetObject and s3:ListBucket, never a write.
+          - Sid: S3EvaluationOutputRead
+            Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+            Resource: !If
+              - ScopeEvalBuckets
+              - !Ref EvaluationOutputBucketArns
+              - '*'
+            Condition:
+              StringEquals:
+                # Confines the fallback to buckets owned by THIS account.
+                aws:ResourceAccount: !Ref 'AWS::AccountId'
+
+          # KMS - key discovery is account level
+          - Sid: KMSListKeys
+            Effect: Allow
+            Action:
+              - kms:ListKeys
+              - kms:ListAliases
+            Resource: '*'
+
+          # KMS - per key metadata and rotation state
+          - Sid: KMSKeyMetadataRead
+            Effect: Allow
+            Action:
+              - kms:DescribeKey
+              - kms:GetKeyRotationStatus
+            Resource: !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+
+          # Resource Groups Tagging API - the IAM prefix is "tag", not
+          # "resourcegroupstaggingapi"
+          - Sid: ResourceTagsRead
+            Effect: Allow
+            Action:
+              - tag:GetResources
+            Resource: '*'
+
+  # Operations Policy
+  OperationsPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseOperations
+    Properties:
+      PolicyName: AVAGovernOperations
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Service Quotas - the IAM prefix is "servicequotas", not
+          # "service-quotas". Read only; quota increase requests are not granted.
+          - Sid: ServiceQuotasRead
+            Effect: Allow
+            Action:
+              - servicequotas:ListServiceQuotas
+              - servicequotas:GetServiceQuota
+            Resource: '*'
+
+          # Systems Manager - managed node, document, and command inventory
+          - Sid: SSMInventoryRead
+            Effect: Allow
+            Action:
+              - ssm:DescribeInstanceInformation
+              - ssm:ListDocuments
+              - ssm:ListCommands
+            Resource: '*'
+
+          # AWS Health - service event feed
+          - Sid: HealthEventsRead
+            Effect: Allow
+            Action:
+              - health:DescribeEvents
+              - health:DescribeEventAggregates
+            Resource: '*'
+
+          # Trusted Advisor via the Support API. The trustedadvisor prefix only
+          # governs console access, so the support prefix is the correct one.
+          - Sid: TrustedAdvisorRead
+            Effect: Allow
+            Action:
+              - support:DescribeTrustedAdvisorChecks
+              - support:DescribeTrustedAdvisorCheckSummaries
+            Resource: '*'
+
+          # EC2 - region discovery only. No instance or network read.
+          - Sid: EC2RegionDiscovery
+            Effect: Allow
+            Action:
+              - ec2:DescribeRegions
+            Resource: '*'
+
+          # API Gateway - REST API inventory. API Gateway authorizes reads with
+          # the HTTP verb GET rather than an operation name.
+          - Sid: ApiGatewayRead
+            Effect: Allow
+            Action:
+              - apigateway:GET
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis'
+              - !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/*'
+
+          # Secrets Manager - METADATA ONLY. AVA Govern counts secrets to
+          # attest a control; it never reads secret material. GetSecretValue
+          # and BatchGetSecretValue are deliberately NOT granted.
+          - Sid: SecretsManagerListOnly
+            Effect: Allow
+            Action:
+              - secretsmanager:ListSecrets
+            Resource: '*'
+
+          # CodeCommit - repository discovery is account level
+          - Sid: CodeCommitListRepositories
+            Effect: Allow
+            Action:
+              - codecommit:ListRepositories
+            Resource: '*'
+
+          # CodeCommit - repository content for AI-DLC project detection
+          - Sid: CodeCommitRepositoryRead
+            Effect: Allow
+            Action:
+              - codecommit:GetRepository
+              - codecommit:GetBranch
+              - codecommit:GetCommit
+              - codecommit:GetFolder
+              - codecommit:GetFile
+            Resource: !Sub 'arn:${AWS::Partition}:codecommit:${AWS::Region}:${AWS::AccountId}:*'
+
+  # FinOps Extended Policy (budgets and rightsizing, gated with Cost Explorer)
+  FinOpsExtendedPolicy:
+    Type: AWS::IAM::Policy
+    Condition: UseCostExplorer
+    Properties:
+      PolicyName: AVAGovernFinOpsExtended
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Budgets - DescribeBudgets is authorized by ViewBudget. There is no
+          # budgets:DescribeBudgets action.
+          - Sid: BudgetsRead
+            Effect: Allow
+            Action:
+              - budgets:ViewBudget
+            Resource: '*'
+
+          # Compute Optimizer - enrollment probe and rightsizing summaries
+          - Sid: ComputeOptimizerRead
+            Effect: Allow
+            Action:
+              - compute-optimizer:GetEnrollmentStatus
+              - compute-optimizer:GetRecommendationSummaries
+            Resource: '*'
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # WRITE ACTIONS - opt-in, default OFF (EnableWriteActions).
+  #
+  # Every other policy in this template is read-only. These four statements are the
+  # complete set of writes any Govern feature needs, ported from the parameterised
+  # infra/ templates that previously carried them outside version control. Two were
+  # tightened on the way in:
+  #
+  #   - DeleteAlarms was Resource '*', which could delete ANY CloudWatch alarm in the
+  #     account including alarms other teams depend on. It is now scoped to alarms
+  #     whose name starts with AVA-, so the role can only remove alarms it created.
+  #     Name your alarms accordingly or the delete will be denied.
+  #   - RequestServiceQuotaIncrease opens real support cases. It sits behind the same
+  #     opt-in gate rather than being granted by default.
+  #
+  # PutMetricData was already correctly conditioned to the AVA/LLMQuality namespace in
+  # the source template and is carried over unchanged.
+  # ───────────────────────────────────────────────────────────────────────────
+  AVAGovernWriteActions:
+    Type: AWS::IAM::Policy
+    Condition: UseWriteActions
+    Properties:
+      PolicyName: AVAGovernWriteActions
+      Roles:
+        - !Ref AVAGovernRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Apply a guardrail to test it against sample content. A write-shaped verb
+          # that creates nothing - it evaluates input and returns a verdict.
+          - Sid: GuardrailInvocation
+            Effect: Allow
+            Action:
+              - bedrock:ApplyGuardrail
+            Resource: !Sub 'arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:guardrail/*'
+
+          # Publish the derived AVA/LLMQuality metrics the AI Quality dashboard reads.
+          # Confined to that one namespace, so it cannot write to any other metric.
+          - Sid: CloudWatchCustomMetrics
+            Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: AVA/LLMQuality
+
+          # Create dashboards and alarms. PutDashboard and PutMetricAlarm are creates,
+          # so '*' is required - there is no resource to scope to before it exists.
+          - Sid: CloudWatchDashboardsAndAlarms
+            Effect: Allow
+            Action:
+              - cloudwatch:PutDashboard
+              - cloudwatch:PutMetricAlarm
+            Resource: '*'
+
+          # Deleting is scoped by name prefix: the role can remove alarms it created
+          # and nothing else.
+          - Sid: CloudWatchDeleteOwnAlarms
+            Effect: Allow
+            Action:
+              - cloudwatch:DeleteAlarms
+            Resource: !Sub 'arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:AVA-*'
+
+          # Opens a real AWS support case. Deliberately last and deliberately gated.
+          - Sid: ServiceQuotaRequests
+            Effect: Allow
+            Action:
+              - servicequotas:RequestServiceQuotaIncrease
+            Resource: '*'
+
   # Instance Profile (for EC2 and some ECS configurations)
   AVAGovernInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -374,10 +961,15 @@ Outputs:
   EnabledCapabilities:
     Description: Enabled AVA Govern capabilities based on parameters
     Value: !Sub |
-      Cost Explorer: ${EnableCostExplorer}
-      Bedrock: ${EnableBedrock}
+      Cost Explorer (plus Budgets and Compute Optimizer): ${EnableCostExplorer}
+      Bedrock (plus AgentCore): ${EnableBedrock}
       CloudWatch: ${EnableCloudWatch}
       CloudTrail: ${EnableCloudTrail}
+      Security services: ${EnableSecurityServices}
+      Compliance and audit: ${EnableComplianceAudit}
+      Data and model governance: ${EnableDataGovernance}
+      Operations: ${EnableOperations}
+      Write actions (opt-in): ${EnableWriteActions}
 
   NextSteps:
     Description: Instructions for using this role

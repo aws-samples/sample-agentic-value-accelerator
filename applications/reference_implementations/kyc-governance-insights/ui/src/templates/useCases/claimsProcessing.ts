@@ -1,0 +1,81 @@
+import type { UseCase } from '../types';
+
+export const claimsProcessingUseCase: UseCase = {
+  id: 'claims-processing',
+  name: 'Claims Processing',
+  domain: 'Insurance / Fraud Detection',
+  description: 'AI-assisted claims assessment with fraud detection, document verification, and SIU escalation.',
+  agents: [
+    {
+      id: 'agt-claims-assessor-001',
+      name: 'Claims Assessor',
+      role: 'Evaluates claim validity, assesses damage, verifies coverage, and recommends settlement amounts',
+      tier: 2,
+      allowedTools: ['claims:GetPolicy', 'claims:GetHistory', 'damage:Estimate', 'coverage:Validate', 'docs:Extract'],
+      prohibitedTools: ['payments:Issue', 'policy:Cancel', 'accounts:Modify'],
+      escalationPath: ['Senior Claims Handler', 'Claims Manager'],
+    },
+    {
+      id: 'agt-fraud-screener-001',
+      name: 'Fraud Screener',
+      role: 'Screens claims for fraud indicators, cross-references claims history, and identifies staged events',
+      tier: 2,
+      allowedTools: ['fraud:PatternMatch', 'claims:CrossRef', 'geo:Verify', 'media:ReverseImage', 'network:AnalyseLinks'],
+      prohibitedTools: ['payments:Issue', 'policy:Cancel', 'claims:Approve'],
+      escalationPath: ['Fraud Analyst', 'SIU Manager'],
+    },
+  ],
+  policies: [
+    { id: 'ORG-001', layer: 'ORG', description: 'Fraud confidence >80% blocks auto-settlement', triggerCondition: 'fraud_score > 0.80', action: 'BLOCK' },
+    { id: 'ORG-002', layer: 'ORG', description: 'Claims >£50K require human approval', triggerCondition: 'claim_amount > 50000', action: 'ESCALATE' },
+    { id: 'APP-001', layer: 'APP', description: 'Multiple claims in 12 months', triggerCondition: 'claims_12m > 2', action: 'ESCALATE' },
+    { id: 'APP-002', layer: 'APP', description: 'Inconsistent documentation detected', triggerCondition: 'doc_consistency_score < 0.60', action: 'ESCALATE' },
+    { id: 'REQ-001', layer: 'REQ', description: 'Claim filed within 30 days of policy inception', triggerCondition: 'days_since_inception < 30', action: 'ESCALATE' },
+  ],
+  risks: [
+    { id: 'R1', category: 'Fraud Miss', description: 'Staged accident not detected', likelihood: 'medium', impact: 'high', controls: ['Fraud Pattern Engine', 'Network Analysis'], residualRisk: 'medium' },
+    { id: 'R2', category: 'Overpayment', description: 'Damage estimate inflated by AI', likelihood: 'medium', impact: 'high', controls: ['Independent Estimator', 'Historical Benchmark'], residualRisk: 'low' },
+    { id: 'R3', category: 'False Accusation', description: 'Legitimate claim flagged as fraud', likelihood: 'medium', impact: 'high', controls: ['Multi-signal Threshold', 'Human Review'], residualRisk: 'low' },
+  ],
+  controls: [
+    { id: 'C1', name: 'Fraud Pattern Engine', type: 'deterministic', awsService: 'AWS Lambda + SageMaker', description: 'Rule-based and ML fraud detection across claims history' },
+    { id: 'C2', name: 'Document Verification', type: 'deterministic', awsService: 'Amazon Textract + Rekognition', description: 'Metadata analysis, reverse image search, timestamp validation' },
+    { id: 'C3', name: 'Damage Estimator', type: 'probabilistic', awsService: 'Bedrock Claude Sonnet 4.5', description: 'AI-assisted damage assessment with photo analysis' },
+    { id: 'C4', name: 'Network Analysis', type: 'deterministic', awsService: 'Amazon Neptune', description: 'Graph-based detection of organised fraud rings' },
+  ],
+  scenarios: {
+    approve: {
+      id: 'approve',
+      label: 'Standard Home Claim',
+      customerName: 'Margaret Thompson',
+      customerId: 'CLM-2026-48291',
+      outcome: 'APPROVE',
+      steps: [
+        { icon: '📥', title: 'Claim Intake', type: 'GenAI (Claude Sonnet 4.5)', blast: 'bf-low', log: [{ t: '10:30:01', a: 'Orchestrator', m: 'Claim CLM-2026-48291: Storm damage to roof. Policy HOM-847291.', c: '' }, { t: '10:30:02', a: 'Textract', m: 'Documents extracted: Photos (4), Builder quote, Weather report.', c: 's-ok' }], risks: ['Fabricated documents', 'Inflated damage'], ctrls: ['Textract (OCR)', 'Metadata validation'], insight: 'Claim intake uses Textract for document extraction — deterministic, auditable, no hallucination risk.' },
+        { icon: '📄', title: 'Document Verification', type: 'Deterministic (Lambda)', blast: 'bf-low', log: [{ t: '10:30:03', a: 'Lambda Worker', m: 'Photo EXIF: Dates match claim date ✓. GPS matches insured property ✓.', c: 's-ok' }, { t: '10:30:04', a: 'Lambda Worker', m: 'Weather API: Storm confirmed for postcode on claim date ✓.', c: 's-ok' }], risks: ['Photo manipulation', 'GPS spoofing'], ctrls: ['EXIF analysis', 'Weather cross-ref'], insight: 'Deterministic verification: photos taken at the right time and place, weather confirms the event.' },
+        { icon: '🔍', title: 'Damage Assessment', type: 'Agentic AI (Claims Assessor)', blast: 'bf-med', log: [{ t: '10:30:05', a: 'Claims Agent', m: 'Damage estimate: £8,200. Based on photo analysis + builder quote cross-ref.', c: '' }, { t: '10:30:06', a: 'Lambda Validator', m: '▶ INDEPENDENT: Builder quote £8,500 within 10% of AI estimate ✓.', c: 's-ok' }], risks: ['Over/under estimation', 'Quote inflation'], ctrls: ['Independent validator', 'Historical benchmark'], insight: 'AI estimates damage; Lambda independently validates against the builder quote. Discrepancy >15% triggers escalation.' },
+        { icon: '🛡️', title: 'Fraud Check', type: 'Agentic AI (Fraud Screener)', blast: 'bf-low', log: [{ t: '10:30:07', a: 'Fraud Agent', m: 'Pattern check: No prior claims in 5 years. No fraud indicators.', c: 's-ok' }, { t: '10:30:08', a: 'Network Analysis', m: 'Graph check: No linked claims, no ring associations.', c: 's-ok' }], risks: ['Missed fraud ring', 'False negative'], ctrls: ['Pattern engine', 'Network graph'], insight: 'Clean claims history, no network connections to known fraud. Fraud score: 3/100 (negligible).' },
+        { icon: '⚖️', title: 'Coverage Validation', type: 'Policy Engine', blast: 'bf-low', log: [{ t: '10:30:09', a: 'Policy Engine', m: '✓ Storm damage covered under HOM-847291. Excess: £250. Within limit (£50K).', c: 's-ok' }, { t: '10:30:10', a: 'Policy Engine', m: '✓ ALL PASS. Claim within bounds. Auto-settlement permitted.', c: 's-ok' }], risks: ['Policy misread', 'Exclusion missed'], ctrls: ['Coverage rules engine', 'Exclusion checker'], insight: 'Policy engine validates coverage deterministically. Cannot be tricked by AI reasoning.' },
+        { icon: '👤', title: 'HITL Review', type: 'Spot Check (Earned Autonomy)', blast: 'bf-low', log: [{ t: '10:30:11', a: 'System', m: 'Claim £8,200 < £50K. Fraud score 3. HITL NOT required.', c: 's-ok' }, { t: '10:30:12', a: 'QA Sampler', m: 'Selected for post-settlement review (8% random). Non-blocking.', c: '' }], risks: ['Complacency'], ctrls: ['Random QA', 'Post-settlement audit'], insight: 'Low-value, low-risk claims settle automatically. Human effort focuses on complex cases.' },
+        { icon: '✅', title: 'Settlement', type: 'Immutable Audit', blast: 'bf-low', log: [{ t: '10:30:13', a: 'Decision', m: 'CLM-2026-48291 → APPROVED. Settlement: £7,950 (£8,200 - £250 excess).', c: 's-ok' }, { t: '10:30:14', a: 'Audit', m: '✓ Full trace. Payment queued. Customer notified.', c: 's-ok' }], risks: ['Payment error'], ctrls: ['Immutable audit', 'Payment reconciliation'], insight: 'Straight-through processing: claim to settlement in under 60 seconds for simple, legitimate cases.' },
+      ],
+    },
+    block: {
+      id: 'block',
+      label: 'Staged Accident Claim',
+      customerName: 'David Marchetti',
+      customerId: 'CLM-2026-51837',
+      outcome: 'BLOCK',
+      steps: [
+        { icon: '📥', title: 'Claim Intake', type: 'GenAI (Claude Sonnet 4.5)', blast: 'bf-med', log: [{ t: '10:30:01', a: 'Orchestrator', m: 'Claim CLM-2026-51837: RTA — rear-end collision. Policy MOT-293847.', c: '' }, { t: '10:30:02', a: 'Textract', m: 'Documents: Photos (6), Repair quote (£14,200), Medical report, Police ref.', c: 's-warn' }], risks: ['Staged accident', 'Inflated quote'], ctrls: ['Textract', 'Metadata analysis'], insight: 'Higher value motor claim with medical component — automatically elevated risk profile.' },
+        { icon: '📄', title: 'Document Verification', type: 'Deterministic (Lambda)', blast: 'bf-high', log: [{ t: '10:30:03', a: 'Lambda Worker', m: '⚠ Photo EXIF: 2 photos have mismatched dates (3 days BEFORE claim date).', c: 's-warn' }, { t: '10:30:04', a: 'Lambda Worker', m: '⚠ Reverse image: 1 photo found on stock photo site (Shutterstock ID-8827341).', c: 's-warn' }, { t: '10:30:05', a: 'Lambda Worker', m: '⚠ Medical report: Clinic address does not match registered NHS facility.', c: 's-warn' }], risks: ['Fabricated evidence', 'Identity fraud'], ctrls: ['EXIF analysis', 'Reverse image search', 'NHS registry check'], insight: 'Three independent deterministic checks flag inconsistencies. Each alone might be explainable — together they form a pattern.' },
+        { icon: '🔍', title: 'Damage Assessment', type: 'Agentic AI (Claims Assessor)', blast: 'bf-med', log: [{ t: '10:30:06', a: 'Claims Agent', m: 'Damage estimate from valid photos: £4,100. Quote states £14,200.', c: 's-warn' }, { t: '10:30:07', a: 'Lambda Validator', m: '▶ INDEPENDENT: Discrepancy 246% — exceeds 15% threshold ⚠.', c: 's-warn' }], risks: ['Quote inflation', 'Phantom damage'], ctrls: ['Independent estimator', 'Threshold alerting'], insight: 'AI estimate vs submitted quote: 246% discrepancy. Combined with document issues, this is a strong fraud signal.' },
+        { icon: '🛡️', title: 'Fraud Check', type: 'Agentic AI (Fraud Screener)', blast: 'bf-high', log: [{ t: '10:30:08', a: 'Fraud Agent', m: '⚠ Fraud Score: 87/100 (CRITICAL). Staged accident indicators.', c: 's-warn' }, { t: '10:30:09', a: 'Network Analysis', m: '⚠ RING DETECTED: Claimant linked to 4 other claims via shared garage (Phoenix Motors).', c: 's-warn' }, { t: '10:30:10', a: 'Fraud Agent', m: '⚠ Phoenix Motors: 12 claims in 6 months. All rear-end collisions. All £10K-£15K.', c: 's-warn' }], risks: ['Organised fraud ring'], ctrls: ['Pattern engine', 'Neptune graph', 'Ring detection'], insight: 'Network analysis reveals an organised ring. The garage is the common link across 12 staged claims.' },
+        { icon: '⚖️', title: 'Coverage Validation', type: 'Policy Engine (BLOCK)', blast: 'bf-high', log: [{ t: '10:30:11', a: 'Gateway', m: '▶▶ INTERCEPTED. Evaluating 3 policy layers...', c: 's-warn' }, { t: '10:30:12', a: 'Org Policy', m: '❌ BLOCK: ORG-001 — Fraud score 87% > 80% threshold.', c: 's-warn' }, { t: '10:30:13', a: 'Policy Engine', m: '❌ MANDATORY BLOCK. Auto-settlement prevented. SIU referral created.', c: 's-warn' }, { t: '10:30:14', a: 'Alert', m: '🚨 INCIDENT: FRD-2026-0294. SIU Manager notified.', c: 's-warn' }], risks: ['Ring continuation'], ctrls: ['External policy gate', 'Auto SIU referral'], insight: 'Policy Engine blocks settlement. Even if the AI were compromised, deterministic controls prevent payout.' },
+        { icon: '👤', title: 'SIU Review', type: 'HITL (Mandatory — Fraud Ring)', blast: 'bf-low', log: [{ t: '10:30:15', a: 'HITL System', m: 'MANDATORY ESCALATION: Fraud ring detected. SIU assigned.', c: 's-warn' }, { t: '10:30:16', a: 'System', m: 'Investigation pack: Network graph, document anomalies, ring history, garage link.', c: '' }, { t: '10:30:17', a: 'System', m: '⏳ AWAITING HUMAN DECISION. Claim frozen. Ring under investigation.', c: 's-warn' }, { t: '10:30:18', a: 'SIU', m: '[Day 3] Decision: CONFIRMED FRAUD. All 12 linked claims voided. Police referral.', c: 's-warn' }], risks: ['Investigation time', 'Ring members warned'], ctrls: ['SIU investigation', 'Police liaison', 'Account freeze'], insight: 'SIU confirms: organised crash-for-cash ring. 12 claims totalling £156K prevented. Police notified.' },
+        { icon: '🚫', title: 'Decline + Police Referral', type: 'Immutable Audit', blast: 'bf-low', log: [{ t: '10:30:19', a: 'Decision', m: '🚫 CLM-2026-51837 → DECLINED. Reason: Organised fraud (staged accident ring).', c: 's-warn' }, { t: '10:30:20', a: 'System', m: 'Police referral: Action Fraud ref AF-2026-847291. 12 linked claims voided.', c: 's-warn' }, { t: '10:30:21', a: 'Audit', m: '✓ Full evidence chain. Ring savings: £156,400.', c: 's-ok' }], risks: ['Legal challenge'], ctrls: ['Immutable audit', 'Evidence preservation'], insight: 'GOVERNANCE WORKED: AI detected fraud signals, deterministic checks confirmed, policy blocked settlement, SIU investigated, police notified. £156K fraud ring dismantled.' },
+      ],
+    },
+  },
+  hitlStepIndex: 5,
+};

@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+import type { Formatter, ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import { Icon } from './icons';
 import { tooltipStyle } from './mockData';
 import {
@@ -127,7 +128,7 @@ function ResultsView({ job, jobName, setJobName }: { job: AgentEvalJob; jobName:
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis type="number" domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 9 }} />
             <YAxis dataKey="name" type="category" width={130} tick={{ fill: '#475569', fontSize: 9 }} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => `${v}%`} />
+            <Tooltip contentStyle={tooltipStyle} formatter={((v: number) => `${v}%`) as Formatter<ValueType, NameType>} />
             <Bar dataKey="score" barSize={14} radius={[0, 4, 4, 0]}>
               {job.evaluators.map((ev, i) => <Cell key={i} fill={ev === 'Builtin.Harmfulness' ? '#dc2626' : '#2563eb'} />)}
             </Bar>

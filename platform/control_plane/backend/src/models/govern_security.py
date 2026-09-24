@@ -15,9 +15,11 @@ service never breaks the others.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
+from models.govern_region_provenance import RegionProvenance
 
 
 class SeverityCount(BaseModel):
@@ -52,3 +54,55 @@ class SecurityPostureResponse(BaseModel):
     live: bool = Field(..., description="True when at least one service is live")
     source: str
     note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )
+
+
+class VulnerabilityFinding(BaseModel):
+    """One Inspector2 vulnerability finding — snake_case mirror of the client shape.
+
+    Sensitive identifiers are masked/shortened before exposure: the finding ARN
+    keeps its shape but its account ID is masked, and the resource ID is reduced
+    to a short, non-sensitive tail. The title is stripped of ARNs/account IDs but
+    intentionally preserves the CVE (also surfaced in its own field).
+    """
+
+    finding_arn: Optional[str] = Field(default=None, description="Inspector2 finding ARN, account ID masked")
+    title: str
+    severity: str = Field(..., description="CRITICAL | HIGH | MEDIUM | LOW | INFORMATIONAL | UNTRIAGED")
+    type: str = Field(..., description="PACKAGE_VULNERABILITY | NETWORK_REACHABILITY | CODE_VULNERABILITY")
+    status: str = Field(..., description="Finding status, e.g. ACTIVE")
+    resource_type: Optional[str] = Field(default=None, description="e.g. AWS_EC2_INSTANCE, AWS_ECR_CONTAINER_IMAGE, AWS_LAMBDA_FUNCTION")
+    resource_id: Optional[str] = Field(default=None, description="Short/masked affected-resource identifier")
+    cve: Optional[str] = Field(default=None, description="CVE id (packageVulnerabilityDetails.vulnerabilityId), when present")
+    fix_available: Optional[str] = Field(default=None, description="YES | NO | PARTIAL")
+    first_observed: Optional[str] = Field(default=None, description="firstObservedAt, ISO 8601")
+
+
+class VulnerabilitiesResponse(BaseModel):
+    """Detailed Inspector2 vulnerability findings — real CVEs on EC2/ECR/Lambda."""
+
+    findings: List[VulnerabilityFinding] = Field(default_factory=list)
+    total: int = 0
+    by_severity: List[SeverityCount] = Field(default_factory=list)
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    by_type: Dict[str, int] = Field(default_factory=dict, description="Finding count keyed by finding TYPE")
+    covered_resources: int = Field(0, description="Resources under Inspector2 scan coverage")
+    live: bool = False
+    source: str = "inspector2"
+    note: Optional[str] = None
+    regions: Optional[RegionProvenance] = Field(
+        default=None,
+        description=(
+            "Which governed regions this aggregate covers. When `unreachable` is "
+            "non-empty every total here is a floor, not a count."
+        ),
+    )

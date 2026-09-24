@@ -36,7 +36,12 @@ function computeIncidentSummaryFromEvents(events: AuditEvent[]): {
   open: number;
   critical: number;
   resolved7d: number;
-  mttrMin: number;
+  /**
+   * null - audit events carry no resolution timestamp, so MTTR is not derivable from them.
+   * This is the live branch, and the value it returns is rendered under a LiveDataBadge as a
+   * board-tier KPI, so a stand-in number here is asserted as measured.
+   */
+  mttrMin: number | null;
 } {
   const incidents = events.filter(e => e.category === 'incident');
   // Heuristic: critical severity incidents with 'flag' or 'alert' action are open
@@ -46,8 +51,15 @@ function computeIncidentSummaryFromEvents(events: AuditEvent[]): {
   ).length;
   const critical = incidents.filter(e => e.severity === 'critical').length;
   const resolved7d = Math.max(0, incidents.length - open);
-  // MTTR estimate: assume ~25 min for resolved incidents (simplified)
-  const mttrMin = resolved7d > 0 ? 25 : MTTR_TARGET_MIN;
+
+  // Not derivable. An AuditEvent has no resolution timestamp, so nothing here measures how
+  // long anything took to resolve. This used to return a flat 25 when anything had resolved
+  // and MTTR_TARGET_MIN (30) when nothing had - both rendered under a LiveDataBadge as
+  // "Incident Resolution (MTTR)", a board-tier KPI, with a RAG colour computed off them. The
+  // second branch was the worse of the two: falling back to the target value makes an
+  // unmeasured metric read as exactly on target. computeVariance/ragForVariance already
+  // return null/'na' for a null actual, which is the contract's documented behaviour.
+  const mttrMin = null;
 
   return { open, critical, resolved7d, mttrMin };
 }
@@ -105,7 +117,7 @@ export function auditMetricRows(liveEvents?: AuditEvent[]): ComputedMetric[] {
       // expected 0 → variancePct undefined; band on the raw count instead.
       variance: open,
       variancePct: null,
-      rag: open === 0 ? 'green' : INCIDENT_SUMMARY.critical > 0 ? 'red' : 'amber',
+      rag: open === 0 ? 'green' : summary.critical > 0 ? 'red' : 'amber',
     });
   }
 

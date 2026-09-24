@@ -17,7 +17,9 @@ import { governInvocationSafetyApi, type AwsInvocationSafetyResponse } from '../
 import LiveHeader from '../LiveHeader';
 import { usePollingKey } from '../usePollingKey';
 import { LiveDataBadge } from '../DataSourceIndicator';
+import { RegionCoverageBadge } from '../RegionCoverageBadge';
 import StatCard from '../StatCard';
+import { useDataSources } from '../DataSourceContext';
 
 const tooltipStyle = {
   background: 'rgba(255,255,255,0.98)', border: '1px solid #e2e8f0',
@@ -41,16 +43,29 @@ export default function LiveRuntimeSafety() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AwsInvocationSafetyResponse | null>(null);
   const pollKey = usePollingKey(60_000);
+  const { updateSource } = useDataSources();
 
   useEffect(() => {
     let cancelled = false;
     // Silent refetch on poll — keep telemetry on screen while refreshing.
     governInvocationSafetyApi.telemetry(7)
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .then(d => {
+        if (!cancelled) {
+          setData(d);
+          if (d?.live) {
+            updateSource('aws-cloudwatch', { status: 'live', lastFetch: Date.now() });
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setData(null);
+          updateSource('aws-cloudwatch', { status: 'error', error: 'Invocation safety API unavailable' });
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [pollKey]);
+  }, [pollKey, updateSource]);
 
   const live = !!data?.live;
   const maxStop = Math.max(...(data?.stop_reasons ?? []).map(s => s.count), 1);
@@ -64,7 +79,10 @@ export default function LiveRuntimeSafety() {
         caption={`real Bedrock invocation outcomes · last ${data?.window_days ?? 7}d · aggregates only (no prompt/response content)`}
         autoRefresh
         right={live ? (
-          <span className="text-[11px] font-semibold text-slate-700 tabular-nums">{data!.intervention_rate_pct}% intervened</span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-700 tabular-nums">{data!.intervention_rate_pct}% intervened</span>
+            <RegionCoverageBadge regions={data!.regions} noun="Invocation counts" />
+          </span>
         ) : undefined}
       />
 

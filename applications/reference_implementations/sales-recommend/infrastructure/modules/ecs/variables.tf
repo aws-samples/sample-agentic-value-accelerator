@@ -51,6 +51,12 @@ variable "agent_runtime_arn" {
   type        = string
 }
 
+variable "leads_table_name" {
+  description = "Name of the DynamoDB leads table (injected as LEADS_TABLE_NAME). Empty disables persistence."
+  type        = string
+  default     = ""
+}
+
 variable "alb_security_group_id" {
   description = "Security group ID for the ALB"
   type        = string

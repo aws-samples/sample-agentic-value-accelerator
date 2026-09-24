@@ -13,22 +13,36 @@ import { useAgentRegistry } from './useAgentRegistry';
 import { LiveDataBadge } from './DataSourceIndicator';
 import { usePollingKey } from './usePollingKey';
 import MaskedIdentity from './MaskedIdentity';
+import { useDataSources } from './DataSourceContext';
 
 export default function LiveAiCallers() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AwsAiCallersResponse | null>(null);
   const { agents } = useAgentRegistry();
   const pollKey = usePollingKey(60_000);
+  const { updateSource } = useDataSources();
 
   useEffect(() => {
     let cancelled = false;
     // Silent refetch on poll — surface newly-observed callers without a flash.
     governTrailApi.aiCallers(168)
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .then(d => {
+        if (!cancelled) {
+          setData(d);
+          if (d?.live) {
+            updateSource('aws-cloudtrail', { status: 'live', lastFetch: Date.now() });
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setData(null);
+          updateSource('aws-cloudtrail', { status: 'error', error: 'API unavailable' });
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [pollKey]);
+  }, [pollKey, updateSource]);
 
   // Recognize a caller if its identity appears in / contains a governed agent name
   // or owner (best-effort substring match — deliberately conservative).

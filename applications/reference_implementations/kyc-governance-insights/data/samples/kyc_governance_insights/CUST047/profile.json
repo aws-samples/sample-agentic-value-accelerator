@@ -1,0 +1,102 @@
+{
+  "customer_id": "CUST047",
+  "name": "Omega Trading Ltd",
+  "account_type": "corporate",
+  "entity_type": "CORPORATE",
+  "industry": "Wholesale \u2014 metals and commodities",
+  "trading_names": [
+    "Omega Trading",
+    "OT Commodities",
+    "Omega Import-Export"
+  ],
+  "incorporation": {
+    "country": "GB",
+    "state": "London",
+    "date": "2021-04-12",
+    "company_number": "14297581",
+    "company_type": "Private Limited Company"
+  },
+  "jurisdiction": "GB",
+  "contact": {
+    "address": "3rd Floor, Meridian House, 42 Worship Street, London, EC2A 2EA, GB",
+    "phone": "+44-20-7555-0147",
+    "email": "accounts@omegatrading.example.co.uk"
+  },
+  "corporate_structure": {
+    "immediate_parent": {
+      "entity_name": "Omega Holdings International Ltd",
+      "jurisdiction": "VG",
+      "registration_number": "BVI-2087341",
+      "ownership_pct": 100
+    },
+    "notes": "UK operating entity wholly owned by BVI holding company; Cyprus intermediate dissolved 2023."
+  },
+  "directors": [
+    {
+      "name": "James Richard Thornton",
+      "role": "Director",
+      "nationality": "GB",
+      "is_nominee": false,
+      "pep_status": true,
+      "pep_detail": "L2 \u2014 business associate of OFSI-designated Alexei Petrov"
+    },
+    {
+      "name": "Marcus Finch-Harrington",
+      "role": "Director",
+      "nationality": "GB",
+      "is_nominee": true,
+      "nominee_provider": "Corporate Services Alliance Ltd"
+    },
+    {
+      "name": "Sandra Chen Wei",
+      "role": "Director",
+      "nationality": "SG",
+      "is_nominee": true,
+      "nominee_provider": "Corporate Services Alliance Ltd"
+    }
+  ],
+  "beneficial_owners": [
+    {
+      "name": "James Richard Thornton",
+      "ownership_percentage": 60,
+      "nationality": "GB",
+      "pep_status": true,
+      "sanctions_match_score": 0.78,
+      "matched_name": "James R. Thorntoun",
+      "matched_list": "OFSI Consolidated List",
+      "listing_reference": "OFSI/2024/1892"
+    },
+    {
+      "name": "Elena Voronova",
+      "ownership_percentage": 40,
+      "nationality": "CY",
+      "pep_status": false
+    }
+  ],
+  "kyc_status": "in_review",
+  "risk_flags": [
+    "sanctions_potential_match",
+    "bvi_holding",
+    "nominee_directors",
+    "pep_l2",
+    "adverse_media"
+  ],
+  "annual_revenue": "\u00a35M (stated)",
+  "application": {
+    "product_requested": "Business Current Account + Trade Finance Facility",
+    "facility_amount_gbp": 2500000,
+    "stated_purpose": "Working capital for import/export \u2014 metals and commodities",
+    "expected_annual_turnover_gbp": 5000000,
+    "application_date": "2026-06-20"
+  },
+  "risk_classification": {
+    "initial_risk_tier": "HIGH",
+    "factors": [
+      "Multi-jurisdictional structure (BVI holding)",
+      "High-risk correspondent banking (Eurobank Cyprus, FirstCaribbean BVI)",
+      "Stated turnover \u00a35M for 3-year-old entity",
+      "Trade finance in metals/commodities (high ML-risk sector)",
+      "Nominee directors identified"
+    ]
+  }
+}

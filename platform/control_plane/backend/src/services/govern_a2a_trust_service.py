@@ -23,6 +23,7 @@ from typing import List, Optional
 
 import boto3
 from boto3.dynamodb.conditions import Attr
+from botocore.exceptions import ClientError
 
 from models.govern_audit import AuditCategory, AuditEventCreate, AuditSeverity
 from models.govern_a2a_trust import (
@@ -113,7 +114,15 @@ class GovernA2ATrustService:
         return [TrustPolicy.model_validate(_from_ddb(json.loads(i["data"]))) for i in resp.get("Items", [])]
 
     def get_policy(self, policy_id: str) -> Optional[TrustPolicy]:
-        item = self.table.get_item(Key={"pk": f"{self.POL_PREFIX}{policy_id}", "sk": self.SK_LATEST}).get("Item")
+        try:
+            item = self.table.get_item(Key={"pk": f"{self.POL_PREFIX}{policy_id}", "sk": self.SK_LATEST}).get("Item")
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                logging.getLogger(__name__).warning(
+                    "Trust policy table not provisioned; returning None for get_policy"
+                )
+                return None
+            raise
         return TrustPolicy.model_validate(_from_ddb(json.loads(item["data"]))) if item else None
 
     def update_policy(self, policy_id: str, req: TrustPolicyUpdate) -> Optional[TrustPolicy]:

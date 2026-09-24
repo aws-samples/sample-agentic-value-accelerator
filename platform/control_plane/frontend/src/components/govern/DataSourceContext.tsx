@@ -23,6 +23,7 @@
  *   const { sources, health } = useDataSources();
  */
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { type IconName } from './icons';
 
 /** Data source status levels (in order of degradation) */
 export type DataSourceStatus = 'live' | 'cached' | 'demo' | 'error' | 'unknown';
@@ -58,17 +59,17 @@ export interface DataSource {
 export interface ProviderInfo {
   id: ProviderCategory;
   name: string;
-  icon: string;
+  icon: IconName;
   color: string;
 }
 
 export const PROVIDERS: Record<ProviderCategory, ProviderInfo> = {
-  aws: { id: 'aws', name: 'AWS', icon: '☁️', color: '#ff9900' },
-  azure: { id: 'azure', name: 'Azure', icon: '⬡', color: '#0078d4' },
-  gcp: { id: 'gcp', name: 'Google Cloud', icon: '◈', color: '#4285f4' },
-  datadog: { id: 'datadog', name: 'Datadog', icon: '🐕', color: '#632ca6' },
-  custom: { id: 'custom', name: 'Custom', icon: '⚙️', color: '#6b7280' },
-  internal: { id: 'internal', name: 'AVA Platform', icon: '◉', color: '#6366f1' },
+  aws: { id: 'aws', name: 'AWS', icon: 'cloud', color: '#ff9900' },
+  azure: { id: 'azure', name: 'Azure', icon: 'cloud', color: '#0078d4' },
+  gcp: { id: 'gcp', name: 'Google Cloud', icon: 'cloud', color: '#4285f4' },
+  datadog: { id: 'datadog', name: 'Datadog', icon: 'chart-bar', color: '#632ca6' },
+  custom: { id: 'custom', name: 'Custom', icon: 'cog-6-tooth', color: '#6b7280' },
+  internal: { id: 'internal', name: 'AVA Platform', icon: 'server-stack', color: '#6366f1' },
 };
 
 /** Overall health summary */
@@ -118,6 +119,7 @@ const DEFAULT_SOURCES: DataSource[] = [
   { id: 'aws-config', name: 'AWS Config', provider: 'aws', status: 'unknown', description: 'Compliance rules' },
   { id: 'aws-bedrock', name: 'Bedrock', provider: 'aws', status: 'unknown', description: 'Model catalog and guardrails', critical: true },
   { id: 'aws-agentcore', name: 'AgentCore', provider: 'aws', status: 'unknown', description: 'Agent runtimes and posture' },
+  { id: 'aws-service-quotas', name: 'Service Quotas', provider: 'aws', status: 'unknown', description: 'AI service capacity limits' },
   // Internal AVA sources
   { id: 'ava-plan', name: 'Plan Module', provider: 'internal', status: 'unknown', description: 'Use cases and business cases', critical: true },
   { id: 'ava-build', name: 'Build Module', provider: 'internal', status: 'unknown', description: 'Deployments' },

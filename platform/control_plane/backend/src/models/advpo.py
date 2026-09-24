@@ -32,6 +32,14 @@ class InferenceConfig(BaseModel):
 
 class ModelConfiguration(BaseModel):
     """A single target model for the optimization job."""
+
+    # `model_id` / `model_configurations` here and on the sibling job models are AI
+    # model identifiers from the Bedrock AdvPO API - meaningful domain vocabulary,
+    # not pydantic internals. Pydantic reserves the `model_` prefix, so the namespace
+    # guard is disabled deliberately; renaming these fields would break the API
+    # contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
+
     model_id: str = Field(..., description="Bedrock model ID or inference profile ARN")
     inference_config: Optional[InferenceConfig] = None
     additional_model_request_fields: Optional[Dict[str, Any]] = None
@@ -39,6 +47,9 @@ class ModelConfiguration(BaseModel):
 
 class AdvPOJobCreate(BaseModel):
     """Request body for creating an AdvPO job."""
+
+    model_config = {"protected_namespaces": ()}
+
     job_name: str = Field(..., min_length=1, max_length=100, description="Job name")
     input_s3_uri: str = Field(..., description="S3 URI of the JSONL evaluation dataset")
     model_configurations: List[ModelConfiguration] = Field(..., min_length=1, max_length=5)
@@ -138,6 +149,9 @@ class AdvPOJobList(BaseModel):
 
 class AdvPOJob(BaseModel):
     """Full job detail returned by GetAdvancedPromptOptimizationJob."""
+
+    model_config = {"protected_namespaces": ()}
+
     job_arn: str
     job_name: str
     status: AdvPOJobStatus

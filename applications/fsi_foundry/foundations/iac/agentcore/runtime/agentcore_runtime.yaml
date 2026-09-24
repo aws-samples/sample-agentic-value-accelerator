@@ -92,7 +92,6 @@ Parameters:
     Default: ''
     Description: Secrets Manager ARN holding the LLM Gateway virtual key for this deployment.
 
-
 Resources:
   AgentCoreRuntime:
     Type: AWS::BedrockAgentCore::Runtime

@@ -391,3 +391,9 @@ variable "fsi_app_signing_secret" {
   default     = ""
   sensitive   = true
 }
+
+variable "evaluations_table_name" {
+  description = "Name of the evaluations DynamoDB table"
+  type        = string
+}
+

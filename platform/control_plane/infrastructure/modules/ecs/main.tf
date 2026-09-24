@@ -93,46 +93,27 @@ resource "aws_iam_role_policy" "ecs_task_dynamodb" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
           "dynamodb:Query",
-          "dynamodb:Scan"
+          "dynamodb:Scan",
+          "dynamodb:DescribeTable"
         ]
+        # All control-plane tables share the name_prefix, so a single prefixed
+        # wildcard covers them (and any table added later, e.g. evaluations).
+        # This also keeps the inline policy under IAM's 10 KB size ceiling —
+        # the prior explicit per-table list had reached that limit.
         Resource = [
-          var.application_catalog_table_arn,
-          "${var.application_catalog_table_arn}/index/*",
-          var.deployment_metadata_table_arn,
-          "${var.deployment_metadata_table_arn}/index/*",
-          var.deployments_table_arn,
-          "${var.deployments_table_arn}/index/*",
-          "${var.deployment_metadata_table_arn}/index/*",
-          var.app_factory_table_arn,
-          "${var.app_factory_table_arn}/index/*",
-          var.guardrails_table_arn,
-          "${var.guardrails_table_arn}/index/*",
-          var.policies_table_arn,
-          "${var.policies_table_arn}/index/*",
-          var.prioritization_table_arn,
-          "${var.prioritization_table_arn}/index/*",
-          var.maturity_table_arn,
-          "${var.maturity_table_arn}/index/*",
-          var.business_cases_table_arn,
-          "${var.business_cases_table_arn}/index/*",
-          var.knowledge_table_arn,
-          "${var.knowledge_table_arn}/index/*",
-          var.operating_model_table_arn,
-          "${var.operating_model_table_arn}/index/*",
-          var.organization_design_table_arn,
-          "${var.organization_design_table_arn}/index/*",
-          var.service_approval_table_arn,
-          "${var.service_approval_table_arn}/index/*",
-          var.mcp_servers_table_arn,
-          "${var.mcp_servers_table_arn}/index/*",
-          var.a2a_agents_table_arn,
-          "${var.a2a_agents_table_arn}/index/*",
-          var.identity_providers_table_arn,
-          "${var.identity_providers_table_arn}/index/*",
-          var.approval_policies_table_arn,
-          "${var.approval_policies_table_arn}/index/*",
-          var.approval_requests_table_arn,
-          "${var.approval_requests_table_arn}/index/*"
+          "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.name_prefix}-*",
+          "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.name_prefix}-*/index/*"
+        ]
+      },
+      {
+        # The wildcard above would otherwise include the Terraform state-lock
+        # table — an invariant the old enumerated list deliberately kept: the
+        # application must never be able to touch IaC state resources.
+        Effect = "Deny"
+        Action = "dynamodb:*"
+        Resource = [
+          "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.name_prefix}-tf-lock",
+          "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.name_prefix}-tf-lock/index/*"
         ]
       }
     ]
@@ -226,6 +207,46 @@ resource "aws_iam_role_policy" "ecs_task_agentcore_invoke" {
       Resource = "arn:aws:bedrock-agentcore:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:runtime/*"
     }]
   })
+}
+
+# Evaluation module: the LLM-as-judge calls bedrock:Converse directly, and
+# agents under test may run with a Bedrock Guardrail attached (guardrails-on
+# vs -off A/B). Model access is account-wide foundation models + inference
+# profiles; guardrails are scoped to this account.
+# Managed (not inline) policy: the ecs_task role's inline policies sit near
+# IAM's 10,240-byte aggregate limit — adding this inline tipped the role over
+# and broke a later PutRolePolicy. Managed policies have their own quota.
+resource "aws_iam_policy" "ecs_task_evaluation_judge" {
+  name = "${var.name_prefix}-evaluation-judge-bedrock"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+          "bedrock:Converse",
+          "bedrock:ConverseStream",
+        ]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["bedrock:ApplyGuardrail"]
+        Resource = "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:guardrail/*"
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_evaluation_judge" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.ecs_task_evaluation_judge.arn
 }
 
 # Harness — control plane + data plane. Backend's /api/v1/harness routes wrap
@@ -694,6 +715,10 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "DEPLOYMENTS_TABLE_NAME"
           value = var.deployments_table_name
+        },
+        {
+          name  = "EVALUATIONS_TABLE_NAME"
+          value = var.evaluations_table_name
         },
         {
           name  = "GUARDRAILS_TABLE_NAME"

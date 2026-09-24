@@ -16,6 +16,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useGovernanceAggregator from './useGovernanceAggregator';
+import { useAssessmentState } from './assessment/useAssessmentState';
+import { Icon, type IconName } from './icons';
 import {
   gradeProgram,
   programCompleteness,
@@ -26,10 +28,10 @@ import {
   type StepStatus,
 } from './governProgram';
 
-const STATUS_META: Record<StepStatus, { dot: string; ring: string; icon: string; label: string }> = {
-  complete: { dot: 'bg-emerald-500', ring: 'border-emerald-300', icon: '✓', label: 'Complete' },
-  partial: { dot: 'bg-amber-500', ring: 'border-amber-300', icon: '◐', label: 'In progress' },
-  empty: { dot: 'bg-slate-300', ring: 'border-slate-200', icon: '○', label: 'Not started' },
+const STATUS_META: Record<StepStatus, { dot: string; ring: string; icon: IconName; label: string }> = {
+  complete: { dot: 'bg-emerald-500', ring: 'border-emerald-300', icon: 'check', label: 'Complete' },
+  partial: { dot: 'bg-amber-500', ring: 'border-amber-300', icon: 'circle-half', label: 'In progress' },
+  empty: { dot: 'bg-slate-300', ring: 'border-slate-200', icon: 'circle', label: 'Not started' },
 };
 
 const ROLES_PREF_KEY = 'govern.gettingStarted.rolesOpen';
@@ -38,6 +40,7 @@ const PANEL_PREF_KEY = 'govern.gettingStarted.panelOpen';
 export default function ProgramProgress() {
   const navigate = useNavigate();
   const agg = useGovernanceAggregator();
+  const assessmentState = useAssessmentState();
 
   // Whole panel is collapsible — returns a compact status bar when closed.
   const [panelOpen, setPanelOpen] = useState<boolean>(() => {
@@ -86,9 +89,7 @@ export default function ProgramProgress() {
       >
         <div className="flex items-center gap-3">
           <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-gradient-to-br from-indigo-600 via-violet-500 to-pink-500">
-            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+            <Icon name="bolt" className="w-3 h-3 text-white" strokeWidth={2} />
           </div>
           <span className="text-xs font-semibold text-slate-700">Getting Started</span>
         </div>
@@ -126,9 +127,7 @@ export default function ProgramProgress() {
             </span>
           )}
 
-          <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <Icon name="chevron-down" className="w-4 h-4 text-slate-400" strokeWidth={2} />
         </div>
       </button>
     );
@@ -140,18 +139,14 @@ export default function ProgramProgress() {
       <button onClick={togglePanel} className="w-full flex items-center justify-between gap-2.5 px-5 pt-4 pb-3 hover:bg-slate-50/50 transition-colors">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-indigo-600 via-violet-500 to-pink-500 shadow-sm shadow-violet-200">
-            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+            <Icon name="bolt" className="w-3.5 h-3.5 text-white" strokeWidth={2} />
           </div>
           <div className="text-left">
             <div className="text-sm font-semibold text-slate-900">Getting Started with AI Governance</div>
             <div className="text-[11px] text-slate-500">Pick your role, see where the program stands, do the next thing.</div>
           </div>
         </div>
-        <svg className="w-4 h-4 text-slate-400 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+        <Icon name="chevron-down" className="w-4 h-4 text-slate-400 rotate-180" strokeWidth={2} />
       </button>
 
       {/* Start by role — collapsible persona entry points that route into the spine */}
@@ -162,25 +157,39 @@ export default function ProgramProgress() {
           className="flex items-center gap-1.5 mb-2 group"
         >
           <span className="text-[10px] font-semibold text-slate-400 group-hover:text-slate-600 uppercase tracking-wide transition-colors">Start by role</span>
-          <svg className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-all ${rolesOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <Icon name="chevron-down" className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-all ${rolesOpen ? 'rotate-180' : ''}`} strokeWidth={2.5} />
           {!rolesOpen && <span className="text-[9px] text-slate-400 font-normal normal-case">7 roles</span>}
         </button>
         {rolesOpen && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-            {PERSONAS.map(p => (
-              <button
-                key={p.role}
-                onClick={() => go(p.nav)}
-                className="text-left rounded-lg border p-2.5 transition-all hover:shadow-md hover:-translate-y-0.5"
-                style={{ backgroundColor: `${p.color}08`, borderColor: `${p.color}33` }}
-              >
-                <div className="text-[11px] font-bold leading-tight" style={{ color: p.color }}>{p.role}</div>
-                <div className="text-[9px] text-slate-500 mt-0.5 leading-tight line-clamp-2 min-h-[1.6rem]">{p.description}</div>
-                <div className="text-[9px] font-medium mt-1 truncate" style={{ color: p.color }}>→ {p.startWith}</div>
-              </button>
-            ))}
+            {PERSONAS.map(p => {
+              const gapCount = assessmentState.gapsByRole[p.role] || 0;
+              const hasAssessment = assessmentState.hasAssessment;
+
+              return (
+                <button
+                  key={p.role}
+                  onClick={() => go(p.nav)}
+                  className="text-left rounded-lg border p-2.5 transition-all hover:shadow-md hover:-translate-y-0.5"
+                  style={{ backgroundColor: `${p.color}08`, borderColor: `${p.color}33` }}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="text-[11px] font-bold leading-tight" style={{ color: p.color }}>{p.role}</div>
+                    {hasAssessment && gapCount > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                        {gapCount} gaps
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[9px] text-slate-500 mt-0.5 leading-tight line-clamp-2 min-h-[1.6rem]">
+                    {hasAssessment && gapCount > 0
+                      ? `${gapCount} gap${gapCount !== 1 ? 's' : ''} identified in your area`
+                      : p.description}
+                  </div>
+                  <div className="text-[9px] font-medium mt-1 truncate" style={{ color: p.color }}>→ {p.startWith}</div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -251,7 +260,7 @@ export default function ProgramProgress() {
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
                     style={{ backgroundColor: g.color }}>{g.step}</span>
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] text-white ${meta.dot}`}>{meta.icon}</span>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-white ${meta.dot}`}><Icon name={meta.icon} className="w-2.5 h-2.5" strokeWidth={2.5} /></span>
                 </div>
                 <div className="text-[12px] font-semibold text-slate-900">{g.title}</div>
                 <div className="text-[9px] text-slate-500 leading-tight mt-0.5 line-clamp-2 min-h-[1.75rem]">{g.desc}</div>
@@ -287,7 +296,7 @@ export default function ProgramProgress() {
           </div>
         ) : (
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-emerald-200/70 bg-emerald-50/60 px-4 py-3">
-            <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[11px]">✓</span>
+            <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center"><Icon name="check" className="w-3 h-3" strokeWidth={2.5} /></span>
             <span className="text-[13px] font-medium text-emerald-800">Program complete across all six steps — keep monitoring and reporting.</span>
           </div>
         )}

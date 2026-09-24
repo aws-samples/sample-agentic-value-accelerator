@@ -129,7 +129,7 @@ variable "redis_num_cache_clusters" {
 }
 
 # -----------------------------------------------------------------------------
-# Environment and Region
+# Environment
 # -----------------------------------------------------------------------------
 
 variable "environment" {
@@ -138,11 +138,13 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "aws_region" {
-  description = "AWS region for deployment and Bedrock endpoint routing"
-  type        = string
-  default     = "us-east-2"
-}
+# There is deliberately no `aws_region` variable here. This module derives its region
+# from `data.aws_region.current` (see data.tf), i.e. from the provider the caller
+# configured, so it cannot disagree with the region its resources are actually created
+# in. A variable with a default would be exactly the trap this change set exists to
+# remove: the sole caller (environments/dev/main.tf) never passed it, so the default
+# was the value, and an AWS call against the wrong region does not raise - it succeeds
+# against that region's inventory.
 
 # -----------------------------------------------------------------------------
 # Tags

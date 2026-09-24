@@ -12,6 +12,7 @@ import { LiveDataBadge } from './DataSourceIndicator';
 import LiveHeader from './LiveHeader';
 import { usePollingKey } from './usePollingKey';
 import MaskedIdentity from './MaskedIdentity';
+import { useDataSources } from './DataSourceContext';
 
 const sourceLabel = (s: string) => s.replace('.amazonaws.com', '');
 
@@ -19,15 +20,29 @@ export default function LiveAiActivity() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AwsTrailResponse | null>(null);
   const pollKey = usePollingKey(60_000);
+  const { updateSource } = useDataSources();
+
   useEffect(() => {
     let cancelled = false;
     // Silent refetch on poll — near-real-time trail without a spinner flash.
     governTrailApi.aiActivity(24)
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .then(d => {
+        if (!cancelled) {
+          setData(d);
+          if (d?.live) {
+            updateSource('aws-cloudtrail', { status: 'live', lastFetch: Date.now() });
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setData(null);
+          updateSource('aws-cloudtrail', { status: 'error', error: 'API unavailable' });
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [pollKey]);
+  }, [pollKey, updateSource]);
 
   const live = !!data?.live;
   const events = data?.events ?? [];

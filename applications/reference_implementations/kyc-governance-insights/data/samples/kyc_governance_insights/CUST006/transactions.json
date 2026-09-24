@@ -1,0 +1,23 @@
+{
+  "customer_id": "CUST006",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 800000,
+    "total_outflow": 750000,
+    "average_monthly_volume": 64583,
+    "transaction_count": 40
+  },
+  "top_counterparties": [],
+  "geographic_distribution": {
+    "domestic": 10,
+    "international": 90
+  },
+  "high_risk_jurisdictions": [
+    "BVI"
+  ],
+  "suspicious_patterns": [
+    "round_dollar_transfers",
+    "rapid_pass_through"
+  ],
+  "large_transactions_over_100k": 1
+}

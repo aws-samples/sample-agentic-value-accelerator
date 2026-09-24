@@ -69,7 +69,7 @@ export default function RiskMetricsPanel() {
                 <tr key={r.id} className="border-t border-slate-100">
                   <td className="py-2 px-5 font-medium text-slate-700">{r.label}</td>
                   <td className="py-2 px-2 text-center tabular-nums font-semibold text-slate-800">{r.residual}</td>
-                  <td className="py-2 px-2 text-center tabular-nums text-slate-500">{r.threshold}</td>
+                  <td className="py-2 px-2 text-center tabular-nums text-slate-500">{r.riskThreshold}</td>
                   <td className="py-2 px-2 text-center tabular-nums text-slate-500">{Math.round(r.controlEffectiveness * 100)}%</td>
                   <td className="py-2 px-2 text-center">{vm ? <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${vm.cls}`}>{vm.label}</span> : <span className="text-slate-300">—</span>}</td>
                   <td className="py-2 px-3 text-[10px] text-slate-500">{r.leadingIndicator ?? <span className="text-slate-300">—</span>}</td>

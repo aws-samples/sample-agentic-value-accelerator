@@ -1,0 +1,45 @@
+{
+  "customer_id": "CUST002",
+  "kyc_verification": {
+    "status": "completed",
+    "date": "2026-05-02",
+    "documents_verified": [
+      "Trade License",
+      "Memorandum of Association",
+      "UBO Declaration"
+    ]
+  },
+  "sanctions_screening": {
+    "status": "clear",
+    "last_check": "2026-06-24",
+    "databases_checked": [
+      "OFAC",
+      "UN",
+      "EU",
+      "UK HMT"
+    ],
+    "matches": []
+  },
+  "pep_screening": {
+    "status": "clear",
+    "matches": []
+  },
+  "adverse_media": {
+    "status": "findings",
+    "last_check": "2026-06-20",
+    "findings": [
+      {
+        "date": "2024-03",
+        "summary": "Regulatory fine ($50K), UAE \u2014 resolved 2024",
+        "severity": "low"
+      }
+    ]
+  },
+  "aml_risk_rating": "medium",
+  "enhanced_due_diligence_required": true,
+  "next_review_date": "2027-05-02",
+  "regulatory_notes": [
+    "Enhanced monitoring applied (geographic risk)",
+    "Adverse media relates to resolved $50K fine"
+  ]
+}

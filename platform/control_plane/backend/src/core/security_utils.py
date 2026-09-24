@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import re
 
-# AWS 12-digit account ID pattern (standalone or in ARN).
-_ACCOUNT_ID = re.compile(r"\b(\d{12})\b")
+# AWS 12-digit account ID pattern (standalone or in ARN). Digit lookarounds (not \b)
+# so IDs adjacent to word chars like '_' are still masked — e.g. "AppTag_123456789012-x"
+# — while a 12-digit run inside a longer number is left alone.
+_ACCOUNT_ID = re.compile(r"(?<!\d)(\d{12})(?!\d)")
 
 # Full ARN: arn:partition:service:region:account:resource
 _ARN = re.compile(r"arn:aws[a-z-]*:[^:]+:[^:]*:\d{12}:[^\s]+")

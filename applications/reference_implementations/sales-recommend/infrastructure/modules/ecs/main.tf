@@ -75,6 +75,10 @@ resource "aws_ecs_task_definition" "ui" {
         {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "LEADS_TABLE_NAME"
+          value = var.leads_table_name
         }
       ]
 

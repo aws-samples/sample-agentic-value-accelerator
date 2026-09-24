@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Controlled Quality Output — LLM-as-Judge service.
+  Lambda that scores the agent's KYC assessment on five quality dimensions using
+  Bedrock Claude Haiku. Invoked directly by the agent runtime with IAM auth —
+  there is no HTTP endpoint.
+
+Parameters:
+  ResourcePrefix:
+    Type: String
+    Default: kyc-gov
+    Description: Prefix for resource names (keeps this stack isolated from other use cases)
+  JudgeModelId:
+    Type: String
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model ID used for evaluation
+  BedrockRegion:
+    Type: String
+    Default: us-east-1
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS allowed origin (e.g. https://<dist>.cloudfront.net). Default '*' for local dev; override in prod.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  LlmJudgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-llm-judge-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub 'arn:aws:bedrock:*::foundation-model/*'
+                  - !Sub 'arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*'
+
+  LlmJudgeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-llm-judge'
+      RetentionInDays: 30
+
+  LlmJudgeFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LlmJudgeLogGroup
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-llm-judge'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt LlmJudgeRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          JUDGE_MODEL_ID: !Ref JudgeModelId
+          BEDROCK_REGION: !Ref BedrockRegion
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: llm-judge}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, os, re, time, logging, boto3
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          REGION = os.environ.get('BEDROCK_REGION', 'us-east-1')
+          MODEL_ID = os.environ.get('JUDGE_MODEL_ID', 'us.anthropic.claude-haiku-4-5-20251001-v1:0')
+          bedrock = boto3.client('bedrock-runtime', region_name=REGION)
+          ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+          DIMENSIONS = ['correctness', 'faithfulness', 'completeness', 'helpfulness', 'tone']
+
+          EVAL_PROMPT = """You are an evaluation judge for a KYC (Know Your Customer) risk assessment system.
+
+          Evaluate the following agent output against these 5 criteria. Score each 0.0 to 1.0:
+
+          1. **Correctness**: Are the facts, numbers, and conclusions accurate?
+          2. **Faithfulness**: Does the output stay true to the source data without hallucination?
+          3. **Completeness**: Does it cover all required checks (sanctions, PEP, credit, UBO, adverse media)?
+          4. **Helpfulness**: Is it actionable for a compliance analyst making an onboarding decision?
+          5. **Tone**: Is it professional, neutral, and appropriate for regulatory documentation?
+
+          AGENT OUTPUT:
+          {agent_output}
+
+          Respond ONLY with valid JSON (no markdown):
+          {{"correctness": 0.0, "faithfulness": 0.0, "completeness": 0.0, "helpfulness": 0.0, "tone": 0.0}}
+          """
+
+          def handler(event, context):
+              rid = getattr(context, 'aws_request_id', None)
+              t0 = time.time()
+              method = event.get('httpMethod') or event.get('requestContext', {}).get('http', {}).get('method', 'POST')
+              if method == 'OPTIONS':
+                  return resp(200, {})
+              try:
+                  # Direct invoke (the AgentCore runtime calls this function with IAM auth) delivers
+                  # the payload at the top level; an API Gateway proxy event nests it under "body".
+                  # Accept both so `aws lambda invoke` and any legacy HTTP caller keep working.
+                  _raw = event.get('body') if isinstance(event, dict) and 'body' in event else event
+                  body = json.loads(_raw) if isinstance(_raw, str) else (_raw or {})
+              except Exception:
+                  body = {}
+              agent_output = body.get('agent_output', '')
+              if not agent_output:
+                  return resp(400, {'error': 'agent_output is required'})
+              prompt = EVAL_PROMPT.format(agent_output=agent_output[:4000])
+              try:
+                  r = bedrock.invoke_model(modelId=MODEL_ID, contentType='application/json', accept='application/json',
+                      body=json.dumps({'anthropic_version': 'bedrock-2023-05-31', 'max_tokens': 200,
+                                       'messages': [{'role': 'user', 'content': prompt}]}))
+                  result = json.loads(r['body'].read())
+                  text = result['content'][0]['text'].strip()
+                  m = re.search(r'\{.*\}', text, re.S)
+                  scores = json.loads(m.group(0) if m else text)
+                  scores = {k: round(min(1.0, max(0.0, float(scores.get(k, 0.0)))), 2) for k in DIMENSIONS}
+              except Exception as e:
+                  # Bedrock/parse failure. This service is an advisory quality score, not a
+                  # governance gate — fail loudly in logs and surface the error in the
+                  # response contract (model='error:...') so the caller can see the degrade.
+                  logger.exception(json.dumps({'svc': 'llm-judge', 'request_id': rid,
+                                               'event': 'error', 'model': MODEL_ID, 'detail': str(e)}))
+                  return resp(200, {'scores': {k: 0.0 for k in DIMENSIONS}, 'model': f'error: {str(e)[:120]}'})
+              logger.info(json.dumps({'svc': 'llm-judge', 'request_id': rid, 'event': 'judged',
+                                      'model': MODEL_ID, 'scores': scores,
+                                      'latency_ms': int((time.time() - t0) * 1000)}))
+              return resp(200, {'scores': scores, 'model': MODEL_ID})
+
+          def resp(code, body):
+              return {'statusCode': code,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': ORIGIN,
+                                  'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type'},
+                      'body': json.dumps(body)}
+
+  LlmJudgeUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/kyc-gov/${EnvironmentTag}/llm-judge-function'
+      Type: String
+      Value: !Ref LlmJudgeFunction
+      Description: Lambda function name for kyc-gov llm-judge, invoked directly by the AgentCore runtime with IAM auth (no public endpoint).
+      Tags:
+        Project: !Ref ProjectTag
+        Environment: !Ref EnvironmentTag
+        Component: llm-judge
+
+Outputs:
+  LlmJudgeFunctionName:
+    Description: Function name for the LLM_JUDGE_FUNCTION env var
+    Value: !Ref LlmJudgeFunction

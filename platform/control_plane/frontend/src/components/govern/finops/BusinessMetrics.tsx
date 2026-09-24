@@ -21,7 +21,7 @@
  * - Dual dashboard strategy (engineering + executive)
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -29,6 +29,7 @@ import {
 } from 'recharts';
 import { useGovernanceAggregator } from '../useGovernanceAggregator';
 import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
+import { governCostApi, type AwsCostTagBreakdown } from '../../../api/client';
 
 const tooltipStyle = {
   background: 'rgba(255,255,255,0.98)',
@@ -205,6 +206,9 @@ const COST_BY_BU = [
   { bu: 'Operations', cost: 12400, color: '#f59e0b' },
 ];
 
+// Palette for live business-unit tag values (cycled when there are many tag values).
+const BU_COLORS = ['#3b82f6', '#ef4444', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#6366f1'];
+
 const MONTHLY_TREND = [
   { month: 'Jan', techCost: 38, bizValue: 142 },
   { month: 'Feb', techCost: 42, bizValue: 168 },
@@ -217,6 +221,23 @@ const MONTHLY_TREND = [
 export default function BusinessMetrics() {
   const [viewMode, setViewMode] = useState<'metrics' | 'tco' | 'spectrum' | 'allocation'>('metrics');
   const { businessCases } = useGovernanceAggregator();
+
+  // Live cost allocation by business-unit tag — same Cost Explorer feed that powers
+  // Chargeback and the FinOps dashboard. Falls back to the illustrative split below.
+  const [buTagData, setBuTagData] = useState<AwsCostTagBreakdown | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    governCostApi.byTag('business-unit')
+      .then(d => { if (!cancelled) setBuTagData(d); })
+      .catch(() => { if (!cancelled) setBuTagData(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const buLive = !!(buTagData?.live && buTagData.tagged_total > 0);
+  const costByBU = buLive
+    ? buTagData!.by_value.map((v, i) => ({ bu: v.value, cost: Math.round(v.amount), color: BU_COLORS[i % BU_COLORS.length] }))
+    : COST_BY_BU;
+  const buUntagged = buLive ? Math.round(buTagData!.untagged_total) : 0;
 
   // REAL portfolio business value from Plan business cases (computed.financials).
   const portfolio = useMemo(() => {
@@ -699,11 +720,16 @@ export default function BusinessMetrics() {
           {/* Cost Allocation by Business Unit */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-4">Cost Allocation by Business Unit</div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="text-sm font-semibold text-slate-900">Cost Allocation by Business Unit</div>
+                {buLive
+                  ? <LiveDataBadge source="Cost Explorer" detail="Cost by business-unit cost-allocation tag" />
+                  : <MockDataBadge integration="Tag AWS resources with a business-unit cost-allocation tag for live allocation" />}
+              </div>
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie
-                    data={COST_BY_BU}
+                    data={costByBU}
                     dataKey="cost"
                     nameKey="bu"
                     cx="50%"
@@ -712,7 +738,7 @@ export default function BusinessMetrics() {
                     outerRadius={90}
                     paddingAngle={2}
                   >
-                    {COST_BY_BU.map((entry, i) => (
+                    {costByBU.map((entry, i) => (
                       <Cell key={i} fill={entry.color} />
                     ))}
                   </Pie>
@@ -720,7 +746,7 @@ export default function BusinessMetrics() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="grid grid-cols-2 gap-2 mt-4">
-                {COST_BY_BU.map(bu => (
+                {costByBU.map(bu => (
                   <div key={bu.bu} className="flex items-center gap-2 text-xs">
                     <div className="w-3 h-3 rounded" style={{ backgroundColor: bu.color }} />
                     <span className="text-slate-600 flex-1">{bu.bu}</span>
@@ -728,6 +754,16 @@ export default function BusinessMetrics() {
                   </div>
                 ))}
               </div>
+              {buLive && buUntagged > 0 && (
+                <div className="mt-3 text-[11px] text-slate-400">
+                  ${buUntagged.toLocaleString()} untagged spend not attributed to a business unit — tag resources to close the gap.
+                </div>
+              )}
+              {!buLive && (
+                <div className="mt-3 text-[11px] text-slate-400">
+                  Illustrative split. Apply a <span className="font-mono text-slate-500">business-unit</span> cost-allocation tag in AWS to populate this from Cost Explorer.
+                </div>
+              )}
             </div>
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5">

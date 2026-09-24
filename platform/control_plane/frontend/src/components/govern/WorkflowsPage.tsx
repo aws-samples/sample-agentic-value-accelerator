@@ -569,7 +569,7 @@ export default function WorkflowsPage() {
                   <MockDataBadge integration="Simulated execution - deploy real agents via App Factory" />
                 </div>
                 <p className="text-slate-500 text-sm mt-0.5">
-                  Multi-agent workflows powered by your live AVA data
+                  Multi-agent governance workflows over your live AVA data — orchestrate reviews, approvals, and remediation across the estate.
                 </p>
               </div>
             </div>

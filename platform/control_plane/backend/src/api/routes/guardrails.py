@@ -1,6 +1,6 @@
 """Guardrail template CRUD API routes"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from typing import Optional, List
 import logging
 
@@ -13,11 +13,18 @@ from models.guardrail import (
     GuardrailMetrics,
 )
 from services.guardrail_service import GuardrailService
+from core.aws_paging import paginate_bounded
 from core.config import settings
 from core.rbac import Role, require_role
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/guardrails", tags=["guardrails"])
+
+# bedrock:ListGuardrails maxResults maximum, per the botocore service model. Named rather
+# than inlined so the value is stated once and a test can pin it; the original 50 was a round
+# number that read like a performance knob and became a ceiling on a reported total.
+_GUARDRAIL_PAGE = 1000
+_GUARDRAIL_MAX_ITEMS = 2000
 
 _svc = None
 
@@ -25,10 +32,12 @@ _svc = None
 def get_service() -> GuardrailService:
     global _svc
     if _svc is None:
-        _svc = GuardrailService(
-            table_name=settings.GUARDRAILS_TABLE_NAME,
-            region=settings.AWS_REGION,
-        )
+        # No region argument: GuardrailService resolves two regions per tier - the
+        # template table in the control-plane region, Bedrock and its CloudWatch
+        # metrics in the governed region. Passing settings.AWS_REGION here (as this
+        # site used to) sent the DynamoDB lookup and the Bedrock calls to the same
+        # region, so a split deployment returned an empty 200 from both.
+        _svc = GuardrailService(table_name=settings.GUARDRAILS_TABLE_NAME)
     return _svc
 
 
@@ -68,16 +77,60 @@ async def get_aws_guardrails_summary(_=Depends(require_role(Role.VIEWER))):
     """
     svc = get_service()
     try:
-        # Get tracked guardrails (skip auto_sync to show current state)
-        tracked = svc.list_templates(auto_sync=False)
+        # Get tracked guardrails (skip auto_sync to show current state).
+        #
+        # Exclude DELETED rows from the drift comparison, matching reconcile_orphans.
+        # Without this the drift never clears: reconciliation closes an orphan row by
+        # setting status=deleted, but a closed row still carries its guardrail_id, so
+        # counting it as tracked kept reporting the same orphan forever and made the
+        # reconcile endpoint look ineffective.
+        all_rows = svc.list_templates(auto_sync=False)
+        tracked = [t for t in all_rows if str(getattr(t.status, "value", t.status)) != "deleted"]
         tracked_ids = {t.guardrail_id for t in tracked if t.guardrail_id}
+        closed_rows = len(all_rows) - len(tracked)
 
-        # List AWS guardrails
-        resp = svc.bedrock_client.list_guardrails(maxResults=50)
-        aws_guardrails = resp.get("guardrails", [])
+        # List AWS guardrails.
+        #
+        # This was `list_guardrails(maxResults=50)` with no paging, against an API maximum
+        # of 1000. Every number below is derived from the result and every one is rendered
+        # as a measurement: `aws_total`, and worse, `orphaned = tracked_ids - aws_ids`. A
+        # truncated read does not just undercount `aws_total`, it FABRICATES orphans - the
+        # 51st guardrail onward is missing from `aws_ids`, so a live guardrail's row is
+        # reported as pointing at nothing, `in_sync` flips to False, and `drift_note`
+        # explains at length that enforcement is over-reported. It is now paged.
+        read = paginate_bounded(
+            svc.bedrock_client, "list_guardrails", "guardrails",
+            page_size=_GUARDRAIL_PAGE, max_items=_GUARDRAIL_MAX_ITEMS,
+        )
+        aws_guardrails = read.items
 
         aws_ids = {g.get("id") for g in aws_guardrails}
+
+        # A bounded or failed walk cannot support a set difference in either direction, so
+        # the drift verdict is withheld rather than guessed. `read.note` is None when the
+        # walk was complete, which is what keeps this from being a reflexive caveat.
+        listing_note = read.note
+
+        # Drift runs in BOTH directions and this endpoint only looked one way.
+        #
+        # `untracked` is an AWS guardrail with no template row - something created outside
+        # the platform. `orphaned` is the opposite: a template row whose guardrail no longer
+        # exists in AWS, because it was deleted there or never finished creating. Only the
+        # first was computed, so `in_sync` reported True while rows pointed at nothing.
+        #
+        # Measured on the reference account: 7 guardrails in AWS, 11 tracked rows all marked
+        # active, untracked_in_aws 0, in_sync True. The 7 and the 11 sat in the same payload
+        # contradicting the flag. Four rows were stale. Their ids are deliberately not
+        # quoted here: they name live guardrails in the reference account, and this repo is
+        # published. `GET /guardrails/aws-summary` returns them as `orphaned_ids` at runtime,
+        # which is where an id belongs - a comment cannot go stale safely.
         untracked = aws_ids - tracked_ids
+        # `orphaned` is only computable from a COMPLETE listing. On a truncated read the
+        # unread tail is indistinguishable from absent, so every guardrail past the bound
+        # would be reported as an orphaned row. `untracked` survives truncation: an id that
+        # did come back from AWS with no template row is untracked whether or not more ids
+        # exist beyond the bound, so it is a floor rather than a fabrication.
+        orphaned = (tracked_ids - aws_ids) if read.complete else set()
 
         import time
         from services.guardrail_service import GuardrailService
@@ -88,12 +141,48 @@ async def get_aws_guardrails_summary(_=Depends(require_role(Role.VIEWER))):
             "auto_sync_enabled": True,
             "sync_interval_seconds": GuardrailService._SYNC_INTERVAL_SECONDS,
             "last_sync_seconds_ago": seconds_since_sync,
-            "aws_total": len(aws_guardrails),
+            # null, not 0, when the listing failed. A 0 there is an artifact of the failure
+            # and says nothing about the account, and nothing downstream could tell it apart
+            # from an account with no guardrails.
+            "aws_total": len(aws_guardrails) if not read.failed else None,
+            # True means aws_total is a FLOOR, not a total: read it with listing_note.
+            "aws_total_is_floor": read.truncated or read.timed_out,
+            "listing_note": listing_note,
             "tracked_total": len(tracked),
+            # Rows closed by reconciliation - reported so the count difference between
+            # tracked_total and the raw row count is explained rather than puzzling.
+            "closed_rows": closed_rows,
             "tracked_with_bedrock_id": len(tracked_ids),
             "untracked_in_aws": len(untracked),
-            "in_sync": len(untracked) == 0,
+            # A template row pointing at a guardrail that is not in AWS. The row typically
+            # still says status=active, so anything counting rows over-reports enforcement.
+            # null, not 0, on an incomplete listing: 0 would assert there are none.
+            "orphaned_templates": len(orphaned) if read.complete else None,
+            "orphaned_ids": sorted(orphaned),
+            # Requires BOTH directions clean. Previously `len(untracked) == 0` alone, which
+            # is why 11 rows against 7 guardrails still reported in_sync. null when the
+            # listing did not complete, because neither True nor False is knowable then.
+            "in_sync": (
+                (len(untracked) == 0 and len(orphaned) == 0) if read.complete else None
+            ),
             "untracked_ids": list(untracked),
+            "drift_note": (
+                "; ".join(
+                    filter(None, [
+                        listing_note,
+                        f"{len(untracked)} guardrail(s) exist in AWS with no template row"
+                        if untracked else None,
+                        f"{len(orphaned)} template row(s) reference a guardrail that no longer "
+                        f"exists in AWS - they are still marked active, so guardrail counts "
+                        f"derived from template rows over-report enforcement by {len(orphaned)}"
+                        if orphaned else None,
+                        "Orphan detection is withheld: it needs a complete guardrail listing, "
+                        "and an unread tail is indistinguishable from a deleted guardrail"
+                        if not read.complete else None,
+                    ])
+                )
+                or None
+            ),
             "aws_guardrails": [
                 {
                     "id": g.get("id"),
@@ -109,11 +198,61 @@ async def get_aws_guardrails_summary(_=Depends(require_role(Role.VIEWER))):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/reconcile-orphans")
+async def reconcile_orphans(
+    dry_run: bool = Query(default=True, description="Report what would change without changing it"),
+    _=Depends(require_role(Role.ADMIN)),
+):
+    """Close template rows whose Bedrock guardrail no longer exists.
+
+    Deliberately NOT the DELETE route: delete_template calls _delete_bedrock_guardrail
+    first, which for an orphan throws and leaves the row FAILED instead of DELETED - and
+    would delete a live guardrail if a row ever carried the wrong id. This endpoint makes
+    no AWS mutation. It reads list_guardrails, diffs, and writes only control-plane rows.
+
+    An orphan keeps status=active, so anything counting rows over-reports guardrail
+    enforcement. See GET /guardrails/aws-summary for the drift this resolves.
+
+    dry_run defaults TRUE. Pass dry_run=false to apply.
+    """
+    svc = get_service()
+    try:
+        return svc.reconcile_orphans(dry_run=dry_run)
+    except Exception as e:
+        logger.error(f"Orphan reconciliation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/store-status")
+async def get_store_status(_=Depends(require_role(Role.VIEWER))):
+    """Provenance for the guardrail template store: which table, which region, reachable.
+
+    `GET /guardrails` returns a bare list, and a list cannot distinguish "this account
+    has no guardrail templates" from "the table is in a region this backend is not
+    looking at". Both render as zero. Read this alongside the list before showing a
+    count, and degrade honestly when `reachable` is false: the `note` names the table
+    and the region that was searched.
+    """
+    svc = get_service()
+    # Touch the store so the status reflects a real call rather than the last one,
+    # which may have been minutes ago or may never have happened.
+    svc.list_templates(auto_sync=False)
+    return svc.store_status()
+
+
 # --- CRUD ---
 
 @router.post("", response_model=GuardrailTemplate, status_code=201)
-async def create_guardrail(req: GuardrailTemplateCreate, _=Depends(require_role(Role.OPERATOR))):
-    """Create a new guardrail template and provision it in Bedrock"""
+async def create_guardrail(
+    req: GuardrailTemplateCreate,
+    x_user_email: Optional[str] = Header(default=None, alias="x-user-email"),
+    _=Depends(require_role(Role.OPERATOR)),
+):
+    """Create a new guardrail template and provision it in Bedrock
+
+    `created_by` comes from the `x-user-email` header, or `"unknown"` when absent -
+    `require_role` returns only a Role, never a principal.
+    """
     # Bedrock requires at least one policy — fail fast with a clear message
     # instead of a 502 from the CreateGuardrail call (and avoid orphan records).
     has_word_filter = bool(
@@ -140,7 +279,9 @@ async def create_guardrail(req: GuardrailTemplateCreate, _=Depends(require_role(
             )
 
     svc = get_service()
-    template = svc.create_template(req, created_by="user")
+    # Not the literal "user": created_by="user" reads like a real principal, so a
+    # guardrail template with no captured author looked fully attributed.
+    template = svc.create_template(req, created_by=x_user_email or "unknown")
     if template.status == GuardrailStatus.FAILED:
         raise HTTPException(
             status_code=502,

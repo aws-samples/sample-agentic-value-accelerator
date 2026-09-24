@@ -20,7 +20,7 @@
  * - Amazon SNS: Notification and escalation
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import GovernPageLayout from '../GovernPageLayout';
 import { MockDataBadge } from '../DataSourceIndicator';
@@ -213,7 +213,11 @@ const MOCK_EXECUTIONS: PlaybookExecution[] = [
     playbookId: 'pb-prompt-injection',
     playbookName: 'Prompt Injection Containment',
     status: 'running',
-    startedAt: '2026-07-23T08:45:00Z',
+    // 'running' fixtures seed their start relative to now so the elapsed-duration
+    // column stays realistic instead of drifting to tens of thousands of minutes as
+    // the calendar advances past a hard-coded date (mirrors the isoDaysFromToday
+    // pattern already used for the Art. 73 deadline fixtures below).
+    startedAt: new Date(Date.now() - 6 * 60_000).toISOString(),
     completedAt: null,
     triggeredBy: 'Bedrock Guardrail: injection-filter',
     incidentId: null,
@@ -230,14 +234,24 @@ const MOCK_EXECUTIONS: PlaybookExecution[] = [
   },
 ];
 
+/**
+ * ISO date (YYYY-MM-DD) offset from real today. Art. 73 clocks are a live obligation,
+ * so the demo deadlines are seeded relative to wall-clock time — otherwise, once the
+ * calendar passes a hard-coded date every fixture reads "overdue". This keeps a
+ * realistic mix (approaching + one overdue) whenever the demo is opened.
+ */
+function isoDaysFromToday(offsetDays: number): string {
+  return new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
+}
+
 const MOCK_DEADLINES: Article73Deadline[] = [
   {
     id: 'dl-001',
     incidentId: 'INC-2026-0043',
     incidentTitle: 'PII leaked in RAG response',
     clockDays: 15,
-    detectedAt: '2026-07-20',
-    deadline: '2026-08-04',
+    detectedAt: isoDaysFromToday(-11),
+    deadline: isoDaysFromToday(4),
     status: 'approaching',
     reportingAuthority: 'BaFin (DE)',
   },
@@ -246,9 +260,9 @@ const MOCK_DEADLINES: Article73Deadline[] = [
     incidentId: 'INC-2026-0041',
     incidentTitle: 'Claims-triage agent emitted unsafe guidance',
     clockDays: 15,
-    detectedAt: '2026-07-18',
-    deadline: '2026-08-02',
-    status: 'approaching',
+    detectedAt: isoDaysFromToday(-17),
+    deadline: isoDaysFromToday(-2),
+    status: 'overdue',
     reportingAuthority: 'CNIL (FR)',
   },
   {
@@ -256,8 +270,8 @@ const MOCK_DEADLINES: Article73Deadline[] = [
     incidentId: 'INC-2026-0040',
     incidentTitle: 'Critical infrastructure disruption (simulated)',
     clockDays: 2,
-    detectedAt: '2026-07-22',
-    deadline: '2026-07-24',
+    detectedAt: isoDaysFromToday(-1),
+    deadline: isoDaysFromToday(1),
     status: 'approaching',
     reportingAuthority: 'BSI (DE)',
   },
@@ -265,7 +279,10 @@ const MOCK_DEADLINES: Article73Deadline[] = [
 
 // ─────────────────────────── Helpers ───────────────────────────
 
-const TODAY = '2026-07-23';
+// Real 'today' — Art. 73 countdowns compute against wall-clock time so overdue and
+// approaching states stay correct as the calendar advances (fixtures above are seeded
+// relative to this via isoDaysFromToday).
+const TODAY = isoDaysFromToday(0);
 
 function daysBetween(fromIso: string, toIso: string): number {
   const from = Date.parse(fromIso);
@@ -355,7 +372,7 @@ export default function IncidentPlaybooks() {
           sub="pre-built templates"
         />
         <StatCard
-          label="Executions (7d)"
+          label="Executions (total)"
           value={MOCK_EXECUTIONS.length}
           variant="default"
           sub={`${MOCK_EXECUTIONS.filter(e => e.status === 'success').length} successful`}
@@ -711,8 +728,14 @@ export default function IncidentPlaybooks() {
                             <span className={`text-[9px] font-semibold px-2 py-0.5 rounded border ${clockBadge[deadline.clockDays]}`}>
                               {deadline.clockDays}-day clock
                             </span>
-                            <span className={`text-[9px] font-semibold px-2 py-0.5 rounded ${deadlineStatusBadge[deadline.status]}`}>
-                              {deadline.status}
+                            <span className={`text-[9px] font-semibold px-2 py-0.5 rounded ${
+                              deadline.status === 'reported' ? deadlineStatusBadge.reported
+                                : urgency === 'overdue' ? deadlineStatusBadge.overdue
+                                : urgency === 'critical' ? 'bg-rose-100 text-rose-700'
+                                : urgency === 'approaching' ? deadlineStatusBadge.approaching
+                                : deadlineStatusBadge.pending
+                            }`}>
+                              {deadline.status === 'reported' ? 'reported' : urgency}
                             </span>
                           </div>
                           <h4 className="text-sm font-semibold text-slate-900">{deadline.incidentTitle}</h4>
@@ -812,9 +835,10 @@ function ExecutePlaybookModal({ playbook, onClose }: ExecutePlaybookModalProps) 
 
   const handleExecute = () => {
     setExecuting(true);
-    // Simulate execution
+    // Demo only: no AWS call is made. In production this would invoke
+    // ssm:StartAutomationExecution against playbook.ssmDocumentName.
     setTimeout(() => {
-      alert(`Playbook "${playbook.name}" would be executed via SSM StartAutomationExecution.\n\nDocument: ${playbook.ssmDocumentName}\nIncident: ${incidentId || 'None'}\n\nIn production, this would invoke the SSM Automation runbook.`);
+      alert(`Demo build — no AWS call was made.\n\nIn production, "${playbook.name}" would run via SSM StartAutomationExecution.\nDocument: ${playbook.ssmDocumentName}\nIncident: ${incidentId || 'None'}\n\nNo automation was executed.`);
       setExecuting(false);
       onClose();
     }, 1500);
@@ -851,9 +875,9 @@ function ExecutePlaybookModal({ playbook, onClose }: ExecutePlaybookModalProps) 
             <div className="flex items-start gap-2">
               <Icon name="exclamation-triangle" className="w-4 h-4 text-amber-600 mt-0.5" />
               <div className="text-[11px] text-amber-800">
-                <span className="font-semibold">Warning:</span> This will execute the SSM Automation document
+                <span className="font-semibold">Demo:</span> In production this would execute the SSM Automation document
                 <code className="mx-1 px-1 py-0.5 bg-amber-100 rounded text-[10px]">{playbook.ssmDocumentName}</code>
-                in your AWS account. Ensure you have the necessary permissions and understand the impact.
+                in your AWS account. This build does not call AWS — running it here executes nothing.
               </div>
             </div>
           </div>

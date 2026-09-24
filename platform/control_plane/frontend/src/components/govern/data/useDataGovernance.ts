@@ -17,6 +17,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   guardrailsApi,
+  governGuardrailsApi,
   deploymentsApi,
   prioritizationApi,
   serviceApprovalApi,
@@ -24,6 +25,10 @@ import {
   getTemplates,
 } from '../../../api/client';
 import type { UseCase, MaturityAssessment } from '../../../api/client';
+import { anonymizedFromPolicies, metricsByTemplateId } from '../guardrailTelemetryMetrics';
+
+/** The window the "Events (24h)" cards claim. Keep the label and this value in step. */
+const DATA_GOVERNANCE_WINDOW_DAYS = 1;
 import type {
   GuardrailTemplate,
   Deployment,
@@ -31,6 +36,7 @@ import type {
   GuardrailMetrics,
   Template,
 } from '../../../types';
+import { computeAdoptionMaturity, type AdoptionMaturityResult } from './dataReadinessEngine';
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -106,15 +112,20 @@ export interface DataGovernanceSummary {
   pendingApprovals: number;
 }
 
-// AI Readiness - computed from maturity assessments and use case scores
-export interface DataReadinessMetrics {
-  overallScore: number;
-  dimensions: {
-    name: string;
-    score: number;
-    maxScore: number;
-    sources: string[];
-  }[];
+/**
+ * ADOPTION MATURITY (0-5 levels per dimension) — how far along the organisation is,
+ * from maturity self-assessment, human use-case scoring, and platform inventory.
+ *
+ * This is NOT a readiness score. Control readiness ("are the controls in place and
+ * effective?") is a separate 0-100 ladder owned by `useDataReadiness`, built from AWS
+ * control-plane signals. This slice previously also carried Data Protection, PII
+ * Coverage, Access Governance and Audit Trail dimensions on a 0-5 scale, which
+ * duplicated the readiness ladder and contradicted it on identical inputs (e.g. one
+ * active guardrail scored 4/5 = 80% here and 70/100 there). Those four dimensions now
+ * exist only on the readiness ladder; the three genuinely-different adoption signals
+ * stay here.
+ */
+export interface AdoptionMaturityMetrics extends AdoptionMaturityResult {
   useCaseReadiness: {
     useCaseId: string;
     name: string;
@@ -180,8 +191,8 @@ export interface DataGovernanceResult {
   guardrailsWithMetrics: GuardrailLink[];
   serviceApprovals: ServiceApprovalRun[];
 
-  // New: AI Readiness data
-  readinessMetrics: DataReadinessMetrics;
+  // Adoption maturity (0-5 levels) — NOT control readiness (see useDataReadiness)
+  adoptionMaturity: AdoptionMaturityMetrics;
 
   // New: Data Lineage flows
   lineageFlows: DataLineageFlow[];
@@ -208,10 +219,16 @@ export function useDataGovernance(): DataGovernanceResult {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [guardrails, setGuardrails] = useState<GuardrailTemplate[]>([]);
   const [guardrailMetricsMap, setGuardrailMetricsMap] = useState<Map<string, GuardrailMetrics>>(new Map());
+  // Account-wide PII masking/redaction interventions. Not per-guardrail: CloudWatch
+  // reports it by policy type (SensitiveInformationPolicy), not by guardrail.
+  const [anonymizedCount, setAnonymizedCount] = useState(0);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [serviceApprovals, setServiceApprovals] = useState<ServiceApprovalRun[]>([]);
   const [maturityAssessments, setMaturityAssessments] = useState<MaturityAssessment[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  // Which feeds actually resolved. Lets the adoption-maturity ladder tell "genuinely
+  // zero" apart from "signal unavailable" instead of scoring both as level 0.
+  const [sourcesLoaded, setSourcesLoaded] = useState({ deployments: false, useCases: false, maturity: false });
 
   // Load data from APIs
   useEffect(() => {
@@ -228,6 +245,12 @@ export function useDataGovernance(): DataGovernanceResult {
           maturityApi.list(),
           getTemplates(),
         ]);
+
+        setSourcesLoaded({
+          deployments: deploymentsRes.status === 'fulfilled',
+          useCases: useCasesRes.status === 'fulfilled',
+          maturity: maturityRes.status === 'fulfilled',
+        });
 
         if (deploymentsRes.status === 'fulfilled') {
           setDeployments(deploymentsRes.value);
@@ -255,18 +278,19 @@ export function useDataGovernance(): DataGovernanceResult {
           setTemplates(templatesRes.value);
         }
 
-        // Fetch metrics for active guardrails
-        const guardrailsWithIds = activeGuardrails.filter(g => g.guardrail_id && g.status === 'active');
-        if (guardrailsWithIds.length > 0) {
-          const metricsPromises = guardrailsWithIds.map(g =>
-            guardrailsApi.getMetrics(g.template_id, 24).catch(() => null)
-          );
-          const metricsResults = await Promise.all(metricsPromises);
-          const metricsMap = new Map<string, GuardrailMetrics>();
-          metricsResults.forEach((m, i) => {
-            if (m) metricsMap.set(guardrailsWithIds[i].template_id, m);
-          });
-          setGuardrailMetricsMap(metricsMap);
+        // Per-guardrail metrics in ONE request, over a 1-day window because the cards
+        // that render these are labelled "Events (24h)". This replaced a loop over
+        // guardrailsApi.getMetrics(template_id, 24) — N requests, all 404 when the
+        // template store is unreadable — with the fleet-wide telemetry endpoint.
+        const activeWithBedrock = activeGuardrails.filter(g => g.status === 'active');
+        if (activeWithBedrock.length > 0) {
+          const telemetry = await governGuardrailsApi
+            .telemetry(DATA_GOVERNANCE_WINDOW_DAYS)
+            .catch(() => null);
+          setGuardrailMetricsMap(metricsByTemplateId(activeWithBedrock, telemetry));
+          // Masking/redaction is only measurable per policy type, not per guardrail,
+          // so it is tracked account-wide alongside the per-template map.
+          setAnonymizedCount(anonymizedFromPolicies(telemetry));
         }
 
       } catch (err) {
@@ -309,8 +333,10 @@ export function useDataGovernance(): DataGovernanceResult {
         });
       }
 
-      // Find guardrails that might be associated with this deployment
-      // (In a real system, this would be a direct link in the deployment config)
+      // ILLUSTRATIVE APPROXIMATION — not a real binding. The platform does not yet resolve
+      // real Bedrock agent guardrail associations, so we attach EVERY active guardrail to
+      // EVERY deployment. Consequently per-agent protection coverage is identical across
+      // agents and must be surfaced in the UI as illustrative, never as live measured coverage.
       const associatedGuardrails: GuardrailLink[] = guardrails
         .filter(g => g.status === 'active')
         .map(g => ({
@@ -322,7 +348,8 @@ export function useDataGovernance(): DataGovernanceResult {
           metrics: guardrailMetricsMap.get(g.template_id),
         }));
 
-      // Aggregate PII protection info
+      // Aggregate PII protection info across ALL guardrails (same illustrative approximation
+      // as above — these totals are not scoped to this specific agent/deployment).
       const allPiiEntities = guardrails.flatMap(g => g.pii_entities || []);
       const allRegexes = guardrails.flatMap(g => g.sensitive_regexes || []);
       const allFilters = guardrails.flatMap(g => g.content_filters || []);
@@ -394,15 +421,17 @@ export function useDataGovernance(): DataGovernanceResult {
     // Aggregate metrics
     let totalInvocations = 0;
     let totalBlocked = 0;
-    let totalAnonymized = 0;
     let totalAllowed = 0;
 
     guardrailMetricsMap.forEach(m => {
       totalInvocations += m.total_invocations;
       totalBlocked += m.blocked_count;
-      totalAnonymized += m.anonymized_count;
       totalAllowed += m.allowed_count;
     });
+    // Account-wide, from the SensitiveInformationPolicy dimension — the only place
+    // AWS reports masking. Summing per-guardrail anonymized_count gave a constant 0,
+    // because no per-guardrail masking metric exists to populate it.
+    const totalAnonymized = anonymizedCount;
 
     // Count agents (Bedrock Agents from agentProfiles, not just deployments)
     // For now, use deployments as proxy for agents
@@ -432,7 +461,7 @@ export function useDataGovernance(): DataGovernanceResult {
       ).length,
       pendingApprovals: serviceApprovals.filter(sa => sa.status === 'pending' || sa.status === 'running').length,
     };
-  }, [deployments, guardrails, guardrailMetricsMap, useCases, serviceApprovals]);
+  }, [deployments, guardrails, guardrailMetricsMap, anonymizedCount, useCases, serviceApprovals]);
 
   // Guardrails with metrics for detailed view
   const guardrailsWithMetrics = useMemo<GuardrailLink[]>(() => {
@@ -446,8 +475,10 @@ export function useDataGovernance(): DataGovernanceResult {
     }));
   }, [guardrails, guardrailMetricsMap]);
 
-  // Compute AI Readiness metrics from maturity assessments and use cases
-  const readinessMetrics = useMemo<DataReadinessMetrics>(() => {
+  // Compute ADOPTION MATURITY (0-5 levels) from maturity assessments, human use-case
+  // scoring, and platform deployment inventory. Control readiness is NOT computed here —
+  // it is the 0-100 ladder in useDataReadiness, built from AWS control-plane signals.
+  const adoptionMaturity = useMemo<AdoptionMaturityMetrics>(() => {
     // Get data dimension score from most recent maturity assessment
     const latestMaturity = maturityAssessments
       .filter(a => a.status === 'Complete' || a.status === 'In Progress')
@@ -466,66 +497,25 @@ export function useDataGovernance(): DataGovernanceResult {
         status: uc.status,
       }));
 
-    // Compute dimension scores from real data
-    const dimensions = [
-      {
-        name: 'Data Protection',
-        score: guardrails.filter(g => g.status === 'active').length > 0 ? 4 : 1,
-        maxScore: 5,
-        sources: ['Guardrails API', `${guardrails.filter(g => g.status === 'active').length} active guardrails`],
-      },
-      {
-        name: 'PII Coverage',
-        score: Math.min(5, Math.ceil((summary.uniquePiiTypes.length / 10) * 5)),
-        maxScore: 5,
-        sources: ['Guardrails API', `${summary.uniquePiiTypes.length} PII types protected`],
-      },
-      {
-        name: 'Data Maturity',
-        score: maturityDataScore ? Math.round(maturityDataScore) : 0,
-        maxScore: 5,
-        sources: latestMaturity ? ['Maturity Assessment', latestMaturity.name] : ['No assessment'],
-      },
-      {
-        name: 'Use Case Readiness',
-        score: useCaseReadiness.length > 0
-          ? Math.round(useCaseReadiness.reduce((sum, uc) => sum + uc.dataReadiness, 0) / useCaseReadiness.length)
-          : 0,
-        maxScore: 5,
-        sources: ['Use Case Prioritization', `${useCaseReadiness.length} use cases scored`],
-      },
-      {
-        name: 'Agent Data Integration',
-        score: deployments.length > 0 ? Math.min(5, Math.ceil((deployments.length / 5) * 5)) : 0,
-        maxScore: 5,
-        sources: ['Deployments API', `${deployments.length} agents deployed`],
-      },
-      {
-        name: 'Access Governance',
-        score: serviceApprovals.filter(sa => sa.status === 'completed').length > 0 ? 4 : 2,
-        maxScore: 5,
-        sources: ['Service Approval API', `${serviceApprovals.filter(sa => sa.status === 'completed').length} completed approvals`],
-      },
-      {
-        name: 'Audit Trail',
-        score: summary.last24hEvents.total > 0 ? 5 : 2,
-        maxScore: 5,
-        sources: ['Guardrail Metrics', `${summary.last24hEvents.total} events tracked`],
-      },
-    ];
-
-    const totalScore = dimensions.reduce((sum, d) => sum + d.score, 0);
-    const maxTotalScore = dimensions.reduce((sum, d) => sum + d.maxScore, 0);
-    const overallScore = Math.round((totalScore / maxTotalScore) * 100);
+    // The 0-5 maturity ladder lives in the shared engine so both of the module's
+    // scales are declared in one place and cannot be rescaled into each other.
+    const maturity = computeAdoptionMaturity({
+      maturityDataScore,
+      assessmentName: latestMaturity?.name ?? null,
+      maturityLoaded: sourcesLoaded.maturity,
+      useCaseDataReadinessScores: useCaseReadiness.map(uc => uc.dataReadiness),
+      useCasesLoaded: sourcesLoaded.useCases,
+      deploymentCount: deployments.length,
+      deploymentsLoaded: sourcesLoaded.deployments,
+    });
 
     return {
-      overallScore,
-      dimensions,
+      ...maturity,
       useCaseReadiness,
       maturityDataScore,
       assessmentCompletion,
     };
-  }, [maturityAssessments, useCases, guardrails, deployments, serviceApprovals, summary]);
+  }, [maturityAssessments, useCases, deployments, sourcesLoaded]);
 
   // Compute data lineage flows from deployments and templates
   const lineageFlows = useMemo<DataLineageFlow[]>(() => {
@@ -689,7 +679,7 @@ export function useDataGovernance(): DataGovernanceResult {
     recentDataEvents,
     guardrailsWithMetrics,
     serviceApprovals,
-    readinessMetrics,
+    adoptionMaturity,
     lineageFlows,
     accessEntries,
     pendingApprovals: pendingApprovalsList,

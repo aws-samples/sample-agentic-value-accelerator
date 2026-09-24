@@ -8,10 +8,12 @@ import UseCaseDrawer from './prioritization/UseCaseDrawer';
 import ValueCostReport from './prioritization/ValueCostReport';
 import ConfirmDialog from './ConfirmDialog';
 import { Icon } from './govern/icons';
+import ExportReportButton from './ExportReportButton';
+import { buildUseCaseReport } from './prioritization/report';
 
 type SortKey = 'composite' | 'risk' | 'readiness' | 'updated' | 'name';
 
-export default function Prioritization() {
+export default function Prioritization({ embedded = false }: { embedded?: boolean } = {}) {
   const [items, setItems] = useState<UseCase[]>([]);
   const [source, setSource] = useState<Source>('api');
   const [loading, setLoading] = useState(true);
@@ -118,17 +120,21 @@ export default function Prioritization() {
   }, [search, filterAi, filterStatus, filterVerdict]);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] relative print-root">
-      <div className="absolute inset-0 pointer-events-none print:hidden" style={{
-        background: 'radial-gradient(ellipse 80% 70% at 20% 50%, rgba(219,234,254,0.8) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 80% 40%, rgba(221,214,254,0.6) 0%, transparent 55%), radial-gradient(ellipse 50% 60% at 50% 80%, rgba(252,231,243,0.5) 0%, transparent 50%)',
-        animation: 'gradientDrift 20s ease-in-out infinite',
-      }} />
+    <div className={embedded ? 'relative print-root' : 'min-h-[calc(100vh-4rem)] relative print-root'}>
+      {!embedded && (
+        <div className="absolute inset-0 pointer-events-none print:hidden" style={{
+          background: 'radial-gradient(ellipse 80% 70% at 20% 50%, rgba(219,234,254,0.8) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 80% 40%, rgba(221,214,254,0.6) 0%, transparent 55%), radial-gradient(ellipse 50% 60% at 50% 80%, rgba(252,231,243,0.5) 0%, transparent 50%)',
+          animation: 'gradientDrift 20s ease-in-out infinite',
+        }} />
+      )}
 
-      <div className="relative max-w-7xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="mb-8 animate-fade-in print:hidden">
-          <Link to="/plan" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Plan</Link>
-        </div>
+      <div className={embedded ? 'relative' : 'relative max-w-7xl mx-auto px-6 py-10'}>
+        {/* Header — hidden in embedded (hub provides its own chrome) */}
+        {!embedded && (
+          <div className="mb-8 animate-fade-in print:hidden">
+            <Link to="/plan" className="text-sm text-slate-400 hover:text-slate-600 transition-colors font-medium">← Back to Plan</Link>
+          </div>
+        )}
 
         {/* Print-only header block (visible in print/PDF, hidden on screen) */}
         <div className="hidden print:block mb-6">
@@ -319,6 +325,7 @@ export default function Prioritization() {
                     </td>
                     <td className="px-5 py-3 print:hidden">
                       <div className="flex items-center justify-end gap-1">
+                        <ExportReportButton getDefinition={() => buildUseCaseReport(u)} variant="link" label="Export" title="Download this use case as a PDF report" />
                         <button onClick={() => handleEdit(u)} className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-md hover:bg-blue-50">Edit</button>
                         <button onClick={() => handleDeleteClick(u)} className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded-md hover:bg-red-50">Delete</button>
                       </div>

@@ -13,6 +13,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts';
+import type { Formatter, ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import {
   businessCasesApi, governCostApi,
   type BusinessCase, type AwsCostSummary,
@@ -293,7 +294,7 @@ export default function BudgetVariance() {
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(v: number, name: string) => [usd(v), name === 'budgeted' ? 'Budget' : 'Actual']}
+                  formatter={((v: number, name: string) => [usd(v), name === 'budgeted' ? 'Budget' : 'Actual']) as Formatter<ValueType, NameType>}
                 />
                 <Legend wrapperStyle={{ fontSize: '10px' }} />
                 <Bar dataKey="budgeted" name="Budget" fill="#94a3b8" radius={[4, 4, 0, 0]} />
@@ -318,7 +319,7 @@ export default function BudgetVariance() {
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(v: number) => [usd(v), 'Variance']}
+                  formatter={((v: number) => [usd(v), 'Variance']) as Formatter<ValueType, NameType>}
                 />
                 <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                 <Line

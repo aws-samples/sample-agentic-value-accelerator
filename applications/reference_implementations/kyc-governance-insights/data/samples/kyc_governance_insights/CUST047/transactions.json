@@ -1,0 +1,36 @@
+{
+  "customer_id": "CUST047",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 4800000,
+    "total_outflow": 4600000,
+    "average_monthly_volume": 391667,
+    "transaction_count": 45
+  },
+  "top_counterparties": [
+    {
+      "name": "Eurobank Cyprus (correspondent)",
+      "country": "CY",
+      "volume": 1500000,
+      "type": "inflow"
+    },
+    {
+      "name": "FirstCaribbean International (BVI)",
+      "country": "VG",
+      "volume": 1200000,
+      "type": "outflow"
+    }
+  ],
+  "geographic_distribution": {
+    "domestic": 15,
+    "international": 85
+  },
+  "high_risk_jurisdictions": [
+    "VG",
+    "CY"
+  ],
+  "suspicious_patterns": [
+    "new_entity_high_turnover_claim"
+  ],
+  "large_transactions_over_100k": 1
+}

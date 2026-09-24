@@ -1,13 +1,27 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 
-type View = 'signIn' | 'newPassword' | 'forgotPassword' | 'confirmReset';
+type View = 'signIn' | 'newPassword' | 'forgotPassword' | 'confirmReset' | 'signUp' | 'confirmSignUp';
+
+// Mirrors the pool's password_policy in modules/cognito/main.tf (min 12,
+// upper/lower/number/symbol). Shown inline on the sign-up form so users
+// don't submit and bounce off Cognito's raw error.
+const PASSWORD_POLICY_HINT = 'At least 12 characters, with upper, lower, number, and symbol.';
 
 export default function SignIn() {
-  const { signIn, completeNewPassword, forgotPassword, confirmForgotPassword } = useAuth();
+  const {
+    signIn,
+    completeNewPassword,
+    forgotPassword,
+    confirmForgotPassword,
+    signUp,
+    confirmSignUp,
+    resendConfirmationCode,
+  } = useAuth();
   const [view, setView] = useState<View>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -17,6 +31,17 @@ export default function SignIn() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setMessage('');
+
+    // Disabled demo account. Blocked client-side so the user gets an
+    // immediate, specific message rather than Cognito's generic
+    // 'NotAuthorizedException'. If the account is ever re-enabled,
+    // remove this guard rather than working around it here.
+    if (email.trim().toLowerCase() === 'demo@example.com') {
+      setError('This email has been disabled. Please create an account with your work email id.');
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await signIn(email, password);
@@ -69,6 +94,55 @@ export default function SignIn() {
       setCode('');
     } catch (err: any) {
       setError(err.message || 'Failed to reset password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    setLoading(true);
+    try {
+      await signUp(email, password, name || undefined);
+      setMessage('We sent a verification code to your email.');
+      setView('confirmSignUp');
+    } catch (err: any) {
+      // Cognito surfaces the PreSignUp Lambda's rejection text under
+      // err.message — that copy is already user-facing.
+      setError(err.message || 'Sign up failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await confirmSignUp(email, code);
+      setMessage('Account confirmed. Please sign in.');
+      setView('signIn');
+      setPassword('');
+      setCode('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to confirm sign up');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError('');
+    setMessage('');
+    setLoading(true);
+    try {
+      await resendConfirmationCode(email);
+      setMessage('A new code was sent to your email.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend code');
     } finally {
       setLoading(false);
     }
@@ -164,6 +238,16 @@ export default function SignIn() {
             <button type="button" onClick={() => { setError(''); setMessage(''); setView('forgotPassword'); }} className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors mt-3">
               Forgot password?
             </button>
+            <div className="pt-4 mt-2 border-t border-slate-100 text-center">
+              <span className="text-sm text-slate-500">Don't have an account? </span>
+              <button
+                type="button"
+                onClick={() => { setError(''); setMessage(''); setPassword(''); setView('signUp'); }}
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold transition-colors"
+              >
+                Create account
+              </button>
+            </div>
           </form>
         )}
 
@@ -239,6 +323,98 @@ export default function SignIn() {
               {loading ? 'Resetting...' : 'Reset Password'}
             </button>
             <button type="button" onClick={() => { setError(''); setMessage(''); setView('signIn'); }} className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors mt-3">
+              Back to sign in
+            </button>
+          </form>
+        )}
+
+        {view === 'signUp' && (
+          <form onSubmit={handleSignUp} className="space-y-5">
+            <p className="text-sm text-slate-600 bg-blue-50 p-4 rounded-xl border border-blue-100">
+              Use your official company email. Public providers (Gmail, Yahoo, Hotmail, iCloud, etc.) are not accepted.
+            </p>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Full Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className={inputClass}
+                placeholder="Jane Doe"
+                autoComplete="name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Work Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className={inputClass}
+                placeholder="you@yourcompany.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className={inputClass}
+                placeholder="Create a strong password"
+                autoComplete="new-password"
+                required
+              />
+              <p className="mt-2 text-xs text-slate-500">{PASSWORD_POLICY_HINT}</p>
+            </div>
+            <button type="submit" disabled={loading} className={btnClass}>
+              {loading ? 'Creating account...' : 'Create Account'}
+            </button>
+            <button type="button" onClick={() => { setError(''); setMessage(''); setView('signIn'); }} className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors mt-3">
+              Back to sign in
+            </button>
+          </form>
+        )}
+
+        {view === 'confirmSignUp' && (
+          <form onSubmit={handleConfirmSignUp} className="space-y-5">
+            <p className="text-sm text-slate-600 bg-blue-50 p-4 rounded-xl border border-blue-100">
+              Check your inbox for a 6-digit verification code and enter it below.
+            </p>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className={inputClass}
+                placeholder="you@yourcompany.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Verification Code</label>
+              <input
+                type="text"
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                className={inputClass}
+                placeholder="Enter 6-digit code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+              />
+            </div>
+            <button type="submit" disabled={loading} className={btnClass}>
+              {loading ? 'Confirming...' : 'Confirm Account'}
+            </button>
+            <button type="button" onClick={handleResendCode} disabled={loading || !email} className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors mt-3 disabled:opacity-50 disabled:cursor-not-allowed">
+              Resend code
+            </button>
+            <button type="button" onClick={() => { setError(''); setMessage(''); setView('signIn'); }} className="w-full text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors">
               Back to sign in
             </button>
           </form>

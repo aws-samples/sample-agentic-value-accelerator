@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
 import {
   governConformanceApi, DEFAULT_ISO42001_CATEGORIES,
@@ -150,12 +150,25 @@ export default function ConformanceView({ embedded = false }: { embedded?: boole
       </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a conformance record that failed to load would inherit a Live header.
+  const badge = state === 'ready' && record
+    ? <LiveDataBadge source="ISO 42001 conformance API" detail="Conformance record persisted in the control-plane backend (DynamoDB); conformance % recomputed server-side" />
+    : <MockDataBadge integration="Conformance record — control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
+
   return (
     <GovernPageLayout
       title="ISO 42001 Conformance"
       description="The AI Management System (AIMS) conformance record ISO auditors and regulated buyers ask for — clause controls with status, evidence, and owner, editable as the AIMS matures. Persisted; conformance % recomputes server-side."
-      badge={<MockDataBadge integration="Conformance record — control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

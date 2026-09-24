@@ -130,6 +130,12 @@ class TechnicalFeasibilityScores(BaseModel):
 
 
 class RiskGovernanceScores(BaseModel):
+    # `model_reliability` scores the reliability of the AI model behind a use case -
+    # meaningful domain vocabulary, not a pydantic internal. Pydantic reserves the
+    # `model_` prefix, so the namespace guard is disabled deliberately; renaming the
+    # field would break the API contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
+
     regulatory_compliance: Score = 3
     data_privacy_security: Score = 3
     ethical_bias_risk: Score = 3
@@ -202,6 +208,9 @@ class UseCaseBase(BaseModel):
     technical_owner: Optional[str] = Field(default="", max_length=120)
     target_go_live: Optional[str] = Field(default="", max_length=40)
     status: UseCaseStatus = UseCaseStatus.CONCEPT
+    # Link to the Reference Catalog use case this record was instantiated from
+    # (the Catalog_Reference). Null for standalone free-form scoring records.
+    catalog_use_case_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class UseCaseCreate(UseCaseBase):
@@ -224,6 +233,7 @@ class UseCaseUpdate(BaseModel):
     status: Optional[UseCaseStatus] = None
     scores: Optional[Scores] = None
     weights: Optional[DimensionWeights] = None
+    catalog_use_case_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class UseCase(UseCaseBase):

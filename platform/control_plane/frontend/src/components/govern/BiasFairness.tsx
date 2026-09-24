@@ -134,24 +134,29 @@ function useLiveBiasSignal(): LiveBiasSignal {
         const completed = jobsResp.jobs.filter(j =>
           j.status.toLowerCase() === 'completed' && j.application_type.toLowerCase().includes('model'));
         // Probe up to a few recent completed jobs for bias metrics in their scores.
+        // Fetch all scores in parallel to avoid N+1 sequential calls.
+        const jobsToScore = completed.slice(0, 6);
+        const scoresResults = await Promise.all(
+          jobsToScore.map(job =>
+            // Use job name (not ARN) for lookup to avoid exposing account IDs.
+            governEvalsApi.scores(job.name).catch(() => null) // Individual failures return null
+          )
+        );
+
         const acc = new Map<string, { sum: number; n: number }>();
         let scored = 0;
-        for (const job of completed.slice(0, 6)) {
-          try {
-            // Use job name (not ARN) for lookup to avoid exposing account IDs.
-            const s = await governEvalsApi.scores(job.name);
-            if (!s.live || !s.metrics.length) continue;
-            let hit = false;
-            for (const m of s.metrics) {
-              const short = shortMetric(m.metric);
-              if ((LIVE_BIAS_METRICS as readonly string[]).includes(short)) {
-                const b = acc.get(short) ?? { sum: 0, n: 0 };
-                b.sum += m.mean_score; b.n += 1; acc.set(short, b);
-                hit = true;
-              }
+        for (const s of scoresResults) {
+          if (!s || !s.live || !s.metrics.length) continue;
+          let hit = false;
+          for (const m of s.metrics) {
+            const short = shortMetric(m.metric);
+            if ((LIVE_BIAS_METRICS as readonly string[]).includes(short)) {
+              const b = acc.get(short) ?? { sum: 0, n: 0 };
+              b.sum += m.mean_score; b.n += 1; acc.set(short, b);
+              hit = true;
             }
-            if (hit) scored += 1;
-          } catch { /* skip a job whose scores don't parse */ }
+          }
+          if (hit) scored += 1;
         }
         if (cancelled) return;
         const metrics = [...acc.entries()].map(([metric, b]) => ({ metric, mean: +(b.sum / b.n).toFixed(3) }));
@@ -466,7 +471,13 @@ function ProxyIntersectionalSection({ data }: { data: Bundle }) {
       {/* Proxy variables */}
       <div className={card}>
         <div className="flex items-center justify-between mb-1">
-          <h3 className={heading}>Proxy Variables</h3>
+          <div className="flex items-center gap-2">
+            <h3 className={heading}>Proxy Variables</h3>
+            {/* Seeded fixture. These tables sit beside genuinely live panels in the same
+                view (LiveDataBadge at :227 and :315), so an unbadged table here reads as
+                measured by association. */}
+            <MockDataBadge integration="Proxy-correlation analysis — feature/protected-class correlation and decision influence, e.g. SageMaker Clarify" />
+          </div>
           <span className="text-[10px] text-slate-400">correlation × decision influence = redlining risk</span>
         </div>
         <p className="text-[11px] text-slate-500 mb-3">Features correlated with a protected class can encode bias even when the protected attribute itself is excluded from inputs.</p>
@@ -498,7 +509,10 @@ function ProxyIntersectionalSection({ data }: { data: Bundle }) {
       {/* Intersectional grid */}
       <div className={card}>
         <div className="flex items-center justify-between mb-1">
-          <h3 className={heading}>Intersectional Fairness · {grid.attrA} × {grid.attrB}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className={heading}>Intersectional Fairness · {grid.attrA} × {grid.attrB}</h3>
+            <MockDataBadge integration="Intersectional subgroup analysis — per-cell selection rates across two protected attributes" />
+          </div>
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${grid.hiddenDisparity ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
             {grid.hiddenDisparity ? 'Hidden disparity' : 'No hidden disparity'}
           </span>
@@ -551,7 +565,10 @@ function RegulatorySection({ data }: { data: Bundle }) {
       {/* Regulatory mapping */}
       <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className={heading}>Regulatory Mapping</h3>
+          <div className="flex items-center gap-2">
+            <h3 className={heading}>Regulatory Mapping</h3>
+            <MockDataBadge integration="Mapping of bias findings to regulatory obligations — illustrative, not derived from this account's findings" />
+          </div>
           <span className="text-[10px] text-slate-400">bias findings mapped to obligations</span>
         </div>
         <table className="w-full text-sm">

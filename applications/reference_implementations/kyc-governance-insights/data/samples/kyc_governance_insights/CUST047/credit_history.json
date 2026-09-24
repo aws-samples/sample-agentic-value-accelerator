@@ -1,0 +1,42 @@
+{
+  "customer_id": "CUST047",
+  "credit_score": 610,
+  "credit_rating": "BB",
+  "existing_facilities": [
+    {
+      "type": "Trade Finance (requested)",
+      "limit": 2500000,
+      "utilized": 0,
+      "status": "pending",
+      "bank": "N/A"
+    }
+  ],
+  "payment_history": {
+    "payments_on_time": 22,
+    "payments_total": 24,
+    "on_time_payments": 22,
+    "late_payments": 2,
+    "defaults": 0,
+    "average_days_to_pay": 41
+  },
+  "financial_statements": {
+    "fiscal_year": 2025,
+    "currency": "GBP",
+    "total_assets": 6200000,
+    "total_liabilities": 5236000,
+    "current_assets": 2400000,
+    "current_liabilities": 3000000,
+    "revenue": 5000000,
+    "net_income": 150000,
+    "debt_to_equity": 5.43,
+    "current_ratio": 0.8,
+    "net_margin": 0.03
+  },
+  "agent_claims": {
+    "de_ratio": 5.43,
+    "current_ratio": 0.8,
+    "net_margin": 0.03,
+    "payment_pct": 91.67
+  },
+  "credit_inquiries_last_12_months": 5
+}

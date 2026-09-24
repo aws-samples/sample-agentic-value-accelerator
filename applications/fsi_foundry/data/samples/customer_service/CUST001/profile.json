@@ -2,7 +2,7 @@
   "customer_id": "CUST001",
   "name": "John Michael Smith",
   "date_of_birth": "1985-07-22",
-  "ssn": "412-68-9073",
+  "ssn": "***-**-****",
   "account_type": "premium_checking",
   "products": ["checking", "savings", "credit_card", "mortgage"],
   "contact_info": {

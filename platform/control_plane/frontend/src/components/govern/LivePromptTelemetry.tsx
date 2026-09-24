@@ -16,9 +16,11 @@ import {
   governAgentCoreApi,
   type AwsGuardrailTelemetryResponse,
   type AwsInvocationSafetyResponse,
+  type AwsInvocationRecordsResponse,
   type AwsAgentRuntimeMetricsResponse,
 } from '../../api/client';
 import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
+import { RegionCoverageBadge } from './RegionCoverageBadge';
 import { Icon } from './icons';
 import { usePollingKey } from './usePollingKey';
 import LiveHeader from './LiveHeader';
@@ -189,8 +191,8 @@ export function LiveInvocationSafety() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <StatTile label="Total Calls" value={formatNumber(data.total_calls)} icon="bolt" />
             <StatTile label="Completions" value={formatNumber(data.completion_calls)} icon="check-circle" />
-            <StatTile label="Guardrail Blocked" value={formatNumber(data.guardrail_intervened)} icon="shield-check" color={data.guardrail_intervened > 0 ? 'text-amber-600' : undefined} />
-            <StatTile label="Block Rate" value={`${data.intervention_rate_pct.toFixed(1)}%`} icon="chart-bar" />
+            <StatTile label="Interventions" value={formatNumber(data.guardrail_intervened)} icon="shield-check" color={data.guardrail_intervened > 0 ? 'text-amber-600' : undefined} />
+            <StatTile label="Intervention Rate" value={`${data.intervention_rate_pct.toFixed(1)}%`} icon="chart-bar" />
             <StatTile label="Input Tokens" value={formatNumber(data.input_tokens)} icon="arrow-right" sub="consumed" />
             <StatTile label="Output Tokens" value={formatNumber(data.output_tokens)} icon="arrow-down" sub="generated" />
           </div>
@@ -286,6 +288,123 @@ export function LiveInvocationSafety() {
           <Icon name="exclamation-circle" className="w-8 h-8 mx-auto mb-2" />
           <div className="text-sm">Unable to load invocation data</div>
           <div className="text-xs">Check AWS credentials and CloudWatch Logs permissions</div>
+        </div>
+      )}
+
+      {/* Per-invocation metadata — rendered below the aggregates, own live/mock gating */}
+      <InvocationRecordsSection />
+    </div>
+  );
+}
+
+// ─────────────────────────── Per-Invocation Metadata ───────────────────────────
+
+/**
+ * Per-invocation telemetry — METADATA ONLY.
+ *
+ * Renders one row per logged Bedrock invocation from
+ * governInvocationSafetyApi.invocations(7, 100). Columns are strictly metadata
+ * (time, model, operation, stop reason, token counts, guardrail signal). Prompt
+ * and response content are never requested by the backend nor surfaced here.
+ */
+function InvocationRecordsSection() {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<AwsInvocationRecordsResponse | null>(null);
+  const pollKey = usePollingKey(60_000);
+
+  useEffect(() => {
+    let cancelled = false;
+    governInvocationSafetyApi.invocations(7, 100)
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [pollKey]);
+
+  const live = !!data?.live;
+  const records = data?.records ?? [];
+
+  return (
+    <div className="mt-5 pt-5 border-t border-slate-100">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon name="table-cells" className="w-4 h-4 text-slate-400" />
+        <span className="text-[11px] font-semibold text-slate-700">Recent Invocations</span>
+        {!loading && (live ? <LiveDataBadge source="Bedrock invocation logs" /> : <MockDataBadge integration="Bedrock model invocation logging" />)}
+        {live && data?.truncated && (
+          <span className="text-[9px] text-slate-400">latest {records.length}</span>
+        )}
+        {/* No FloorCountBadge here — "latest N" already says the list is capped. What it
+            does not say is which regions the N were drawn from: with a region missing,
+            "latest 100" can be 100 rows from one region and read as the whole account. */}
+        {live && <RegionCoverageBadge regions={data?.regions} noun="This list" />}
+      </div>
+      <div className="flex items-center gap-1 mb-3 text-[10px] text-slate-400">
+        <Icon name="shield-check" className="w-3 h-3 flex-shrink-0" />
+        <span>Metadata only — prompt and response content are never surfaced.</span>
+      </div>
+
+      {loading ? (
+        <div className="h-16 flex items-center justify-center text-xs text-slate-400">Loading invocations...</div>
+      ) : live && records.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-slate-400 text-[10px] uppercase tracking-wide text-left border-b border-slate-100">
+                <th className="font-medium pb-2">Time</th>
+                <th className="font-medium pb-2">Model</th>
+                <th className="font-medium pb-2">Operation</th>
+                <th className="font-medium pb-2">Stop reason</th>
+                <th className="font-medium pb-2 text-right">Input tokens</th>
+                <th className="font-medium pb-2 text-right">Output tokens</th>
+                <th className="font-medium pb-2 text-right">Guardrail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((r, i) => (
+                <tr key={`${r.timestamp}-${i}`} className={i > 0 ? 'border-t border-slate-50' : ''}>
+                  <td className="py-2 pr-3 text-slate-500 whitespace-nowrap">{formatTimestamp(r.timestamp)}</td>
+                  <td className="py-2 pr-3">
+                    <span className="font-medium text-slate-800" title={r.model_id}>{shortModel(r.model_id)}</span>
+                  </td>
+                  <td className="py-2 pr-3 text-slate-600">{r.operation || '—'}</td>
+                  <td className="py-2 pr-3">
+                    {r.stop_reason ? (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                        r.stop_reason.toLowerCase().includes('guardrail') ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                        r.stop_reason.toLowerCase().includes('error') ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                        'bg-slate-50 text-slate-600 border border-slate-200'
+                      }`}>{r.stop_reason}</span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-right text-slate-600">{r.input_tokens != null ? r.input_tokens.toLocaleString() : '—'}</td>
+                  <td className="py-2 text-right text-slate-600">{r.output_tokens != null ? r.output_tokens.toLocaleString() : '—'}</td>
+                  <td className="py-2 text-right">
+                    {r.guardrail_intervened ? (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                        {r.guardrail_action || 'intervened'}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : live ? (
+        <div className="text-center py-6 text-slate-400">
+          <Icon name="list-bullet" className="w-8 h-8 mx-auto mb-2" />
+          <div className="text-sm">No invocations logged</div>
+          <div className="text-xs">No model-invocation log records in the last 7 days</div>
+        </div>
+      ) : (
+        <div className="text-center py-6 text-slate-400">
+          <Icon name="exclamation-circle" className="w-8 h-8 mx-auto mb-2" />
+          <div className="text-sm">Per-invocation telemetry unavailable</div>
+          <div className="text-xs">{data?.note || 'Enable Bedrock model invocation logging to see per-call metadata'}</div>
         </div>
       )}
     </div>
@@ -387,6 +506,21 @@ function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
+}
+
+/** Logs Insights @timestamp is "YYYY-MM-DD HH:MM:SS.mmm" (UTC). Render compactly. */
+function formatTimestamp(ts: string): string {
+  if (!ts) return '—';
+  const iso = ts.includes('T') ? ts : `${ts.replace(' ', 'T')}${ts.endsWith('Z') ? '' : 'Z'}`;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return ts;
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+/** Collapse a (already-shortened) model id to its readable family segment. */
+function shortModel(modelId: string): string {
+  if (!modelId) return 'unknown';
+  return modelId.split('.').pop()?.split('-').slice(0, 3).join('-') || modelId;
 }
 
 function StatTile({ label, value, icon, color, sub }: { label: string; value: string | number; icon: Parameters<typeof Icon>[0]['name']; color?: string; sub?: string }) {

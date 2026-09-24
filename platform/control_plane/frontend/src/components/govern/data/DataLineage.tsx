@@ -1,7 +1,11 @@
 /**
- * DataLineage — Data Provenance & Lineage Visualization (LIVE)
+ * DataLineage — Data Provenance & Lineage Visualization (ILLUSTRATIVE)
  *
- * Shows data flows from live AWS sources:
+ * Assembles a representative topology from live AWS source feeds. The individual feeds
+ * are live, but the node-to-node pairings are approximated for illustration — they are
+ * not observed end-to-end lineage.
+ *
+ * Source feeds:
  * - CloudTrail AI callers (who initiated)
  * - Invocation logs (what models, how many calls)
  * - Guardrails (protection applied)
@@ -12,7 +16,7 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LiveDataBadge } from '../DataSourceIndicator';
+import { MockDataBadge } from '../DataSourceIndicator';
 import { useDataLineage, type LineageNode } from './useDataLineage';
 import { Icon, type IconName } from '../icons';
 
@@ -31,7 +35,6 @@ function LineageNodeCard({ node }: { node: LineageNode }) {
       <div className="flex items-center gap-2 mb-1">
         <Icon name={colors.icon} className="w-4 h-4 text-slate-600" />
         <span className="text-xs font-semibold text-slate-700 capitalize">{node.type}</span>
-        {node.live && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Live data" />}
       </div>
       <div className="text-sm font-medium text-slate-900 truncate" title={node.label}>{node.label}</div>
       <div className="text-[10px] text-slate-500 truncate" title={node.detail}>{node.detail}</div>
@@ -66,13 +69,16 @@ export default function DataLineage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">Data Lineage</h1>
-              <LiveDataBadge />
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
-                {lineage.liveSourcesCount} sources
-              </span>
+              <MockDataBadge integration="Data lineage: Glue/OpenLineage/DataZone" />
+              {lineage.liveSourcesCount > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                  {lineage.liveSourcesCount} live source feeds
+                </span>
+              )}
             </div>
             <p className="text-slate-500 mt-1 max-w-2xl">
-              Data flow visualization from CloudTrail, invocation logs, and guardrails.
+              Illustrative data-flow topology built from live CloudTrail, invocation, and guardrail feeds.
+              Node-to-node pairings are representative, not measured end-to-end lineage.
             </p>
           </div>
           <button
@@ -257,11 +263,12 @@ export default function DataLineage() {
             )}
 
             {/* Info */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-              <p className="text-xs text-blue-800">
-                <strong>Live Data Lineage</strong> shows the path data takes through your AI system:
-                Caller (who initiated) → Agent (if deployed) → Guardrail (protection) → Model (inference) → Response.
-                Built from CloudTrail, invocation logs, and guardrail configs. No additional setup required.
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-xs text-amber-800">
+                <strong>Illustrative Lineage:</strong> This view assembles a representative
+                Caller → Agent → Guardrail → Model → Response topology from live CloudTrail, invocation, and
+                guardrail feeds. The individual feeds are live, but the node-to-node pairings are approximated for
+                illustration — true end-to-end lineage requires Glue, OpenLineage, or Amazon DataZone integration.
               </p>
             </div>
           </div>

@@ -45,6 +45,12 @@ class DataLakeConfig(BaseModel):
 
 
 class KnowledgeBaseConfig(BaseModel):
+    # `model_id` is an AI model identifier (the Bedrock modelId used for retrieval
+    # generation) - meaningful domain vocabulary, not a pydantic internal. Pydantic
+    # reserves the `model_` prefix, so the namespace guard is disabled deliberately;
+    # renaming the field would break the API contract the frontend reads.
+    model_config = {"protected_namespaces": ()}
+
     knowledge_base_id: str = Field(..., min_length=1)
     model_id: str = Field(default="us.anthropic.claude-sonnet-4-20250514-v2:0")
 

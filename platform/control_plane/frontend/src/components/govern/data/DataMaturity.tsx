@@ -9,7 +9,8 @@ import {
 } from 'recharts';
 import { MockDataBadge } from '../DataSourceIndicator';
 import UnifiedGuide, { DATA_MATURITY_GUIDE } from '../UnifiedGuide';
-import { MATURITY_QUESTIONS, MATURITY_LEVELS, MATURITY_ROADMAP } from './dataGovernanceData';
+import { MATURITY_QUESTIONS, MATURITY_ROADMAP } from './dataGovernanceData';
+import { computeMaturityAssessment } from './dataReadinessEngine';
 
 type SubTab = 'assessment' | 'roadmap' | 'raci';
 
@@ -23,19 +24,8 @@ export default function DataMaturity() {
   const [subTab, setSubTab] = useState<SubTab>('assessment');
   const [answers, setAnswers] = useState<Record<string, number>>({});
 
-  const dimensionScores = MATURITY_QUESTIONS.map(q => ({
-    dimension: q.dimension,
-    score: answers[q.dimension] ?? 0,
-    answered: q.dimension in answers,
-  }));
-
-  const answeredCount = Object.keys(answers).length;
-  const avgScore = answeredCount > 0
-    ? dimensionScores.reduce((s, d) => s + d.score, 0) / answeredCount
-    : 0;
-
-  const currentLevel = MATURITY_LEVELS.find(l => avgScore >= l.range[0] && avgScore <= l.range[1])
-    ?? MATURITY_LEVELS[0];
+  // Shared readiness/maturity engine: ONE consistent avgScore + level computation.
+  const { answered: answeredCount, avgScore, level: currentLevel } = computeMaturityAssessment(answers);
 
   const radarData = MATURITY_QUESTIONS.map(q => ({
     dimension: q.dimension.split(' ').slice(0, 2).join(' '),

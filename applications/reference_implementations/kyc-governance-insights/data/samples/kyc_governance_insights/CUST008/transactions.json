@@ -1,0 +1,20 @@
+{
+  "customer_id": "CUST008",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 78000000,
+    "total_outflow": 72000000,
+    "average_monthly_volume": 6250000,
+    "transaction_count": 1200
+  },
+  "top_counterparties": [],
+  "geographic_distribution": {
+    "domestic": 30,
+    "international": 70
+  },
+  "high_risk_jurisdictions": [
+    "Cyprus"
+  ],
+  "suspicious_patterns": [],
+  "large_transactions_over_100k": 24
+}

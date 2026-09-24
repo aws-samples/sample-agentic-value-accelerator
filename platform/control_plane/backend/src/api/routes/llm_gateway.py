@@ -17,13 +17,17 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from core import region_config
 from core.config import settings
 from core.rbac import Role, require_role
+
+if TYPE_CHECKING:  # annotations only; core.safe_fetch is imported where it is used
+    from core.safe_fetch import SafeResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/llm-gateway", tags=["llm-gateway"])
@@ -118,6 +122,142 @@ def _stub_instance(gateway_id: str) -> GatewayInstance:
     )
 
 
+# Body cap for the LiteLLM admin-API JSON calls (config, models, virtual keys,
+# spend, audit).
+#
+# safe_fetch's 5 MiB default is sized for a caller-supplied agent card. These are
+# our own gateway's admin documents, and /spend/logs plus /global/spend/report
+# return one row per request, so a 30-day window on a busy gateway is legitimately
+# tens of MiB. `urlopen(...).read()` was unbounded; a cap still has to exist here
+# (an unbounded read of a compromised responder is a memory DoS), but it has to be
+# above the real answer, and going over it has to be an error - see _gateway_fetch.
+#
+# Every _gateway_json call site inherits it from that function's default - eight of
+# them today: /v1/models, /key/generate, the key-list read (/key/list, then
+# /key/info), the two per-key /key/info lookups, the spend report, the model-level
+# spend report, and audit. get_config's /config/yaml attempts are the exception and
+# pass it by hand, because they want the response object rather than just the
+# parsed body. Grep for both names before adding another admin call.
+_ADMIN_API_MAX_BYTES = 32 * 1024 * 1024
+
+# How much of an upstream error body may reach a client-visible field.
+_ERROR_SNIPPET_CHARS = 2000
+
+
+def _gateway_fetch(
+    url: str,
+    *,
+    timeout: float,
+    require_ok: bool = True,
+    **kwargs: Any,
+) -> "SafeResponse":
+    """Call the configured gateway. No redirect, so the master key cannot be replayed.
+
+    `fetch_internal` and not `fetch`: the endpoint is platform configuration, and
+    depending on the deployment topology it is either a private ALB address
+    (`infrastructure/modules/litellm`) or a public CloudFront domain
+    (`templates/llm-gateway`). The address class therefore is not a useful gate on
+    this value at all, in either direction. What `fetch_internal` buys us is the
+    redirect refusal: `urllib`'s redirect handler forwards every header except
+    content-length and content-type, so a 302 from the gateway - or from anything
+    else answering on that address - replayed the `Authorization: Bearer <master
+    key>` these calls carry to whatever host the Location header named. A gateway
+    of ours never redirects.
+
+    The trust assumption this rests on, stated plainly because nothing here checks
+    it: `url` is built from `outputs.gateway_endpoint` (our own deployment record)
+    or `LLM_GATEWAY_ENDPOINT` / `LITELLM_GATEWAY_URL`. Both are platform-written.
+    A caller-supplied URL must go through `safe_fetch.fetch`, not through here.
+
+    `require_ok` restores what `urlopen` did: it raised HTTPError on 4xx/5xx, and
+    the callers below rely on that to fall through to the next API path or to a
+    stub payload. `fetch_internal` returns the response instead, so a 404 body
+    would otherwise be parsed as data. Only the playground relay, which hands the
+    gateway's own error body back to the UI, passes require_ok=False.
+    """
+    from core import safe_fetch
+
+    resp = safe_fetch.fetch_internal(url, timeout=timeout, **kwargs)
+    if require_ok and not (200 <= resp.status < 300):
+        raise safe_fetch.SafeFetchError("http_status_error", f"status={resp.status} url={url}")
+    if resp.truncated:
+        # A body cut at max_bytes is not a smaller answer, it is a broken one, and
+        # every caller below swallows the parse failure it causes: get_spend then
+        # reports total_usd 0.0 and get_audit rows [], neither distinguishable in
+        # the UI from a real zero. Refuse instead, the way safe_fetch.fetch_json
+        # does, so the failure is visible rather than plausible.
+        raise safe_fetch.SafeFetchError("response_too_large", f"body exceeded max_bytes for {url}")
+    return resp
+
+
+def _gateway_json(url: str, *, timeout: float, max_bytes: int = _ADMIN_API_MAX_BYTES, **kwargs: Any) -> Any:
+    """_gateway_fetch plus JSON parsing, for the callers that only want a body.
+
+    Every caller is reading a LiteLLM admin document, so the cap defaults to
+    _ADMIN_API_MAX_BYTES rather than safe_fetch's agent-card-sized 5 MiB.
+    """
+    return _gateway_fetch(url, timeout=timeout, max_bytes=max_bytes, **kwargs).json()
+
+
+def _fetch_reason(exc: BaseException) -> str:
+    """The part of a fetch failure that is safe to put in a response body.
+
+    `SafeFetchError.reason` is a stable category; `str(exc)` and `.detail` name
+    the host and the resolved address, and echoing those back would turn a
+    refusal into the port scan it just prevented. Logs get _fetch_log_detail.
+
+    Duck-typed rather than isinstance, so formatting an error cannot itself raise
+    an import error inside the except block that is trying to report one.
+    """
+    reason = getattr(exc, "reason", None)
+    return reason if isinstance(reason, str) and reason else type(exc).__name__
+
+
+def _log_safe(text: str) -> str:
+    """Flatten control characters before a string reaches a log line.
+
+    Fetch details carry the URL that failed, and two of the URLs below embed a key
+    hash the gateway handed us (`/key/info?key=...`). A CR/LF in there forges a
+    whole log record, so anything this process did not author gets flattened.
+    """
+    return "".join(ch if ch.isprintable() else " " for ch in text)
+
+
+def _fetch_log_detail(exc: BaseException) -> str:
+    """Logs only. Carries the host and resolved address _fetch_reason drops."""
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, str) and detail:
+        return _log_safe(f"{_fetch_reason(exc)} ({detail})")
+    return _log_safe(str(exc))
+
+
+def _upstream_error_text(resp: "SafeResponse") -> str:
+    """The part of a non-2xx gateway body worth showing the operator.
+
+    LiteLLM puts the useful sentence ("model not found", "budget exceeded") in
+    `error.message`, so prefer that. Anything else - a CloudFront 502 page, an
+    nginx banner, a LiteLLM traceback - is relayed only as a bounded snippet:
+    this is upstream content going straight into a client-visible field, and the
+    body can be megabytes of HTML.
+    """
+    try:
+        body = resp.json()
+    except Exception:
+        body = None
+
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict) and isinstance(error.get("message"), str) and error["message"]:
+            return error["message"][:_ERROR_SNIPPET_CHARS]
+        if isinstance(error, str) and error:
+            return error[:_ERROR_SNIPPET_CHARS]
+        upstream_detail = body.get("detail")
+        if isinstance(upstream_detail, str) and upstream_detail:
+            return upstream_detail[:_ERROR_SNIPPET_CHARS]
+
+    return resp.text[:_ERROR_SNIPPET_CHARS] or f"status {resp.status}"
+
+
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
@@ -131,14 +271,11 @@ async def health(_=Depends(require_role(Role.VIEWER))) -> Dict[str, Any]:
         return {"deployed": False, "status": "not_deployed"}
 
     try:
-        import urllib.request
-
         # Try /health/liveliness first, fall back to /health
         for path in ["/health/liveliness", "/health"]:
             try:
-                with urllib.request.urlopen(f"{endpoint}{path}", timeout=5) as resp:
-                    if resp.status == 200:
-                        return {"deployed": True, "status": "ok", "endpoint": endpoint}
+                if _gateway_fetch(f"{endpoint}{path}", timeout=5).status == 200:
+                    return {"deployed": True, "status": "ok", "endpoint": endpoint}
             except Exception:
                 continue
         return {"deployed": True, "status": "degraded", "endpoint": endpoint}
@@ -171,7 +308,14 @@ async def _list_instances_internal() -> List[GatewayInstance]:
     try:
         import boto3
 
-        ddb = boto3.resource("dynamodb", region_name=_aws_region())
+        # table_region("DEPLOYMENTS") for the table specifically, not _aws_region(). The
+        # tier is the same (this is AVA's own deployments table), but _aws_region() reads
+        # AWS_REGION with no way to override it per table, so DEPLOYMENTS_TABLE_REGION was
+        # honoured by litellm.py's read of this exact table and ignored here. The two
+        # readers then scanned different regions and this one returned no gateway
+        # instances - an empty list, not an error. _aws_region() stays correct for the
+        # ssm / ecs / s3 / logs clients below, which are the gateway's own infra.
+        ddb = boto3.resource("dynamodb", region_name=region_config.table_region("DEPLOYMENTS"))
         table_name = getattr(settings, "DEPLOYMENTS_TABLE_NAME", None) or os.getenv("DEPLOYMENTS_TABLE_NAME")
         if not table_name:
             return []
@@ -209,32 +353,30 @@ async def _list_instances_internal() -> List[GatewayInstance]:
             endpoint = os.getenv("LLM_GATEWAY_ENDPOINT", "") or os.getenv("LITELLM_GATEWAY_URL", "")
             if endpoint:
                 try:
-                    import urllib.request
-                    with urllib.request.urlopen(f"{endpoint}/health", timeout=5) as resp2:
-                        if resp2.status == 200:
-                            table.put_item(Item={
-                                "pk": "DEPLOYMENT#llm-gateway-auto",
-                                "sk": "METADATA",
-                                "deployment_id": "llm-gateway-auto",
-                                "project_name": "llm-gateway",
-                                "template_id": "llm-gateway",
-                                "status": "DEPLOYED",
-                                "region": _aws_region(),
-                                "created_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
-                                "parameters": {
-                                    "environment": os.getenv("ENVIRONMENT", "dev"),
-                                    "enabled_models": [],
-                                },
-                                "outputs": {
-                                    "gateway_endpoint": endpoint,
-                                    "cluster_name": os.getenv("LITELLM_ECS_CLUSTER", ""),
-                                    "service_name": os.getenv("LITELLM_ECS_SERVICE", ""),
-                                },
-                            })
-                            logger.info("Auto-registered LLM gateway at %s", endpoint)
-                            return await _list_instances_internal()
+                    if _gateway_fetch(f"{endpoint}/health", timeout=5).status == 200:
+                        table.put_item(Item={
+                            "pk": "DEPLOYMENT#llm-gateway-auto",
+                            "sk": "METADATA",
+                            "deployment_id": "llm-gateway-auto",
+                            "project_name": "llm-gateway",
+                            "template_id": "llm-gateway",
+                            "status": "DEPLOYED",
+                            "region": _aws_region(),
+                            "created_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+                            "parameters": {
+                                "environment": os.getenv("ENVIRONMENT", "dev"),
+                                "enabled_models": [],
+                            },
+                            "outputs": {
+                                "gateway_endpoint": endpoint,
+                                "cluster_name": os.getenv("LITELLM_ECS_CLUSTER", ""),
+                                "service_name": os.getenv("LITELLM_ECS_SERVICE", ""),
+                            },
+                        })
+                        logger.info("Auto-registered LLM gateway at %s", endpoint)
+                        return await _list_instances_internal()
                 except Exception as reg_exc:
-                    logger.debug("Auto-registration failed: %s", reg_exc)
+                    logger.debug("Auto-registration failed: %s", _fetch_log_detail(reg_exc))
 
         return out
     except Exception as exc:
@@ -311,9 +453,12 @@ async def deploy(req: DeployRequest, _=Depends(require_role(Role.OPERATOR))) -> 
         }
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
+        # A category, not `{exc}`: a botocore error stringifies with the full table
+        # name / ARN, account id included, and this detail reaches the client. The
+        # logger.exception above already carries the whole traceback.
         logger.exception("Failed to submit LLM Gateway deploy")
-        raise HTTPException(status_code=500, detail=f"Deploy submission failed: {exc}")
+        raise HTTPException(status_code=500, detail="Deploy submission failed")
 
 
 # ---------------------------------------------------------------------------
@@ -341,9 +486,12 @@ async def get_config(gateway_id: str, _=Depends(require_role(Role.VIEWER))) -> D
             ssm = boto3.client("ssm", region_name=_aws_region())
             resp = ssm.get_parameter(Name=inst.config_parameter_name)
             return {"config_yaml": resp["Parameter"]["Value"], "version": resp["Parameter"]["Version"]}
-        except Exception as exc:
+        except Exception:
+            # Reason only, same discipline as _fetch_reason: a ParameterNotFound or
+            # AccessDeniedException stringifies with the SSM parameter name and the
+            # account id, and this route is Role.VIEWER.
             logger.exception("Failed to read LLM Gateway config from SSM")
-            raise HTTPException(status_code=500, detail=f"Config read failed: {exc}")
+            raise HTTPException(status_code=500, detail="Config read from SSM failed")
 
     # Fallback: read config directly from the running gateway (local dev / docker-compose)
     endpoint = inst.endpoint or os.getenv("LITELLM_GATEWAY_URL", "")
@@ -367,11 +515,10 @@ async def get_config(gateway_id: str, _=Depends(require_role(Role.VIEWER))) -> D
 
     # Fallback: read from LiteLLM admin API
     if endpoint:
-        import urllib.request
         import json
 
         # Try multiple auth header styles and API paths (varies by LiteLLM version)
-        last_exc = None
+        last_exc: Optional[BaseException] = None
 
         config_attempts = [
             # LiteLLM main-latest: GET /config/yaml needs config_info body (unusual but how litellm works)
@@ -391,34 +538,48 @@ async def get_config(gateway_id: str, _=Depends(require_role(Role.VIEWER))) -> D
                 if attempt["content_type"]:
                     hdrs["Content-Type"] = attempt["content_type"]
                 logger.info("Attempting config read: %s %s", attempt["method"], url)
-                req = urllib.request.Request(
+                # max_bytes explicitly: this is one of the admin-API reads
+                # _ADMIN_API_MAX_BYTES exists for, and it is the only one that stays
+                # on _gateway_fetch rather than _gateway_json (the success log below
+                # reports the body size, so it needs the response, not just the
+                # body). Without this argument it silently kept safe_fetch's 5 MiB
+                # default, which _gateway_fetch's truncation refusal turns into a 502
+                # for every attempt - so the only admin read that has to opt into the
+                # cap by hand was also the only one that could not exceed 5 MiB.
+                resp = _gateway_fetch(
                     url,
-                    headers=hdrs,
                     method=attempt["method"],
-                    data=attempt["data"],
+                    headers=hdrs,
+                    body=attempt["data"],
+                    timeout=10,
+                    max_bytes=_ADMIN_API_MAX_BYTES,
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    raw = resp.read()
-                    logger.info("Config read SUCCESS from %s %s (status=%s, len=%d)", attempt["method"], url, resp.status, len(raw))
-                    body = json.loads(raw)
-                    config_data = body.get("config", body)
-                    if isinstance(config_data, dict):
-                        try:
-                            import yaml
-                            config_yaml = yaml.dump(config_data, default_flow_style=False, sort_keys=False)
-                        except ImportError:
-                            config_yaml = json.dumps(config_data, indent=2)
-                    else:
-                        config_yaml = str(config_data)
-                    return {"config_yaml": config_yaml, "version": 0}
+                logger.info(
+                    "Config read SUCCESS from %s %s (status=%s, len=%d)",
+                    attempt["method"], url, resp.status, len(resp.body),
+                )
+                body = resp.json()
+                config_data = body.get("config", body)
+                if isinstance(config_data, dict):
+                    try:
+                        import yaml
+                        config_yaml = yaml.dump(config_data, default_flow_style=False, sort_keys=False)
+                    except ImportError:
+                        config_yaml = json.dumps(config_data, indent=2)
+                else:
+                    config_yaml = str(config_data)
+                return {"config_yaml": config_yaml, "version": 0}
             except Exception as exc:
-                logger.warning("Config read attempt %s %s%s failed: %s", attempt["method"], endpoint, attempt["path"], exc)
+                logger.warning(
+                    "Config read attempt %s %s%s failed: %s",
+                    attempt["method"], endpoint, attempt["path"], _fetch_log_detail(exc),
+                )
                 last_exc = exc
                 continue
 
         raise HTTPException(
             status_code=502,
-            detail=f"Config read from gateway failed after trying all paths: {last_exc}",
+            detail=f"Config read from gateway failed after trying all paths: {_fetch_reason(last_exc)}",
         )
 
     raise HTTPException(status_code=404, detail="No config source available: no SSM parameter and no gateway endpoint")
@@ -454,9 +615,11 @@ async def update_config(gateway_id: str, req: ConfigUpdate, _=Depends(require_ro
                 )
 
             return {"status": "ok", "rollout": "ECS forceNewDeployment triggered"}
-        except Exception as exc:
+        except Exception:
+            # As in get_config: the boto3 text names the parameter, the cluster and
+            # the account. The traceback is in the log, not in the response.
             logger.exception("Failed to update LLM Gateway config")
-            raise HTTPException(status_code=500, detail=f"Config update failed: {exc}")
+            raise HTTPException(status_code=500, detail="Config update failed")
 
     # Fallback: push config via the gateway admin API (local dev / docker-compose)
     endpoint = inst.endpoint or os.getenv("LITELLM_GATEWAY_URL", "")
@@ -491,31 +654,36 @@ async def update_config(gateway_id: str, req: ConfigUpdate, _=Depends(require_ro
                 )
                 return {"status": "ok", "rollout": "Config saved to S3 + ECS forceNewDeployment triggered"}
             return {"status": "ok", "rollout": "Config saved to S3 (no ECS service to redeploy)"}
-        except Exception as exc:
+        except Exception:
+            # The bucket name and the account id live in the boto3 message; keep both
+            # out of the response body.
             logger.exception("S3 config update failed")
-            raise HTTPException(status_code=500, detail=f"Config update to S3 failed: {exc}")
+            raise HTTPException(status_code=500, detail="Config update to S3 failed")
 
     # Local dev fallback: push via gateway admin API
     if endpoint:
         try:
             import json
-            import urllib.request
 
-            payload = json.dumps({"config_yaml": req.config_yaml}).encode()
-            admin_req = urllib.request.Request(
+            # The response body is deliberately unread: this path only cares that the
+            # gateway accepted the push, which _gateway_fetch's status check asserts.
+            _gateway_fetch(
                 f"{endpoint}/config/update",
-                data=payload,
+                method="POST",
+                body=json.dumps({"config_yaml": req.config_yaml}),
                 headers={
                     "Content-Type": "application/json",
                     **({"Authorization": f"Bearer {master_key}"} if master_key else {}),
                 },
-                method="POST",
+                timeout=10,
             )
-            with urllib.request.urlopen(admin_req, timeout=10) as resp:
-                return {"status": "ok", "rollout": "Config pushed to gateway (local dev)"}
+            return {"status": "ok", "rollout": "Config pushed to gateway (local dev)"}
         except Exception as exc:
-            logger.warning("Fallback config update via gateway failed: %s", exc)
-            raise HTTPException(status_code=500, detail=f"Config update failed (fallback): {exc}")
+            logger.warning("Fallback config update via gateway failed: %s", _fetch_log_detail(exc))
+            raise HTTPException(
+                status_code=500,
+                detail=f"Config update failed (fallback): {_fetch_reason(exc)}",
+            )
 
     raise HTTPException(status_code=404, detail="Config parameter unknown for this gateway and gateway unreachable")
 
@@ -532,15 +700,11 @@ async def list_models(gateway_id: str, _=Depends(require_role(Role.VIEWER))) -> 
 
     master_key = _resolve_master_key(inst)
     try:
-        import json
-        import urllib.request
-
-        request = urllib.request.Request(
+        payload = _gateway_json(
             f"{inst.endpoint}/v1/models",
             headers={"Authorization": f"Bearer {master_key}"} if master_key else {},
+            timeout=8,
         )
-        with urllib.request.urlopen(request, timeout=8) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
         models = payload.get("data", [])
         # Fix owned_by — LiteLLM defaults to "openai" for all models
         for m in models:
@@ -551,7 +715,7 @@ async def list_models(gateway_id: str, _=Depends(require_role(Role.VIEWER))) -> 
         models = _filter_display_models(models)
         return models
     except Exception as exc:
-        logger.warning("Failed to fetch /v1/models: %s", exc)
+        logger.warning("Failed to fetch /v1/models: %s", _fetch_log_detail(exc))
         # Fallback: surface the configured list so the UI never shows empty
         return [{"id": m, "object": "model", "owned_by": _infer_model_owner(m)} for m in inst.enabled_models]
 
@@ -596,28 +760,28 @@ async def create_virtual_key(gateway_id: str, req: VirtualKeyCreate, _=Depends(r
     master_key = _resolve_master_key(inst)
     try:
         import json
-        import urllib.request
 
         payload = req.model_dump(exclude_none=True)
         # LiteLLM /key/generate names the human-readable label `key_alias`, not
         # `name`. Without this mapping the created key shows a blank alias in the UI.
         if "name" in payload:
             payload["key_alias"] = payload.pop("name")
-        body = json.dumps(payload).encode("utf-8")
-        request = urllib.request.Request(
+        return _gateway_json(
             f"{inst.endpoint}/key/generate",
-            data=body,
+            method="POST",
+            body=json.dumps(payload),
             headers={
                 "Authorization": f"Bearer {master_key}",
                 "Content-Type": "application/json",
             },
-            method="POST",
+            timeout=15,
         )
-        with urllib.request.urlopen(request, timeout=15) as resp:
-            return json.loads(resp.read().decode("utf-8"))
     except Exception as exc:
-        logger.exception("Virtual key create failed")
-        raise HTTPException(status_code=502, detail=f"LiteLLM /key/generate failed: {exc}")
+        logger.exception("Virtual key create failed: %s", _fetch_log_detail(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=f"LiteLLM /key/generate failed: {_fetch_reason(exc)}",
+        )
 
 
 @router.get("/{gateway_id}/virtual-keys")
@@ -628,18 +792,14 @@ async def list_virtual_keys(gateway_id: str, _=Depends(require_role(Role.VIEWER)
 
     master_key = _resolve_master_key(inst)
     try:
-        import json
-        import urllib.request
-
         # Try /key/list first, then /key/info
         for path in ["/key/list", "/key/info"]:
             try:
-                request = urllib.request.Request(
+                payload = _gateway_json(
                     f"{inst.endpoint}{path}",
                     headers={"Authorization": f"Bearer {master_key}"},
+                    timeout=10,
                 )
-                with urllib.request.urlopen(request, timeout=10) as resp:
-                    payload = json.loads(resp.read().decode("utf-8"))
 
                 # Normalize response to list
                 if isinstance(payload, dict):
@@ -659,12 +819,11 @@ async def list_virtual_keys(gateway_id: str, _=Depends(require_role(Role.VIEWER)
                     if not isinstance(key_hash, str) or not key_hash:
                         continue
                     try:
-                        info_req = urllib.request.Request(
+                        key_info = _gateway_json(
                             f"{inst.endpoint}/key/info?key={key_hash}",
                             headers={"Authorization": f"Bearer {master_key}"},
+                            timeout=5,
                         )
-                        with urllib.request.urlopen(info_req, timeout=5) as info_resp:
-                            key_info = json.loads(info_resp.read().decode("utf-8"))
                         if isinstance(key_info, dict):
                             # /key/info returns {"info": {...}, "key": "..."} or just the object
                             info = key_info.get("info", key_info)
@@ -675,11 +834,11 @@ async def list_virtual_keys(gateway_id: str, _=Depends(require_role(Role.VIEWER)
                         result.append({"token": key_hash, "key_alias": key_hash[:12] + "..."})
                 return result
             except Exception as exc:
-                logger.warning("Key list path %s failed: %s", path, exc)
+                logger.warning("Key list path %s failed: %s", path, _fetch_log_detail(exc))
                 continue
         return []
     except Exception as exc:
-        logger.warning("Falling back to empty key list: %s", exc)
+        logger.warning("Falling back to empty key list: %s", _fetch_log_detail(exc))
         return []
 
 
@@ -756,9 +915,6 @@ async def get_spend(
 
     master_key = _resolve_master_key(inst)
     try:
-        import json
-        import urllib.request
-
         start = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
         end = datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -776,10 +932,10 @@ async def get_spend(
             try:
                 url = f"{inst.endpoint}{path}"
                 logger.info("Attempting spend fetch: %s", url)
-                request = urllib.request.Request(url, headers={"Authorization": f"Bearer {master_key}"})
-                with urllib.request.urlopen(request, timeout=10) as resp:
-                    payload = json.loads(resp.read().decode("utf-8"))
-                    logger.info("Spend fetch succeeded from %s", path)
+                payload = _gateway_json(
+                    url, headers={"Authorization": f"Bearer {master_key}"}, timeout=10
+                )
+                logger.info("Spend fetch succeeded from %s", path)
 
                 # Normalize response
                 if isinstance(payload, dict) and "data" in payload:
@@ -803,7 +959,7 @@ async def get_spend(
                     by_model = payload.get("spend_per_model", [])
                 break  # success, stop trying paths
             except Exception as path_exc:
-                logger.warning("Spend path %s failed: %s", path, path_exc)
+                logger.warning("Spend path %s failed: %s", path, _fetch_log_detail(path_exc))
                 continue
 
         # Fetch model-level spend separately (different endpoint)
@@ -814,10 +970,11 @@ async def get_spend(
             ]
             for mpath in model_paths:
                 try:
-                    url = f"{inst.endpoint}{mpath}"
-                    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {master_key}"})
-                    with urllib.request.urlopen(request, timeout=10) as resp:
-                        mpayload = json.loads(resp.read().decode("utf-8"))
+                    mpayload = _gateway_json(
+                        f"{inst.endpoint}{mpath}",
+                        headers={"Authorization": f"Bearer {master_key}"},
+                        timeout=10,
+                    )
                     if isinstance(mpayload, list):
                         model_spend_map: Dict[str, float] = {}
                         for entry in mpayload:
@@ -840,12 +997,11 @@ async def get_spend(
                 key_hash = entry.get("api_key", "")
                 if key_hash and len(key_hash) > 20 and key_hash != "litellm_proxy_master_key":
                     try:
-                        info_req = urllib.request.Request(
+                        key_info = _gateway_json(
                             f"{inst.endpoint}/key/info?key={key_hash}",
                             headers={"Authorization": f"Bearer {master_key}"},
+                            timeout=5,
                         )
-                        with urllib.request.urlopen(info_req, timeout=5) as info_resp:
-                            key_info = json.loads(info_resp.read().decode("utf-8"))
                         info = key_info.get("info", key_info) if isinstance(key_info, dict) else {}
                         alias = info.get("key_alias") or info.get("key_name", "")
                         if alias:
@@ -857,7 +1013,7 @@ async def get_spend(
 
         return {"days": days, "total_usd": total, "by_key": by_key, "by_model": by_model}
     except Exception as exc:
-        logger.warning("Spend fetch failed, returning zeros: %s", exc)
+        logger.warning("Spend fetch failed, returning zeros: %s", _fetch_log_detail(exc))
         return {"days": days, "total_usd": 0.0, "by_key": [], "by_model": []}
 
 
@@ -939,16 +1095,13 @@ async def get_audit(
 
     for path in audit_paths:
         try:
-            import json
-            import urllib.request
-
             url = f"{endpoint}{path}"
             logger.info("Attempting audit fetch from LiteLLM API: %s", url)
-            request = urllib.request.Request(
-                url, headers={"Authorization": f"Bearer {master_key}"} if master_key else {},
+            payload = _gateway_json(
+                url,
+                headers={"Authorization": f"Bearer {master_key}"} if master_key else {},
+                timeout=15,
             )
-            with urllib.request.urlopen(request, timeout=15) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
 
             # Normalize response — LiteLLM returns a list of spend log entries
             entries = payload if isinstance(payload, list) else payload.get("data", [])
@@ -993,7 +1146,7 @@ async def get_audit(
             rows.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
             return {"source": "litellm_api", "log_group": None, "rows": rows}
         except Exception as exc:
-            logger.warning("Audit path %s failed: %s", path, exc)
+            logger.warning("Audit path %s failed: %s", path, _fetch_log_detail(exc))
             continue
 
     return {"source": "none", "log_group": None, "rows": []}
@@ -1048,32 +1201,40 @@ async def playground(gateway_id: str, req: PlaygroundRequest, _=Depends(require_
 
     try:
         import json
-        import urllib.request
 
         payload = json.dumps({
             "model": req.model,
             "messages": req.messages,
             "max_tokens": req.max_tokens,
-        }).encode()
+        })
 
-        proxy_req = urllib.request.Request(
+        # require_ok=False: a non-2xx body is the useful part here. LiteLLM explains
+        # a bad model id or an exhausted budget in it, and the UI shows that text.
+        # That is the gateway's own content, not the target address `urlopen` used
+        # to leak, so relaying it is unchanged.
+        #
+        # A body over the cap is refused by _gateway_fetch, which raises
+        # response_too_large rather than handing back JSON that lost its tail. This
+        # relay was always one buffered read, so nothing here streams.
+        resp = _gateway_fetch(
             f"{endpoint}/v1/chat/completions",
-            data=payload,
+            method="POST",
+            body=payload,
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {auth_key}",
             },
-            method="POST",
+            timeout=60,
+            require_ok=False,
         )
-        with urllib.request.urlopen(proxy_req, timeout=60) as resp:
-            return json.loads(resp.read())
+        if not (200 <= resp.status < 300):
+            raise HTTPException(
+                status_code=502,
+                detail=f"Gateway request failed: {_upstream_error_text(resp)}",
+            )
+        return resp.json()
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.warning("Playground request failed: %s", exc)
-        detail = str(exc)
-        # Try to extract the error body from HTTPError
-        if hasattr(exc, "read"):
-            try:
-                detail = exc.read().decode("utf-8")  # type: ignore[union-attr]
-            except Exception:
-                pass
-        raise HTTPException(status_code=502, detail=f"Gateway request failed: {detail}")
+        logger.warning("Playground request failed: %s", _fetch_log_detail(exc))
+        raise HTTPException(status_code=502, detail=f"Gateway request failed: {_fetch_reason(exc)}")

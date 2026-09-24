@@ -15,12 +15,23 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
 import { Icon } from './icons';
 import { COMPLIANCE_CENTER_FRAMEWORKS, MODEL_DETAILS } from './mockData';
+import { useControlEvaluation } from './useControlEvaluation';
+import type { ControlEvaluation } from '../../api/client';
 import GpaiModelCard from './compliance/GpaiModelCard';
 import { ComplianceGapGuidanceCompact } from './compliance/ComplianceGapGuidance';
+
+// Maps a live control-evaluation status onto the framework's ControlStatus union.
+// 'not-evaluated' surfaces as 'not-started' so it flows through the existing
+// applicable = total - notStarted denominator convention.
+function liveControlStatus(
+  status: ControlEvaluation['status'],
+): 'pass' | 'fail' | 'in-progress' | 'not-started' {
+  return status === 'not-evaluated' ? 'not-started' : status;
+}
 
 // ───────────────────────────────────── Types ─────────────────────────────────────
 
@@ -161,10 +172,39 @@ export default function EuAiActView({ embedded = false, onNavigateToProgram }: E
     return COMPLIANCE_CENTER_FRAMEWORKS.find(fw => fw.id === 'eu-ai-act');
   }, []);
 
-  // Compute stats from the framework controls
+  // All controls flattened for live evaluation — only those with an
+  // autoDetectSource are actually sent to the backend by the hook.
+  const frameworkControls = useMemo(
+    () => euAiActFramework?.categories.flatMap(c => c.controls) ?? [],
+    [euAiActFramework],
+  );
+
+  // Live control evaluation against CloudTrail/CloudWatch/Bedrock/Config/
+  // SageMaker/IAM/Glue. Degrades gracefully to static data when unavailable.
+  const { evaluations: liveEvaluations, live: controlsLive } = useControlEvaluation({
+    controls: frameworkControls,
+    skip: !euAiActFramework,
+  });
+
+  // Categories with live status overlaid onto controls that returned a live
+  // evaluation. When the eval isn't live we keep the static framework data.
+  const liveCategories = useMemo(() => {
+    const cats = euAiActFramework?.categories ?? [];
+    if (!controlsLive) return cats;
+    return cats.map(cat => ({
+      ...cat,
+      controls: cat.controls.map(c => {
+        const ev = liveEvaluations.get(c.id);
+        if (!ev) return c;
+        return { ...c, status: liveControlStatus(ev.status), evidence: ev.evidence || c.evidence };
+      }),
+    }));
+  }, [euAiActFramework, controlsLive, liveEvaluations]);
+
+  // Compute stats from the (live-overlaid) framework controls
   const stats = useMemo(() => {
     if (!euAiActFramework) return { total: 0, passed: 0, inProgress: 0, failed: 0, conformancePct: 0 };
-    const allControls = euAiActFramework.categories.flatMap(c => c.controls);
+    const allControls = liveCategories.flatMap(c => c.controls);
     const total = allControls.length;
     const passed = allControls.filter(c => c.status === 'pass').length;
     const inProgress = allControls.filter(c => c.status === 'in-progress').length;
@@ -173,7 +213,7 @@ export default function EuAiActView({ embedded = false, onNavigateToProgram }: E
     const applicable = total - notStarted;
     const conformancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
     return { total, passed, inProgress, failed, conformancePct };
-  }, [euAiActFramework]);
+  }, [euAiActFramework, liveCategories]);
 
   // Count systems by tier
   const systemsByTier = useMemo(() => {
@@ -202,7 +242,7 @@ export default function EuAiActView({ embedded = false, onNavigateToProgram }: E
       {onNavigateToProgram && (
         <div className="flex items-center justify-between bg-violet-50 rounded-xl border border-violet-200 px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-violet-600 text-sm">📋</span>
+            <Icon name="clipboard-document-list" className="w-4 h-4 text-violet-600" />
             <span className="text-sm text-violet-800">Track EU AI Act controls in your governance program</span>
           </div>
           <button
@@ -454,7 +494,7 @@ export default function EuAiActView({ embedded = false, onNavigateToProgram }: E
       {/* Article-by-Article Control Status (from framework data) */}
       {euAiActFramework && (
         <>
-          {euAiActFramework.categories.map(cat => (
+          {liveCategories.map(cat => (
             <div key={cat.name} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
               <div className="px-5 py-2.5 border-b border-slate-100 text-sm font-semibold text-slate-900">{cat.name}</div>
               <div className="divide-y divide-slate-100">
@@ -548,12 +588,16 @@ export default function EuAiActView({ embedded = false, onNavigateToProgram }: E
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               {gpaiModels.map(m => (
                 <div key={m.id} className="p-2 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="text-[11px] font-semibold text-slate-800">{m.name}</div>
+                  <div className="text-[11px] font-semibold text-slate-800">{m.osfiInventory.modelName}</div>
                   <div className="text-[9px] text-slate-500">
                     {m.attestation?.euAiAct?.classification || 'Classification pending'}
                   </div>
-                  <div className={`text-[9px] mt-1 ${m.attestation?.euAiAct?.documented ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {m.attestation?.euAiAct?.documented ? '&#10003; Documented' : '! Documentation pending'}
+                  <div className={`text-[9px] mt-1 flex items-center gap-1 ${m.attestation?.euAiAct?.documented ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {m.attestation?.euAiAct?.documented ? (
+                      <><Icon name="check" className="w-3 h-3" />Documented</>
+                    ) : (
+                      <><Icon name="exclamation-triangle" className="w-3 h-3" />Documentation pending</>
+                    )}
                   </div>
                 </div>
               ))}
@@ -655,13 +699,25 @@ export default function EuAiActView({ embedded = false, onNavigateToProgram }: E
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a framework whose controls are seeded would inherit a Live header.
+  const badge = controlsLive
+    ? <LiveDataBadge source="AWS control evaluation" detail="Controls with an AWS auto-detect source evaluated live against CloudTrail, CloudWatch, Bedrock, Config, SageMaker, IAM, and Glue" />
+    : <MockDataBadge integration="EU AI Act mapping — control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
 
   return (
     <GovernPageLayout
       title="EU AI Act (Regulation 2024/1689)"
       description="Risk-based AI regulation with obligations for High-Risk AI systems and General-Purpose AI models. Phased implementation 2024-2027."
-      badge={<MockDataBadge integration="EU AI Act mapping — control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

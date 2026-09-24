@@ -1,0 +1,35 @@
+{
+  "_comment": "PORTABLE TEMPLATE — copy to runtime-config.json and fill in YOUR account's endpoints. runtime-config.json itself is gitignored (it holds account-specific values and must not be committed). It is uploaded to the S3 bucket at deploy time (deploy scripts handle this). RECOMMENDED: once the CloudFront distribution routes /api/<svc>/* to each backend, set these to RELATIVE paths (e.g. \"/api/cedar\") so the browser never sees raw execute-api URLs and the config is identical across accounts.",
+  "use_case_id": "kyc_governance_insights",
+  "use_case_name": "KYC - Controlled Quality Output",
+  "description": "Governed KYC assessment for corporate banking: specialist agents produce credit and compliance findings, then a non-bypassable governance layer applies deterministic financial checks, sanctions/PEP screening, a three-layer policy cascade, and an LLM-as-Judge quality score to reach the final decision.",
+  "domain": "FSI",
+  "agents": [
+    { "id": "credit_analyst", "name": "Credit Analyst", "description": "Specialized AI agent: Credit Analyst" },
+    { "id": "compliance_officer", "name": "Compliance Officer", "description": "Specialized AI agent: Compliance Officer" }
+  ],
+  "api_endpoint": "/api/invoke",
+  "console_services": {
+    "metrics_api_url": "<YOUR_METRICS_API_URL or /api/metrics>",
+    "cedar_api_url": "<YOUR_CEDAR_API_URL or /api/cedar>",
+    "registry_api_url": "<YOUR_REGISTRY_API_URL or /api/registry>",
+    "eval_write_api_url": "<YOUR_EVAL_WRITE_API_URL or /api/registry>",
+    "hitl_api_url": "<YOUR_HITL_API_URL or /api/hitl>",
+    "grounding_api_url": "<YOUR_GROUNDING_API_URL or /api/grounding>",
+    "validator_api_url": "<YOUR_VALIDATOR_API_URL or /api/validator>",
+    "api_key": "<YOUR_PROXY_API_KEY>",
+    "tenant_id": "fsi-demo"
+  },
+  "input_schema": {
+    "id_field": "customer_id",
+    "id_label": "Customer ID",
+    "id_placeholder": "e.g. CUST001",
+    "type_field": "assessment_type",
+    "type_options": [
+      { "value": "full", "label": "Full" },
+      { "value": "credit_only", "label": "Credit Only" },
+      { "value": "compliance_only", "label": "Compliance Only" }
+    ],
+    "test_entities": ["CUST001", "CUST002", "CUST003", "CUST004", "CUST005", "CUST006", "CUST007", "CUST008", "CUST009", "CUST047"]
+  }
+}

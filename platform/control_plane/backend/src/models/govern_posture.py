@@ -21,7 +21,14 @@ class ConfigCompliance(BaseModel):
     compliant: int = Field(0, description="Rules evaluating COMPLIANT")
     non_compliant: int = Field(0, description="Rules evaluating NON_COMPLIANT")
     insufficient_data: int = Field(0, description="Rules with INSUFFICIENT_DATA")
-    total_rules: int = Field(0, description="Config rules evaluated (compliant + non_compliant)")
+    total_rules: int = Field(
+        0,
+        description=(
+            "Rules with a pass/fail verdict (compliant + non_compliant) — the evaluated "
+            "subset, not the account's Config rule count. Label it as such in any UI; the "
+            "full rule set comes from /govern/controls/config-rules (`total`)."
+        ),
+    )
     pct_compliant: float = Field(0.0, description="compliant / (compliant + non_compliant) * 100")
     live: bool
     source: str

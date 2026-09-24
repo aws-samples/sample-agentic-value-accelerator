@@ -13,26 +13,23 @@
  */
 import { useMemo, useState } from 'react';
 import GovernPageLayout from './GovernPageLayout';
-import { MockDataBadge } from './DataSourceIndicator';
+import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
 import StatCard from './StatCard';
 import { COMPLIANCE_CENTER_FRAMEWORKS } from './mockData';
+import { useControlEvaluation } from './useControlEvaluation';
+import type { ControlEvaluation } from '../../api/client';
+import { Icon } from './icons';
+
+// Maps a live control-evaluation status onto the framework's ControlStatus union.
+// 'not-evaluated' surfaces as 'not-started' so it flows through the existing
+// applicable = total - notStarted denominator convention.
+function liveControlStatus(
+  status: ControlEvaluation['status'],
+): 'pass' | 'fail' | 'in-progress' | 'not-started' {
+  return status === 'not-evaluated' ? 'not-started' : status;
+}
 
 // ───────────────────────────────────── Types ─────────────────────────────────────
-
-interface CriControl {
-  id: string;
-  label: string;
-  section: string;
-  status: 'pass' | 'in-progress' | 'fail' | 'not-started';
-  evidence?: string;
-  owner?: string;
-  dueDate?: string;
-}
-
-interface CriCategory {
-  name: string;
-  controls: CriControl[];
-}
 
 interface AwsServiceMapping {
   service: string;
@@ -150,33 +147,64 @@ export default function CriAiRmfView({ embedded = false, onNavigateToProgram }: 
     return COMPLIANCE_CENTER_FRAMEWORKS.find(fw => fw.id === 'cri-fs-ai-rmf');
   }, []);
 
+  // All controls flattened for live evaluation — only those with an
+  // autoDetectSource are actually sent to the backend by the hook.
+  const frameworkControls = useMemo(
+    () => criFramework?.categories.flatMap(c => c.controls) ?? [],
+    [criFramework],
+  );
+
+  // Live control evaluation against CloudTrail/CloudWatch/Bedrock/Config/
+  // SageMaker/IAM/Glue. Degrades gracefully to static data when unavailable.
+  const { evaluations: liveEvaluations, live: controlsLive } = useControlEvaluation({
+    controls: frameworkControls,
+    skip: !criFramework,
+  });
+
+  // Categories with live status overlaid onto controls that returned a live
+  // evaluation. When the eval isn't live we keep the static framework data.
+  const liveCategories = useMemo(() => {
+    const cats = criFramework?.categories ?? [];
+    if (!controlsLive) return cats;
+    return cats.map(cat => ({
+      ...cat,
+      controls: cat.controls.map(c => {
+        const ev = liveEvaluations.get(c.id);
+        if (!ev) return c;
+        return { ...c, status: liveControlStatus(ev.status), evidence: ev.evidence || c.evidence };
+      }),
+    }));
+  }, [criFramework, controlsLive, liveEvaluations]);
+
   // Compute stats from the framework controls
   const stats = useMemo(() => {
     if (!criFramework) return { total: 0, passed: 0, inProgress: 0, failed: 0, compliancePct: 0, domainsCount: 0 };
-    const allControls = criFramework.categories.flatMap(c => c.controls);
+    const allControls = liveCategories.flatMap(c => c.controls);
     const total = allControls.length;
     const passed = allControls.filter(c => c.status === 'pass').length;
     const inProgress = allControls.filter(c => c.status === 'in-progress').length;
     const failed = allControls.filter(c => c.status === 'fail').length;
     const applicable = total - allControls.filter(c => c.status === 'not-started').length;
     const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
-    return { total, passed, inProgress, failed, compliancePct, domainsCount: criFramework.categories.length };
-  }, [criFramework]);
+    return { total, passed, inProgress, failed, compliancePct, domainsCount: liveCategories.length };
+  }, [criFramework, liveCategories]);
 
   // Compute per-domain stats
   const domainStats = useMemo(() => {
     if (!criFramework) return {};
     const result: Record<string, { total: number; passed: number; inProgress: number; failed: number; compliancePct: number }> = {};
-    criFramework.categories.forEach(cat => {
+    liveCategories.forEach(cat => {
       const total = cat.controls.length;
       const passed = cat.controls.filter(c => c.status === 'pass').length;
       const inProgress = cat.controls.filter(c => c.status === 'in-progress').length;
       const failed = cat.controls.filter(c => c.status === 'fail').length;
-      const compliancePct = total > 0 ? Math.round((passed / total) * 100) : 0;
+      // Match the hub denominator: % is pass over applicable (total minus not-started), not raw total.
+      const applicable = total - cat.controls.filter(c => c.status === 'not-started').length;
+      const compliancePct = applicable > 0 ? Math.round((passed / applicable) * 100) : 0;
       result[cat.name] = { total, passed, inProgress, failed, compliancePct };
     });
     return result;
-  }, [criFramework]);
+  }, [criFramework, liveCategories]);
 
   const toggleDomain = (name: string) => {
     const next = new Set(expandedDomains);
@@ -187,12 +215,12 @@ export default function CriAiRmfView({ embedded = false, onNavigateToProgram }: 
 
   // Filter categories by status
   const filteredCategories = useMemo(() => {
-    if (!criFramework || filterStatus === 'all') return criFramework?.categories || [];
-    return criFramework.categories.map(cat => ({
+    if (filterStatus === 'all') return liveCategories;
+    return liveCategories.map(cat => ({
       ...cat,
       controls: cat.controls.filter(c => c.status === filterStatus),
     })).filter(cat => cat.controls.length > 0);
-  }, [criFramework, filterStatus]);
+  }, [liveCategories, filterStatus]);
 
   const body = (
     <div className="space-y-6">
@@ -270,7 +298,7 @@ export default function CriAiRmfView({ embedded = false, onNavigateToProgram }: 
       {onNavigateToProgram && (
         <div className="flex items-center justify-between bg-emerald-50 rounded-xl border border-emerald-200 px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="text-emerald-600 text-sm">&#128203;</span>
+            <Icon name="clipboard-document-list" className="w-4 h-4 text-emerald-600" strokeWidth={2} />
             <span className="text-sm text-emerald-800">Track CRI FS AI RMF controls in your governance program</span>
           </div>
           <button
@@ -400,22 +428,18 @@ export default function CriAiRmfView({ embedded = false, onNavigateToProgram }: 
                   }`}>{dStats.compliancePct}%</div>
                   <div className="text-[9px] text-slate-500">{dStats.passed}/{dStats.total}</div>
                 </div>
-                <svg
+                <Icon
+                  name="chevron-down"
                   className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
                   strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
+                />
               </div>
             </button>
 
             {/* Controls list */}
             {isExpanded && (
               <div className="border-t border-slate-100 divide-y divide-slate-100">
-                {cat.controls.map((ctrl: CriControl) => {
+                {cat.controls.map((ctrl) => {
                   const sm = statusMeta[ctrl.status] || statusMeta['not-started'];
                   return (
                     <div key={ctrl.id} className="px-5 py-3 flex items-start gap-3">
@@ -555,13 +579,25 @@ export default function CriAiRmfView({ embedded = false, onNavigateToProgram }: 
     </div>
   );
 
-  if (embedded) return body;
+  // Hoisted so the embedded path can render it too. Dropping the badge when embedded left
+  // this view sitting under ComplianceCenter's page-level provenance claim rather than its
+  // own - a framework whose controls are seeded would inherit a Live header.
+  const badge = controlsLive
+    ? <LiveDataBadge source="AWS control evaluation" detail="Controls with an AWS auto-detect source evaluated live against CloudTrail, CloudWatch, Bedrock, Config, SageMaker, IAM, and Glue" />
+    : <MockDataBadge integration="CRI FS AI RMF controls - control-plane backend (DynamoDB)" />;
+
+  if (embedded) return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">{badge}</div>
+      {body}
+    </div>
+  );
 
   return (
     <GovernPageLayout
       title="CRI FS AI RMF"
       description="Cyber Risk Institute Financial Services AI Risk Management Framework - 230 Control Objectives with NIST AI RMF alignment and FSI-specific guidance."
-      badge={<MockDataBadge integration="CRI FS AI RMF controls - control-plane backend (DynamoDB)" />}
+      badge={badge}
     >
       {body}
     </GovernPageLayout>

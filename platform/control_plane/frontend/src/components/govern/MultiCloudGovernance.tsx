@@ -16,6 +16,7 @@ import {
   PieChart, Pie, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   AreaChart, Area,
 } from 'recharts';
+import type { Formatter, ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import {
   ALL_AGENTS,
   AGENT_PROVIDER_CONFIG,
@@ -28,7 +29,15 @@ import {
 import UnifiedGuide, { MULTI_CLOUD_GUIDE } from './UnifiedGuide';
 import GovernPageLayout from './GovernPageLayout';
 import { MockDataBadge, LiveDataBadge } from './DataSourceIndicator';
-import { governCostApi, type AwsProviderConnectorsResponse } from '../../api/client';
+import {
+  governCostApi,
+  multicloudApi,
+  type AwsProviderConnectorsResponse,
+  type MultiCloudConnectorsResponse,
+  type MultiCloudConnectorStatus,
+  type MultiCloudAllCosts,
+  type MultiCloudAllAgents,
+} from '../../api/client';
 import { Icon, type IconName } from './icons';
 import { rowButtonProps } from './a11y';
 import { useAgentRegistry } from './useAgentRegistry';
@@ -341,6 +350,56 @@ function connectorStatusBadge(status: { connected: boolean; isLive: boolean; det
   );
 }
 
+/**
+ * Badge for one connector card in the Connector Configuration panel.
+ *
+ * `configured` only means the secret was read and the required fields are non-empty. It
+ * does NOT mean the provider accepted them. Every one of these cards used to fall through
+ * to an amber "Configured" whenever `configured && !connected`, so a connector the
+ * provider had explicitly REJECTED was labelled with the opposite fact - and rejected is
+ * exactly the case the amber branch is reached most often. `auth_state` carries the
+ * measured verdict from the last token exchange, so read that before choosing the label.
+ *
+ * Rejected/incomplete are rose (a problem to fix now); unavailable is amber (transient,
+ * retried automatically); a genuinely unmeasured `unknown` stays amber and says so rather
+ * than claiming a verdict. `detail` is the backend's own honest sentence, so it becomes
+ * the tooltip instead of being dropped.
+ */
+function multicloudConnectorBadge(conn: MultiCloudConnectorStatus | undefined) {
+  const dot = (color: string) => <span className={`w-1.5 h-1.5 rounded-full ${color}`} />;
+  const pill = (tone: string, dotColor: string, label: string, title?: string) => (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${tone}`}
+      title={title}
+    >
+      {dot(dotColor)} {label}
+    </span>
+  );
+
+  if (conn?.connected) {
+    return pill('bg-emerald-100 text-emerald-700', 'bg-emerald-500', 'Connected', conn.detail);
+  }
+
+  if (conn?.configured) {
+    // Treat a missing auth_state as 'unknown' - older backend builds omit the field.
+    const authTitle = conn.auth_detail ? `${conn.detail} (${conn.auth_detail})` : conn.detail;
+    switch (conn.auth_state ?? 'unknown') {
+      case 'rejected':
+        return pill('bg-rose-100 text-rose-700', 'bg-rose-500', 'Credentials rejected', authTitle);
+      case 'incomplete':
+        return pill('bg-rose-100 text-rose-700', 'bg-rose-500', 'Credentials incomplete', authTitle);
+      case 'unavailable':
+        return pill('bg-amber-100 text-amber-700', 'bg-amber-500', 'Provider unreachable', authTitle);
+      default:
+        return pill('bg-amber-100 text-amber-700', 'bg-amber-500', 'Configured, not verified', authTitle);
+    }
+  }
+
+  return pill('bg-slate-100 text-slate-600', 'bg-slate-400', 'Not Connected', conn?.detail);
+}
+
+type ConfigureProvider = 'azure' | 'gcp' | 'servicenow' | 'salesforce' | 'copilot_studio' | null;
+
 export default function MultiCloudGovernance() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as ViewTab) || 'dashboard';
@@ -350,20 +409,153 @@ export default function MultiCloudGovernance() {
   const [inventoryFilter, setInventoryFilter] = useState<string>('all');
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // 'warning' is for an outcome that succeeded but is not what the operator asked for -
+  // today, a connector stored with a URL we could not reach. It renders in amber and does
+  // not auto-dismiss, because the whole point is that it gets read.
+  const [toastVariant, setToastVariant] = useState<'success' | 'warning'>('success');
+
+  // Configuration modal state
+  const [configureModal, setConfigureModal] = useState<ConfigureProvider>(null);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; latency_ms?: number } | null>(null);
+
+  // Form state for each provider
+  const [azureForm, setAzureForm] = useState({ tenant_id: '', client_id: '', client_secret: '', subscription_id: '' });
+  const [gcpForm, setGcpForm] = useState({ project_id: '', service_account_json: '', billing_export_table: '', location: 'us-central1' });
+  const [servicenowForm, setServicenowForm] = useState({ instance_url: '', client_id: '', client_secret: '', monthly_license_cost: 0 });
+  const [salesforceForm, setSalesforceForm] = useState({ client_id: '', client_secret: '', login_url: 'https://login.salesforce.com', monthly_license_cost: 0 });
+  const [copilotForm, setCopilotForm] = useState({ tenant_id: '', client_id: '', client_secret: '', environment_id: '', monthly_capacity_cost: 0 });
 
   // Live provider connector data from governCostApi
   const [providerConnectorsData, setProviderConnectorsData] = useState<AwsProviderConnectorsResponse | null>(null);
+  // Multi-cloud connector status, costs, and agents from multicloudApi
+  const [multicloudStatus, setMulticloudStatus] = useState<MultiCloudConnectorsResponse | null>(null);
+  const [multicloudCosts, setMulticloudCosts] = useState<MultiCloudAllCosts | null>(null);
+  const [multicloudAgents, setMulticloudAgents] = useState<MultiCloudAllAgents | null>(null);
+
+  const refreshConnectorData = () => {
+    multicloudApi.status().then(setMulticloudStatus).catch(() => setMulticloudStatus(null));
+    multicloudApi.allCosts(30).then(setMulticloudCosts).catch(() => setMulticloudCosts(null));
+    multicloudApi.allAgents().then(setMulticloudAgents).catch(() => setMulticloudAgents(null));
+  };
 
   useEffect(() => {
     let cancelled = false;
     governCostApi.providerConnectors()
       .then(d => { if (!cancelled) setProviderConnectorsData(d); })
       .catch(() => { if (!cancelled) setProviderConnectorsData(null); });
+    // Fetch multi-cloud connector status, costs, agents in parallel
+    multicloudApi.status()
+      .then(d => { if (!cancelled) setMulticloudStatus(d); })
+      .catch(() => { if (!cancelled) setMulticloudStatus(null); });
+    multicloudApi.allCosts(30)
+      .then(d => { if (!cancelled) setMulticloudCosts(d); })
+      .catch(() => { if (!cancelled) setMulticloudCosts(null); });
+    multicloudApi.allAgents()
+      .then(d => { if (!cancelled) setMulticloudAgents(d); })
+      .catch(() => { if (!cancelled) setMulticloudAgents(null); });
     return () => { cancelled = true; };
   }, []);
 
   const setActiveTab = (tab: ViewTab) => {
     setSearchParams({ tab });
+  };
+
+  // Save connector configuration
+  const handleSaveConfig = async () => {
+    setConfigSaving(true);
+    setConfigError(null);
+    // A plain local, not state: the `finally` below decides whether to schedule the
+    // dismiss, and a setTimeout closure reading `toastVariant` would read the value from
+    // before this render.
+    let autoDismiss = true;
+    try {
+      let result;
+      switch (configureModal) {
+        case 'azure':
+          result = await multicloudApi.configureAzure(azureForm);
+          break;
+        case 'gcp':
+          result = await multicloudApi.configureGcp(gcpForm);
+          break;
+        case 'servicenow':
+          result = await multicloudApi.configureServicenow(servicenowForm);
+          break;
+        case 'salesforce':
+          result = await multicloudApi.configureSalesforce(salesforceForm);
+          break;
+        case 'copilot_studio':
+          result = await multicloudApi.configureCopilotStudio(copilotForm);
+          break;
+      }
+      if (result?.success) {
+        // The backend distinguishes "stored and the URL checks out" from "stored, and we
+        // could not check the URL", and says which in `message`. This used to hardcode
+        // "configured successfully" for both, so an unverified write was reported in the
+        // verified write's words - the same defect as a derived number under a live badge.
+        // `success` only means the write landed: a write that did not land is a 500, so it
+        // is always true here and cannot carry the distinction.
+        const unverified = result.url_verified === false;
+        setToast(result.message || `${configureModal} connector configured successfully`);
+        // An unverified write does not auto-dismiss. A 3.5s toast is the right weight for
+        // "done" and the wrong weight for "we stored something we could not reach"; that
+        // one has to wait to be read.
+        setToastVariant(unverified ? 'warning' : 'success');
+        autoDismiss = !unverified;
+        setConfigureModal(null);
+        refreshConnectorData();
+      } else {
+        // Unreachable against the current backend, which raises a 500 rather than
+        // returning success=false. Kept as defence rather than relied on.
+        setConfigError(result?.message || 'Configuration failed');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save configuration';
+      setConfigError(message);
+    } finally {
+      setConfigSaving(false);
+      if (autoDismiss) setTimeout(() => setToast(null), 3500);
+    }
+  };
+
+  // Delete connector configuration
+  const handleDeleteConfig = async (provider: ConfigureProvider) => {
+    if (!provider || !confirm(`Are you sure you want to delete the ${provider} connector configuration?`)) return;
+    try {
+      let result;
+      switch (provider) {
+        case 'azure': result = await multicloudApi.deleteAzure(); break;
+        case 'gcp': result = await multicloudApi.deleteGcp(); break;
+        case 'servicenow': result = await multicloudApi.deleteServicenow(); break;
+        case 'salesforce': result = await multicloudApi.deleteSalesforce(); break;
+        case 'copilot_studio': result = await multicloudApi.deleteCopilotStudio(); break;
+      }
+      if (result?.success) {
+        setToast(`${provider} connector removed`);
+        refreshConnectorData();
+      }
+    } catch {
+      setToast(`Failed to delete ${provider} configuration`);
+    }
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // Test connection
+  const handleTestConnection = async () => {
+    if (!configureModal) return;
+    setTestingConnection(true);
+    setTestResult(null);
+    try {
+      const result = await multicloudApi.testConnection(configureModal);
+      setTestResult({ success: result.success, message: result.message, latency_ms: result.latency_ms });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Test failed';
+      setTestResult({ success: false, message });
+    } finally {
+      setTestingConnection(false);
+    }
   };
 
   // AWS connector is "connected" when the account is reachable (live AWS APIs),
@@ -376,6 +568,14 @@ export default function MultiCloudGovernance() {
 
   // Helper to get connector status from live data or fallback to local logic
   const getConnectorStatus = (provider: AgentProvider): { connected: boolean; isLive: boolean; detail?: string } => {
+    // Check multicloud status for azure/gcp first (dedicated connectors)
+    if ((provider === 'azure' || provider === 'gcp') && multicloudStatus?.connectors) {
+      const connector = multicloudStatus.connectors.find(c => c.provider.toLowerCase() === provider.toLowerCase());
+      if (connector) {
+        return { connected: connector.connected, isLive: multicloudStatus.live, detail: connector.detail };
+      }
+    }
+    // Fallback to providerConnectorsData for AWS and others
     if (providerConnectorsData?.connectors) {
       const connector = providerConnectorsData.connectors.find(c => c.provider.toLowerCase() === provider.toLowerCase());
       if (connector) {
@@ -451,14 +651,22 @@ export default function MultiCloudGovernance() {
     <GovernPageLayout
       title="Multi-Cloud Governance"
       description="Unified governance across AWS, Azure, GCP, and SaaS agent platforms."
-      badge={providerConnectorsData?.live
-        ? <LiveDataBadge source="Cost Explorer" detail={`${providerConnectorsData.connected_count}/${providerConnectorsData.total_count} providers connected`} />
-        : <MockDataBadge integration="Connect cloud providers for live inventory" />}
+      badge={
+        // The headline KPIs, dashboard charts, and Agent Inventory on this page are
+        // illustrative (ALL_AGENTS / TOOL_REGISTRY mock constants), so the PAGE badge is
+        // honestly Demo — a single connector being configured does NOT make the fleet
+        // totals live. Genuinely-live connector cost/agent data is badged per-section below.
+        <MockDataBadge integration="Fleet totals & inventory are illustrative — connector cost/agent data is live only where a provider is connected" />
+      }
     >
       {/* Multi-Cloud Governance Guide */}
       <UnifiedGuide {...MULTI_CLOUD_GUIDE} />
 
-      {/* KPI Summary */}
+      {/* KPI Summary — illustrative fleet totals from the mock agent/tool registry */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Fleet Summary</span>
+        <MockDataBadge integration="Illustrative fleet — Total Agents, Monthly Cost, Compliance & Tools+MCP come from the demo agent registry, not live connectors" />
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-4">
           <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Total Agents</div>
@@ -692,7 +900,10 @@ export default function MultiCloudGovernance() {
           {/* Real-Time Invocation Metrics */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-4">Invocations by Hour (Last 24h)</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm font-semibold text-slate-900">Invocations by Hour (Last 24h)</div>
+                <MockDataBadge integration="CloudWatch AWS/Bedrock + Azure Monitor + GCP Cloud Monitoring invocation metrics" />
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={[
                   { hour: '00:00', aws: 1240, azure: 890, gcp: 450, saas: 320 },
@@ -715,7 +926,10 @@ export default function MultiCloudGovernance() {
             </div>
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-4">Error Rate Trends (7 Day)</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm font-semibold text-slate-900">Error Rate Trends (7 Day)</div>
+                <MockDataBadge integration="CloudWatch InvocationClientErrors/ServerErrors + Azure Monitor + GCP error metrics" />
+              </div>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={[
                   { day: 'Mon', aws: 0.12, azure: 0.18, gcp: 0.15 },
@@ -729,7 +943,7 @@ export default function MultiCloudGovernance() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 10 }} />
                   <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value}%`, '']} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={((value: number) => [`${value}%`, '']) as Formatter<ValueType, NameType>} />
                   <Area type="monotone" dataKey="aws" name="AWS" stroke="#FF9900" fill="#FF9900" fillOpacity={0.3} />
                   <Area type="monotone" dataKey="azure" name="Azure" stroke="#0078D4" fill="#0078D4" fillOpacity={0.3} />
                   <Area type="monotone" dataKey="gcp" name="GCP" stroke="#4285F4" fill="#4285F4" fillOpacity={0.3} />
@@ -741,7 +955,10 @@ export default function MultiCloudGovernance() {
           {/* Token Usage & Model Performance */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-3">Token Usage (MTD)</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-slate-900">Token Usage (MTD)</div>
+                <MockDataBadge integration="Bedrock model-invocation logs + Azure OpenAI / GCP Vertex token metrics" />
+              </div>
               <div className="space-y-3">
                 {[
                   { provider: 'AWS', input: 847.2, output: 312.4, color: '#FF9900' },
@@ -768,7 +985,10 @@ export default function MultiCloudGovernance() {
             </div>
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-3">Model Distribution</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-slate-900">Model Distribution</div>
+                <MockDataBadge integration="Per-model invocation counts from Bedrock invocation logs + Azure/GCP model telemetry" />
+              </div>
               <div className="space-y-2">
                 {[
                   { model: 'Claude 3.5 Sonnet', pct: 42, count: 847, color: '#f97316' },
@@ -789,7 +1009,10 @@ export default function MultiCloudGovernance() {
             </div>
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-3">Latency Percentiles (p50/p95/p99)</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-slate-900">Latency Percentiles (p50/p95/p99)</div>
+                <MockDataBadge integration="CloudWatch InvocationLatency percentile statistics + Azure/GCP latency metrics" />
+              </div>
               <div className="space-y-3">
                 {[
                   { provider: 'AWS Bedrock', p50: 180, p95: 420, p99: 680, color: '#FF9900' },
@@ -813,7 +1036,10 @@ export default function MultiCloudGovernance() {
           {/* Security & Compliance Metrics */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-4">Guardrail Interventions (7 Day)</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm font-semibold text-slate-900">Guardrail Interventions (7 Day)</div>
+                <MockDataBadge integration="Bedrock Guardrails CloudWatch intervention metrics + Azure Content Safety + GCP Model Armor" />
+              </div>
               <div className="space-y-2">
                 {[
                   { type: 'PII Detection', count: 1247, trend: -12, severity: 'medium' },
@@ -842,7 +1068,10 @@ export default function MultiCloudGovernance() {
             </div>
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-900 mb-4">Compliance Coverage by Framework</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm font-semibold text-slate-900">Compliance Coverage by Framework</div>
+                <MockDataBadge integration="AWS Audit Manager / Security Hub standards + Azure Policy compliance + GCP Assured Workloads" />
+              </div>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={[
                   { framework: 'SOC 2', aws: 98, azure: 96, gcp: 94 },
@@ -854,7 +1083,7 @@ export default function MultiCloudGovernance() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis type="number" domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={v => `${v}%`} />
                   <YAxis dataKey="framework" type="category" tick={{ fill: '#475569', fontSize: 10 }} width={70} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value}%`, '']} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={((value: number) => [`${value}%`, '']) as Formatter<ValueType, NameType>} />
                   <Bar dataKey="aws" name="AWS" fill="#FF9900" />
                   <Bar dataKey="azure" name="Azure" fill="#0078D4" />
                   <Bar dataKey="gcp" name="GCP" fill="#4285F4" />
@@ -866,7 +1095,10 @@ export default function MultiCloudGovernance() {
           {/* Cost Analytics Summary */}
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-semibold text-slate-900">Cost Breakdown (MTD)</div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-semibold text-slate-900">Cost Breakdown (MTD)</div>
+                <MockDataBadge integration="AWS Cost Explorer + Azure Cost Management + GCP Billing Export + SaaS vendor billing APIs" />
+              </div>
               <Link to="/govern/finops" className="text-xs text-blue-600 hover:text-blue-700 font-medium">View FinOps →</Link>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -897,6 +1129,11 @@ export default function MultiCloudGovernance() {
       {/* ════════════════════════════════ INVENTORY TAB ════════════════════════════════ */}
       {activeTab === 'inventory' && (
         <div className="space-y-6">
+          {/* Illustrative agent inventory — sourced from the demo registry (ALL_AGENTS), not live connectors */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-900">Agent Inventory</span>
+            <MockDataBadge integration="Illustrative agent inventory from the demo registry — not live connector data" />
+          </div>
           {/* Filter Bar */}
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs font-medium text-slate-600">Filter by Provider:</span>
@@ -958,7 +1195,7 @@ export default function MultiCloudGovernance() {
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                             agent.status === 'production' ? 'bg-emerald-100 text-emerald-700' :
-                            agent.status === 'staging' ? 'bg-blue-100 text-blue-700' :
+                            agent.status === 'pilot' ? 'bg-blue-100 text-blue-700' :
                             agent.status === 'development' ? 'bg-amber-100 text-amber-700' :
                             'bg-slate-100 text-slate-600'
                           }`}>
@@ -971,11 +1208,11 @@ export default function MultiCloudGovernance() {
                             agent.governanceStatus === 'review_needed' ? 'bg-amber-100 text-amber-700' :
                             'bg-rose-100 text-rose-700'
                           }`}>
-                            {agent.governanceStatus.replace('_', ' ')}
+                            {(agent.governanceStatus ?? 'unknown').replace('_', ' ')}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right text-slate-900 font-medium">${agent.metrics.avgCostPerDay.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-slate-600">{agent.metrics.avgLatency}ms</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{agent.metrics.p95LatencyMs}ms</td>
                       </tr>
                     );
                   })}
@@ -1036,7 +1273,7 @@ export default function MultiCloudGovernance() {
                           <div className="font-medium text-slate-900">{tool.name}</div>
                           <div className="text-[10px] text-slate-500">{tool.id}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{tool.category}</td>
+                        <td className="px-4 py-3 text-slate-600">{tool.type}</td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                             tool.riskLevel === 'low' ? 'bg-emerald-100 text-emerald-700' :
@@ -1047,7 +1284,7 @@ export default function MultiCloudGovernance() {
                             {tool.riskLevel}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-center text-slate-700">{tool.agentCount}</td>
+                        <td className="px-4 py-3 text-center text-slate-700">{tool.authorizedAgents}</td>
                         <td className="px-4 py-3 text-center">
                           {tool.requiresHumanApproval ? (
                             <Icon name="check-circle" className="w-4 h-4 text-amber-500 mx-auto" />
@@ -1080,7 +1317,7 @@ export default function MultiCloudGovernance() {
                   <thead>
                     <tr className="bg-slate-50/50">
                       <th scope="col" className="text-left px-4 py-3 font-medium text-slate-600">Server</th>
-                      <th scope="col" className="text-left px-4 py-3 font-medium text-slate-600">Transport</th>
+                      <th scope="col" className="text-left px-4 py-3 font-medium text-slate-600">Auth Method</th>
                       <th scope="col" className="text-center px-4 py-3 font-medium text-slate-600">Tools</th>
                       <th scope="col" className="text-center px-4 py-3 font-medium text-slate-600">Agents</th>
                       <th scope="col" className="text-center px-4 py-3 font-medium text-slate-600">Status</th>
@@ -1094,18 +1331,18 @@ export default function MultiCloudGovernance() {
                           <div className="text-[10px] text-slate-500">{server.id}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{server.transport}</span>
+                          <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">{server.authMethod}</span>
                         </td>
                         <td className="px-4 py-3 text-center text-slate-700">{server.toolCount}</td>
-                        <td className="px-4 py-3 text-center text-slate-700">{server.connectedAgents}</td>
+                        <td className="px-4 py-3 text-center text-slate-700">{TOOL_REGISTRY.filter(t => t.mcpServer === server.id).reduce((sum, t) => sum + t.authorizedAgents, 0)}</td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            server.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                            server.status === 'operational' ? 'bg-emerald-100 text-emerald-700' :
                             server.status === 'degraded' ? 'bg-amber-100 text-amber-700' :
                             'bg-slate-100 text-slate-600'
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${
-                              server.status === 'active' ? 'bg-emerald-500' :
+                              server.status === 'operational' ? 'bg-emerald-500' :
                               server.status === 'degraded' ? 'bg-amber-500' : 'bg-slate-400'
                             }`} />
                             {server.status}
@@ -1386,6 +1623,230 @@ export default function MultiCloudGovernance() {
             </div>
           </div>
 
+          {/* Connector Configuration */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Multi-Cloud Connector Configuration</div>
+                <div className="text-xs text-slate-600 mt-1">
+                  Connect cloud providers and SaaS platforms to pull live cost and agent data. Credentials are securely stored in AWS Secrets Manager.
+                </div>
+              </div>
+              {multicloudStatus?.live && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live
+                </span>
+              )}
+            </div>
+            {/* Cloud Service Providers */}
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-2 mb-2">Cloud Service Providers</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Azure Connector */}
+              <div className="p-4 rounded-lg bg-white border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-100">
+                      <Icon name="cloud" className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Azure</div>
+                      <div className="text-[10px] text-slate-500">Cost Management + AI Foundry</div>
+                    </div>
+                  </div>
+                  {multicloudConnectorBadge(multicloudStatus?.connectors?.find(c => c.provider === 'azure'))}
+                </div>
+                {multicloudCosts?.azure?.live ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-end">
+                      <LiveDataBadge source="Azure Cost Management" detail="Live 30-day cost from Azure Cost Management" />
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">30-Day Cost</span>
+                      <span className="font-semibold text-slate-900">${multicloudCosts.azure.total.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Agents</span>
+                      <span className="font-semibold text-slate-900">{multicloudAgents?.azure?.total || 0}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic">
+                    Configure connector to see live Azure data
+                  </div>
+                )}
+                <button
+                  onClick={() => setConfigureModal('azure')}
+                  className="mt-3 w-full px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Configure Azure
+                </button>
+              </div>
+
+              {/* GCP Connector */}
+              <div className="p-4 rounded-lg bg-white border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-100">
+                      <Icon name="cloud" className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Google Cloud</div>
+                      <div className="text-[10px] text-slate-500">BigQuery Billing + Vertex AI</div>
+                    </div>
+                  </div>
+                  {multicloudConnectorBadge(multicloudStatus?.connectors?.find(c => c.provider === 'gcp'))}
+                </div>
+                {multicloudCosts?.gcp?.live ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-end">
+                      <LiveDataBadge source="BigQuery Billing" detail="Live 30-day cost from GCP BigQuery billing export" />
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">30-Day Cost</span>
+                      <span className="font-semibold text-slate-900">${multicloudCosts.gcp.total.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Agents</span>
+                      <span className="font-semibold text-slate-900">{multicloudAgents?.gcp?.total || 0}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic">
+                    Configure connector to see live GCP data
+                  </div>
+                )}
+                <button
+                  onClick={() => setConfigureModal('gcp')}
+                  className="mt-3 w-full px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Configure GCP
+                </button>
+              </div>
+            </div>
+
+            {/* SaaS Platforms */}
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-6 mb-2">SaaS Platforms</div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* ServiceNow Connector */}
+              <div className="p-4 rounded-lg bg-white border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#81B53A20' }}>
+                      <Icon name="building-office" className="w-4 h-4" style={{ color: '#81B53A' }} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">ServiceNow</div>
+                      <div className="text-[10px] text-slate-500">Now Assist + AI Agent Studio</div>
+                    </div>
+                  </div>
+                  {multicloudConnectorBadge(multicloudStatus?.connectors?.find(c => c.provider === 'servicenow'))}
+                </div>
+                {multicloudCosts?.servicenow?.live ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Monthly License</span>
+                      <span className="font-semibold text-slate-900">${multicloudCosts.servicenow.total.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Agents</span>
+                      <span className="font-semibold text-slate-900">{multicloudAgents?.servicenow?.total || 0}</span>
+                    </div>
+                    <div className="text-[9px] text-slate-400 italic">License cost is user-entered, not live billing telemetry.</div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic">
+                    Configure connector to see live ServiceNow data
+                  </div>
+                )}
+                <button
+                  onClick={() => setConfigureModal('servicenow')}
+                  className="mt-3 w-full px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                >
+                  Configure ServiceNow
+                </button>
+              </div>
+
+              {/* Salesforce Connector */}
+              <div className="p-4 rounded-lg bg-white border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#00A1E020' }}>
+                      <Icon name="building-office" className="w-4 h-4" style={{ color: '#00A1E0' }} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Salesforce</div>
+                      <div className="text-[10px] text-slate-500">Einstein + Agentforce</div>
+                    </div>
+                  </div>
+                  {multicloudConnectorBadge(multicloudStatus?.connectors?.find(c => c.provider === 'salesforce'))}
+                </div>
+                {multicloudCosts?.salesforce?.live ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Monthly License</span>
+                      <span className="font-semibold text-slate-900">${multicloudCosts.salesforce.total.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Agents</span>
+                      <span className="font-semibold text-slate-900">{multicloudAgents?.salesforce?.total || 0}</span>
+                    </div>
+                    <div className="text-[9px] text-slate-400 italic">License cost is user-entered, not live billing telemetry.</div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic">
+                    Configure connector to see live Salesforce data
+                  </div>
+                )}
+                <button
+                  onClick={() => setConfigureModal('salesforce')}
+                  className="mt-3 w-full px-3 py-1.5 text-xs font-medium text-cyan-700 bg-cyan-50 rounded-lg hover:bg-cyan-100 transition-colors"
+                >
+                  Configure Salesforce
+                </button>
+              </div>
+
+              {/* Copilot Studio Connector */}
+              <div className="p-4 rounded-lg bg-white border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#5C2D9120' }}>
+                      <Icon name="building-office" className="w-4 h-4" style={{ color: '#5C2D91' }} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Copilot Studio</div>
+                      <div className="text-[10px] text-slate-500">Microsoft Power Platform</div>
+                    </div>
+                  </div>
+                  {multicloudConnectorBadge(multicloudStatus?.connectors?.find(c => c.provider === 'copilot_studio'))}
+                </div>
+                {multicloudCosts?.copilot_studio?.live ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Monthly Capacity</span>
+                      <span className="font-semibold text-slate-900">${multicloudCosts.copilot_studio.total.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600">Agents</span>
+                      <span className="font-semibold text-slate-900">{multicloudAgents?.copilot_studio?.total || 0}</span>
+                    </div>
+                    <div className="text-[9px] text-slate-400 italic">Capacity cost is user-entered, not live billing telemetry.</div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic">
+                    Configure connector to see live Copilot Studio data
+                  </div>
+                )}
+                <button
+                  onClick={() => setConfigureModal('copilot_studio')}
+                  className="mt-3 w-full px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                >
+                  Configure Copilot Studio
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Provider Detail Panel */}
           {selectedProvider && PROVIDER_FEATURES[selectedProvider as keyof typeof PROVIDER_FEATURES] && (
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm p-5">
@@ -1463,7 +1924,7 @@ export default function MultiCloudGovernance() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="month" tick={{ fill: '#475569', fontSize: 11 }} />
                     <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={v => `$${v.toLocaleString()}`} />
-                    <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`$${value.toLocaleString()}`, '']} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={((value: number) => [`$${value.toLocaleString()}`, '']) as Formatter<ValueType, NameType>} />
                     <Legend />
                     <Area type="monotone" dataKey="aws" name="AWS" stackId="1" stroke="#FF9900" fill="#FF9900" fillOpacity={0.6} />
                     <Area type="monotone" dataKey="azure" name="Azure" stackId="1" stroke="#0078D4" fill="#0078D4" fillOpacity={0.6} />
@@ -1511,7 +1972,7 @@ export default function MultiCloudGovernance() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={v => `$${v.toFixed(3)}`} />
                     <YAxis dataKey="type" type="category" tick={{ fill: '#475569', fontSize: 11 }} width={110} />
-                    <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`$${value.toFixed(4)}`, '']} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={((value: number) => [`$${value.toFixed(4)}`, '']) as Formatter<ValueType, NameType>} />
                     <Legend />
                     <Bar dataKey="aws" name="AWS" fill="#FF9900" />
                     <Bar dataKey="azure" name="Azure" fill="#0078D4" />
@@ -1575,7 +2036,7 @@ export default function MultiCloudGovernance() {
                     <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={v => `${v}ms`} />
                     <YAxis type="category" dataKey="provider" tick={{ fill: '#475569', fontSize: 11 }} width={100} />
-                    <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [`${value}ms`, 'Avg Latency']} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={((value: number) => [`${value}ms`, 'Avg Latency']) as Formatter<ValueType, NameType>} />
                     <Bar dataKey="latency" fill="#6366f1" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1874,10 +2335,359 @@ export default function MultiCloudGovernance() {
         </div>
       )}
 
-      {/* Toast notification */}
+      {/* Toast notification. The warning variant carries a full sentence from the backend
+          rather than a three-word confirmation, so it needs a width and a dismiss control;
+          the success variant keeps its original single-line shape. */}
       {toast && (
-        <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
-          {toast}
+        <div
+          className={
+            toastVariant === 'warning'
+              ? 'fixed bottom-4 right-4 max-w-md bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in flex items-start gap-3'
+              : 'fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in'
+          }
+          role={toastVariant === 'warning' ? 'alert' : 'status'}
+        >
+          {toastVariant === 'warning' && (
+            <Icon name="exclamation-triangle" className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
+          )}
+          <span className="flex-1">{toast}</span>
+          {toastVariant === 'warning' && (
+            <button
+              onClick={() => setToast(null)}
+              className="text-amber-700 hover:text-amber-900 flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              <Icon name="x-mark" className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Configuration Modal */}
+      {configureModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Configure {configureModal === 'copilot_studio' ? 'Copilot Studio' : configureModal.charAt(0).toUpperCase() + configureModal.slice(1)} Connector
+              </h2>
+              <button onClick={() => setConfigureModal(null)} className="text-slate-400 hover:text-slate-600">
+                <Icon name="x-mark" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {configError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700">
+                  {configError}
+                </div>
+              )}
+
+              {/* Azure Form */}
+              {configureModal === 'azure' && (
+                <>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Enter your Azure AD service principal credentials. These will be stored securely in AWS Secrets Manager.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Tenant ID</label>
+                    <input
+                      type="text"
+                      value={azureForm.tenant_id}
+                      onChange={e => setAzureForm({ ...azureForm, tenant_id: e.target.value })}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Client ID (Application ID)</label>
+                    <input
+                      type="text"
+                      value={azureForm.client_id}
+                      onChange={e => setAzureForm({ ...azureForm, client_id: e.target.value })}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
+                    <input
+                      type="password"
+                      value={azureForm.client_secret}
+                      onChange={e => setAzureForm({ ...azureForm, client_secret: e.target.value })}
+                      placeholder="Enter client secret"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Subscription ID</label>
+                    <input
+                      type="text"
+                      value={azureForm.subscription_id}
+                      onChange={e => setAzureForm({ ...azureForm, subscription_id: e.target.value })}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* GCP Form */}
+              {configureModal === 'gcp' && (
+                <>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Enter your GCP service account credentials. These will be stored securely in AWS Secrets Manager.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Project ID</label>
+                    <input
+                      type="text"
+                      value={gcpForm.project_id}
+                      onChange={e => setGcpForm({ ...gcpForm, project_id: e.target.value })}
+                      placeholder="my-gcp-project"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Service Account JSON Key</label>
+                    <textarea
+                      value={gcpForm.service_account_json}
+                      onChange={e => setGcpForm({ ...gcpForm, service_account_json: e.target.value })}
+                      placeholder='{"type": "service_account", "project_id": "...", ...}'
+                      rows={4}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">BigQuery Billing Export Table (optional)</label>
+                    <input
+                      type="text"
+                      value={gcpForm.billing_export_table}
+                      onChange={e => setGcpForm({ ...gcpForm, billing_export_table: e.target.value })}
+                      placeholder="project.dataset.table"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Vertex AI Location</label>
+                    <input
+                      type="text"
+                      value={gcpForm.location}
+                      onChange={e => setGcpForm({ ...gcpForm, location: e.target.value })}
+                      placeholder="us-central1"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* ServiceNow Form */}
+              {configureModal === 'servicenow' && (
+                <>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Enter your ServiceNow OAuth credentials. Create an OAuth Application in ServiceNow with AI Agent Studio access.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Instance URL</label>
+                    <input
+                      type="text"
+                      value={servicenowForm.instance_url}
+                      onChange={e => setServicenowForm({ ...servicenowForm, instance_url: e.target.value })}
+                      placeholder="https://dev12345.service-now.com"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">OAuth Client ID</label>
+                    <input
+                      type="text"
+                      value={servicenowForm.client_id}
+                      onChange={e => setServicenowForm({ ...servicenowForm, client_id: e.target.value })}
+                      placeholder="Enter Client ID"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">OAuth Client Secret</label>
+                    <input
+                      type="password"
+                      value={servicenowForm.client_secret}
+                      onChange={e => setServicenowForm({ ...servicenowForm, client_secret: e.target.value })}
+                      placeholder="Enter Client Secret"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Monthly License Cost ($)</label>
+                    <input
+                      type="number"
+                      value={servicenowForm.monthly_license_cost}
+                      onChange={e => setServicenowForm({ ...servicenowForm, monthly_license_cost: parseFloat(e.target.value) || 0 })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Used for cost tracking (ServiceNow uses license-based pricing)</p>
+                  </div>
+                </>
+              )}
+
+              {/* Salesforce Form */}
+              {configureModal === 'salesforce' && (
+                <>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Enter your Salesforce Connected App credentials. Enable OAuth with Client Credentials flow.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Client ID (Consumer Key)</label>
+                    <input
+                      type="text"
+                      value={salesforceForm.client_id}
+                      onChange={e => setSalesforceForm({ ...salesforceForm, client_id: e.target.value })}
+                      placeholder="Enter Consumer Key"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Client Secret (Consumer Secret)</label>
+                    <input
+                      type="password"
+                      value={salesforceForm.client_secret}
+                      onChange={e => setSalesforceForm({ ...salesforceForm, client_secret: e.target.value })}
+                      placeholder="Enter Consumer Secret"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Login URL</label>
+                    <select
+                      value={salesforceForm.login_url}
+                      onChange={e => setSalesforceForm({ ...salesforceForm, login_url: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    >
+                      <option value="https://login.salesforce.com">Production (login.salesforce.com)</option>
+                      <option value="https://test.salesforce.com">Sandbox (test.salesforce.com)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Monthly License Cost ($)</label>
+                    <input
+                      type="number"
+                      value={salesforceForm.monthly_license_cost}
+                      onChange={e => setSalesforceForm({ ...salesforceForm, monthly_license_cost: parseFloat(e.target.value) || 0 })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Used for cost tracking (Salesforce uses license-based pricing)</p>
+                  </div>
+                </>
+              )}
+
+              {/* Copilot Studio Form */}
+              {configureModal === 'copilot_studio' && (
+                <>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Enter your Azure AD credentials for Power Platform access. Requires Power Platform Admin permissions.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Azure AD Tenant ID</label>
+                    <input
+                      type="text"
+                      value={copilotForm.tenant_id}
+                      onChange={e => setCopilotForm({ ...copilotForm, tenant_id: e.target.value })}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Client ID (Application ID)</label>
+                    <input
+                      type="text"
+                      value={copilotForm.client_id}
+                      onChange={e => setCopilotForm({ ...copilotForm, client_id: e.target.value })}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Client Secret</label>
+                    <input
+                      type="password"
+                      value={copilotForm.client_secret}
+                      onChange={e => setCopilotForm({ ...copilotForm, client_secret: e.target.value })}
+                      placeholder="Enter client secret"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Power Platform Environment ID</label>
+                    <input
+                      type="text"
+                      value={copilotForm.environment_id}
+                      onChange={e => setCopilotForm({ ...copilotForm, environment_id: e.target.value })}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Find in Power Platform Admin Center → Environments</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Capacity Cost ($)</label>
+                    <input
+                      type="number"
+                      value={copilotForm.monthly_capacity_cost}
+                      onChange={e => setCopilotForm({ ...copilotForm, monthly_capacity_cost: parseFloat(e.target.value) || 0 })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Used for cost tracking (Copilot Studio uses capacity-based pricing)</p>
+                  </div>
+                </>
+              )}
+            </div>
+            {/* Test Result Display */}
+            {testResult && (
+              <div className={`mx-6 mb-4 p-3 rounded-lg border ${testResult.success ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                <div className="flex items-center gap-2">
+                  <Icon name={testResult.success ? 'check-circle' : 'x-circle'} className={`w-5 h-5 ${testResult.success ? 'text-emerald-600' : 'text-rose-600'}`} />
+                  <span className={`text-sm font-medium ${testResult.success ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {testResult.message}
+                  </span>
+                  {testResult.latency_ms && (
+                    <span className="text-xs text-slate-500 ml-auto">{testResult.latency_ms}ms</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+              <button
+                onClick={() => handleDeleteConfig(configureModal)}
+                className="text-sm text-rose-600 hover:text-rose-700 font-medium"
+              >
+                Remove Connector
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleTestConnection}
+                  disabled={testingConnection}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
+                >
+                  {testingConnection ? 'Testing...' : 'Test Connection'}
+                </button>
+                <button
+                  onClick={() => { setConfigureModal(null); setTestResult(null); }}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={configSaving}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {configSaving ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </GovernPageLayout>

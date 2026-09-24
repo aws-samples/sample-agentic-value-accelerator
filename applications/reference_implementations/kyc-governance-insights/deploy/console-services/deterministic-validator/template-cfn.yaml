@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  KYC Deterministic Validator - Lambda + HTTP API that recomputes financial ratios
+  from raw inputs and independently verifies them against the agent's claimed figures
+  (no AI, no stored result). Durable IaC for the function that was initially deployed
+  via CLI. Resource policy is SCOPED to this API Gateway (never Principal '*') so it
+  is not world-accessible (see EpoxyMitigationsRisk-26117896 / Palisade finding).
+
+Parameters:
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: CORS allowed origin (e.g. https://<dist>.cloudfront.net). Default '*' for local dev; override in prod.
+  ProjectTag:
+    Type: String
+    Default: kyc-governance-insights
+    Description: Project tag for cost attribution.
+  EnvironmentTag:
+    Type: String
+    Default: demo
+    AllowedValues: [demo, test, prod]
+    Description: Environment tag.
+
+Resources:
+  ValidatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/kyc-deterministic-validator
+      RetentionInDays: 30
+
+  ValidatorFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ValidatorLogGroup
+    Properties:
+      FunctionName: kyc-deterministic-validator
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 10
+      MemorySize: 128
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      Role: !GetAtt ValidatorRole.Arn
+      Tags:
+        - {Key: Project, Value: !Ref ProjectTag}
+        - {Key: Environment, Value: !Ref EnvironmentTag}
+        - {Key: Component, Value: validator}
+        - {Key: ManagedBy, Value: cloudformation}
+      Code:
+        ZipFile: |
+          import json, os
+          ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+          THRESHOLDS = {
+              "debt_to_equity": {"op": "<", "limit": 3.0, "label": "< 3.0"},
+              "current_ratio": {"op": ">", "limit": 1.0, "label": "> 1.0"},
+              "payment_history_pct": {"op": ">", "limit": 90.0, "label": "> 90%"},
+          }
+          CORS = {
+              "Access-Control-Allow-Origin": ORIGIN,
+              "Access-Control-Allow-Headers": "content-type,x-api-key,x-tenant-id",
+              "Access-Control-Allow-Methods": "POST,OPTIONS",
+              "Content-Type": "application/json",
+          }
+          def _round(x): return round(float(x), 2)
+          def _passes(op, v, lim): return v < lim if op == "<" else v > lim
+          def handler(event, context):
+              method = (event.get("requestContext", {}).get("http", {}) or {}).get("method", "") or event.get("httpMethod", "")
+              if method == "OPTIONS":
+                  return {"statusCode": 200, "headers": CORS, "body": ""}
+              # Auth is enforced at the edge by the shared origin-verify API Gateway
+              # authorizer (invariant #1) — this handler contains no auth logic.
+              try:
+                  body = json.loads(event.get("body") or "{}")
+                  raw = body.get("raw") or {}
+                  claimed = body.get("claimed") or {}
+                  recomputed = {}
+                  if "total_equity" in raw and float(raw["total_equity"]) != 0:
+                      recomputed["debt_to_equity"] = _round(float(raw["total_liabilities"]) / float(raw["total_equity"]))
+                  if "current_liabilities" in raw and float(raw["current_liabilities"]) != 0:
+                      recomputed["current_ratio"] = _round(float(raw["current_assets"]) / float(raw["current_liabilities"]))
+                  if "total_payments" in raw and float(raw["total_payments"]) != 0:
+                      recomputed["payment_history_pct"] = _round(float(raw["on_time_payments"]) / float(raw["total_payments"]) * 100.0)
+                  checks, mismatches = [], []
+                  for name, value in recomputed.items():
+                      th = THRESHOLDS.get(name)
+                      passed = _passes(th["op"], value, th["limit"]) if th else True
+                      claim_matches = True
+                      if name in claimed:
+                          claim_matches = abs(_round(claimed[name]) - value) <= 0.01
+                          if not claim_matches:
+                              mismatches.append({"metric": name, "claimed": _round(claimed[name]), "recomputed": value})
+                      checks.append({"name": name, "recomputed": value, "threshold": th["label"] if th else None, "passed": passed, "claim_matches": claim_matches})
+                  all_pass = all(c["passed"] for c in checks) and not mismatches
+                  return {"statusCode": 200, "headers": CORS, "body": json.dumps({
+                      "verdict": "PASS" if all_pass else "FAIL", "recomputed": recomputed,
+                      "checks": checks, "mismatches": mismatches, "checked": len(checks),
+                      "engine": "deterministic-lambda (no AI, no stored result)"})}
+              except Exception as e:
+                  return {"statusCode": 500, "headers": CORS, "body": json.dumps({"error": str(e)})}
+
+  ValidatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: kyc-deterministic-validator-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  ValidatorApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: kyc-deterministic-validator
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: [content-type, x-api-key, x-tenant-id]
+
+  # Edge auth (invariant #1): shared origin-verify REQUEST authorizer, imported from the
+  # origin-verify-authorizer stack.
+  OriginVerifyAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref ValidatorApi
+      AuthorizerType: REQUEST
+      Name: kyc-origin-verify
+      IdentitySource:
+        - '$request.header.x-origin-verify'
+      AuthorizerPayloadFormatVersion: '2.0'
+      EnableSimpleResponses: true
+      AuthorizerResultTtlInSeconds: 300
+      AuthorizerUri: !Sub
+        - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnArn}/invocations'
+        - FnArn: !ImportValue kyc-origin-verify-authorizer-arn
+
+  OriginVerifyAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue kyc-origin-verify-authorizer-arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ValidatorApi}/authorizers/${OriginVerifyAuthorizer}'
+
+  ValidatorIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ValidatorApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ValidatorFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  ValidatorRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ValidatorApi
+      RouteKey: 'POST /validate'
+      Target: !Sub integrations/${ValidatorIntegration}
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref OriginVerifyAuthorizer
+
+  ValidatorStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ValidatorApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  # SCOPED invoke permission — Principal is the API Gateway service, restricted to THIS
+  # API's source ARN. Never Principal '*'. This is the durable fix for the Palisade finding.
+  ValidatorApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ValidatorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ValidatorApi}/*/*
+
+Outputs:
+  ValidatorApiUrl:
+    Description: Deterministic validator API URL (POST /validate)
+    Value: !GetAtt ValidatorApi.ApiEndpoint

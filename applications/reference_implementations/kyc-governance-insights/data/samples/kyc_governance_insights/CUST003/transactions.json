@@ -1,0 +1,25 @@
+{
+  "customer_id": "CUST003",
+  "summary": {
+    "period": "last_12_months",
+    "total_inflow": 320000000,
+    "total_outflow": 210000000,
+    "average_monthly_volume": 22083333,
+    "transaction_count": 900
+  },
+  "top_counterparties": [
+    {
+      "name": "UK Gilt Settlements",
+      "country": "UK",
+      "volume": 120000000,
+      "type": "outflow"
+    }
+  ],
+  "geographic_distribution": {
+    "domestic": 95,
+    "international": 5
+  },
+  "high_risk_jurisdictions": [],
+  "suspicious_patterns": [],
+  "large_transactions_over_100k": 18
+}

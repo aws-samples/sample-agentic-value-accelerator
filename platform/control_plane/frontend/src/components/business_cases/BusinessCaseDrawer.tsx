@@ -11,6 +11,8 @@ import {
   DEFAULT_RISK, DEFAULT_RISK_WEIGHTS,
 } from './types';
 import { computeBC, decisionColor, riskColor, fmtMoney, fmtPct } from './scoring';
+import { buildBusinessCaseReport } from './report';
+import ExportReportButton from '../ExportReportButton';
 
 type Tab = 'meta' | 'inputs' | 'costs' | 'benefits' | 'risk';
 
@@ -108,11 +110,32 @@ export default function BusinessCaseDrawer({ open, initial, existingNames = [], 
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mt-0.5">{name || 'Untitled business case'}</h3>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" aria-label="Close">
-            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportReportButton
+              variant="subtle"
+              title="Download this business case as a PDF report (reflects current edits)"
+              getDefinition={() => buildBusinessCaseReport({
+                business_case_id: initial?.business_case_id ?? 'draft',
+                name: name.trim() || 'Untitled business case',
+                description,
+                status: status ?? 'Draft',
+                created_at: initial?.created_at ?? new Date().toISOString(),
+                updated_at: initial?.updated_at ?? new Date().toISOString(),
+                created_by: initial?.created_by ?? null,
+                inputs,
+                costs,
+                benefits,
+                risk_scores: riskScores,
+                risk_weights: riskWeights,
+                computed,
+              })}
+            />
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" aria-label="Close">
+              <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Tab nav + verdict */}

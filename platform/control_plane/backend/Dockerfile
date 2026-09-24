@@ -39,6 +39,26 @@ ENV PATH=/root/.local/bin:$PATH
 # Copy application code
 COPY platform/control_plane/backend/src/ ./src/
 
+# JSON Schema for template metadata. Required at RUNTIME, not just by tests:
+# TemplateValidator.__init__ resolves
+# Path(__file__).parent.parent.parent / "schemas" / "template_metadata_schema.json"
+# -> /app/schemas/template_metadata_schema.json and _load_schema() RAISES FileNotFoundError
+# when it is absent. This directory was never copied, so the deployed image could not
+# construct a TemplateValidator at all. Verified against the running container:
+#   FileNotFoundError: Schema file not found: /app/schemas/template_metadata_schema.json
+#
+# That took out two reachable endpoints, because both callers build the validator
+# unconditionally: bootstrap.py:47 (BootstrapEngine.__init__ -> TemplateValidator()) and
+# TemplateCatalog.validate_template() (template_catalog.py:187). Template LISTING was
+# unaffected - TemplateCatalog.__init__ does not build a validator - which is why this
+# survived: the catalog looked healthy and only validation 500'd.
+#
+# It also accounted for 34 of the container suite's collection errors in
+# test_bootstrap_engine.py and test_template_validator.py, which pass on a host checkout
+# because ./schemas is right there. A test that only fails inside the image is easy to
+# dismiss as an environment quirk; here the image was the thing that was wrong.
+COPY platform/control_plane/backend/schemas/ ./schemas/
+
 # Copy templates directory
 COPY platform/control_plane/templates/ ./templates/
 
@@ -74,6 +94,8 @@ COPY applications/fsi_foundry/ui/ ./fsi_foundry/ui/
 
 # Set Python path to find modules
 ENV PYTHONPATH=/app/src
+# Foundry use-case registry — evaluation auto-enrollment scaffolds suites from it
+ENV FOUNDRY_REGISTRY_PATH=/app/fsi_foundry/data/registry/offerings.json
 
 # Set templates path environment variable
 ENV TEMPLATES_PATH=/app/templates

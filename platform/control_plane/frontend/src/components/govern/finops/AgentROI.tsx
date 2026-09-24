@@ -15,13 +15,17 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  LineChart, Line, AreaChart, Area, Bar, XAxis, YAxis, CartesianGrid,
+  LineChart, Line, AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, ComposedChart,
 } from 'recharts';
 import { scopeColor, scopeName, type AgentScopeLevel } from '../autonomyLadder';
 import { useGovernanceAggregator } from '../useGovernanceAggregator';
+import { useAgentCoreCosts, useAwsCost } from '../useAwsCost';
 import type { BusinessCase } from '../../../api/client';
 import { LiveDataBadge, MockDataBadge } from '../DataSourceIndicator';
+
+// Compact USD formatter for the real agent-cost denominator readouts.
+const fmtCost = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`);
 
 const tooltipStyle = {
   background: 'rgba(255,255,255,0.98)',
@@ -159,7 +163,9 @@ function businessCaseToROI(bc: BusinessCase): AgentROIData | null {
   const f = bc.computed?.financials;
   if (!f) return null;
   const months = bc.updated_at ? Math.max(1, Math.round((Date.now() - new Date(bc.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30))) : 1;
-  const monthlySavings = Math.round((f.total_benefits - f.total_costs) / 12); // annualized net → per month
+  // Backend financials sum benefits/costs over a 4-year horizon (business_case.py
+  // `for y in range(4)`), so the net is a 4-year total → divide by 48 for a monthly figure.
+  const monthlySavings = Math.round((f.total_benefits - f.total_costs) / 48); // 4-year net → per month
   const status: AgentROIData['status'] =
     f.npv_decision === 'POSITIVE NPV - Proceed' ? 'healthy'
     : f.npv_decision === 'BREAKEVEN - Review' ? 'at-risk'
@@ -183,22 +189,35 @@ function businessCaseToROI(bc: BusinessCase): AgentROIData | null {
   };
 }
 
-// Current-month (Jun) savings is the live portfolio total so the trend's latest
-// point matches the "Monthly Savings" KPI; prior months are historical ramp.
-const CURRENT_MONTH_SAVINGS = MOCK_AGENT_ROI.reduce((s, a) => s + a.roi.monthlySavings, 0);
-const PORTFOLIO_TREND = [
-  { month: 'Jan', savings: 180000, cost: 42000, roi: 328 },
-  { month: 'Feb', savings: 245000, cost: 48000, roi: 410 },
-  { month: 'Mar', savings: 312000, cost: 52000, roi: 500 },
-  { month: 'Apr', savings: 428000, cost: 58000, roi: 638 },
-  { month: 'May', savings: 542000, cost: 62000, roi: 774 },
-  { month: 'Jun', savings: CURRENT_MONTH_SAVINGS, cost: 68000, roi: 952 },
-];
+// NOTE: the former PORTFOLIO_TREND / CURRENT_MONTH_SAVINGS scaffolding and its
+// `shape = [0.35, 0.5, ...]` ramp were deleted. They synthesised a "value creation"
+// series with no backend source: there is no realised-savings time series anywhere
+// in the API (a business case's financials are a single 4-year net scalar, and every
+// `savings` field on the cost models is an AWS optimisation *recommendation*, not
+// realised value). The ramp also cancelled out of the ROI line — roi =
+// (target·shape[i]) / (cost·shape[i]) — so a flat line was drawn over rising bars.
+// The chart now shows only the real monthly AWS cost series from Cost Explorer.
+
+/** Month key (YYYY-MM) for "now", used to flag the in-progress month as partial. */
+function currentMonthKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export default function AgentROI() {
   const [selectedAgent, setSelectedAgent] = useState<AgentROIData | null>(null);
   const [viewMode, setViewMode] = useState<'portfolio' | 'agent'>('portfolio');
   const { businessCases } = useGovernanceAggregator();
+
+  // REAL per-agent AWS run cost (Cost Explorer + CloudWatch AgentCore, trailing 30d) —
+  // the same feed FinOps' AgentCostsTab renders. This is the live ROI cost denominator;
+  // the value/benefit side comes from Plan business cases below.
+  const { data: agentCostData, live: costLive } = useAgentCoreCosts(30);
+
+  // REAL monthly AWS spend from Cost Explorer (CostSummary.by_month), 6-month window.
+  // This is TOTAL account spend across every AWS service — deliberately not badged as
+  // agent-only spend. Per-agent run cost is the trailing-30d figure in the header above.
+  const { data: costSummary, live: costTrendLive } = useAwsCost(6, false);
 
   // Prefer REAL Plan business cases; fall back to illustrative mock when none exist.
   const { data: roiData, live } = useMemo(() => {
@@ -209,7 +228,21 @@ export default function AgentROI() {
   const portfolioStats = useMemo(() => {
     const totalMonthlySavings = roiData.reduce((s, a) => s + a.roi.monthlySavings, 0);
     const totalCumulativeSavings = roiData.reduce((s, a) => s + a.roi.cumulativeSavings, 0);
-    const avgROI = roiData.length ? Math.round(roiData.reduce((s, a) => s + a.roi.projectedAnnualROI, 0) / roiData.length) : 0;
+    // Portfolio ROI is volume-weighted — Σ(net benefit) / Σ(cost) — NOT the mean of
+    // per-case ROI% (a tiny 5000% case would otherwise dominate the CFO headline).
+    // Each case's cost is recovered from net ÷ ROI, since roi% = (net/cost)·100 and
+    // net = cumulativeSavings; cases with an undefined (0) ROI are excluded from both.
+    const weighted = roiData.reduce(
+      (acc, a) => {
+        if (a.roi.projectedAnnualROI !== 0) {
+          acc.net += a.roi.cumulativeSavings;
+          acc.cost += (a.roi.cumulativeSavings * 100) / a.roi.projectedAnnualROI;
+        }
+        return acc;
+      },
+      { net: 0, cost: 0 },
+    );
+    const avgROI = weighted.cost > 0 ? Math.round((weighted.net / weighted.cost) * 100) : 0;
     const healthy = roiData.filter(a => a.status === 'healthy').length;
     const atRisk = roiData.filter(a => a.status === 'at-risk').length;
     const underperforming = roiData.filter(a => a.status === 'underperforming').length;
@@ -217,19 +250,23 @@ export default function AgentROI() {
     return { totalMonthlySavings, totalCumulativeSavings, avgROI, healthy, atRisk, underperforming };
   }, [roiData]);
 
-  // Value-creation ramp — a projection. When live, anchor the final point to the
-  // real portfolio monthly savings so the trend and KPI agree.
-  const portfolioTrend = useMemo(() => {
-    if (!live) return PORTFOLIO_TREND;
-    const target = portfolioStats.totalMonthlySavings;
-    const shape = [0.35, 0.5, 0.62, 0.78, 0.9, 1];
-    return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month, i) => ({
-      month,
-      savings: Math.round(target * shape[i]),
-      cost: Math.round(target * shape[i] * 0.12),
-      roi: Math.round(portfolioStats.avgROI * shape[i]),
-    }));
-  }, [live, portfolioStats]);
+  // Real monthly AWS cost series. Month labels come from the data (the real window is
+  // whatever Cost Explorer returns — e.g. Apr–Sep — not a hardcoded Jan–Jun), and the
+  // in-progress month is flagged `partial` so a mid-month figure isn't read as a cliff.
+  const costTrend = useMemo(() => {
+    const monthKey = currentMonthKey();
+    return (costSummary?.by_month ?? []).map(m => {
+      const partial = m.month.startsWith(monthKey);
+      const label = new Date(`${m.month}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      return {
+        month: partial ? `${label} (MTD)` : label,
+        cost: Math.round(m.amount),
+        partial,
+      };
+    });
+  }, [costSummary]);
+
+  const hasPartialMonth = costTrend.some(p => p.partial);
 
   const calculateValueCreated = (agent: AgentROIData) => {
     const costSavings = (agent.baseline.manualCostPerTask - agent.current.agentCostPerTask) * agent.current.tasksPerMonth;
@@ -273,6 +310,16 @@ export default function AgentROI() {
           <Link to="/business-cases" className="text-[11px] text-blue-600 hover:text-blue-700 font-medium">
             {live ? 'Manage business cases in Plan →' : 'Create business cases in Plan →'}
           </Link>
+          {costLive && (
+            <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-slate-500">
+              <LiveDataBadge source="Cost Explorer + CloudWatch" detail="Per-agent AWS run cost from AgentCore metrics + Cost Explorer" />
+              <span>
+                Agent run cost (trailing 30d):{' '}
+                <span className="font-semibold text-slate-700">{fmtCost(agentCostData?.total ?? 0)}</span>{' '}
+                — real ROI cost denominator
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -326,31 +373,56 @@ export default function AgentROI() {
 
       {viewMode === 'portfolio' ? (
         <>
-          {/* Portfolio Savings Trend */}
+          {/* AWS Spend Trend — the real, measured cost side of ROI. There is no
+              realised-savings time series in the API, so no value/ROI series is drawn
+              here rather than a synthesised ramp standing in for one. */}
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-semibold text-slate-900">Portfolio Value Creation Trend <span className="text-[10px] font-normal text-slate-400">· projection</span></div>
-              <div className="flex items-center gap-4 text-[11px]">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Savings</span>
+            <div className="flex items-start justify-between mb-4 gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-semibold text-slate-900">Monthly AWS Spend Trend</div>
+                  {costTrendLive
+                    ? <LiveDataBadge source="Cost Explorer" detail="Monthly unblended cost from AWS Cost Explorer" />
+                    : <MockDataBadge integration="Cost Explorer unavailable — grant ce:GetCostAndUsage" />}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5 max-w-2xl">
+                  Total account spend across all AWS services, by month — the measured cost side of ROI.
+                  No realised-savings time series exists in the platform yet, so no value or ROI series is plotted.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] shrink-0">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Cost</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" /> ROI %</span>
+                {hasPartialMonth && (
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-300" /> Month to date</span>
+                )}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={portfolioTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                <YAxis yAxisId="left" tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#94a3b8', fontSize: 10 }} unit="%" />
-                <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => {
-                  if (name === 'roi') return [`${value}%`, 'ROI'];
-                  return [`$${Number(value).toLocaleString()}`, name === 'savings' ? 'Savings' : 'Cost'];
-                }} />
-                <Bar yAxisId="left" dataKey="savings" fill="#10b981" radius={[4, 4, 0, 0]} name="savings" />
-                <Bar yAxisId="left" dataKey="cost" fill="#f43f5e" radius={[4, 4, 0, 0]} name="cost" />
-                <Line yAxisId="right" type="monotone" dataKey="roi" stroke="#6366f1" strokeWidth={2} dot={{ fill: '#6366f1', r: 4 }} name="roi" />
-              </ComposedChart>
-            </ResponsiveContainer>
+            {costTrend.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={costTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                    <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Cost']} />
+                    <Bar dataKey="cost" radius={[4, 4, 0, 0]} name="cost">
+                      {costTrend.map(p => (
+                        <Cell key={p.month} fill={p.partial ? '#fda4af' : '#f43f5e'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                {hasPartialMonth && (
+                  <p className="text-[10px] text-slate-400 mt-2">
+                    The final bar is the current month to date, so it is lower than a full month by construction — not a drop in spend.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="h-[240px] flex items-center justify-center text-sm text-slate-400">
+                No Cost Explorer spend history available for this account.
+              </div>
+            )}
           </div>
 
           {/* ROI Cards — one per business case (live) or illustrative agent (mock) */}

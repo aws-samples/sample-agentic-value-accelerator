@@ -200,7 +200,14 @@ class ModelCatalogEntry:
         display_name: Human-readable model name (e.g. "Claude Sonnet 4")
         provider: Provider type ("bedrock" or "bedrock-mantle")
         litellm_prefix: LiteLLM routing prefix ("bedrock/" or "bedrock_mantle/")
-        region: AWS region for the model endpoint (e.g. "us-east-2")
+        region: Region model INFERENCE is routed to, i.e. the governed fleet
+            (tier 2, settings.GOVERN_AWS_REGION) and NOT the control-plane AWS_REGION.
+            See core/region_config.py for the tiers. _build_model_list() emits this as
+            litellm_params["aws_region_name"] for bedrock and as the api_base host
+            (https://bedrock-mantle.{region}.api.aws/v1) for bedrock-mantle, so it is
+            where customer prompts are actually sent. The previous wording gave
+            "us-east-2" as the example, which is this account's control-plane region -
+            it taught the wrong tier to anyone adding a catalog entry.
         mode: Model capability mode ("chat" or "embedding")
         input_cost_per_token: Cost per input token in USD
         output_cost_per_token: Cost per output token in USD

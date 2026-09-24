@@ -1,0 +1,8 @@
+node_modules
+dist
+*.tsbuildinfo
+.env.production
+
+# runtime-config.json is now PORTABLE (same-origin relative /svc/* paths, no api key,
+# no account URLs) — it is tracked again. The consolidated CF /svc/* gateway injects auth
+# origin-side. See docs/DESIGN_DECISION_API_CONSOLIDATION.md.

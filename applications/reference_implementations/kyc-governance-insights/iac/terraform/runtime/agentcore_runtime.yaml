@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AgentCore Runtime for Financial Risk Assessment (Container-based)'
+
+Parameters:
+  AgentName:
+    Type: String
+    Default: financial_risk_assessment
+    Description: Name of the AgentCore runtime
+  
+  RoleArn:
+    Type: String
+    Description: ARN of the IAM role for AgentCore runtime
+  
+  ECRRepository:
+    Type: String
+    Description: ECR repository URI for container image
+  
+  ImageTag:
+    Type: String
+    Default: latest
+    Description: Container image tag
+  
+  DataBucket:
+    Type: String
+    Description: S3 bucket for customer data
+  
+  BedrockModelId:
+    Type: String
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    Description: Bedrock model ID
+  
+  UseCaseId:
+    Type: String
+    Description: Use case ID for resource naming (e.g., b01, i03)
+
+  UseCaseName:
+    Type: String
+    Description: Use case name for application configuration (e.g., kyc_banking, customer_engagement)
+
+  Framework:
+    Type: String
+    Default: langchain_langgraph
+    Description: AI agent framework (langchain_langgraph or strands)
+
+  Description:
+    Type: String
+    Default: AVA AgentCore Runtime
+    Description: Description of the AgentCore runtime
+
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name
+
+  AwsRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS region
+
+  EnableTracing:
+    Type: String
+    Default: 'false'
+    Description: Enable Langfuse OTEL tracing
+
+  LangfuseHost:
+    Type: String
+    Default: ''
+    Description: Langfuse server URL
+
+  LangfuseSecretName:
+    Type: String
+    Default: ''
+    Description: Secrets Manager secret name for Langfuse API keys
+
+  GuardrailId:
+    Type: String
+    Default: ''
+    Description: Bedrock Guardrail ID to apply to model invocations
+
+  GuardrailVersion:
+    Type: String
+    Default: ''
+    Description: Bedrock Guardrail version (DRAFT or published version number)
+
+  LlmGatewayBaseUrl:
+    Type: String
+    Default: ''
+    Description: LLM Gateway (LiteLLM) base URL. When set, foundation model calls route through the gateway instead of direct Bedrock.
+
+  LlmGatewayApiKeySecretArn:
+    Type: String
+    Default: ''
+    Description: Secrets Manager ARN holding the LLM Gateway virtual key for this deployment.
+
+  # Governance service URLs — used only by the kyc_governance_insights use case.
+  # When left empty, that use case falls back to equivalent in-process governance
+  # logic, so leaving these unset is safe for every other use case.
+  DeterministicCheckFunctionName:
+    Type: String
+    Default: ''
+    Description: Lambda function name for the deterministic financial-check service, invoked directly with IAM auth — no public endpoint (kyc_governance_insights).
+  SanctionsCheckFunctionName:
+    Type: String
+    Default: ''
+    Description: Lambda function name for the sanctions screening service, invoked directly with IAM auth — no public endpoint (kyc_governance_insights).
+  PepCheckFunctionName:
+    Type: String
+    Default: ''
+    Description: Lambda function name for the PEP screening service, invoked directly with IAM auth — no public endpoint (kyc_governance_insights).
+  PolicyCascadeFunctionName:
+    Type: String
+    Default: ''
+    Description: Lambda function name for the policy-cascade service, invoked directly with IAM auth — no public endpoint (kyc_governance_insights).
+  LlmJudgeFunctionName:
+    Type: String
+    Default: ''
+    Description: Lambda function name for the LLM-as-Judge service, invoked directly with IAM auth — no public endpoint (kyc_governance_insights).
+  GovernanceMode:
+    Type: String
+    Default: external
+    AllowedValues: [external, local]
+    Description: >
+      kyc_governance_insights enforcement mode. 'external' (default) makes the
+      deployed governance microservices authoritative — enforcement happens
+      outside the agent process and a degraded service fails closed (no silent
+      in-process self-governance). 'local' uses the in-process equivalents
+      (standalone/dev, or use cases without the companion governance stack).
+
+
+Resources:
+  AgentCoreRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: !Ref AgentName
+      Description: !Ref Description
+      RoleArn: !Ref RoleArn
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Sub '${ECRRepository}:${ImageTag}'
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      EnvironmentVariables:
+        DEPLOYMENT_MODE: agentcore
+        AWS_REGION: !Ref AwsRegion
+        AGENT_FRAMEWORK: !Ref Framework
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        S3_BUCKET_NAME: !Ref DataBucket
+        APP_ENV: !Ref Environment
+        USE_CASE_ID: !Ref UseCaseName
+        AGENT_NAME: !Ref UseCaseName
+        DATA_PREFIX: !Sub "samples/${UseCaseName}"
+        ENABLE_TRACING: !Ref EnableTracing
+        LANGFUSE_HOST: !Ref LangfuseHost
+        LANGFUSE_SECRET_NAME: !Ref LangfuseSecretName
+        GUARDRAIL_ID: !Ref GuardrailId
+        GUARDRAIL_VERSION: !Ref GuardrailVersion
+        # LLM Gateway routing — when LLM_GATEWAY_BASE_URL is non-empty, the
+        # foundations layer (foundations/src/base/{langgraph,strands}/*) routes
+        # all model invocations through the gateway. The virtual key is fetched
+        # from Secrets Manager at runtime by foundations/src/utils/llm_gateway.py.
+        LLM_GATEWAY_BASE_URL: !Ref LlmGatewayBaseUrl
+        LLM_GATEWAY_API_KEY_SECRET_ARN: !Ref LlmGatewayApiKeySecretArn
+        # Governance service URLs (kyc_governance_insights). Empty by default —
+        # the use case falls back to in-process governance logic when unset.
+        DETERMINISTIC_CHECK_FUNCTION: !Ref DeterministicCheckFunctionName
+        SANCTIONS_CHECK_FUNCTION: !Ref SanctionsCheckFunctionName
+        PEP_CHECK_FUNCTION: !Ref PepCheckFunctionName
+        POLICY_CASCADE_FUNCTION: !Ref PolicyCascadeFunctionName
+        LLM_JUDGE_FUNCTION: !Ref LlmJudgeFunctionName
+        GOVERNANCE_MODE: !Ref GovernanceMode
+        # OTel resource attributes — applied to every span this runtime
+        # emits, picked up by both Langfuse (as trace metadata) and
+        # CloudWatch GenAI Observability (as span resource attrs).
+        # Includes both flat keys (usecase, agent_name, framework) for easy
+        # filtering in either UI and dotted OTel-semantic keys
+        # (service.name, agent.name) for OTel-conformant tooling.
+        OTEL_RESOURCE_ATTRIBUTES: !Sub "usecase=${UseCaseId},agent_name=${AgentName},framework=${Framework},environment=${Environment},service.name=ava-${UseCaseName},agent.name=${AgentName}"
+        # ADOT (AWS Distro for OpenTelemetry) auto-instrumentation. The
+        # container is launched via `opentelemetry-instrument`; these env
+        # vars route the auto-collected spans to the AgentCore-managed
+        # CloudWatch destination when no third-party OTLP endpoint is set.
+        # Required for in-agent (LangGraph node / Bedrock / tool) spans to
+        # show up in CloudWatch GenAI Observability.
+        OTEL_PYTHON_DISTRO: aws_distro
+        OTEL_PYTHON_CONFIGURATOR: aws_configurator
+        AGENT_OBSERVABILITY_ENABLED: !Ref EnableTracing
+      Tags:
+        Name: !Sub '${AgentName}-agentcore_runtime'
+        Environment: !Ref Environment
+
+Outputs:
+  AgentRuntimeId:
+    Description: ID of the AgentCore Runtime
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeId
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeId'
+  
+  AgentRuntimeArn:
+    Description: ARN of the AgentCore Runtime
+    Value: !GetAtt AgentCoreRuntime.AgentRuntimeArn
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeArn'
+  
+  AgentRuntimeName:
+    Description: Name of the AgentCore Runtime
+    Value: !Ref AgentName
+    Export:
+      Name: !Sub '${AWS::StackName}-RuntimeName'

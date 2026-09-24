@@ -6,11 +6,21 @@ import logging
 import time
 from typing import Dict, List, Any, Optional
 
+from core.aws_paging import paginate_bounded
 from models.deployment import Deployment
 from models.template import Template
 from services.pipeline_inputs import PipelineInput
 
 logger = logging.getLogger(__name__)
+
+# stepfunctions:GetExecutionHistory maxResults maximum, verified against the botocore
+# 1.43.10 service model (min 0, max 1000). The old call asked for 100.
+_HISTORY_PAGE = 1000
+
+# Bound on one history walk. A deployment pipeline that has emitted this many events is
+# pathological, and reaching the bound is disclosed rather than silently truncating.
+_MAX_HISTORY_EVENTS = 5000
+_HISTORY_BUDGET_S = 15.0
 
 
 class PipelineService:
@@ -54,19 +64,36 @@ class PipelineService:
         return execution_arn
 
     def get_execution_status(self, execution_arn: str) -> dict:
-        """Get current execution status and history."""
+        """Get current execution status and history.
+
+        NOTE ON SCOPE: this method has no callers anywhere in the repo (only its own
+        definition matched a search), so nothing it returns is user-visible today. It is
+        fixed rather than left because the shape of the bug is a trap for the next caller.
+
+        The history read was `maxResults=100` with no paging, against an API maximum of
+        1000. It does not feed a count, so it is not the same defect as the Govern sites -
+        but it does feed `events`, a list rendered as "the execution history", and the
+        truncation is at the WORST end. `reverseOrder=False` returns oldest first, so the
+        events dropped are the most recent ones: exactly the ones that say how the
+        execution failed. The list simply stopped, with nothing marking it as partial.
+
+        `status` and `output` come from describe_execution and were never affected.
+        """
         describe = self.sfn_client.describe_execution(
             executionArn=execution_arn
         )
 
-        history_response = self.sfn_client.get_execution_history(
+        history = paginate_bounded(
+            self.sfn_client, "get_execution_history", "events",
+            page_size=_HISTORY_PAGE,
+            max_items=_MAX_HISTORY_EVENTS,
+            budget_s=_HISTORY_BUDGET_S,
             executionArn=execution_arn,
-            maxResults=100,
             reverseOrder=False,
         )
 
         events = []
-        for event in history_response.get("events", []):
+        for event in history.items:
             events.append({
                 "timestamp": event["timestamp"].isoformat()
                 if hasattr(event["timestamp"], "isoformat")
@@ -88,6 +115,13 @@ class PipelineService:
             if describe.get("output")
             else None,
             "events": events,
+            # False means `events` is a PREFIX of the history, not the history. Since
+            # reverseOrder is False, the missing events are the most recent ones, so a
+            # consumer must not infer an outcome from the last event it sees.
+            "events_complete": history.complete,
+            # None when the walk reached the end. A caveat that always fires teaches a
+            # reader to ignore the one that matters.
+            "events_note": history.note,
         }
 
     def start_destroy_pipeline(self, deployment: Deployment, template: Template) -> str:

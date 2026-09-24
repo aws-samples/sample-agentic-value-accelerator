@@ -8,8 +8,10 @@
 import { useEffect, useState } from 'react';
 import { governRiskPostureApi, type AwsRiskPostureResponse } from '../../../api/client';
 import { LiveDataBadge } from '../DataSourceIndicator';
+import { RegionCoverageBadge, FloorCountBadge } from '../RegionCoverageBadge';
 import LiveHeader from '../LiveHeader';
 import { usePollingKey } from '../usePollingKey';
+import { useDataSources } from '../DataSourceContext';
 
 const sevStyle: Record<string, { bar: string; badge: string }> = {
   CRITICAL: { bar: 'bg-rose-500', badge: 'bg-rose-100 text-rose-700' },
@@ -23,15 +25,29 @@ export default function LiveSecurityPosture() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AwsRiskPostureResponse | null>(null);
   const pollKey = usePollingKey(60_000);
+  const { updateSource } = useDataSources();
+
   useEffect(() => {
     let cancelled = false;
     // Silent refetch on poll — keep the current posture on screen while refreshing.
     governRiskPostureApi.securityHub(200)
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .then(d => {
+        if (!cancelled) {
+          setData(d);
+          if (d?.live) {
+            updateSource('aws-security-hub', { status: 'live', lastFetch: Date.now() });
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setData(null);
+          updateSource('aws-security-hub', { status: 'error', error: 'API unavailable' });
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [pollKey]);
+  }, [pollKey, updateSource]);
 
   const live = !!data?.live;
   const maxCount = Math.max(...(data?.by_severity ?? []).map(s => s.count), 1);
@@ -44,7 +60,15 @@ export default function LiveSecurityPosture() {
         caption="real active findings as a risk-posture signal (securityhub:GetFindings)"
         autoRefresh
         right={live && data!.total > 0 ? (
-          <span className="text-[11px] font-semibold text-slate-700 tabular-nums">{data!.total} active findings</span>
+          <span className="flex items-center gap-1.5">
+            {/* "200 active findings" is a scan result, not the account's finding count.
+                When the scan hit its limit the backend says so; say it here too. */}
+            <span className="text-[11px] font-semibold text-slate-700 tabular-nums">
+              {data!.truncated ? '≥' : ''}{data!.total} active findings
+            </span>
+            <FloorCountBadge truncated={data!.truncated} scanned={data!.scanned} noun="findings" />
+            <RegionCoverageBadge regions={data!.regions} noun="Finding counts" />
+          </span>
         ) : undefined}
       />
 

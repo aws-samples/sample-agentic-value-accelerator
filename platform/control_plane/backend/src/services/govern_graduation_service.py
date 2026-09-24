@@ -20,6 +20,7 @@ from typing import List, Optional
 import boto3
 from boto3.dynamodb.conditions import Attr
 
+from core.ttl_cache import get_or_load, invalidate
 from models.govern_audit import AuditCategory, AuditEventCreate, AuditSeverity
 from models.govern_graduation import (
     AGREEMENT_ACTIONS,
@@ -45,6 +46,19 @@ MIN_DECISIONS_FOR_EVIDENCE = 8
 # The APPROVAL category is shared between human decisions and ratchet bookkeeping;
 # only these actions represent a genuine human decision on an agent's output.
 _DECISION_ACTIONS = AGREEMENT_ACTIONS | PARTIAL_ACTIONS | OVERRIDE_ACTIONS
+
+
+def _audit_read_degraded(audit: GovernAuditService) -> bool:
+    """Whether the audit service's last DynamoDB call failed and is still cooling off.
+
+    The audit query primitives never raise — they catch the DynamoDB failure and serve
+    their in-memory buffer instead — so a caller cannot tell a measured signal from a
+    degraded one by looking at what came back. `_table_ok` is the only provenance the
+    audit service exposes: tri-state, and False *only* inside the cool-off window after
+    a failed call (a successful read clears it). Read through one helper so this
+    dependency on audit internals lives in exactly one place.
+    """
+    return audit._table_ok is False
 
 
 class StepDownGuardError(Exception):
@@ -77,6 +91,11 @@ class GovernGraduationService:
     PK_PREFIX = "GRAD#"
     SK_LATEST = "LATEST"
 
+    # TTLs for cached data (in seconds)
+    _TTL_LIST = 60  # Graduation list changes with promote/step-down actions
+    _TTL_SUMMARY = 60  # Summary aggregates change with list
+    _TTL_SIGNALS = 60  # Computed signals derive from audit events
+
     # Ephemeral in-memory store used when the graduation table isn't provisioned
     # (e.g. running locally without the DynamoDB backend). The roster is stateful
     # CRUD (seed + promote/step-down), so a table-free environment can't persist
@@ -98,6 +117,27 @@ class GovernGraduationService:
             self.table.put_item(Item=self._to_item(r))
         except Exception:
             type(self)._mem[r.agent_id] = r
+        self._invalidate_caches(r.agent_id)
+
+    def _invalidate_caches(self, agent_id: str) -> None:
+        """Invalidate graduation-related caches after a write operation.
+
+        All four read caches, not three. `graduation:records:` was missing, so a
+        promote or step-down left `list_records()` serving the pre-write roster for
+        its full TTL. The write returned 200 and the record really was persisted, so
+        nothing surfaced as an error - the agent's new stage simply did not appear on
+        that one surface.
+
+        It presented as an INCONSISTENCY rather than as staleness, which is the part
+        that would have cost the debugging time: `list_graduations()` and
+        `summarize()` compose `_list_records_impl` directly rather than the cached
+        `list_records()`, so they picked the write up immediately. One roster read
+        showed the old stage while the roll-up beside it already showed the new one.
+        """
+        invalidate(f"graduation:records:{self.table_name}")
+        invalidate(f"graduation:list:{self.table_name}")
+        invalidate(f"graduation:summary:{self.table_name}")
+        invalidate(f"graduation:signals:{self.table_name}:{agent_id}")
 
     # --- DDB shape ---------------------------------------------------------
 
@@ -119,6 +159,26 @@ class GovernGraduationService:
     # --- Signal computation from the real audit log ------------------------
 
     def _compute_signals(self, agent_id: str) -> ComputedSignals:
+        cache_key = f"graduation:signals:{self.table_name}:{agent_id}"
+        # ComputedSignals has no provenance field, and every number in it is derived from
+        # audit reads that fall back to an in-memory buffer instead of raising — so the
+        # object alone cannot say whether it was measured. Provenance therefore belongs to
+        # the AUDIT table, checked right after the loader ran.
+        #
+        # Without this, an agent read while the audit table was unavailable got 0
+        # decisions / "insufficient evidence" cached for the full TTL, and every later
+        # request was served that verdict from cache even once DynamoDB was back.
+        #
+        # Note `sufficient_evidence` is NOT the predicate: it describes whether the data
+        # is adequate to judge readiness, not whether it was measured. Using it would
+        # refuse to cache a perfectly-measured agent that genuinely has thin evidence.
+        result, _ = get_or_load(
+            cache_key, self._TTL_SIGNALS, lambda: self._compute_signals_impl(agent_id),
+            should_cache=lambda _r: not _audit_read_degraded(self.audit),
+        )
+        return result
+
+    def _compute_signals_impl(self, agent_id: str) -> ComputedSignals:
         # All decision events for this agent (approval category), newest-first.
         counts = self.audit.count_by_action(agent_id, category=AuditCategory.APPROVAL)
         agree = sum(counts.get(a, 0) for a in AGREEMENT_ACTIONS)
@@ -218,29 +278,85 @@ class GovernGraduationService:
         return compute(record, signals)
 
     def list_records(self) -> List[GraduationRecord]:
+        cache_key = f"graduation:records:{self.table_name}"
+        # A GraduationRecord list carries no provenance, so the loader reports the
+        # fallback out-of-band via this holder. Testing the list itself would be wrong
+        # twice over: an empty roster from a reachable table is a real answer that should
+        # cache, and the in-memory fallback is often non-empty.
+        degraded = {"v": False}
+        result, _ = get_or_load(
+            cache_key, self._TTL_LIST, lambda: self._list_records_impl(degraded),
+            should_cache=lambda _r: not degraded["v"],
+        )
+        return result
+
+    def _list_records_impl(self, degraded: Optional[dict] = None) -> List[GraduationRecord]:
         try:
             resp = self.table.scan(FilterExpression=Attr("pk").begins_with(self.PK_PREFIX))
             return [self._from_item(i) for i in resp.get("Items", [])]
         except Exception:
+            # Scan failed (table absent, throttled, denied): the ephemeral store is not a
+            # measured roster, so flag it and let the caller decline to cache.
+            if degraded is not None:
+                degraded["v"] = True
             return list(type(self)._mem.values())
 
     def list_graduations(self) -> List[AgentGraduation]:
-        out = [compute(r, self._compute_signals(r.agent_id)) for r in self.list_records()]
-        out.sort(key=lambda g: g.readiness, reverse=True)
+        cache_key = f"graduation:list:{self.table_name}"
+        degraded = {"v": False}
+        result, _ = get_or_load(
+            cache_key, self._TTL_LIST, lambda: self._list_graduations_impl(degraded),
+            should_cache=lambda _r: not degraded["v"],
+        )
+        return result
+
+    def _list_graduations_impl(self, degraded: Optional[dict] = None) -> List[AgentGraduation]:
+        records = self._list_records_impl(degraded)
+        out = [compute(r, self._compute_signals(r.agent_id)) for r in records]
+        # Composed provenance: this view is only measured if BOTH reads behind it were —
+        # the roster scan above (which sets the holder itself) and the audit reads behind
+        # _compute_signals. Either one degrading makes the whole list unfit to cache.
+        if degraded is not None and _audit_read_degraded(self.audit):
+            degraded["v"] = True
+        # `readiness` is None for an agent with too little evidence to score, so it
+        # cannot be compared against an int. Unscored agents sort LAST rather than
+        # as 0: they are unmeasured, not the least ready, and putting them at the
+        # top of a descending list would be worse still.
+        out.sort(key=lambda g: (g.readiness is not None, g.readiness or 0), reverse=True)
         return out
 
     def summarize(self) -> GraduationSummary:
-        grads = self.list_graduations()
+        cache_key = f"graduation:summary:{self.table_name}"
+        # GraduationSummary has no provenance field of its own; it inherits the
+        # provenance of the graduation list it rolls up, which threads through the
+        # same holder.
+        degraded = {"v": False}
+        result, _ = get_or_load(
+            cache_key, self._TTL_SUMMARY, lambda: self._summarize_impl(degraded),
+            should_cache=lambda _r: not degraded["v"],
+        )
+        return result
+
+    def _summarize_impl(self, degraded: Optional[dict] = None) -> GraduationSummary:
+        grads = self._list_graduations_impl(degraded)
         ready = sum(1 for g in grads if g.verdict == "ready" and not g.ratchet.step_down_triggered)
         conditional = sum(1 for g in grads if g.verdict == "conditional")
         not_ready = sum(1 for g in grads if g.verdict == "not_ready")
+        insufficient = sum(1 for g in grads if g.verdict == "insufficient_evidence")
         step_down = sum(1 for g in grads if g.ratchet.step_down_triggered)
         hours = sum(g.reviewer_hours_per_month for g in grads if g.verdict == "ready" and not g.ratchet.step_down_triggered)
         low = sum(1 for g in grads if g.current_level <= 2)
+        # Scored vs unscored, kept separate so the roll-up cannot imply the whole
+        # fleet was assessed. The mean is over scored agents only - counting an
+        # unscored agent as 0 would understate the fleet rather than admit ignorance.
+        scored = [g.readiness for g in grads if g.readiness is not None]
         return GraduationSummary(
             total=len(grads), ready=ready, conditional=conditional, not_ready=not_ready,
             step_down_recommended=step_down, reclaimable_hours_per_month=hours,
             pct_at_low_autonomy=round(low / len(grads) * 100) if grads else 0,
+            insufficient_evidence=insufficient,
+            unscored=len(grads) - len(scored),
+            mean_readiness_scored=round(sum(scored) / len(scored)) if scored else None,
         )
 
     # --- Ratchet actions (persist intent + audit the action) ---------------

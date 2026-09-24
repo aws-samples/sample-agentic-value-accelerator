@@ -45,7 +45,7 @@ interface UnifiedGuideProps {
   };
 }
 
-export default function UnifiedGuide({ module, title, summary, howToUse, goLive, status }: UnifiedGuideProps) {
+export default function UnifiedGuide({ title, summary, howToUse, goLive, status }: UnifiedGuideProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'howto' | 'golive'>('howto');
 

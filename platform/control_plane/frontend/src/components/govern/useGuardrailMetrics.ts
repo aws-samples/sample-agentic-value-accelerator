@@ -6,16 +6,25 @@
  * show the same guardrail numbers.
  *
  * Features:
- * - Fetches guardrail templates and metrics from guardrailsApi
+ * - Fetches guardrail templates (control plane) plus one live telemetry call
  * - Caches results to avoid redundant API calls
  * - Returns computed stats (active, draft, failed counts)
  * - Aggregates metrics (invocations, blocked, allowed, anonymized)
  * - Provides loading and error states
+ *
+ * Two requests total, regardless of fleet size: `guardrailsApi.list()` for the
+ * templates and `governGuardrailsApi.telemetry()` for every guardrail's CloudWatch
+ * rollup. Per-template metrics are derived from that one telemetry payload
+ * (see guardrailTelemetryMetrics.ts), so the window is TELEMETRY_WINDOW_DAYS and is
+ * reported back as `windowDays` — do not label these numbers with a fixed window.
  */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { guardrailsApi } from '../../api/client';
+import { guardrailsApi, governGuardrailsApi } from '../../api/client';
+import type { AwsGuardrailTelemetryResponse, AwsRegionProvenance } from '../../api/client';
 import type { GuardrailTemplate, GuardrailMetrics } from '../../types';
+import { metricsByTemplateId } from './guardrailTelemetryMetrics';
+import { useDataSources } from './DataSourceContext';
 
 // ─────────────────────────── Types ───────────────────────────
 
@@ -59,6 +68,17 @@ export interface GuardrailMetricsResult {
   // Total count (excludes deleted)
   totalCount: number;
 
+  // Trailing window the metrics above cover, in days. Callers that label the numbers
+  // must read this rather than hard-coding a window — it used to be 24h per template
+  // and is now the single telemetry window (TELEMETRY_WINDOW_DAYS).
+  windowDays: number;
+
+  // Region coverage of the guardrail telemetry fan-out. A governed region that did not
+  // answer is dropped rather than failing the request, so the aggregated invocation and
+  // intervention counts can be a floor. Null when the response carried no provenance
+  // block, i.e. single-region by construction.
+  regions: AwsRegionProvenance | null;
+
   // Refresh function
   refresh: () => void;
 }
@@ -69,11 +89,18 @@ export interface GuardrailMetricsResult {
 interface CacheEntry {
   templates: GuardrailTemplate[];
   metricsMap: Map<string, GuardrailMetrics>;
+  telemetry: AwsGuardrailTelemetryResponse | null;
   timestamp: number;
 }
 
 let cache: CacheEntry | null = null;
 const CACHE_TTL_MS = 30000; // 30 seconds cache TTL
+
+/** Trailing window for both the fleet totals and the per-template metrics derived from them. */
+export const TELEMETRY_WINDOW_DAYS = 30;
+
+// Bedrock guardrail statuses treated as "in-progress" (analogous to template drafts)
+const BEDROCK_DRAFT_STATES = ['CREATING', 'UPDATING', 'VERSIONING', 'DELETING'];
 
 // Track in-flight requests to prevent duplicate calls
 let pendingRequest: Promise<void> | null = null;
@@ -100,6 +127,10 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
   // Local state from cache
   const [templates, setTemplates] = useState<GuardrailTemplate[]>([]);
   const [metricsMap, setMetricsMap] = useState<Map<string, GuardrailMetrics>>(new Map());
+  const [guardrailTelemetry, setGuardrailTelemetry] = useState<AwsGuardrailTelemetryResponse | null>(null);
+
+  // Data source context for health reporting
+  const { updateSource } = useDataSources();
 
   // Track if component is mounted
   const isMounted = useRef(true);
@@ -121,6 +152,7 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
         if (isMounted.current) {
           setTemplates(cache.templates);
           setMetricsMap(cache.metricsMap);
+          setGuardrailTelemetry(cache.telemetry);
           setLoading(false);
           setError(null);
         }
@@ -133,6 +165,7 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
         if (cache && isMounted.current) {
           setTemplates(cache.templates);
           setMetricsMap(cache.metricsMap);
+          setGuardrailTelemetry(cache.telemetry);
           setLoading(false);
           setError(null);
         }
@@ -145,33 +178,28 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
       // Create the fetch promise
       const fetchPromise = (async () => {
         try {
-          // Fetch all guardrail templates
-          const guardrailsRes = await guardrailsApi.list();
+          // Fetch guardrail templates (control-plane) + live Bedrock guardrail telemetry in parallel.
+          // The live telemetry drives the COUNTS; templates drive per-template metrics.
+          const [guardrailsRes, telemetryRes] = await Promise.all([
+            guardrailsApi.list(),
+            governGuardrailsApi.telemetry(TELEMETRY_WINDOW_DAYS).catch(() => null),
+          ]);
           const activeGuardrails = guardrailsRes.filter(t => t.status !== 'deleted');
 
           if (!isMounted.current) return;
 
-          // Fetch metrics for active guardrails (in parallel)
-          const guardrailsWithIds = activeGuardrails.filter(g => g.guardrail_id && g.status === 'active');
-          const newMetricsMap = new Map<string, GuardrailMetrics>();
-
-          if (guardrailsWithIds.length > 0) {
-            const metricsPromises = guardrailsWithIds.map(g =>
-              guardrailsApi.getMetrics(g.template_id, 24).catch(() => null)
-            );
-            const metricsResults = await Promise.all(metricsPromises);
-
-            if (!isMounted.current) return;
-
-            metricsResults.forEach((m, i) => {
-              if (m) newMetricsMap.set(guardrailsWithIds[i].template_id, m);
-            });
-          }
+          // Per-template metrics come out of the telemetry call already made above —
+          // one request for the whole fleet instead of one per guardrail.
+          const newMetricsMap = metricsByTemplateId(
+            activeGuardrails.filter(g => g.status === 'active'),
+            telemetryRes,
+          );
 
           // Update cache
           cache = {
             templates: activeGuardrails,
             metricsMap: newMetricsMap,
+            telemetry: telemetryRes,
             timestamp: Date.now(),
           };
 
@@ -179,12 +207,32 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
           if (isMounted.current) {
             setTemplates(activeGuardrails);
             setMetricsMap(newMetricsMap);
+            setGuardrailTelemetry(telemetryRes);
             setError(null);
+            // Only the AWS telemetry call can attest that AWS Bedrock is reachable.
+            //
+            // This used to also OR in `activeGuardrails.length > 0 || newMetricsMap.size > 0`.
+            // Both of those are derived from guardrailsApi.list(), which reads guardrail
+            // TEMPLATES out of the control-plane's own DynamoDB table (see the comment on the
+            // fetch above, and /api/v1/guardrails). So rows in our own database flipped the
+            // shared `aws-bedrock` source to live — a source marked `critical: true` in
+            // DataSourceContext, feeding the platform-wide "N/M live sources" indicator and
+            // the page badges that read from it. With Bedrock unreachable, 11 template rows
+            // would still have asserted it was live.
+            //
+            // Every sibling call gates on the payload's own flag — AgentCorePostureCard
+            // (`d?.live`), DevToolsGovernance (`harnesses?.live`), HallucinationDetection
+            // (`d.live`), GovernanceCommandCenter (`data.eval_jobs.live`). This one was the
+            // outlier.
+            if (telemetryRes?.live) {
+              updateSource('aws-bedrock', { status: 'live', lastFetch: Date.now() });
+            }
           }
         } catch (err) {
           console.error('Failed to load guardrail metrics:', err);
           if (isMounted.current) {
             setError('Failed to load guardrail data');
+            updateSource('aws-bedrock', { status: 'error', error: 'Guardrails API unavailable' });
           }
         } finally {
           if (isMounted.current) {
@@ -199,7 +247,7 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
     };
 
     loadData();
-  }, [refreshKey]);
+  }, [refreshKey, updateSource]);
 
   // Transform templates for display (with metrics)
   const guardrails = useMemo<GuardrailSummary[]>(() => {
@@ -237,11 +285,29 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
     };
   }, [metricsMap]);
 
-  // Compute status counts
-  const activeCount = useMemo(() => templates.filter(g => g.status === 'active').length, [templates]);
-  const draftCount = useMemo(() => templates.filter(g => g.status === 'draft').length, [templates]);
-  const failedCount = useMemo(() => templates.filter(g => g.status === 'failed').length, [templates]);
-  const totalCount = templates.length;
+  // Compute status counts — prefer live Bedrock telemetry (bedrock:ListGuardrails) when it
+  // returns data, otherwise fall back to the DynamoDB template counts so behavior is unchanged
+  // when Bedrock is unreachable or the account has no deployed guardrails.
+  const bedrockLive = !!(guardrailTelemetry?.live && guardrailTelemetry.total_guardrails > 0);
+  const activeCount = useMemo(
+    () => bedrockLive
+      ? guardrailTelemetry!.guardrails.filter(g => g.status === 'READY').length
+      : templates.filter(g => g.status === 'active').length,
+    [bedrockLive, guardrailTelemetry, templates],
+  );
+  const draftCount = useMemo(
+    () => bedrockLive
+      ? guardrailTelemetry!.guardrails.filter(g => BEDROCK_DRAFT_STATES.includes(g.status)).length
+      : templates.filter(g => g.status === 'draft').length,
+    [bedrockLive, guardrailTelemetry, templates],
+  );
+  const failedCount = useMemo(
+    () => bedrockLive
+      ? guardrailTelemetry!.guardrails.filter(g => g.status === 'FAILED').length
+      : templates.filter(g => g.status === 'failed').length,
+    [bedrockLive, guardrailTelemetry, templates],
+  );
+  const totalCount = bedrockLive ? guardrailTelemetry!.total_guardrails : templates.length;
 
   // Refresh function - invalidates cache and refetches
   const refresh = useCallback(() => {
@@ -259,6 +325,8 @@ export function useGuardrailMetrics(): GuardrailMetricsResult {
     draftCount,
     failedCount,
     totalCount,
+    windowDays: guardrailTelemetry?.window_days ?? TELEMETRY_WINDOW_DAYS,
+    regions: guardrailTelemetry?.regions ?? null,
     refresh,
   };
 }

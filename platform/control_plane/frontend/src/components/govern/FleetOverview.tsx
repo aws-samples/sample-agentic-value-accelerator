@@ -20,15 +20,23 @@ import UnifiedGuide, { FLEET_GUIDE } from './UnifiedGuide';
 import { useGovernanceAggregator } from './useGovernanceAggregator';
 import { useGuardrailMetrics } from './useGuardrailMetrics';
 import EmergencyControls from './EmergencyControls';
-import FleetPostureSection from './FleetPostureSection';
+import FleetPostureSection, { type PosturePillarKey } from './FleetPostureSection';
+import FleetIdentitySection from './FleetIdentitySection';
 import EmptyState from './EmptyState';
 import GovernPageLayout from './GovernPageLayout';
 import FleetScaleView from './FleetScaleView';
 import GovernanceDimensionsCard from './GovernanceDimensionsCard';
 import { Icon, type IconName } from './icons';
 import { LiveDataBadge, MockDataBadge } from './DataSourceIndicator';
-import { governAgentCoreApi, type AwsDiscoveredAgent } from '../../api/client';
+import { governAgentCoreApi, type AwsDiscoveredAgent, type AwsAgentRuntimeMetricsResponse, type AwsResourceUsageResponse, type AwsRegionProvenance } from '../../api/client';
+import { RegionCoverageBadge } from './RegionCoverageBadge';
+import {
+  governTrailApi, governAuditApi, governFleetApi, multicloudApi, governResourceTagsApi,
+  type AwsTrailResponse, type GovernAuditEvent, type FleetSegmentsResponse, type MultiCloudAllAgents,
+  type AwsGovernanceResourceTagsResponse,
+} from '../../api/client';
 import CoreBadge from './CoreBadge';
+import { DataSourceInfo, getPageDataSources } from './DataSourceInfo';
 
 function cellColor(score: number): string {
   if (score < 20) return 'bg-emerald-100 text-emerald-800';
@@ -73,7 +81,6 @@ function FleetRiskView({
   cellColor,
   tooltipStyle,
   liveAgentData,
-  isLiveData,
 }: {
   useCaseRiskHeatmap: Array<{ useCaseId: string; name: string; scores: number[]; goNoGo: string }>;
   useCaseRiskCategories: string[];
@@ -82,7 +89,6 @@ function FleetRiskView({
   cellColor: (score: number) => string;
   tooltipStyle: React.CSSProperties;
   liveAgentData?: { heatmap: Array<{ useCaseId: string; name: string; scores: number[]; goNoGo: string }>; topRisky: Array<{ useCaseId: string; name: string; riskScore: number; status: string }> };
-  isLiveData?: boolean;
 }) {
   const [riskView, setRiskView] = useState<'heatmap' | 'ranking'>('heatmap');
 
@@ -98,8 +104,8 @@ function FleetRiskView({
   const totalUseCases = effectiveHeatmap.length;
   const highRiskCount = effectiveTopRisky.filter(uc => uc.riskScore >= 50).length;
   const criticalCount = effectiveTopRisky.filter(uc => uc.riskScore >= 75).length;
-  const avgRiskScore = totalUseCases > 0
-    ? Math.round(effectiveTopRisky.reduce((sum, uc) => sum + uc.riskScore, 0) / totalUseCases)
+  const avgRiskScore = effectiveTopRisky.length > 0
+    ? Math.round(effectiveTopRisky.reduce((sum, uc) => sum + uc.riskScore, 0) / effectiveTopRisky.length)
     : 0;
   const goCount = effectiveHeatmap.filter(uc => uc.goNoGo === 'GO').length;
   const noGoCount = effectiveHeatmap.filter(uc => uc.goNoGo === 'NO GO').length;
@@ -115,7 +121,14 @@ function FleetRiskView({
           {isDemo ? (
             <MockDataBadge />
           ) : hasLiveAgentData ? (
-            <LiveDataBadge source="AgentCore" detail="Live agent data from AWS Bedrock + AgentCore" />
+            <>
+              {/* The agent inventory (names/count/status) is live from AWS, but the
+                  per-category risk scores are a heuristic derived from the agent's
+                  name/status (see computeRiskHeatmapFromAgents), NOT a live risk signal.
+                  Keep the inventory "Live" but disclose the scoring as illustrative. */}
+              <LiveDataBadge source="AgentCore" detail="Live agent inventory from AWS Bedrock + AgentCore" />
+              <MockDataBadge integration="Per-category risk scoring" />
+            </>
           ) : (
             <LiveDataBadge source="Use Cases" detail="Computed from AVA use case risk scores" />
           )}
@@ -157,7 +170,7 @@ function FleetRiskView({
       <div className="p-3">
         {!hasData ? (
           <EmptyState
-            icon="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+            icon="chart-bar"
             title="Visualize risk across your fleet"
             description="Add and score use cases to see risk distribution, identify hotspots, and track GO/NO GO decisions."
             tips={['Add use cases in Plan → Use Cases', 'Score them to populate the heatmap']}
@@ -301,9 +314,7 @@ function FleetRiskView({
             className="text-[10px] text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
           >
             View Full Agent Registry
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
+            <Icon name="arrow-right" className="w-3 h-3" strokeWidth={2} />
           </Link>
         </div>
       </div>
@@ -642,10 +653,15 @@ const DEMO_CHAINS: AgentChain[] = [
 
 function AgentChainVisualization({
   useCases,
-  guardrails,
+  activeGuardrailCount,
 }: {
   useCases: Array<{ use_case_id: string; name: string; business_domain: string; ai_type: string; status: string }>;
-  guardrails: Array<{ template_id: string; name: string; status: string }>;
+  /**
+   * Count of ACTIVE guardrails protecting the fleet — sourced from live Bedrock
+   * telemetry (useGuardrailMetrics.activeCount), not the AVA template table, so a
+   * chain never renders "unprotected" while real guardrails are deployed.
+   */
+  activeGuardrailCount: number;
 }) {
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
@@ -661,7 +677,7 @@ function AgentChainVisualization({
 
     return agenticUseCases.slice(0, 4).map((uc) => {
       const isAgentic = uc.ai_type === 'Agentic AI';
-      const hasGuardrails = guardrails.filter(g => g.status === 'active').length > 0;
+      const hasGuardrails = activeGuardrailCount > 0;
 
       // Build chain nodes
       const nodes: ChainNode[] = [
@@ -693,7 +709,7 @@ function AgentChainVisualization({
 
       // Guardrail if active
       if (hasGuardrails) {
-        nodes.push({ id: `${uc.use_case_id}-guardrail`, type: 'guardrail', name: 'Guardrails', risk: 'low', details: `${guardrails.filter(g => g.status === 'active').length} active` });
+        nodes.push({ id: `${uc.use_case_id}-guardrail`, type: 'guardrail', name: 'Guardrails', risk: 'low', details: `${activeGuardrailCount} active` });
       }
 
       // Output
@@ -737,7 +753,7 @@ function AgentChainVisualization({
         overallRisk,
       };
     });
-  }, [useCases, guardrails]);
+  }, [useCases, activeGuardrailCount]);
 
   const activeChain = chains.find(c => c.id === selectedChain) || chains[0];
   const isDemo = useCases.filter(uc => uc.ai_type === 'Agentic AI' || uc.ai_type === 'Generative AI').length === 0;
@@ -1034,31 +1050,177 @@ function AgentChainVisualization({
   );
 }
 
+// Governance Tag Coverage — real governed denominator + owner/project/env tag
+// coverage across the AI estate, scanned via the Resource Groups Tagging API
+// (GET /governance/resource-tags). The payload carries a real `.live` flag; when
+// the backend can't reach AWS we render an honest empty-state with the server note
+// rather than a green Live badge over empty/derived numbers.
+//
+// The scan is fetched ONCE by <FleetOverview/> and handed down, because the same
+// coverage ratios also score the Registry and Access posture pillars. Sharing the
+// response keeps the card and the pillars on identical numbers with one network call.
+function GovernanceTagCoverage({ resp, loading }: {
+  resp: AwsGovernanceResourceTagsResponse | null;
+  loading: boolean;
+}) {
+  const live = resp?.live === true;
+
+  // The three governance-tag dimensions the fleet card surfaces as coverage bars.
+  const dimensions = resp
+    ? [
+        { label: 'Owner', pct: resp.owner_coverage_pct, count: resp.with_owner, color: 'bg-indigo-500', text: 'text-indigo-600' },
+        { label: 'Project', pct: resp.project_coverage_pct, count: resp.with_project, color: 'bg-violet-500', text: 'text-violet-600' },
+        { label: 'Environment', pct: resp.env_coverage_pct, count: resp.with_env, color: 'bg-sky-500', text: 'text-sky-600' },
+      ]
+    : [];
+
+  return (
+    <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Icon name="tag" className="w-5 h-5 text-indigo-600" />
+          <span className="text-sm font-semibold text-slate-900">Governance Tag Coverage</span>
+          {/* Honesty gate: pass the REAL `.live` so a green Live pill never sits over
+              non-live/empty data — LiveDataBadge renders the Demo badge when live===false. */}
+          {live
+            ? <LiveDataBadge live={resp!.live} source="Resource Tags" detail="Governance-tag coverage across the AI estate (Resource Groups Tagging API)" />
+            : <MockDataBadge integration="Resource Groups Tagging API" />}
+        </div>
+        <Link to="/govern/data" className="text-[10px] text-blue-600 hover:text-blue-700 font-medium">
+          Data Governance →
+        </Link>
+      </div>
+
+      <div className="p-4">
+        {loading ? (
+          <div className="flex items-center gap-2 py-6 text-slate-400 text-xs">
+            <span className="w-2 h-2 rounded-full bg-slate-300 animate-pulse" />
+            Scanning governance tags…
+          </div>
+        ) : !live ? (
+          <EmptyState
+            icon="tag"
+            title="Tag coverage unavailable"
+            description={resp?.note || 'Connect AWS credentials to scan owner, project, and environment tags across your AI estate.'}
+          />
+        ) : (
+          <>
+            {/* Headline metrics: total AI resources, real governed denominator, ungoverned */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/60 text-center">
+                <div className="text-xl font-bold text-slate-900">{resp!.total_ai_resources.toLocaleString()}</div>
+                <div className="text-[9px] text-slate-500 font-medium">AI Resources</div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200/60 text-center" title="Resources carrying governance tags — the real governed denominator">
+                <div className="text-xl font-bold text-emerald-700">{resp!.governed_denominator.toLocaleString()}</div>
+                <div className="text-[9px] text-emerald-600 font-medium">Governed</div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200/60 text-center">
+                <div className="text-xl font-bold text-amber-700">{resp!.ungoverned.toLocaleString()}</div>
+                <div className="text-[9px] text-amber-600 font-medium">Ungoverned</div>
+              </div>
+            </div>
+
+            {/* Governed percentage bar (real governed denominator ÷ total AI resources) */}
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, resp!.governed_pct))}%` }} />
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-600">{resp!.governed_pct}% governed</span>
+            </div>
+
+            {/* Per-dimension tag coverage: owner / project / environment */}
+            <div className="space-y-2">
+              <div className="text-[9px] font-semibold text-slate-500 uppercase tracking-wide">Tag Coverage</div>
+              {dimensions.map(d => (
+                <div key={d.label} className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-600 w-24 flex-shrink-0">{d.label}</span>
+                  <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${d.color} rounded-full transition-all`} style={{ width: `${Math.min(100, Math.max(0, d.pct))}%` }} />
+                  </div>
+                  <span className={`text-[10px] font-semibold ${d.text} w-10 text-right`}>{Math.round(d.pct)}%</span>
+                  <span className="text-[9px] text-slate-400 w-14 text-right">{d.count.toLocaleString()}/{resp!.total_ai_resources.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Scanned resource types footnote */}
+            {resp!.resource_types_scanned.length > 0 && (
+              <div className="mt-3 pt-2 border-t border-slate-100 text-[9px] text-slate-400">
+                Scanned: {resp!.resource_types_scanned.join(', ')}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Provider Summary - Shows agent distribution and governance status by provider
 function ProviderSummary() {
-  // Compute provider stats from ALL_AGENTS
-  const providerStats = useMemo(() => {
-    const stats: Record<AgentProvider, { count: number; compliant: number; review_needed: number; blocked: number }> = {
-      aws: { count: 0, compliant: 0, review_needed: 0, blocked: 0 },
-      azure: { count: 0, compliant: 0, review_needed: 0, blocked: 0 },
-      gcp: { count: 0, compliant: 0, review_needed: 0, blocked: 0 },
-      servicenow: { count: 0, compliant: 0, review_needed: 0, blocked: 0 },
-      salesforce: { count: 0, compliant: 0, review_needed: 0, blocked: 0 },
-      copilot_studio: { count: 0, compliant: 0, review_needed: 0, blocked: 0 },
-      custom: { count: 0, compliant: 0, review_needed: 0, blocked: 0 },
-    };
+  // Live sources: server-side provider governance rollups (Fleet Aggregator, has
+  // `.live`) for AWS + the multi-cloud connector inventory for non-AWS counts.
+  const [segResp, setSegResp] = useState<FleetSegmentsResponse | null>(null);
+  const [mcAgents, setMcAgents] = useState<MultiCloudAllAgents | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [seg, mc] = await Promise.all([
+        governFleetApi.segments('provider').catch(() => null),
+        multicloudApi.allAgents().catch(() => null),
+      ]);
+      if (cancelled) return;
+      setSegResp(seg);
+      setMcAgents(mc);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const fleetLive = segResp?.live === true;
+  const nonAwsLive = (['azure', 'gcp', 'servicenow', 'salesforce', 'copilot_studio'] as const)
+    .some(p => mcAgents?.[p]?.live);
 
-    ALL_AGENTS.forEach(agent => {
-      const provider = agent.provider || 'custom';
-      stats[provider].count++;
-      const govStatus = agent.governanceStatus || 'unknown';
-      if (govStatus === 'compliant') stats[provider].compliant++;
-      else if (govStatus === 'review_needed') stats[provider].review_needed++;
-      else if (govStatus === 'blocked') stats[provider].blocked++;
-    });
+  // Provider stats: server rollups when live, else the ALL_AGENTS demo fallback;
+  // non-AWS live inventories overlay counts only (no governance breakdown to fabricate).
+  const providerStats = useMemo(() => {
+    const empty = () => ({ count: 0, compliant: 0, review_needed: 0, blocked: 0 });
+    const stats: Record<AgentProvider, { count: number; compliant: number; review_needed: number; blocked: number }> = {
+      aws: empty(), azure: empty(), gcp: empty(), servicenow: empty(),
+      salesforce: empty(), copilot_studio: empty(), custom: empty(),
+    };
+    const PROVIDERS = new Set<string>(['aws', 'azure', 'gcp', 'servicenow', 'salesforce', 'copilot_studio', 'custom']);
+
+    if (fleetLive && segResp) {
+      for (const seg of segResp.segments) {
+        if (PROVIDERS.has(seg.key)) {
+          stats[seg.key as AgentProvider] = {
+            count: seg.total, compliant: seg.compliant, review_needed: seg.review_needed, blocked: seg.blocked,
+          };
+        }
+      }
+    } else {
+      ALL_AGENTS.forEach(agent => {
+        const provider = agent.provider || 'custom';
+        stats[provider].count++;
+        const govStatus = agent.governanceStatus || 'unknown';
+        if (govStatus === 'compliant') stats[provider].compliant++;
+        else if (govStatus === 'review_needed') stats[provider].review_needed++;
+        else if (govStatus === 'blocked') stats[provider].blocked++;
+      });
+    }
+
+    if (mcAgents) {
+      for (const p of ['azure', 'gcp', 'servicenow', 'salesforce', 'copilot_studio'] as const) {
+        const inv = mcAgents[p];
+        if (inv?.live && stats[p].count === 0) {
+          stats[p] = { count: inv.total, compliant: 0, review_needed: 0, blocked: 0 };
+        }
+      }
+    }
 
     return stats;
-  }, []);
+  }, [fleetLive, segResp, mcAgents]);
 
   // Get providers with agents, sorted by count
   const activeProviders = useMemo(() => {
@@ -1103,6 +1265,8 @@ function ProviderSummary() {
           <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">
             {totalAgents} agents
           </span>
+          {fleetLive ? <LiveDataBadge source="Fleet Aggregator" /> : <MockDataBadge integration="Agent registry" />}
+          {!nonAwsLive && <MockDataBadge integration="Non-AWS providers" />}
         </div>
         <Link to="/govern/agents" className="text-[10px] text-blue-600 hover:text-blue-700 font-medium">
           Agent Registry →
@@ -1217,7 +1381,7 @@ function AgentDataToolsView({
         <div className="flex items-center gap-2">
           <div className="text-sm font-semibold text-slate-900">Agentic Data & Tools</div>
           {hasData && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">Live</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium" title="Data sources & tools are inferred from live use cases, not scanned from AWS">Inferred</span>
           )}
           {/* Inline KPIs */}
           {hasData && (
@@ -1262,7 +1426,7 @@ function AgentDataToolsView({
       <div className="p-3">
         {!hasData ? (
           <EmptyState
-            icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+            icon="circle-stack"
             title="No use cases defined"
             description="Create use cases to see data sources and tools."
             actionLabel="Add Use Cases"
@@ -1383,33 +1547,65 @@ function computeRiskHeatmapFromAgents(
   return { heatmap, topRisky };
 }
 
+// Unified activity-feed row consumed by the Activity Feed card — bridges the mock
+// ActivityFeedItem, CloudTrail events, and governance audit events into one shape.
+interface FeedRow { id: string; ts: string; type: string; severity: 'low' | 'medium' | 'high' | 'critical'; title: string; }
+
 export default function FleetOverview() {
   const [openRisk, setOpenRisk] = useState<{ useCaseId: string; useCaseName: string; category: string; score: number } | null>(null);
   const [activityFilter, setActivityFilter] = useState<'all' | 'critical' | 'high'>('all');
   // View toggle: the standard operations overview vs the large-fleet (10k+) scale view.
   const [fleetView, setFleetView] = useState<'overview' | 'scale'>('overview');
-  const [useRealFleetData, setUseRealFleetData] = useState(false);
+  // Default to LIVE fleet data (server rollups / agent registry). FleetScaleView
+  // gates its badge on the real `.live`/source signal and falls back to synthetic
+  // only when the user unchecks this box.
+  const [useRealFleetData, setUseRealFleetData] = useState(true);
 
   // Live agent data from governAgentCoreApi
   const [liveAgents, setLiveAgents] = useState<AwsDiscoveredAgent[]>([]);
   const [liveAgentsLoading, setLiveAgentsLoading] = useState(true);
   const [liveAgentsError, setLiveAgentsError] = useState<string | null>(null);
+  // Region coverage of the agent-discovery fan-out: an unanswered governed region is
+  // dropped rather than failing the request, so the "(N from AWS)" count can be a floor.
+  const [liveAgentRegions, setLiveAgentRegions] = useState<AwsRegionProvenance | null>(null);
 
-  // Fetch live agent data on mount
+  // Observability metrics state
+  const [runtimeMetrics, setRuntimeMetrics] = useState<AwsAgentRuntimeMetricsResponse | null>(null);
+  const [resourceUsage, setResourceUsage] = useState<AwsResourceUsageResponse | null>(null);
+
+  // Activity Feed live sources: CloudTrail AI activity (has `.live`) + governance audit log.
+  const [trailResp, setTrailResp] = useState<AwsTrailResponse | null>(null);
+  const [auditEvents, setAuditEvents] = useState<GovernAuditEvent[]>([]);
+
+  // Governance-tag scan of the AI estate (Resource Groups Tagging API). Fetched here
+  // rather than inside <GovernanceTagCoverage/> because the Registry and Access
+  // posture pillars are scored from these same real ratios — one call, one source.
+  const [tagCoverage, setTagCoverage] = useState<AwsGovernanceResourceTagsResponse | null>(null);
+  const [tagCoverageLoading, setTagCoverageLoading] = useState(true);
+
+  // Fetch live agent data and observability metrics on mount
   useEffect(() => {
     let cancelled = false;
-    async function fetchLiveAgents() {
+    async function fetchLiveData() {
       try {
         setLiveAgentsLoading(true);
         setLiveAgentsError(null);
-        const response = await governAgentCoreApi.agents();
+        const [agentsResp, metricsResp, resourceResp] = await Promise.all([
+          governAgentCoreApi.agents(),
+          governAgentCoreApi.agentMetrics(7).catch(() => null),
+          governAgentCoreApi.resourceUsage(7).catch(() => null),
+        ]);
         if (!cancelled) {
-          setLiveAgents(response.agents || []);
+          setLiveAgents(agentsResp.agents || []);
+          setLiveAgentRegions(agentsResp.regions ?? null);
+          setRuntimeMetrics(metricsResp);
+          setResourceUsage(resourceResp);
         }
       } catch (err) {
         if (!cancelled) {
           setLiveAgentsError(err instanceof Error ? err.message : 'Failed to fetch agents');
           setLiveAgents([]);
+          setLiveAgentRegions(null);
         }
       } finally {
         if (!cancelled) {
@@ -1417,7 +1613,34 @@ export default function FleetOverview() {
         }
       }
     }
-    fetchLiveAgents();
+    fetchLiveData();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch CloudTrail AI activity + governance audit events for the Activity Feed.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [trail, audit] = await Promise.all([
+        governTrailApi.aiActivity(24).catch(() => null),
+        governAuditApi.list(undefined, 50).catch(() => [] as GovernAuditEvent[]),
+      ]);
+      if (cancelled) return;
+      setTrailResp(trail);
+      setAuditEvents(audit);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fetch the governance-tag coverage scan (shared by the posture pillars + tag card).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const data = await governResourceTagsApi.coverage().catch(() => null);
+      if (cancelled) return;
+      setTagCoverage(data);
+      setTagCoverageLoading(false);
+    })();
     return () => { cancelled = true; };
   }, []);
 
@@ -1446,6 +1669,26 @@ export default function FleetOverview() {
     controlStats,
   } = useGovernanceAggregator();
 
+  // Live activity: prefer the governance audit log (richest context), else CloudTrail
+  // AI-service activity; fall back to the demo feed when neither is live.
+  const liveActivity = useMemo<FeedRow[]>(() => {
+    if (auditEvents.length > 0) {
+      return auditEvents.map((e): FeedRow => ({ id: e.id, ts: e.ts, type: e.category, severity: e.severity, title: e.summary }));
+    }
+    if (trailResp?.live && trailResp.events.length > 0) {
+      return trailResp.events.map((ev): FeedRow => ({
+        id: ev.event_id,
+        ts: ev.event_time ?? '',
+        type: ev.event_source.replace('.amazonaws.com', ''),
+        severity: ev.error_code ? 'high' : 'low',
+        title: ev.username ? `${ev.event_name} by ${ev.username}` : ev.event_name,
+      }));
+    }
+    return [];
+  }, [auditEvents, trailResp]);
+  const activityLive = auditEvents.length > 0 || trailResp?.live === true;
+  const displayFeed: FeedRow[] = activityLive ? liveActivity : activityFeed;
+
   // Use shared guardrail metrics hook for consistent data across all Govern pages
   const {
     error: guardrailError,
@@ -1454,6 +1697,8 @@ export default function FleetOverview() {
     activeCount: guardrailsActive,
     draftCount: guardrailsDraft,
     failedCount: guardrailsFailed,
+    windowDays: guardrailWindowDays,
+    regions: guardrailRegions,
   } = useGuardrailMetrics();
 
   // Only block on aggregator loading - guardrail errors are handled gracefully
@@ -1465,41 +1710,84 @@ export default function FleetOverview() {
   const effectiveGuardrailsFailed = guardrailError ? 0 : guardrailsFailed;
   const effectiveGuardrailMetrics = guardrailError ? { totalInvocations: 0, blockedCount: 0 } : guardrailMetricsTotal;
 
+  // AVA-managed guardrail TEMPLATES (the control-plane table). Distinct from
+  // `effectiveGuardrailsActive`, which is the live Bedrock guardrail count. Only the
+  // template list may be labelled "AVA-managed"; every other "guardrails" surface on
+  // this page uses the live count so the page can never report 0 and 7 at once.
+  const avaActiveTemplates = guardrails.filter(g => g.status === 'active');
+
+  // ── Fleet posture pillars ──────────────────────────────────────────────────
+  // Registry and Access are REAL coverage ratios over the scanned AI estate, not
+  // point formulas:
+  //   registry = governance_tagged / total_ai_resources  (tag_coverage_pct) — is the
+  //              resource in the governance inventory at all?
+  //   access   = with_scope       / total_ai_resources  (scope_coverage_pct) — does it
+  //              carry an access-scope tag?
+  // Both come from GET /governance/resource-tags (resourcegroupstaggingapi:GetResources)
+  // and are gated on that response's own `live` flag: when the scan is not live they
+  // degrade to 0 (rendered "—") and drop out of `livePillars` instead of falling back
+  // to a heuristic. `security` is already a real ratio (implemented/total controls).
+  // `visualization` / `interoperability` remain boolean gates on real counts and stay
+  // disclosed via `illustrativePillars`.
+  const tagCoverageLive = tagCoverage?.live === true && tagCoverage.total_ai_resources > 0;
+  const posturePillars = useMemo<Record<PosturePillarKey, number>>(() => ({
+    registry: tagCoverageLive ? Math.round(tagCoverage!.tag_coverage_pct) : 0,
+    access: tagCoverageLive ? Math.round(tagCoverage!.scope_coverage_pct) : 0,
+    visualization: useCases.length > 0 ? 80 : 40,
+    interoperability: effectiveGuardrailsActive > 0 ? 70 : 30,
+    security: controlStats.percentage,
+  }), [tagCoverageLive, tagCoverage, useCases.length, effectiveGuardrailsActive, controlStats.percentage]);
+
+  // Pillars whose score is an actual measurement — drives the Live badge copy.
+  const livePillars = useMemo<PosturePillarKey[]>(
+    () => (tagCoverageLive ? ['registry', 'access', 'security'] : ['security']),
+    [tagCoverageLive],
+  );
+
   return (
     <GovernPageLayout
       title="Agent Fleet Governance"
-      description="Unified control plane for your agentic AI fleet. Monitor posture, enforce policies, and respond to incidents."
+      description="The control plane for your agentic fleet — monitor posture, enforce policies, and respond to incidents across thousands of agents."
       badge={<CoreBadge pillar="see" />}
-      actions={
-        <>
-          <Link
-            to="/govern/risk"
-            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-          >
-            View Risk Management →
-          </Link>
-          <div className="text-xs text-slate-400">
-            Updated {new Date().toLocaleTimeString()} · <span className="text-emerald-600 font-medium">● Live</span>
-          </div>
-        </>
-      }
     >
         {/* How to Use Guide */}
         <UnifiedGuide {...FLEET_GUIDE} />
 
-        {/* View toggle: standard operations overview vs large-fleet (10k+) scale view */}
-        <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg mb-4">
-          {([['overview', 'Overview'], ['scale', 'At Scale (10k+)']] as const).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setFleetView(id)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                fleetView === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Navigation tabs */}
+        <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-6">
+          {([
+            ['overview', 'Overview'],
+            ['scale', 'At Scale (10k+)'],
+            ['observability', 'Observability'],
+            ['risk', 'Risk Management'],
+          ] as const).map(([id, label]) => {
+            const isLink = id === 'observability' || id === 'risk';
+            const isActive = !isLink && fleetView === id;
+
+            if (isLink) {
+              return (
+                <Link
+                  key={id}
+                  to={id === 'observability' ? '/govern/fleet/observability' : '/govern/risk'}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                >
+                  {label}
+                </Link>
+              );
+            }
+
+            return (
+              <button
+                key={id}
+                onClick={() => setFleetView(id as 'overview' | 'scale')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isActive ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {fleetView === 'scale' && (
@@ -1521,25 +1809,28 @@ export default function FleetOverview() {
 
         {fleetView === 'overview' && (
         <div className="space-y-6">
-          {/* Real-time data indicator */}
-          {!loading && (guardrails.length > 0 || policies.length > 0 || deployments.length > 0 || useCases.length > 0 || liveAgents.length > 0) && (
+          {/* Real-time data indicator. The guardrail count is the LIVE Bedrock count
+              (useGuardrailMetrics.activeCount), not the AVA template-table length —
+              the two disagree (0 templates vs 7 deployed guardrails) and this banner
+              previously reported the template count next to a "7 healthy" posture card. */}
+          {!loading && (effectiveGuardrailsActive > 0 || policies.length > 0 || deployments.length > 0 || useCases.length > 0 || liveAgents.length > 0) && (
             <div className="flex items-center gap-2 text-[10px] text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg w-fit">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live AVA Data: {guardrails.length} guardrails, {policies.length} policies, {deployments.length} deployments, {useCases.length} use cases, {frontierAgents.length + liveAgents.length} agents
+              Live AVA Data: {effectiveGuardrailsActive} active guardrails, {policies.length} policies, {deployments.length} deployments, {useCases.length} use cases, {frontierAgents.length + liveAgents.length} agents
               {liveAgents.length > 0 && <span className="text-sky-600 ml-1">({liveAgents.length} from AWS)</span>}
+              {liveAgents.length > 0 && (
+                <RegionCoverageBadge regions={liveAgentRegions} noun="AWS agent counts" />
+              )}
             </div>
           )}
 
           {/* Fleet Posture — Unified hero section */}
           <FleetPostureSection
             score={controlStats.percentage}
-            pillarScores={{
-              registry: deployments.length > 0 ? Math.min(100, 50 + deployments.length * 10) : 0,
-              access: effectiveGuardrailsActive > 0 ? Math.min(100, 40 + effectiveGuardrailsActive * 15) : 0,
-              visualization: useCases.length > 0 ? 80 : 40,
-              interoperability: guardrails.length > 0 ? 70 : 30,
-              security: controlStats.percentage,
-            }}
+            pillarScores={posturePillars}
+            livePillars={livePillars}
+            illustrativePillars={['visualization', 'interoperability']}
+            trendIllustrative
             statusCounts={{
               healthy: effectiveGuardrailsActive,
               watch: effectiveGuardrailsDraft,
@@ -1578,6 +1869,9 @@ export default function FleetOverview() {
             }}
           />
 
+          {/* AgentCore Identity — workload identities issued to fleet agents */}
+          <FleetIdentitySection />
+
           {/* AWS Governance Dimensions Coverage */}
           <GovernanceDimensionsCard
             guardrailsActive={effectiveGuardrailsActive}
@@ -1586,6 +1880,11 @@ export default function FleetOverview() {
             identityConfigured={true}
           />
 
+          {/* Governance Tag Coverage — real governed denominator + owner/project/env
+              tag coverage across the AI estate (GET /governance/resource-tags).
+              Same response that scores the Registry/Access posture pillars above. */}
+          <GovernanceTagCoverage resp={tagCoverage} loading={tagCoverageLoading} />
+
           {/* Security Controls + Activity Feed - Side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Security Controls - Compact */}
@@ -1593,11 +1892,15 @@ export default function FleetOverview() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-slate-900">Security Controls</span>
-                {(guardrails.length > 0 || policies.length > 0) && (
+                {/* "guardrails" = live Bedrock count; the invocation/block counters come
+                    from AVA-managed templates only, so they are labelled as such rather
+                    than reading as traffic through the live guardrails. */}
+                {(effectiveGuardrailsActive > 0 || avaActiveTemplates.length > 0 || policies.length > 0) && (
                   <div className="flex items-center gap-3 ml-2 text-[10px]">
-                    <span><strong className="text-violet-600">{guardrails.length}</strong> guardrails</span>
-                    <span><strong className="text-emerald-600">{effectiveGuardrailMetrics.totalInvocations.toLocaleString()}</strong> calls</span>
-                    <span><strong className="text-amber-600">{effectiveGuardrailMetrics.blockedCount}</strong> blocked</span>
+                    <span title="Active guardrails deployed in Bedrock (live telemetry)"><strong className="text-violet-600">{effectiveGuardrailsActive}</strong> guardrails</span>
+                    <span title={`Invocations recorded against AVA-managed guardrail templates over the last ${guardrailWindowDays} day(s)`}><strong className="text-emerald-600">{effectiveGuardrailMetrics.totalInvocations.toLocaleString()}</strong> template calls</span>
+                    <span title={`Blocks recorded against AVA-managed guardrail templates over the last ${guardrailWindowDays} day(s)`}><strong className="text-amber-600">{effectiveGuardrailMetrics.blockedCount}</strong> blocked</span>
+                    <RegionCoverageBadge regions={guardrailRegions} noun="Guardrail invocation and block counts" />
                     <span><strong className="text-indigo-600">{policies.length}</strong> policies</span>
                   </div>
                 )}
@@ -1608,12 +1911,10 @@ export default function FleetOverview() {
               </div>
             </div>
 
-            {guardrails.length === 0 && policies.length === 0 ? (
+            {effectiveGuardrailsActive === 0 && avaActiveTemplates.length === 0 && policies.length === 0 ? (
               <div className="flex items-center gap-3 py-3 px-3 bg-slate-50 rounded-lg">
                 <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
+                  <Icon name="shield-check" className="w-4 h-4 text-violet-600" strokeWidth={2} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-medium text-slate-700">Protect your AI fleet</div>
@@ -1625,17 +1926,26 @@ export default function FleetOverview() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                {/* Guardrails - compact list */}
+                {/* AVA-managed guardrail templates — this list IS the control-plane
+                    template table, so it is labelled as such. When it is empty but live
+                    Bedrock guardrails exist, say so rather than implying no protection. */}
                 <div className="space-y-1">
-                  <div className="text-[9px] font-semibold text-slate-500 uppercase">Guardrails</div>
-                  {guardrails.filter(g => g.status === 'active').slice(0, 3).map((g) => (
+                  <div className="text-[9px] font-semibold text-slate-500 uppercase" title="Guardrail templates managed in AVA (control plane)">AVA-Managed Templates</div>
+                  {avaActiveTemplates.slice(0, 3).map((g) => (
                     <div key={g.template_id} className="flex items-center gap-1.5 py-1 px-2 bg-slate-50 rounded text-[10px]">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                       <span className="text-slate-700 truncate flex-1">{g.name}</span>
                     </div>
                   ))}
-                  {guardrails.filter(g => g.status === 'active').length > 3 && (
-                    <div className="text-[9px] text-slate-400 pl-2">+{guardrails.filter(g => g.status === 'active').length - 3} more</div>
+                  {avaActiveTemplates.length > 3 && (
+                    <div className="text-[9px] text-slate-400 pl-2">+{avaActiveTemplates.length - 3} more</div>
+                  )}
+                  {avaActiveTemplates.length === 0 && (
+                    <div className="py-1 px-2 bg-slate-50 rounded text-[10px] text-slate-500">
+                      {effectiveGuardrailsActive > 0
+                        ? `None — ${effectiveGuardrailsActive} guardrail${effectiveGuardrailsActive === 1 ? '' : 's'} active directly in Bedrock`
+                        : 'No guardrail templates yet'}
+                    </div>
                   )}
                 </div>
                 {/* Policies - compact list */}
@@ -1661,7 +1971,9 @@ export default function FleetOverview() {
               <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-slate-900">Activity Feed</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Demo</span>
+                  {activityLive
+                    ? <LiveDataBadge source={auditEvents.length > 0 ? 'Audit Log' : 'CloudTrail'} />
+                    : <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Demo</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-0.5 bg-slate-100 rounded p-0.5">
@@ -1681,10 +1993,10 @@ export default function FleetOverview() {
                 </div>
               </div>
               <div className="divide-y divide-slate-100">
-                {activityFeed.length === 0 ? (
+                {displayFeed.length === 0 ? (
                   <div className="text-center py-6 text-slate-400 text-xs">No activity yet</div>
                 ) : (
-                  (activityFilter === 'all' ? activityFeed : activityFeed.filter(e => e.severity === activityFilter)).slice(0, 5).map((e) => (
+                  (activityFilter === 'all' ? displayFeed : displayFeed.filter(e => e.severity === activityFilter)).slice(0, 5).map((e) => (
                     <Link
                       key={e.id}
                       to="/govern/audit"
@@ -1758,9 +2070,7 @@ export default function FleetOverview() {
                         control.implemented ? 'bg-emerald-100' : 'bg-slate-100'
                       }`}>
                         {control.implemented ? (
-                          <svg className="w-2.5 h-2.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
+                          <Icon name="check" className="w-2.5 h-2.5 text-emerald-600" strokeWidth={3} />
                         ) : (
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                         )}
@@ -1824,9 +2134,7 @@ export default function FleetOverview() {
               {deployments.length === 0 ? (
                 <div className="flex items-center gap-3 py-3 px-3 bg-slate-50 rounded-lg">
                   <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                    <Icon name="bolt" className="w-4 h-4 text-blue-600" strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[11px] font-medium text-slate-700">Get started with AVA</div>
@@ -1857,6 +2165,78 @@ export default function FleetOverview() {
             </div>
           </div>
 
+          {/* Runtime Observability - Compact metrics widget */}
+          {runtimeMetrics && runtimeMetrics.by_agent.length > 0 && (
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200/60 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Icon name="chart-bar" className="w-4 h-4 text-indigo-600" />
+                  <span className="text-sm font-semibold text-slate-900">Runtime Observability</span>
+                  {runtimeMetrics.live && (
+                    <LiveDataBadge />
+                  )}
+                </div>
+                <Link to="/govern/fleet/observability" className="text-[10px] text-blue-600 hover:text-blue-700 font-medium">
+                  Full Dashboard →
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                {/* KPIs */}
+                <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200/60">
+                  <div className="text-lg font-bold text-indigo-700">
+                    {runtimeMetrics.by_agent.reduce((sum, a) => sum + a.invocations, 0).toLocaleString()}
+                  </div>
+                  <div className="text-[9px] text-indigo-600 font-medium">Total Invocations</div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200/60">
+                  <div className="text-lg font-bold text-emerald-700">
+                    {runtimeMetrics.by_agent.filter(a => a.invocations > 0).length}
+                  </div>
+                  <div className="text-[9px] text-emerald-600 font-medium">Active Agents</div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200/60">
+                  <div className="text-lg font-bold text-amber-700">
+                    {runtimeMetrics.by_agent.reduce((sum, a) => sum + a.invocations, 0) > 0
+                      ? `${Math.round(runtimeMetrics.by_agent.reduce((sum, a) => sum + a.avg_latency_ms * a.invocations, 0) / runtimeMetrics.by_agent.reduce((sum, a) => sum + a.invocations, 0))}ms`
+                      : '0ms'}
+                  </div>
+                  <div className="text-[9px] text-amber-600 font-medium">Avg Latency</div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200/60">
+                  <div className="text-lg font-bold text-rose-700">
+                    {runtimeMetrics.by_agent.reduce((sum, a) => sum + a.errors, 0)}
+                  </div>
+                  <div className="text-[9px] text-rose-600 font-medium">Errors (7d)</div>
+                </div>
+                {resourceUsage && resourceUsage.by_resource.length > 0 && (
+                  <div className="p-2.5 rounded-lg bg-violet-50 border border-violet-200/60">
+                    <div className="text-lg font-bold text-violet-700">
+                      {resourceUsage.by_resource.reduce((sum, r) => sum + r.cpu_vcpu_hours, 0).toFixed(1)}h
+                    </div>
+                    <div className="text-[9px] text-violet-600 font-medium">CPU (vCPU-hrs)</div>
+                  </div>
+                )}
+              </div>
+              {/* Top agents by invocations */}
+              <div className="mt-3 pt-3 border-t border-slate-200/60">
+                <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-2 font-medium">Top Agents by Activity</div>
+                <div className="flex flex-wrap gap-2">
+                  {runtimeMetrics.by_agent
+                    .filter(a => a.invocations > 0)
+                    .sort((a, b) => b.invocations - a.invocations)
+                    .slice(0, 5)
+                    .map((agent, idx) => (
+                      <div key={agent.runtime_name} className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-lg border border-slate-200/60">
+                        <span className="text-[10px] font-bold text-slate-400">#{idx + 1}</span>
+                        <span className="text-xs text-slate-700">{agent.runtime_name}</span>
+                        <span className="text-[10px] text-indigo-600 font-semibold">{agent.invocations.toLocaleString()}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Provider Summary + Vendor Health - Side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Provider Summary - Agent distribution by provider with governance status */}
@@ -1871,6 +2251,7 @@ export default function FleetOverview() {
                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">
                     27 vendors
                   </span>
+                  <MockDataBadge integration="TPRM / vendor risk source" />
                 </div>
                 <Link to="/govern/risk?tab=third-party" className="text-[10px] text-blue-600 hover:text-blue-700 font-medium">
                   TPRM →
@@ -1923,9 +2304,7 @@ export default function FleetOverview() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center">
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
+                  <Icon name="plus" className="w-3 h-3 text-white" strokeWidth={2} />
                 </div>
                 <div>
                   <div className="text-[11px] font-semibold text-slate-900">Expand Your Governed Fleet</div>
@@ -1966,7 +2345,6 @@ export default function FleetOverview() {
               cellColor={cellColor}
               tooltipStyle={tooltipStyle}
               liveAgentData={liveAgentRiskData ?? undefined}
-              isLiveData={!!liveAgentRiskData}
             />
 
             {/* Agentic Data & Tools - Derived from use cases */}
@@ -1986,12 +2364,18 @@ export default function FleetOverview() {
           {/* Agent Chain Analysis - Attack path style visualization */}
           <AgentChainVisualization
             useCases={useCases}
-            guardrails={guardrails}
+            activeGuardrailCount={effectiveGuardrailsActive}
           />
 
           {/* Emergency Controls - Full Panel */}
           <EmergencyControls />
 
+          {/* Data Source Info Panel */}
+          <DataSourceInfo
+            pageId="fleet"
+            pageTitle="Fleet Overview"
+            sources={getPageDataSources('fleet')}
+          />
         </div>
         )}
 

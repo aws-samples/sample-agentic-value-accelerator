@@ -1,0 +1,107 @@
+{
+  "id": "kyc-governance-insights",
+  "name": "KYC - Controlled Quality Output",
+  "description": "Governed KYC assessment for corporate banking: specialist agents produce credit and compliance findings, then a non-bypassable governance layer applies deterministic financial checks, sanctions/PEP screening, a three-layer policy cascade (ORG/APP/REQUEST), and an LLM-as-Judge quality score to reach the final APPROVE/ESCALATE/DECLINE/BLOCK decision. Ships a two-mode console: a guided Basic-mode walkthrough and a full governance console (Advanced) with CRO fleet, evaluations, and earned-autonomy views.",
+  "version": "1.0.0",
+  "pattern_type": "orchestration",
+  "type": "reference",
+  "frameworks": [
+    {
+      "id": "langchain_langgraph",
+      "name": "LangGraph",
+      "path": "agent/use_cases/kyc_governance_insights/src/langchain_langgraph",
+      "description": "Default implementation: LangGraph state graph (router -> parallel specialists -> synthesize -> governance_review)"
+    }
+  ],
+  "deployment_patterns": [
+    {
+      "id": "terraform",
+      "name": "Terraform + CloudFormation",
+      "description": "Self-contained AgentCore runtime (Terraform infra + runtime + UI) plus CloudFormation stacks for the governance microservices and console services",
+      "path": "iac/terraform"
+    }
+  ],
+  "built_with": [
+    "agent-runtime-agentcore",
+    "agent-observability"
+  ],
+  "parameters": [
+    {
+      "name": "project_name",
+      "type": "string",
+      "description": "Short resource-name prefix. Keep it short: it is composed into IAM role names as AgentCoreRuntime-<project_name>-<use_case>-<framework>-<region>, which AWS caps at 64 characters. 'ava' also matches the prefix recorded in this use case's existing Terraform state, so a deploy converges on the running deployment instead of creating a parallel one.",
+      "required": false,
+      "default": "ava"
+    },
+    {
+      "name": "aws_region",
+      "type": "string",
+      "description": "AWS region",
+      "required": false,
+      "default": "us-east-1",
+      "enum": ["us-east-1", "us-east-2", "us-west-2"]
+    },
+    {
+      "name": "framework",
+      "type": "string",
+      "description": "Agent framework to deploy",
+      "required": false,
+      "default": "langchain_langgraph",
+      "enum": ["langchain_langgraph"]
+    },
+    {
+      "name": "governance_mode",
+      "type": "string",
+      "description": "external = the deployed governance services are authoritative and failures fail closed; local = in-process equivalents for standalone/dev runs",
+      "required": false,
+      "default": "external",
+      "enum": ["external", "local"]
+    },
+    {
+      "name": "governance_ssm_prefix",
+      "type": "string",
+      "description": "SSM path prefix the governance stacks publish their Lambda function names to (e.g. /kyc-gov/demo). The runtime resolves the 5 function names from here and invokes them directly with IAM auth, so there is no public endpoint and no account-specific value is committed.",
+      "required": false,
+      "default": "/kyc-gov/demo"
+    }
+  ],
+  "example_use_cases": [
+    "Corporate onboarding KYC with a non-bypassable governance layer over agent output",
+    "Demonstrating deterministic controls (recomputed ratios, sanctions/PEP screening, policy cascade) that override an LLM verdict",
+    "Earned-autonomy governance: promotion and automatic demotion driven by measured accuracy"
+  ],
+  "jobs": [
+    {
+      "name": "onboarding",
+      "incoming_event": "kyc_governance_onboarding_request",
+      "outgoing_event": "kyc_governance_onboarding_success"
+    },
+    {
+      "name": "offboarding",
+      "incoming_event": "kyc_governance_offboarding_request",
+      "outgoing_event": "kyc_governance_offboarding_success"
+    }
+  ],
+  "author": "AVA Team",
+  "license": "Apache-2.0",
+  "tags": [
+    "kyc",
+    "aml",
+    "governance",
+    "sanctions",
+    "pep",
+    "cedar",
+    "verified-permissions",
+    "bedrock-guardrails",
+    "multi-agent",
+    "langgraph",
+    "agentcore",
+    "terraform"
+  ],
+  "outputs": {
+    "cloudfront_url": "CloudFront distribution URL serving the governance console",
+    "agentcore_runtime_arn": "AgentCore Runtime ARN for the KYC assessment agent",
+    "console_gateway_endpoint": "Consolidated console-services gateway fronted by CloudFront /svc/*"
+  },
+  "dependencies": []
+}

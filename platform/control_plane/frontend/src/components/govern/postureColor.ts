@@ -5,9 +5,9 @@
  * to a Tailwind palette hex: emerald (great) → blue (good) → amber (watch) → rose (poor).
  *
  * The default cutoffs are 80/60/40 (the majority convention across the Govern
- * posture tiles). Callers that need different bands — e.g. ControlPlanePillars,
- * which grades pillars on a stricter 90/75/60 curve — can pass a `thresholds`
- * override rather than redefining the color ramp.
+ * posture tiles). Callers that need different bands — e.g. pillar grading on a
+ * stricter 90/75/60 curve — can pass a `thresholds` override rather than
+ * redefining the color ramp.
  */
 
 export interface PostureThresholds {

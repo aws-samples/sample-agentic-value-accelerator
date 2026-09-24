@@ -23,7 +23,7 @@ export default function DataQualityMetricsPanel() {
         <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">shared scorecard feed</span>
       </div>
       <p className="text-[11px] text-slate-500 max-w-3xl">
-        Data Governance owns these quality, lineage, and PII-protection metrics; the executive scorecard reads the composite Data Quality Health. Each is measured against its target with shared RAG banding, giving cross-module observability.
+        Data Governance owns these quality, lineage, and PII-protection metrics; the executive scorecard reads the composite Data Quality Health — a per-dimension <em>weighted</em> mean (not a flat average), so narrow coverage ratios don't count the same as dimensions measured across every record. Each is measured against its target with shared RAG banding, giving cross-module observability.
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
