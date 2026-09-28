@@ -241,7 +241,7 @@ If false, write `_metadata.scp_gap` note and skip.
   operations MUST also deny `UntagResource` for those tag keys using `aws:TagKeys` condition.
   Without this, mandatory tags can be removed after resource creation. Add a separate Deny
   statement: `"Action": "<prefix>:UntagResource"` with
-  `"Condition": {"ForAnyValue:StringEquals": {"aws:TagKeys": ["Owner", "CostCenter", "Environment", "DataClassification"]}}`.
+  `"Condition": {"ForAnyValue:StringEqualsIgnoreCase": {"aws:TagKeys": ["Owner", "CostCenter", "Environment", "DataClassification"]}}`.
 - Use `"NotAction"` only for region-restriction controls
 - Use `"Principal": "*"` only in resource-based policies, NOT in SCPs
 - Track the **minified policy body size** (Version + Statement, excluding
