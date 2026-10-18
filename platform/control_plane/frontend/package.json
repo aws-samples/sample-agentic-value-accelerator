@@ -20,7 +20,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@xyflow/react": "^12.11.2",
     "amazon-cognito-identity-js": "^6.3.16",
-    "axios": "^1.13.6",
+    "axios": "^1.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "docx": "^9.7.1",
