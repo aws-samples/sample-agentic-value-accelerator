@@ -32,6 +32,11 @@ if TYPE_CHECKING:  # annotations only; core.safe_fetch is imported where it is u
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/llm-gateway", tags=["llm-gateway"])
 
+# Exact LiteLLM release deployed by the llm-gateway template. Must match the
+# template's `litellm_version` default, which rejects floating tags. v1.106.6
+# includes the fixes for CVE-2026-114612, GHSA-g5ff-637f-6q2m, GHSA-hhww-mrg2-969h.
+DEFAULT_LITELLM_VERSION = "v1.106.6"
+
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -67,7 +72,7 @@ class DeployRequest(BaseModel):
     langfuse_host: Optional[str] = ""
     existing_vpc_id: Optional[str] = ""
     cognito_user_pool_id: Optional[str] = ""
-    litellm_version: Optional[str] = "main-stable"
+    litellm_version: Optional[str] = DEFAULT_LITELLM_VERSION
 
 
 class ConfigUpdate(BaseModel):
@@ -425,7 +430,7 @@ async def deploy(req: DeployRequest, _=Depends(require_role(Role.OPERATOR))) -> 
             "aws_region": req.aws_region,
             "environment": req.environment,
             "master_key": req.master_key,
-            "litellm_version": req.litellm_version or "main-stable",
+            "litellm_version": req.litellm_version or DEFAULT_LITELLM_VERSION,
         }
         if req.enabled_models:
             parameters["enabled_models"] = req.enabled_models

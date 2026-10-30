@@ -1,5 +1,13 @@
 # Release Notes
 
+## Unreleased
+
+### 🔐 Security
+
+- **LiteLLM gateway pinned to `v1.106.6`** — the Control Plane gateway (`litellm_image_tag`), the `llm-gateway` template (`litellm_version`, Terraform and `template.json`), the backend deploy default, and local `docker-compose.yaml` previously floated on `main-latest` / `main-stable`, so the running version was whatever the image registry served when a task last started. `v1.106.6` includes the fixes for **CVE-2026-114612** (GHSA-7hp6-4w63-5g45, privilege escalation to Proxy Admin via salt-key reuse, high), **GHSA-g5ff-637f-6q2m** (arbitrary local file read via `vertex_ai_credentials`, high), and **GHSA-hhww-mrg2-969h** (reflected XSS in `/sso/debug/callback`, medium). Both Terraform variables now reject anything that is not an exact `vX.Y.Z` release, the frontend no longer sends its own tag, and `tests/test_litellm_version_pin.py` fails if the four declarations drift apart. — _vikramelango_
+
+**Upgrade note:** this is a large version jump for gateways that started on an older `main-stable`; LiteLLM runs its own database migrations on startup. Redeploy a non-production gateway first. Any `terraform.tfvars` that sets `litellm_image_tag` or `litellm_version` to a floating tag must be changed to an exact release.
+
 ## v5.0 — Govern goes AWS-native and multi-cloud; Marketplace, Evaluation, and enterprise-grade hardening
 
 Release date: September 2026

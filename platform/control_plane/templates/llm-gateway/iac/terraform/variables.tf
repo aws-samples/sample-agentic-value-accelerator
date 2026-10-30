@@ -95,9 +95,15 @@ variable "cognito_region" {
 }
 
 variable "litellm_version" {
+  # v1.106.6 includes the fixes for CVE-2026-114612 (GHSA-7hp6-4w63-5g45),
+  # GHSA-g5ff-637f-6q2m and GHSA-hhww-mrg2-969h. Bump deliberately, never float.
   description = "LiteLLM container image tag to deploy"
   type        = string
-  default     = "main-stable"
+  default     = "v1.106.6"
+  validation {
+    condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+$", var.litellm_version))
+    error_message = "litellm_version must be an exact release tag such as v1.106.6. Floating tags (main-latest, main-stable) are rejected so the deployed version is known and auditable."
+  }
 }
 
 variable "additional_ingress_cidrs" {

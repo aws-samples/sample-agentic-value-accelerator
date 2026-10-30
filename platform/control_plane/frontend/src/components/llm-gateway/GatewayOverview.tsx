@@ -87,7 +87,6 @@ export default function GatewayOverview({ onSelect }: Props) {
         aws_region: region,
         environment: 'dev',
         master_key: masterKey,
-        litellm_version: 'main-stable',
         enabled_models: models,
       };
       if (guardrailId) {

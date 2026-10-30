@@ -92,7 +92,6 @@ export default function LLMGateway(_props?: { initialTab?: string }) {
         aws_region: region,
         environment: 'dev',
         master_key: masterKey,
-        litellm_version: 'main-stable',
         enabled_models: models,
       };
       if (guardrailId) {

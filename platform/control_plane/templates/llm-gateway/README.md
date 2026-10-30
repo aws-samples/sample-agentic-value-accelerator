@@ -54,7 +54,7 @@ graph TB
 | `langfuse_secret_key_secret_arn` | no | — | Secrets Manager ARN for Langfuse secret key |
 | `existing_vpc_id` | no | — | Reuse the Foundation Stack VPC (recommended) |
 | `cognito_user_pool_id` | no | — | Optional admin-UI SSO |
-| `litellm_version` | no | `main-stable` | LiteLLM container tag |
+| `litellm_version` | no | `v1.106.6` | LiteLLM container tag. Must be an exact release (`vX.Y.Z`); floating tags are rejected |
 
 ## Deployment
 
