@@ -174,7 +174,7 @@ Closes #123
 Contributors will be recognized in:
 - GitHub contributors page
 - Release notes (for significant contributions)
-- CONTRIBUTORS.md file
+- [CONTRIBUTORS.md](../CONTRIBUTORS.md) file
 
 ## Code of Conduct
 
