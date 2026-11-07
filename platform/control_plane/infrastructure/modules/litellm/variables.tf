@@ -33,9 +33,15 @@ variable "ecs_cluster_id" {
 # -----------------------------------------------------------------------------
 
 variable "litellm_image_tag" {
+  # v1.106.6 includes the fixes for CVE-2026-114612 (GHSA-7hp6-4w63-5g45),
+  # GHSA-g5ff-637f-6q2m and GHSA-hhww-mrg2-969h. Bump deliberately, never float.
   description = "Pinned LiteLLM Docker image tag from ghcr.io/berriai/litellm"
   type        = string
-  default     = "main-latest"
+  default     = "v1.106.6"
+  validation {
+    condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+$", var.litellm_image_tag))
+    error_message = "litellm_image_tag must be an exact release tag such as v1.106.6. Floating tags (main-latest, main-stable) are rejected so the deployed version is known and auditable."
+  }
 }
 
 # -----------------------------------------------------------------------------

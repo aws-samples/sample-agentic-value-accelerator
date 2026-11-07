@@ -149,8 +149,8 @@
       "name": "litellm_version",
       "type": "string",
       "required": false,
-      "default": "main-stable",
-      "description": "LiteLLM container image tag"
+      "default": "v1.106.6",
+      "description": "LiteLLM container image tag (exact release, e.g. v1.106.6)"
     }
   ],
   "outputs": {

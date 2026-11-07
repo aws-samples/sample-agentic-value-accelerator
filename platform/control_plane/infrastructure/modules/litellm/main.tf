@@ -95,7 +95,7 @@ resource "aws_lb_target_group" "litellm" {
 # -----------------------------------------------------------------------------
 # ECS Task Definition
 # -----------------------------------------------------------------------------
-# Uses version-pinned LiteLLM image from ghcr.io/berriai/litellm.
+# Uses the LiteLLM image from ghcr.io/berriai/litellm pinned by var.litellm_image_tag.
 # Container exposes port 4000.
 #
 # Health Check (Requirement 9.3):
