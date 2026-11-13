@@ -33,6 +33,14 @@ echo ""
 
 cd "$INFRA_DIR"
 
+# Only read state from a bucket this account owns (see ensure_owned_bucket in
+# deploy.sh): a bucket of the same name held by another account would feed
+# Terraform someone else's state.
+if ! aws s3api head-bucket --bucket "$STATE_BUCKET" --expected-bucket-owner "$ACCOUNT_ID" >/dev/null 2>&1; then
+  echo "ERROR: s3://${STATE_BUCKET} is not owned by account ${ACCOUNT_ID}; refusing to read Terraform state from it." >&2
+  exit 1
+fi
+
 # Init with backend config
 terraform init -input=false -reconfigure \
   -backend-config="bucket=${STATE_BUCKET}" \
@@ -61,7 +69,8 @@ terraform destroy -input=false -auto-approve \
 if [ -n "$PROJECT_FULL" ]; then
   CODE_BUCKET="bedrock-agentcore-codebuild-sources-${ACCOUNT_ID}-${REGION}"
   echo "→ Removing agent code artifact s3://${CODE_BUCKET}/${PROJECT_FULL}/deployment.zip ..."
-  aws s3 rm "s3://${CODE_BUCKET}/${PROJECT_FULL}/deployment.zip" --region "$REGION" 2>/dev/null || true
+  aws s3api delete-object --bucket "$CODE_BUCKET" --key "${PROJECT_FULL}/deployment.zip" \
+    --expected-bucket-owner "$ACCOUNT_ID" --region "$REGION" >/dev/null 2>&1 || true
 fi
 
 echo ""

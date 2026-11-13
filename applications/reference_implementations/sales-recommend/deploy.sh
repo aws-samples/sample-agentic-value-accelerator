@@ -35,6 +35,41 @@ ACTION="${ACTION:-deploy}"
 
 # State backend — auto-created if not exists
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# ── Shadow-resource guard ────────────────────────────────────────────
+# Bucket names derived from the account id are predictable. If another AWS
+# account has already claimed the name, `create-bucket` fails — and a swallowed
+# failure means every later write (Terraform state carrying secrets, deployment
+# artifacts the service then executes) lands in a bucket we do not own. So:
+# use the bucket only if THIS account owns it (head-bucket with
+# --expected-bucket-owner answers 403 for anyone else), create it only when the
+# name is free, harden it, and never continue against a bucket we cannot prove
+# is ours.
+ensure_owned_bucket() {
+  local bucket="$1" region="$2" account="$3" out=""
+  if aws s3api head-bucket --bucket "$bucket" --expected-bucket-owner "$account" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ "$region" = "us-east-1" ]; then
+    out=$(aws s3api create-bucket --bucket "$bucket" --region "$region" 2>&1 >/dev/null) || true
+  else
+    out=$(aws s3api create-bucket --bucket "$bucket" --region "$region" \
+      --create-bucket-configuration LocationConstraint="$region" 2>&1 >/dev/null) || true
+  fi
+  if ! aws s3api head-bucket --bucket "$bucket" --expected-bucket-owner "$account" >/dev/null 2>&1; then
+    echo "ERROR: s3://${bucket} is not owned by account ${account} and could not be created here." >&2
+    [ -n "$out" ] && echo "       ${out}" >&2
+    echo "       Another AWS account may hold this bucket name. Refusing to continue; pick a bucket name you own and re-run." >&2
+    exit 1
+  fi
+  aws s3api put-public-access-block --bucket "$bucket" --expected-bucket-owner "$account" \
+    --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+  aws s3api put-bucket-ownership-controls --bucket "$bucket" --expected-bucket-owner "$account" \
+    --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerEnforced}]'
+  aws s3api put-bucket-encryption --bucket "$bucket" --expected-bucket-owner "$account" \
+    --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+}
+
 STATE_BUCKET="${STATE_BUCKET:-${PROJECT}-tfstate-${ACCOUNT_ID}-${REGION}}"
 LOCK_TABLE="${LOCK_TABLE:-terraform-locks}"
 
@@ -66,14 +101,11 @@ fi
 
 # ── Step 1: Ensure state backend exists ──────────────────────────────
 echo "→ Ensuring Terraform state backend..."
-if [ "$REGION" = "us-east-1" ]; then
-  aws s3api create-bucket --bucket "$STATE_BUCKET" --region "$REGION" 2>/dev/null || true
-else
-  aws s3api create-bucket --bucket "$STATE_BUCKET" --region "$REGION" \
-    --create-bucket-configuration LocationConstraint="$REGION" 2>/dev/null || true
-fi
-aws s3api put-bucket-versioning --bucket "$STATE_BUCKET" \
-  --versioning-configuration Status=Enabled 2>/dev/null || true
+# The Terraform S3 backend has no bucket-owner check of its own, so ownership
+# is proven here, before `terraform init` points the state at the bucket.
+ensure_owned_bucket "$STATE_BUCKET" "$REGION" "$ACCOUNT_ID"
+aws s3api put-bucket-versioning --bucket "$STATE_BUCKET" --expected-bucket-owner "$ACCOUNT_ID" \
+  --versioning-configuration Status=Enabled
 
 aws dynamodb create-table \
   --table-name "$LOCK_TABLE" \
@@ -146,15 +178,12 @@ cp "$SCRIPT_DIR/agent/src/recommend.py" "$BUILD_DIR/recommend.py"
 ( cd "$BUILD_DIR" && zip -rq "$AGENT_ZIP" . )
 CODE_BUCKET="bedrock-agentcore-codebuild-sources-${ACCOUNT_ID}-${REGION}"
 CODE_PREFIX="${PROJECT_FULL}/deployment.zip"
-# Ensure the shared AgentCore code bucket exists (may not in a fresh account).
-if [ "$REGION" = "us-east-1" ]; then
-  aws s3api create-bucket --bucket "$CODE_BUCKET" --region "$REGION" 2>/dev/null || true
-else
-  aws s3api create-bucket --bucket "$CODE_BUCKET" --region "$REGION" \
-    --create-bucket-configuration LocationConstraint="$REGION" 2>/dev/null || true
-fi
+# Ensure the shared AgentCore code bucket exists (may not in a fresh account)
+# and that it is ours: AgentCore executes the code it pulls from this name.
+ensure_owned_bucket "$CODE_BUCKET" "$REGION" "$ACCOUNT_ID"
 echo "→ Uploading agent code to s3://${CODE_BUCKET}/${CODE_PREFIX} ..."
-aws s3 cp "$AGENT_ZIP" "s3://${CODE_BUCKET}/${CODE_PREFIX}" --region "$REGION"
+aws s3api put-object --bucket "$CODE_BUCKET" --key "$CODE_PREFIX" --body "$AGENT_ZIP" \
+  --expected-bucket-owner "$ACCOUNT_ID" --region "$REGION" >/dev/null
 rm -rf "$BUILD_DIR" "$AGENT_ZIP"
 echo "  ✓ Agent code uploaded (self-contained code deploy)"
 
