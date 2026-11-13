@@ -169,35 +169,44 @@ print_info "State Bucket: $STATE_BUCKET"
 # ============================================================================
 print_header "STEP 1: Bootstrap State Backend"
 
-# Check if S3 bucket exists
-if aws s3api head-bucket --bucket "$STATE_BUCKET" --no-cli-pager 2>/dev/null; then
-    print_info "State bucket '$STATE_BUCKET' already exists"
+# Use the state bucket only if THIS account owns it; create it only when the
+# name is free. A bucket of the same name in another account answers 403 to the
+# owner check and must never receive the Terraform state (shadow-resource guard).
+if aws s3api head-bucket --bucket "$STATE_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" --no-cli-pager 2>/dev/null; then
+    print_info "State bucket '$STATE_BUCKET' already exists in this account"
 else
     print_info "Creating state bucket '$STATE_BUCKET'..."
 
-    # Create bucket (us-east-1 doesn't use LocationConstraint)
+    # Create bucket (us-east-1 doesn't use LocationConstraint); a failure here
+    # is reported, not hidden — the name may be held by another account.
     if [ "$AWS_REGION" = "us-east-1" ]; then
         aws s3api create-bucket \
             --bucket "$STATE_BUCKET" \
             --region "$AWS_REGION" \
-            --no-cli-pager
+            --no-cli-pager || { print_error "Could not create s3://$STATE_BUCKET — the name may belong to another AWS account. Set STATE_BUCKET_PREFIX to a name you own."; exit 1; }
     else
         aws s3api create-bucket \
             --bucket "$STATE_BUCKET" \
             --region "$AWS_REGION" \
             --create-bucket-configuration LocationConstraint="$AWS_REGION" \
-            --no-cli-pager
+            --no-cli-pager || { print_error "Could not create s3://$STATE_BUCKET — the name may belong to another AWS account. Set STATE_BUCKET_PREFIX to a name you own."; exit 1; }
+    fi
+    if ! aws s3api head-bucket --bucket "$STATE_BUCKET" --expected-bucket-owner "$AWS_ACCOUNT_ID" --no-cli-pager 2>/dev/null; then
+        print_error "s3://$STATE_BUCKET exists but is not owned by account $AWS_ACCOUNT_ID; refusing to use it for Terraform state."
+        exit 1
     fi
 
     # Enable versioning
     aws s3api put-bucket-versioning \
         --bucket "$STATE_BUCKET" \
+        --expected-bucket-owner "$AWS_ACCOUNT_ID" \
         --versioning-configuration Status=Enabled \
         --no-cli-pager
 
     # Enable default encryption
     aws s3api put-bucket-encryption \
         --bucket "$STATE_BUCKET" \
+        --expected-bucket-owner "$AWS_ACCOUNT_ID" \
         --server-side-encryption-configuration \
         '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}' \
         --no-cli-pager
@@ -205,6 +214,7 @@ else
     # Block all public access
     aws s3api put-public-access-block \
         --bucket "$STATE_BUCKET" \
+        --expected-bucket-owner "$AWS_ACCOUNT_ID" \
         --public-access-block-configuration \
         "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" \
         --no-cli-pager

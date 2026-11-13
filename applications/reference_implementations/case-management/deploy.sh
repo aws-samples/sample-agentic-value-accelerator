@@ -34,6 +34,40 @@ fi
 # Extract REGION from AWS_REGION if REGION not set
 REGION="${REGION:-${AWS_REGION:-us-east-1}}"
 ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+
+# ── Shadow-resource guard ────────────────────────────────────────────
+# Bucket names derived from the account id are predictable. If another AWS
+# account has already claimed the name, `create-bucket` fails — and a swallowed
+# failure means every later write (Terraform state carrying secrets, deployment
+# artifacts the service then executes) lands in a bucket we do not own. So:
+# use the bucket only if THIS account owns it (head-bucket with
+# --expected-bucket-owner answers 403 for anyone else), create it only when the
+# name is free, harden it, and never continue against a bucket we cannot prove
+# is ours.
+ensure_owned_bucket() {
+  local bucket="$1" region="$2" account="$3" out=""
+  if aws s3api head-bucket --bucket "$bucket" --expected-bucket-owner "$account" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ "$region" = "us-east-1" ]; then
+    out=$(aws s3api create-bucket --bucket "$bucket" --region "$region" 2>&1 >/dev/null) || true
+  else
+    out=$(aws s3api create-bucket --bucket "$bucket" --region "$region" \
+      --create-bucket-configuration LocationConstraint="$region" 2>&1 >/dev/null) || true
+  fi
+  if ! aws s3api head-bucket --bucket "$bucket" --expected-bucket-owner "$account" >/dev/null 2>&1; then
+    echo "ERROR: s3://${bucket} is not owned by account ${account} and could not be created here." >&2
+    [ -n "$out" ] && echo "       ${out}" >&2
+    echo "       Another AWS account may hold this bucket name. Refusing to continue; pick a bucket name you own and re-run." >&2
+    exit 1
+  fi
+  aws s3api put-public-access-block --bucket "$bucket" --expected-bucket-owner "$account" \
+    --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+  aws s3api put-bucket-ownership-controls --bucket "$bucket" --expected-bucket-owner "$account" \
+    --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerEnforced}]'
+  aws s3api put-bucket-encryption --bucket "$bucket" --expected-bucket-owner "$account" \
+    --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+}
 ENDPOINT_NAME="${ENDPOINT_NAME:-fraud-xgb-placeholder}"
 SKIP_AGENTCORE=false
 
@@ -579,21 +613,14 @@ echo "  Deploying frontend to S3 + CloudFront..."
 
 BUCKET_NAME="case-management-ui-${ACCOUNT_ID}"
 
-# Create bucket if it doesn't exist
-if aws s3 ls "s3://${BUCKET_NAME}" 2>/dev/null; then
-  echo "    Bucket ${BUCKET_NAME} exists"
-else
-  echo "    Creating S3 bucket ${BUCKET_NAME}..."
-  if [ "$REGION" = "us-east-1" ]; then
-    aws s3 mb "s3://${BUCKET_NAME}" --region "$REGION"
-  else
-    aws s3 mb "s3://${BUCKET_NAME}" --region "$REGION" --create-bucket-configuration LocationConstraint="$REGION"
-  fi
-fi
+# Create the bucket, or verify this account already owns it. `aws s3 ls` /
+# `aws s3 mb` cannot tell "ours" from "someone else's bucket of the same name";
+# the UI build below must never be synced into a bucket we do not own.
+ensure_owned_bucket "${BUCKET_NAME}" "$REGION" "$ACCOUNT_ID"
 
 # Enable block public access (secure)
 echo "    Configuring secure bucket access..."
-aws s3api put-public-access-block --bucket "${BUCKET_NAME}" \
+aws s3api put-public-access-block --bucket "${BUCKET_NAME}" --expected-bucket-owner "$ACCOUNT_ID" \
   --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
 
 # Upload build files
@@ -739,7 +766,7 @@ cat > /tmp/bucket-policy.json << BPOLICY
 }
 BPOLICY
 
-aws s3api put-bucket-policy --bucket "${BUCKET_NAME}" --policy file:///tmp/bucket-policy.json
+aws s3api put-bucket-policy --bucket "${BUCKET_NAME}" --expected-bucket-owner "$ACCOUNT_ID" --policy file:///tmp/bucket-policy.json
 
 # Get CloudFront domain
 CF_DOMAIN=$(aws cloudfront get-distribution --id "$CF_DIST_ID" --query "Distribution.DomainName" --output text)

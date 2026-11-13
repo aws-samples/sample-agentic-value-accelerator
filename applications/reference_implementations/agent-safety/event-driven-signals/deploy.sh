@@ -66,6 +66,38 @@ ACCOUNT_ID=$(aws sts get-caller-identity $AWS_OPTS --query Account --output text
 CODE_BUCKET="${STACK_NAME}-code-${ACCOUNT_ID}-${REGION}"
 CODE_PREFIX="event-driven-signals"
 
+# ── Shadow-resource guard ────────────────────────────────────────────
+# Bucket names derived from the account id are predictable. If another AWS
+# account has already claimed the name, `s3 mb` fails — and a swallowed failure
+# means the Lambda code uploaded below lands in, and is later executed from, a
+# bucket we do not own. So: use the bucket only if THIS account owns it
+# (head-bucket with --expected-bucket-owner answers 403 for anyone else), create
+# it only when the name is free, harden it, and never continue otherwise.
+ensure_owned_bucket() {
+  local bucket="$1" region="$2" account="$3" out=""
+  if aws s3api head-bucket --bucket "$bucket" --expected-bucket-owner "$account" $AWS_OPTS >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ "$region" = "us-east-1" ]; then
+    out=$(aws s3api create-bucket --bucket "$bucket" $AWS_OPTS 2>&1 >/dev/null) || true
+  else
+    out=$(aws s3api create-bucket --bucket "$bucket" $AWS_OPTS \
+      --create-bucket-configuration LocationConstraint="$region" 2>&1 >/dev/null) || true
+  fi
+  if ! aws s3api head-bucket --bucket "$bucket" --expected-bucket-owner "$account" $AWS_OPTS >/dev/null 2>&1; then
+    echo "ERROR: s3://${bucket} is not owned by account ${account} and could not be created here." >&2
+    [ -n "$out" ] && echo "       ${out}" >&2
+    echo "       Another AWS account may hold this bucket name. Refusing to continue; pick a bucket name you own and re-run." >&2
+    exit 1
+  fi
+  aws s3api put-public-access-block --bucket "$bucket" --expected-bucket-owner "$account" $AWS_OPTS \
+    --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+  aws s3api put-bucket-ownership-controls --bucket "$bucket" --expected-bucket-owner "$account" $AWS_OPTS \
+    --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerEnforced}]'
+  aws s3api put-bucket-encryption --bucket "$bucket" --expected-bucket-owner "$account" $AWS_OPTS \
+    --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+}
+
 echo ""
 echo "============================================================"
 echo "  🚀 Event-Driven Signal Processing — Deploy"
@@ -80,7 +112,7 @@ echo ""
 
 # ── Phase 1: Create S3 bucket for Lambda code ──
 echo "📦 Phase 1: Creating code bucket..."
-aws s3 mb "s3://$CODE_BUCKET" $AWS_OPTS 2>/dev/null || true
+ensure_owned_bucket "$CODE_BUCKET" "$REGION" "$ACCOUNT_ID"
 echo "   ✅ Bucket ready: $CODE_BUCKET"
 
 # ── Phase 2: Zip and upload Lambda functions ──
@@ -103,7 +135,8 @@ for LAMBDA in "${LAMBDAS[@]}"; do
   cp "$SCRIPT_DIR/${LAMBDA}.py" "$TEMP_DIR/"
   pip3 install "boto3>=1.42.80" -t "$TEMP_DIR" --quiet --upgrade --no-cache-dir 2>/dev/null
   (cd "$TEMP_DIR" && zip -r "$ZIP_FILE" . -q)
-  aws s3 cp "$ZIP_FILE" "s3://$CODE_BUCKET/$CODE_PREFIX/${LAMBDA}.zip" $AWS_OPTS --quiet
+  aws s3api put-object --bucket "$CODE_BUCKET" --key "$CODE_PREFIX/${LAMBDA}.zip" --body "$ZIP_FILE" \
+    --expected-bucket-owner "$ACCOUNT_ID" $AWS_OPTS >/dev/null
   echo "   ✅ ${LAMBDA}.zip uploaded"
   rm -rf "$TEMP_DIR" "$ZIP_FILE"
 done
